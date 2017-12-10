@@ -1,5 +1,5 @@
 module Parse.Unsweet
-  (parse, Expr(..), Lit(..), Op(..))
+  (parse, Exp(..), Lit(..), Op(..))
 where
 
 import qualified Parse.Sweet as Sweet
@@ -11,14 +11,14 @@ import qualified Data.Map.Strict as Map
 import Data.Map (Map)
 import Control.Monad (guard)
 
--- data Binding = Binding String Expr
+-- data Binding = Binding String Exp
  --            deriving (Show)
 
-data Expr = Lit Lit
---          | Let Binding Expr
-          | If Expr Expr Expr
-          | Neg Expr
-          | Prim Op Expr Expr -- Eventually replace this with function application
+data Exp = Lit Lit
+--          | Let Binding Exp
+          | If Exp Exp Exp
+          | Neg Exp
+          | Prim Op Exp Exp -- Eventually replace this with function application
           deriving (Show)
 
 data Assoc = Leftfix | Rightfix | Nonfix deriving Eq
@@ -27,17 +27,17 @@ type Fixity = (Int, Assoc)
 opTable :: Map Op Fixity
 opTable = Map.fromList [(Op "+", (6, Leftfix)), (Op "==", (4, Nonfix))]
 
-desugarExpr :: Sweet.Expr -> Expr
-desugarExpr (Sweet.Lit lit) = Lit lit
-desugarExpr (Sweet.OpSequence ts) = case resolve opTable ts of Just x -> x
-desugarExpr (Sweet.If e1 e2 e3) = If (desugarExpr e1) (desugarExpr e2) (desugarExpr e3)
+desugarExp :: Sweet.Exp -> Exp
+desugarExp (Sweet.Lit lit) = Lit lit
+desugarExp (Sweet.OpSequence ts) = case resolve opTable ts of Just x -> x
+desugarExp (Sweet.If e1 e2 e3) = If (desugarExp e1) (desugarExp e2) (desugarExp e3)
 
-resolve :: Map Op Fixity -> [Sweet.Tok] -> Maybe Expr
+resolve :: Map Op Fixity -> [Sweet.Tok] -> Maybe Exp
 resolve fixity ts = fst <$> parseNeg (Op "", (-1, Nonfix)) ts
   where  
-    parseNeg :: (Op, Fixity) -> [Sweet.Tok] -> Maybe (Expr, [Sweet.Tok])
+    parseNeg :: (Op, Fixity) -> [Sweet.Tok] -> Maybe (Exp, [Sweet.Tok])
     parseNeg op1 (TExp e1 : rest)
-      = parse op1 (desugarExpr e1) rest
+      = parse op1 (desugarExp e1) rest
     parseNeg op1 (TNeg : rest)
       = do guard (prec1 < 6)
            (r, rest') <- parseNeg (Op "-", (6, Leftfix)) rest
@@ -45,7 +45,7 @@ resolve fixity ts = fst <$> parseNeg (Op "", (-1, Nonfix)) ts
       where
         (s1, (prec1, fix1)) = op1
 
-    parse :: (Op, Fixity) -> Expr -> [Sweet.Tok] -> Maybe (Expr, [Sweet.Tok])
+    parse :: (Op, Fixity) -> Exp -> [Sweet.Tok] -> Maybe (Exp, [Sweet.Tok])
     parse _   e1 [] = Just (e1, [])  
     parse op1 e1 (TOp s2 : rest)  
        -- case (1): check for illegal expressions  
@@ -65,6 +65,6 @@ resolve fixity ts = fst <$> parseNeg (Op "", (-1, Nonfix)) ts
         op2 = (s2, fixity Map.! s2)
         (_, (prec2, fix2)) = op2
 
-parse :: String -> Either ParseError Expr
-parse s = desugarExpr <$> Sweet.parse s
+parse :: String -> Either ParseError Exp
+parse s = desugarExp <$> Sweet.parse s
 

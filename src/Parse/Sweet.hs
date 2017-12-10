@@ -1,5 +1,5 @@
 module Parse.Sweet 
-  (parse, Expr(..), Lit(..), Op(..), Tok(..))
+  (parse, Exp(..), Lit(..), Op(..), Tok(..))
 where
 
 import Prelude hiding (exp)
@@ -37,15 +37,15 @@ data Lit = Integer Integer
 data Op = Op String
         deriving (Show, Ord, Eq)
 
--- data Binding = Binding String Expr
+-- data Binding = Binding String Exp
 --             deriving (Show)
 
-data Tok = TExp Expr | TOp Op | TNeg
+data Tok = TExp Exp | TOp Op | TNeg
          deriving (Show)
 
-data Expr = Lit Lit
---          | Let [Binding] Expr
-          | If Expr Expr Expr
+data Exp = Lit Lit
+--          | Let [Binding] Exp
+          | If Exp Exp Exp
           | OpSequence [Tok]
           deriving (Show)
 
@@ -57,9 +57,9 @@ sepBy1Full a sep = do
 
 -- instance Show (State s a) where
 --   show _ = ""
--- type AExpr = Expr -- (State String (), Expr)
+-- type AExp = Exp -- (State String (), Exp)
 
-int :: Parser Expr
+int :: Parser Exp
 int = (Lit . Integer) <$> natural
 
 op :: Parser Op
@@ -70,15 +70,15 @@ qop = op
  
 lit = int
 
-exp :: Parser Expr
+exp :: Parser Exp
 exp = infixexp
 
-infixexp :: Parser Expr
+infixexp :: Parser Exp
 infixexp = OpSequence <$> sepBy1Full lexp' ((\x -> [TOp x]) <$> qop)
     where lexp' :: Parser [Tok]
           lexp' = do { n <- option [] (symbol "-" >> return [TNeg]); e <- lexp; return (n ++ [TExp e]) }
 
-lexp :: Parser Expr
+lexp :: Parser Exp
 lexp =  ifexp <|> fexp
   where ifexp = do 
                 { reserved "if"  ; e1 <- exp
@@ -86,14 +86,14 @@ lexp =  ifexp <|> fexp
                 ; reserved "else"; e3 <- exp
                 ; return (If e1 e2 e3) }
 
-fexp :: Parser Expr
+fexp :: Parser Exp
 fexp = aexp
 
 aexp = lit <|> parens exp
 
-program :: Parser Expr
+program :: Parser Exp
 program = do { whiteSpace; e <- exp; eof; return e }
 
-parse :: String -> Either ParseError Expr
+parse :: String -> Either ParseError Exp
 parse = Prim.parse program ""
 

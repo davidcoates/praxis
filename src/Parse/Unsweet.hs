@@ -19,7 +19,7 @@ data Exp = Lit Lit
           | If Exp Exp Exp
           | Neg Exp
           | Prim Op Exp Exp -- Eventually replace this with function application
-          deriving (Show)
+          deriving (Show, Eq)
 
 data Assoc = Leftfix | Rightfix | Nonfix deriving Eq
 type Fixity = (Int, Assoc)

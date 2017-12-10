@@ -32,7 +32,7 @@ natural    = Token.natural    lexer
 reserved   = Token.reserved   lexer
 
 data Lit = Integer Integer
-         deriving (Show)
+         deriving (Show, Eq)
 
 data Op = Op String
         deriving (Show, Ord, Eq)

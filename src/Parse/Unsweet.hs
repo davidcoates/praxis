@@ -16,7 +16,7 @@ import Control.Monad (guard)
 
 data Expr = Lit Lit
 --          | Let Binding Expr
---          | If Expr Expr Expr
+          | If Expr Expr Expr
           | Neg Expr
           | Prim Op Expr Expr -- Eventually replace this with function application
           deriving (Show)
@@ -30,6 +30,7 @@ opTable = Map.fromList [(Op "+", (6, Leftfix)), (Op "==", (4, Nonfix))]
 desugarExpr :: Sweet.Expr -> Expr
 desugarExpr (Sweet.Lit lit) = Lit lit
 desugarExpr (Sweet.OpSequence ts) = case resolve opTable ts of Just x -> x
+desugarExpr (Sweet.If e1 e2 e3) = If (desugarExpr e1) (desugarExpr e2) (desugarExpr e3)
 
 resolve :: Map Op Fixity -> [Sweet.Tok] -> Maybe Expr
 resolve fixity ts = fst <$> parseNeg (Op "", (-1, Nonfix)) ts

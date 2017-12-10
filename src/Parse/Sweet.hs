@@ -21,6 +21,7 @@ operator   = Token.operator   lexer
 symbol     = Token.symbol     lexer
 parens     = Token.parens     lexer
 integer    = Token.integer    lexer
+natural    = Token.natural    lexer
 
 data Lit = Integer Integer
          deriving (Show)
@@ -48,10 +49,10 @@ sepBy1Full a sep = do
 -- type AExpr = Expr -- (State String (), Expr)
 
 int :: Parser Expr
-int = (Lit . Integer) <$> integer
+int = (Lit . Integer) <$> natural
 
 op :: Parser Op
-op = do { s <- symbol "+"; return Plus } <|> do { s <- symbol "=="; return Eq }
+op = ( symbol "+" >> return Plus) <|> ( symbol "==" >> return Eq )
  
 qop :: Parser Op
 qop = op
@@ -63,7 +64,9 @@ exp = infixexp
 
 infixexp :: Parser Expr
 infixexp = do
-  (es, os) <- sepBy1Full lexp qop
+  -- (es, os) <- sepBy1Full lexp qop
+  es <- sepBy1 lexp qop
+  let os = []
   return (OpSequence es os)
 
 lexp :: Parser Expr
@@ -76,7 +79,7 @@ fexp = aexp
 aexp = lit <|> parens exp
 
 program :: Parser Expr
-program = exp
+program = do { whiteSpace; e <- exp; eof; return e }
 
 parse :: String -> Either ParseError Expr
 parse = Prim.parse program ""

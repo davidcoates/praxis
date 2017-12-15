@@ -4,63 +4,80 @@ where
 
 import qualified Parse.Sweet as Sweet
 import Parse.Sweet (Op, Tok(..))
-import Text.Parsec.Error (ParseError)
+import Text.Parsec.Error (ParseError, Message(..), newErrorMessage)
 import Text.Parsec.Prim hiding (parse)
 import Text.Parsec.Combinator
 import qualified Data.Map.Strict as Map
 import Data.Map (Map)
-import Control.Monad (guard)
+import Control.Monad (unless)
 import AST
 
 -- data Binding = Binding String Exp
  --            deriving (Show)
 
 
+data InfixError = BadNeg (Op, Fixity) | BadPrec (Op, Fixity) (Op, Fixity)
+
+toMessage :: InfixError -> Message
+toMessage (BadNeg (o, f))             = Message $ "\tPrecedence parsing error\n\t\tcannot mix '" ++ o  ++ "' " ++ show f  ++ " and prefix '-' [infixl 6] in the same infix expression"
+toMessage (BadPrec (o1, f1) (o2, f2)) = Message $ "\tPrecedence parsing error\n\t\tcannot mix '" ++ o1 ++ "' " ++ show f1 ++ " and '" ++ o2 ++ "' " ++ show f2 ++ " in the same infix expression"
+
 data Assoc = Leftfix | Rightfix | Nonfix deriving Eq
-type Fixity = (Int, Assoc)
+
+instance Show Assoc where
+  show Leftfix  = "infixl"
+  show Rightfix = "infixr"
+  show Nonfix   = "infix"
+
+newtype Fixity = Fixity { fixity :: (Int, Assoc) }
+
+instance Show Fixity where
+  show (Fixity (p, a)) = "[" ++ show a ++ " " ++ show p ++ "]"
 
 opTable :: Map Op Fixity
-opTable = Map.fromList [("+", (6, Leftfix)), ("==", (4, Nonfix))]
+opTable = Map.fromList [("+", Fixity (6, Leftfix)), ("==", Fixity (4, Nonfix))]
 
-desugarExp :: Praxis Sweet.Exp -> Praxis Exp
-desugarExp (_ :< Sweet.Infix ts) = case resolve opTable ts of Just x -> x
-desugarExp (a :< x) = a :< desugarExp' x
-  where desugarExp' (Sweet.Lit lit)     = Lit lit
-        desugarExp' (Sweet.If e1 e2 e3) = If (desugarExp e1) (desugarExp e2) (desugarExp e3)
+desugarExp :: Praxis Sweet.Exp -> Either ParseError (Praxis Exp)
+desugarExp (_ :< Sweet.Infix ts) = resolve opTable ts
+desugarExp (a :< x) = (a :<) <$> desugarExp' x 
+  where desugarExp' :: PraxisTail Sweet.Exp -> Either ParseError (PraxisTail Exp)
+        desugarExp' (Sweet.Lit lit)     = Right (Lit lit)
+        desugarExp' (Sweet.If e1 e2 e3) = do
+          [x1, x2, x3] <- mapM desugarExp [e1, e2, e3]
+          return (If x1 x2 x3)
 
-resolve :: Map Op Fixity -> [Praxis Tok] -> Maybe (Praxis Exp)
-resolve fixity ts = fst <$> parseNeg ("", (-1, Nonfix)) ts
+resolve :: Map Op Fixity -> [Praxis Tok] -> Either ParseError (Praxis Exp)
+resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
   where  
-    parseNeg :: (Op, Fixity) -> [Praxis Tok] -> Maybe (Praxis Exp, [Praxis Tok])
+    parseNeg :: (Op, Fixity) -> [Praxis Tok] -> Either ParseError (Praxis Exp, [Praxis Tok])
     parseNeg op1 (_ :< TExp e1 : rest)
-      = parse op1 (desugarExp e1) rest
+      = (\x -> parse op1 x rest) =<< desugarExp e1
     parseNeg op1 (p :< TNeg : rest)
-      = do guard (prec1 < 6)
-           (r, rest') <- parseNeg ("-", (6, Leftfix)) rest
+      = do unless (prec1 < 6) (Left (newErrorMessage (toMessage (BadNeg op1)) p)) 
+           (r, rest') <- parseNeg ("-", Fixity (6, Leftfix)) rest
            parse op1 (p :< Apply (p :< Prim Neg) r) rest'
       where
-        (s1, (prec1, fix1)) = op1
+        (s1, Fixity (prec1, fix1)) = op1
 
-    parse :: (Op, Fixity) -> Praxis Exp -> [Praxis Tok] -> Maybe (Praxis Exp, [Praxis Tok])
-    parse _   e1 [] = Just (e1, [])  
+    parse :: (Op, Fixity) -> Praxis Exp -> [Praxis Tok] -> Either ParseError (Praxis Exp, [Praxis Tok])
+    parse _   e1 [] = Right (e1, [])  
     parse op1 e1 (p :< TOp s2 : rest)  
        -- case (1): check for illegal expressions  
        | prec1 == prec2 && (fix1 /= fix2 || fix1 == Nonfix)  
-       = Nothing  
+       = Left (newErrorMessage (toMessage (BadPrec op1 op2)) p)
  
        -- case (2): op1 and op2 should associate to the left  
        | prec1 > prec2 || (prec1 == prec2 && fix1 == Leftfix)  
-       = Just (e1, p :< TOp s2 : rest)  
+       = Right (e1, p :< TOp s2 : rest)  
  
        -- case (3): op1 and op2 should associate to the right  
        | otherwise  
        = do (r, rest') <- parseNeg op2 rest  
             parse op1 (p :< Apply (p :< Apply (p :< Fun s2) e1) r) rest'
        where  
-        (_, (prec1, fix1))  = op1
-        op2 = (s2, fixity Map.! s2)
-        (_, (prec2, fix2)) = op2
+        (_, Fixity (prec1, fix1))  = op1
+        op2 = (s2, fixityTable Map.! s2)
+        (_, Fixity (prec2, fix2)) = op2
 
 parse :: String -> Either ParseError (Praxis Exp)
-parse s = desugarExp <$> Sweet.parse s
-
+parse s = desugarExp =<< Sweet.parse s

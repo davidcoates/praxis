@@ -4,7 +4,6 @@ where
 
 import qualified Parse.Sweet as Sweet
 import Parse.Sweet (Op, Tok(..))
-import Text.Parsec.Error (ParseError, Message(..), newErrorMessage)
 import Text.Parsec.Prim hiding (parse)
 import Text.Parsec.Combinator
 import qualified Data.Map.Strict as Map
@@ -18,9 +17,9 @@ import AST
 
 data InfixError = BadNeg (Op, Fixity) | BadPrec (Op, Fixity) (Op, Fixity)
 
-toMessage :: InfixError -> Message
-toMessage (BadNeg (o, f))             = Message $ "\tPrecedence parsing error\n\t\tcannot mix '" ++ o  ++ "' " ++ show f  ++ " and prefix '-' [infixl 6] in the same infix expression"
-toMessage (BadPrec (o1, f1) (o2, f2)) = Message $ "\tPrecedence parsing error\n\t\tcannot mix '" ++ o1 ++ "' " ++ show f1 ++ " and '" ++ o2 ++ "' " ++ show f2 ++ " in the same infix expression"
+instance Show InfixError where
+  show (BadNeg (o, f))             = "\tPrecedence parsing error\n\t\tcannot mix '" ++ o  ++ "' " ++ show f  ++ " and prefix '-' [infixl 6] in the same infix expression"
+  show (BadPrec (o1, f1) (o2, f2)) = "\tPrecedence parsing error\n\t\tcannot mix '" ++ o1 ++ "' " ++ show f1 ++ " and '" ++ o2 ++ "' " ++ show f2 ++ " in the same infix expression"
 
 data Assoc = Leftfix | Rightfix | Nonfix deriving Eq
 
@@ -53,7 +52,7 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
     parseNeg op1 (_ :< TExp e1 : rest)
       = (\x -> parse op1 x rest) =<< desugarExp e1
     parseNeg op1 (p :< TNeg : rest)
-      = do unless (prec1 < 6) (Left (newErrorMessage (toMessage (BadNeg op1)) p)) 
+      = do unless (prec1 < 6) (Left (newErrorMessage (show (BadNeg op1)) p)) 
            (r, rest') <- parseNeg ("-", Fixity (6, Leftfix)) rest
            parse op1 (p :< Apply (p :< Prim Neg) r) rest'
       where
@@ -64,7 +63,7 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
     parse op1 e1 (p :< TOp s2 : rest)  
        -- case (1): check for illegal expressions  
        | prec1 == prec2 && (fix1 /= fix2 || fix1 == Nonfix)  
-       = Left (newErrorMessage (toMessage (BadPrec op1 op2)) p)
+       = Left (newErrorMessage (show (BadPrec op1 op2)) p)
  
        -- case (2): op1 and op2 should associate to the left  
        | prec1 > prec2 || (prec1 == prec2 && fix1 == Leftfix)  

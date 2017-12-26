@@ -1,7 +1,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module AST 
-  ( Lit(..)
+  ( SourcePos(..)
+  , getPosition
+  , newErrorMessage
+  , ParseError
+  , Lit(..)
   , Prim(..)
   , Exp(..)
   , Tag(..)
@@ -14,9 +18,19 @@ module AST
 
 import Data.Tree (Tree(..))
 import Data.Tree.Pretty (drawVerticalTree)
-import Text.Parsec.Pos (SourcePos)
+import Text.Parsec.Pos (sourceName, sourceLine, sourceColumn)
+import qualified Text.Parsec.Pos as Parsec (SourcePos)
 import Text.Parsec.String (Parser)
-import Text.ParserCombinators.Parsec.Prim (getPosition)
+import qualified Text.Parsec.Error as Parsec (ParseError, Message(..), newErrorMessage)
+import qualified Text.ParserCombinators.Parsec.Prim as Parsec (getPosition)
+
+type ParseError = Parsec.ParseError
+newtype SourcePos = SourcePos Parsec.SourcePos
+instance Show SourcePos where
+  show (SourcePos p) = sourceName p ++ ":" ++ show (sourceLine p) ++ ":" ++ show (sourceColumn p)
+
+getPosition = SourcePos <$> Parsec.getPosition
+newErrorMessage s (SourcePos p) = Parsec.newErrorMessage (Parsec.Message s) p
 
 data Lit = Integer Integer
 

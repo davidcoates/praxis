@@ -7,15 +7,14 @@ where
 import Prelude hiding (exp)
 import Control.Applicative ((<|>))
 import Text.Parsec.String (Parser)
-import Text.ParserCombinators.Parsec.Prim (many, getPosition)
+import Text.ParserCombinators.Parsec.Prim (many)
 import Text.ParserCombinators.Parsec.Combinator (eof, option)
 import qualified Text.ParserCombinators.Parsec.Prim as Prim (parse) 
 import Text.ParserCombinators.Parsec.Language (haskellStyle)
 import Text.Parsec.Error (ParseError)
 import qualified Text.ParserCombinators.Parsec.Token as Token
-import Text.Parsec.Pos (SourcePos)
 
-import AST (Tag(..), Lit(..), Annotate, Praxis, lift, tagTree)
+import AST (Tag(..), Lit(..), Annotate, Praxis, lift, tagTree, getPosition, SourcePos)
 import Data.Tree (Tree(..))
 import Data.Tree.Pretty (drawVerticalTree)
 

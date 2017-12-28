@@ -43,5 +43,8 @@ getLine :: () -> String # ReadIO
 
 Terms can have multiple side effects, which are written as a comma-separated list (although the order is unimportant).
 ```
+getLine :: () -> String # ReadIO
+putString :: String -> () # WriteIO
+
 x :: () -> () # ReadIO, WriteIO
 x = putString . getLine

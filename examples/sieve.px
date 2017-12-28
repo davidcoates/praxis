@@ -1,0 +1,65 @@
+-- A sieve of Eratosthenes
+-- Example of usage of linear types (Array a)
+
+
+import Array (update, replicate, (!), filter)
+
+{- External functions used:
+
+-- update :: Int -> a -> Array a -> Array a
+-- 'update i x a' returns a but with position i updated to value x
+-- Since Array is a linear type, update is a destructive (in-place) update
+ 
+-- replicate :: Int -> a -> Array a
+-- 'replicate n x' returns an array of n copies of x
+
+-- (!) :: (Array a)! -> Int -> a!
+-- Don't confuse (!) (the element access operator) with ! the type operator.
+-- T! refers to a read-only reference to value of type T.
+-- So if a :: (Array Bool)!  (a read only reference to an array of bools), 
+--  then a ! 0 :: Bool!  (a read only reference to a boolean). 
+
+-- filter :: (a -> Bool) -> (Array a)! -> [a!]
+
+class Kill a where
+  kill :: a -> ()
+
+instance Kill (Array a) where
+  kill = ...
+
+-- Since Array is linear, destruction is made explicit by calling kill.
+
+-- fold :: (a -> b -> a) -> a -> [b] -> a
+-- Note: fold is like foldl' in Haskell.
+
+-}
+
+-- Performs a sieve of eratosthenes, returns a list of all primes less than the given number
+-- No optimisations
+sieve :: Int -> [Int]
+sieve n = filter id primes !primes finally kill primes
+  where
+        primes :: Array Bool
+        primes = fold f (replicate n True) [2 .. sqrt n]
+        f :: Array Bool -> Int -> Array Bool
+        f a k = fold (\b k -> update k False b) a [2*k..n]
+
+-- Notes:
+-- 'filter id primes !primes finally kill primes' desugars to
+   let! (primes) x = filter id primes   -- after the =, primes :: (Array Bool)!
+   in snd (kill primes, x)              -- kill primes, then return the list x :: [Int]
+
+-- primes is the finished sieve
+-- 'f a k' sets a ! i to False for all multiples i of k
+
+-- Minor optimisation: For f a k, only update all multiples i of k if k is prime
+        f :: Array Bool -> Int -> Array Bool
+        f a k = if (a ! k) !a -- here a is made temporarily read-only for the condition
+                then fold (\b k -> update k False b) a [2*k..n]
+                else a
+-- Desugars to
+        f a k = let! (a) x = a ! k
+                in if x
+                   then fold ...
+                   else a
+

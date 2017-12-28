@@ -1,6 +1,6 @@
 Main points:
 - Strict by default
-- Pure, with effect types
+- Mostly pure but explicit impure code with effect types
 - Linear types (typically abstract) for pure destructive updates
 
 Secondary features:

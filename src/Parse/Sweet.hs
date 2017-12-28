@@ -1,5 +1,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 
+{-
+  Parse.Sweet parses sugared Praxis in to an AST. Every node of the AST is annotated with source positions.
+  All sugaring is preserved in the AST, and infix expressions are not structured.
+  It is up to Praxis.Unsweet to perform desugaring, and process local fixity bindings to structure infix expressions.
+-}
+
 module Parse.Sweet 
   (parse, Exp(..), Lit(..), Op, Tok(..))
 where
@@ -13,7 +19,6 @@ import qualified Text.ParserCombinators.Parsec.Prim as Prim (parse)
 import Text.ParserCombinators.Parsec.Language (haskellStyle)
 import Text.Parsec.Error (ParseError)
 import qualified Text.ParserCombinators.Parsec.Token as Token
-
 import AST (Tag(..), Lit(..), Annotate, Praxis, lift, tagTree, getPosition, SourcePos)
 import Data.Tree (Tree(..))
 import Data.Tree.Pretty (drawVerticalTree)
@@ -39,11 +44,12 @@ data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit 
            | Infix [a (Tok a)]
 
--- Tok is used for structuring infix expressions
+-- Tok is used for structuring infix expressions. 
+-- It represents a token in an unstructure infix expression, where a token is either an expression, a binary operator, or prefix negation.
 type Op = String
 data Tok a = TExp (a (Exp a)) | TOp Op | TNeg
 
-
+-- Pretty printing
 class TreeShow a where
   treeShow :: a -> Tree String
 
@@ -59,17 +65,18 @@ instance Show a => TreeShow (Annotate a Exp) where
 instance Show a => Show (Annotate a Exp) where
   show = drawVerticalTree . treeShow
 
+-- This is the primary function, which attempts to parse a string to an annotated sugared AST
+parse :: String -> Either ParseError (Praxis Exp)
+parse = Prim.parse program ""
+
+program :: Parser (Praxis Exp)
+program = do { whiteSpace; e <- exp; eof; return e }
 
 sepBy1Full :: Parser [a] -> Parser [a] -> Parser [a]
 sepBy1Full a sep = do
   x <- a
   xs <- concat <$> many (do { y <- sep; z <- a; return (y ++ z) })
   return (x ++ xs)
-
--- instance Show (State s a) where
---   show _ = ""
--- type AExp = Exp -- (State String (), Exp)
-
 
 int :: Parser (Praxis Exp)
 int = lift $ (Lit . Integer) <$> natural
@@ -102,10 +109,3 @@ fexp :: Parser (Praxis Exp)
 fexp = aexp
 
 aexp = lit <|> parens exp
-
-program :: Parser (Praxis Exp)
-program = do { whiteSpace; e <- exp; eof; return e }
-
-
-parse :: String -> Either ParseError (Praxis Exp)
-parse = Prim.parse program ""

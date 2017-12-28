@@ -1,3 +1,9 @@
+{- 
+  Parse.Unsweet converts the AST of sugared Praxis to an AST of desugared Praxis, defined in AST.hs.
+  Every node of the resultant AST is annotated with source positions.
+  This is where infix expressions are structured, taking in to account of local fixity declarations. (that may appear after the operator is used) 
+-}
+
 module Parse.Unsweet
   (parse, Exp(..), Lit(..), Op(..))
 where
@@ -11,9 +17,9 @@ import Data.Map (Map)
 import Control.Monad (unless)
 import AST
 
--- data Binding = Binding String Exp
- --            deriving (Show)
-
+-- This is the primary function, which attempts to parse a string to an annotated desugared AST
+parse :: String -> Either ParseError (Praxis Exp)
+parse s = desugarExp =<< Sweet.parse s
 
 data InfixError = BadNeg (Op, Fixity) | BadPrec (Op, Fixity) (Op, Fixity)
 
@@ -45,6 +51,9 @@ desugarExp (a :< x) = (a :<) <$> desugarExp' x
           [x1, x2, x3] <- mapM desugarExp [e1, e2, e3]
           return (If x1 x2 x3)
 
+-- resolve structures infix expressions. This code was modified from https://www.haskell.org/onlinereport/haskell2010/haskellch10.html
+-- Although Parsec contains functions to create infix expression Parsers, this is not sufficient for our purposes, since the desugaring is
+-- complete separated from the initial parse.
 resolve :: Map Op Fixity -> [Praxis Tok] -> Either ParseError (Praxis Exp)
 resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
   where  
@@ -78,5 +87,3 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
         op2 = (s2, fixityTable Map.! s2)
         (_, Fixity (prec2, fix2)) = op2
 
-parse :: String -> Either ParseError (Praxis Exp)
-parse s = desugarExp =<< Sweet.parse s

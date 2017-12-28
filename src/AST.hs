@@ -14,6 +14,7 @@ module AST
   , PraxisTail
   , lift
   , tagTree
+  , indent
   ) where
 
 import Data.Tree (Tree(..))
@@ -91,3 +92,5 @@ instance Show a => TreeShow (Annotate a Exp) where
 instance Show a => Show (Annotate a Exp) where
   show = drawVerticalTree . treeShow
 
+indent :: String -> String
+indent = unlines . map ("  " ++) . lines

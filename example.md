@@ -14,7 +14,7 @@ The type of `x` is still `String`, and so we can pass it to any function that ex
 ```
 words :: String -> [String]
 
-let y = words x
+y = words x
 ```
 Importantly, the effect annotations of the arguments of a function will be added to the output. This ensures that we always have a complete record of possible side effects. In the above snippet, in order to evaluate `y` we have to evaluate `x`. Since evaluating `x` has side effect `ReadIO`, evaluating `y` should also have side effect `ReadIO`.
 ```

@@ -28,6 +28,7 @@ So, although we can mix pure and impure code, we will always have a record of wh
 Let's look at a real impure function, `getLine`.
 ```
 getLine :: () -> (String # ReadIO)
+getLine = ...
 ```
 The annotated type says that `getLine` takes a single unit argument, and returns a `String` with side effect `ReadIO`.
 

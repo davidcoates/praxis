@@ -42,7 +42,7 @@ sieve n = filter id primes !primes finally kill primes
         primes :: Array Bool
         primes = fold f (replicate n True) [2 .. sqrt n]
         f :: Array Bool -> Int -> Array Bool
-        f a k = fold (\b k -> update k False b) a [2*k..n]
+        f a k = fold (\b k -> update k False b) a [2*k,3*k..n]
 
 -- Notes:
 -- 'filter id primes !primes finally kill primes' desugars to
@@ -55,7 +55,7 @@ sieve n = filter id primes !primes finally kill primes
 -- Minor optimisation: For f a k, only update all multiples i of k if k is prime
         f :: Array Bool -> Int -> Array Bool
         f a k = if (a ! k) !a -- here a is made temporarily read-only for the condition
-                then fold (\b k -> update k False b) a [2*k..n]
+                then fold (\b k -> update k False b) a [2*k,3*k..n]
                 else a
 -- Desugars to
         f a k = let! (a) x = a ! k

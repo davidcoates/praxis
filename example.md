@@ -25,7 +25,7 @@ So, although we can mix pure and impure code, we will always have a record of wh
 
 ##### Impure functions
 
-Let's look at a real impure function, `getLine`.
+Let's look at the type signature of the impure function `getLine`, which reads a line from stdin.
 ```
 getLine :: () -> (String # ReadIO)
 getLine = ...

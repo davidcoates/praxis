@@ -1,10 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module AST 
-  ( SourcePos(..)
-  , getPosition
-  , newErrorMessage
-  , ParseError
+  ( Error(..)
+  , SourcePos
+  , indent
   , Lit(..)
   , Prim(..)
   , Exp(..)
@@ -14,24 +13,23 @@ module AST
   , PraxisTail
   , lift
   , tagTree
-  , indent
   ) where
 
 import Data.Tree (Tree(..))
 import Data.Tree.Pretty (drawVerticalTree)
-import Text.Parsec.Pos (sourceName, sourceLine, sourceColumn)
-import qualified Text.Parsec.Pos as Parsec (SourcePos)
+import Text.Parsec.Pos (sourceName, sourceLine, sourceColumn, SourcePos)
 import Text.Parsec.String (Parser)
-import qualified Text.Parsec.Error as Parsec (ParseError, Message(..), newErrorMessage)
-import qualified Text.ParserCombinators.Parsec.Prim as Parsec (getPosition)
+import Text.ParserCombinators.Parsec.Prim (getPosition)
 
-type ParseError = Parsec.ParseError
-newtype SourcePos = SourcePos Parsec.SourcePos
-instance Show SourcePos where
-  show (SourcePos p) = sourceName p ++ ":" ++ show (sourceLine p) ++ ":" ++ show (sourceColumn p)
+data Error a = Error { pos :: SourcePos, stage :: String,  message :: a } 
 
-getPosition = SourcePos <$> Parsec.getPosition
-newErrorMessage s (SourcePos p) = Parsec.newErrorMessage (Parsec.Message s) p
+indent :: String -> String
+indent = unlines . map ("  " ++) . lines
+
+instance Show a => Show (Error a) where
+  show e = "error in stage <<" ++ stage e ++ ">> at " ++ sourceName p ++ ":" ++ show (sourceLine p) ++ ":" ++ show (sourceColumn p) ++ " " ++ indent (show (message e)) 
+         where p = pos e
+
 
 data Lit = Integer Integer
 
@@ -92,5 +90,3 @@ instance Show a => TreeShow (Annotate a Exp) where
 instance Show a => Show (Annotate a Exp) where
   show = drawVerticalTree . treeShow
 
-indent :: String -> String
-indent = unlines . map ("  " ++) . lines

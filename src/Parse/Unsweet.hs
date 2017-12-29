@@ -5,27 +5,43 @@
 -}
 
 module Parse.Unsweet
-  (parse, Exp(..), Lit(..), Op(..))
+  (parse, ParseError)
 where
 
 import qualified Parse.Sweet as Sweet
 import Parse.Sweet (Op, Tok(..))
-import Text.Parsec.Prim hiding (parse)
 import Text.Parsec.Combinator
 import qualified Data.Map.Strict as Map
 import Data.Map (Map)
 import Control.Monad (unless)
+import Text.Parsec.Error (showErrorMessages, errorMessages, errorPos)
+import qualified Text.Parsec.Error as Parsec (ParseError)
 import AST
 
--- This is the primary function, which attempts to parse a string to an annotated desugared AST
-parse :: String -> Either ParseError (Praxis Exp)
-parse s = desugarExp =<< Sweet.parse s
+data ParseErrorTy = SugarError Parsec.ParseError | DesugarError DesugarError
+
+instance Show ParseErrorTy where
+  show (SugarError p)   = showErrorMessages "or" "unknown parse error" "expecting" "unexpected" "end of input" (errorMessages p)
+  show (DesugarError d) = "\n" ++ show d
+
+data DesugarError = InfixError InfixError
+
+instance Show DesugarError where
+  show (InfixError e) = "precedence error when trying to structure infix expression\n" ++ indent (show e)
 
 data InfixError = BadNeg (Op, Fixity) | BadPrec (Op, Fixity) (Op, Fixity)
 
 instance Show InfixError where
-  show (BadNeg (o, f))             = "Precedence parsing error\n" ++ indent ("cannot mix '" ++ o  ++ "' " ++ show f  ++ " and prefix '-' [infixl 6] in the same infix expression")
-  show (BadPrec (o1, f1) (o2, f2)) = "Precedence parsing error\n" ++ indent ("cannot mix '" ++ o1 ++ "' " ++ show f1 ++ " and '" ++ o2 ++ "' " ++ show f2 ++ " in the same infix expression")
+  show (BadNeg (o, f))             = "cannot mix '" ++ o  ++ "' " ++ show f  ++ " and prefix '-' [infixl 6] in the same infix expression"
+  show (BadPrec (o1, f1) (o2, f2)) = "cannot mix '" ++ o1 ++ "' " ++ show f1 ++ " and '" ++ o2 ++ "' " ++ show f2 ++ " in the same infix expression"
+
+type ParseError = Error ParseErrorTy
+
+
+-- This is the primary function, which attempts to parse a string to an annotated desugared AST
+parse :: String -> Either ParseError (Praxis Exp)
+parse s = case Sweet.parse s of Left p -> Left Error{ pos=errorPos p, stage="parsing", message = SugarError p }
+                                Right e -> desugarExp e
 
 data Assoc = Leftfix | Rightfix | Nonfix deriving Eq
 
@@ -61,7 +77,7 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
     parseNeg op1 (_ :< TExp e1 : rest)
       = (\x -> parse op1 x rest) =<< desugarExp e1
     parseNeg op1 (p :< TNeg : rest)
-      = do unless (prec1 < 6) (Left (newErrorMessage (indent (show (BadNeg op1))) p)) 
+      = do unless (prec1 < 6) (Left Error{pos=p, stage="desugaring", message = DesugarError (InfixError (BadNeg op1))})
            (r, rest') <- parseNeg ("-", Fixity (6, Leftfix)) rest
            parse op1 (p :< Apply (p :< Prim Neg) r) rest'
       where
@@ -72,7 +88,7 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
     parse op1 e1 (p :< TOp s2 : rest)  
        -- case (1): check for illegal expressions  
        | prec1 == prec2 && (fix1 /= fix2 || fix1 == Nonfix)  
-       = Left (newErrorMessage (indent (show (BadPrec op1 op2))) p)
+       = Left Error{pos=p, stage="desugaring", message=DesugarError (InfixError (BadPrec op1 op2))}
  
        -- case (2): op1 and op2 should associate to the left  
        | prec1 > prec2 || (prec1 == prec2 && fix1 == Leftfix)  

@@ -6,7 +6,7 @@
   It is up to Praxis.Unsweet to perform desugaring, and process local fixity bindings to structure infix expressions.
 -}
 
-module Parse.Sweet 
+module Parse.Sweet
   (parse, Exp(..), Lit(..), Op, Tok(..))
 where
 
@@ -15,7 +15,7 @@ import Control.Applicative ((<|>))
 import Text.Parsec.String (Parser)
 import Text.ParserCombinators.Parsec.Prim (many, getPosition)
 import Text.ParserCombinators.Parsec.Combinator (eof, option)
-import qualified Text.ParserCombinators.Parsec.Prim as Prim (parse) 
+import qualified Text.ParserCombinators.Parsec.Prim as Prim (parse)
 import Text.ParserCombinators.Parsec.Language (haskellStyle)
 import qualified Text.ParserCombinators.Parsec.Token as Token
 import Data.Tree (Tree(..))
@@ -41,10 +41,10 @@ natural    = Token.natural    lexer
 reserved   = Token.reserved   lexer
 
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
-           | Lit Lit 
+           | Lit Lit
            | Infix [a (Tok a)]
 
--- Tok is used for structuring infix expressions. 
+-- Tok is used for structuring infix expressions.
 -- It represents a token in an unstructure infix expression, where a token is either an expression, a binary operator, or prefix negation.
 type Op = String
 data Tok a = TExp (a (Exp a)) | TOp Op | TNeg
@@ -59,7 +59,7 @@ instance Show a => TreeShow (Annotate a Exp) where
           treeShow' (Lit lit)   = Node (show lit) []
           treeShow' (Infix ts)  = Node "[infix]" (map (tagTree tokShow) ts)
           tokShow TNeg     = Node "prefix[-]" []
-          tokShow (TOp o)  = Node o [] 
+          tokShow (TOp o)  = Node o []
           tokShow (TExp e) = treeShow e
 
 instance Show a => Show (Annotate a Exp) where
@@ -82,11 +82,11 @@ int :: Parser (Praxis Exp)
 int = lift $ (Lit . Integer) <$> natural
 
 op :: Parser Op
-op = symbol "+" <|> symbol "==" 
+op = symbol "+" <|> symbol "=="
 
 qop :: Parser Op
 qop = op
- 
+
 lit = int
 
 exp :: Parser (Praxis Exp)
@@ -99,7 +99,7 @@ infixexp = lift $ Infix <$> sepBy1Full lexp' ((:[]) <$> lift (TOp <$> qop))
 
 lexp :: Parser (Praxis Exp)
 lexp =  ifexp <|> fexp
-  where ifexp = lift $ do 
+  where ifexp = lift $ do
                 { reserved "if"  ; e1 <- exp
                 ; reserved "then"; e2 <- exp
                 ; reserved "else"; e3 <- exp

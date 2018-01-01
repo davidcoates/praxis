@@ -60,7 +60,7 @@ opTable = Map.fromList [("+", Fixity (6, Leftfix)), ("==", Fixity (4, Nonfix))]
 
 desugarExp :: Praxis Sweet.Exp -> Either ParseError (Praxis Exp)
 desugarExp (_ :< Sweet.Infix ts) = resolve opTable ts
-desugarExp (a :< x) = (a :<) <$> desugarExp' x 
+desugarExp (a :< x) = (a :<) <$> desugarExp' x
   where desugarExp' :: PraxisTail Sweet.Exp -> Either ParseError (PraxisTail Exp)
         desugarExp' (Sweet.Lit lit)     = Right (Lit lit)
         desugarExp' (Sweet.If e1 e2 e3) = do
@@ -72,7 +72,7 @@ desugarExp (a :< x) = (a :<) <$> desugarExp' x
 -- complete separated from the initial parse.
 resolve :: Map Op Fixity -> [Praxis Tok] -> Either ParseError (Praxis Exp)
 resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
-  where  
+  where
     parseNeg :: (Op, Fixity) -> [Praxis Tok] -> Either ParseError (Praxis Exp, [Praxis Tok])
     parseNeg op1 (_ :< TExp e1 : rest)
       = (\x -> parse op1 x rest) =<< desugarExp e1
@@ -84,21 +84,21 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
         (s1, Fixity (prec1, fix1)) = op1
 
     parse :: (Op, Fixity) -> Praxis Exp -> [Praxis Tok] -> Either ParseError (Praxis Exp, [Praxis Tok])
-    parse _   e1 [] = Right (e1, [])  
-    parse op1 e1 (p :< TOp s2 : rest)  
-       -- case (1): check for illegal expressions  
-       | prec1 == prec2 && (fix1 /= fix2 || fix1 == Nonfix)  
+    parse _   e1 [] = Right (e1, [])
+    parse op1 e1 (p :< TOp s2 : rest)
+       -- case (1): check for illegal expressions
+       | prec1 == prec2 && (fix1 /= fix2 || fix1 == Nonfix)
        = Left Error{pos=p, stage="desugaring", message=DesugarError (InfixError (BadPrec op1 op2))}
- 
-       -- case (2): op1 and op2 should associate to the left  
-       | prec1 > prec2 || (prec1 == prec2 && fix1 == Leftfix)  
-       = Right (e1, p :< TOp s2 : rest)  
- 
-       -- case (3): op1 and op2 should associate to the right  
-       | otherwise  
-       = do (r, rest') <- parseNeg op2 rest  
+
+       -- case (2): op1 and op2 should associate to the left
+       | prec1 > prec2 || (prec1 == prec2 && fix1 == Leftfix)
+       = Right (e1, p :< TOp s2 : rest)
+
+       -- case (3): op1 and op2 should associate to the right
+       | otherwise
+       = do (r, rest') <- parseNeg op2 rest
             parse op1 (p :< Apply (p :< Apply (p :< Fun s2) e1) r) rest'
-       where  
+       where
         (_, Fixity (prec1, fix1))  = op1
         op2 = (s2, fixityTable Map.! s2)
         (_, Fixity (prec2, fix2)) = op2

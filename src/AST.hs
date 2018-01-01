@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module AST 
+module AST
   ( Error(..)
   , SourcePos
   , indent
@@ -21,13 +21,13 @@ import Text.Parsec.Pos (sourceName, sourceLine, sourceColumn, SourcePos)
 import Text.Parsec.String (Parser)
 import Text.ParserCombinators.Parsec.Prim (getPosition)
 
-data Error a = Error { pos :: SourcePos, stage :: String,  message :: a } 
+data Error a = Error { pos :: SourcePos, stage :: String,  message :: a }
 
 indent :: String -> String
 indent = unlines . map ("  " ++) . lines
 
 instance Show a => Show (Error a) where
-  show e = "error in stage <<" ++ stage e ++ ">> at " ++ sourceName p ++ ":" ++ show (sourceLine p) ++ ":" ++ show (sourceColumn p) ++ " " ++ indent (show (message e)) 
+  show e = "error in stage <<" ++ stage e ++ ">> at " ++ sourceName p ++ ":" ++ show (sourceLine p) ++ ":" ++ show (sourceColumn p) ++ " " ++ indent (show (message e))
          where p = pos e
 
 
@@ -37,7 +37,7 @@ instance Show Lit where
   show (Integer i) = show i
 
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
-           | Lit Lit 
+           | Lit Lit
            | Fun String
            | Apply (a (Exp a)) (a (Exp a))
            | Prim Prim
@@ -48,7 +48,7 @@ data Prim = Neg
 instance Show Prim where
   show Neg = "[-]"
 
-data Tag a b = a :< b 
+data Tag a b = a :< b
 
 tagTree :: Show a => (b -> Tree String) -> Tag a b -> Tree String
 tagTree f (a :< x) = let Node y bs = f x in Node (show a ++ " :< " ++ y) bs
@@ -89,4 +89,3 @@ instance Show a => TreeShow (Annotate a Exp) where
 
 instance Show a => Show (Annotate a Exp) where
   show = drawVerticalTree . treeShow
-

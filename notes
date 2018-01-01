@@ -302,3 +302,56 @@ interacts ReadIO WriteIO
 interacts ReadIO ReadIO
 
 This would allow term rewriting/reordering EVEN for impure code! Awesome!
+
+
+
+
+filter id primes !primes finally kill primes
+vs
+filter id !primes finally kill primes
+
+filter id !primes 
+same as
+read primes in filter id primes
+?
+or
+let !primes in filter id primes
+
+
+ 
+
+Note: For polymorphic ffi: All type variables must be determinable at compile time. (Including in return I think..) Then they can be implemented as template functions.
+^-- Maybe do this for everything. No rank2 types.
+
+Lens as abstract type (so we can avoid rank2 types)
+
+foo :: a! -> a -> Int
+template <typename A_ref, typename A_>
+Int foo(A_Ref _, A _) { ... }
+
+A_Ref could be A* or it could just be A
+Int is a type alias for int
+
+or maybe (A&& _, A&& _) ?
+
+
+Multiparam type classes and functional dependencies.
+class Copy (a :: Type) (e :: Effect) | a -> e where
+      copy :: a! -> a # e
+
+class Copy a Pure => Share a
+
+* as alias for Type
+# as alias for Effect?
+or # for ImpureType? 
+
+
+Numeric literals.
+4 :: Int by default? 4N :: Num a or 4?
+
+or 4 :: Num a, with type defaulting?
+or 4 :: Num a. 4I :: Integer or 4i :: Int 
+
+
+Pumpkins idea: Might be a good idea to have syntax construct to temporarily un-linearise linear type to avoid lots of dupe's and bindings.
+

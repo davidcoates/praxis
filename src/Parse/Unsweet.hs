@@ -66,6 +66,11 @@ desugarExp (a :< x) = (a :<) <$> desugarExp' x
         desugarExp' (Sweet.If e1 e2 e3) = do
           [x1, x2, x3] <- mapM desugarExp [e1, e2, e3]
           return (If x1 x2 x3)
+        desugarExp' (Sweet.Fun s) = Right (Fun s)
+        desugarExp' (Sweet.Apply x y) = do
+          x' <- desugarExp x
+          y' <- desugarExp y
+          return (Apply x' y')
 
 -- resolve structures infix expressions. This code was modified from https://www.haskell.org/onlinereport/haskell2010/haskellch10.html
 -- Although Parsec contains functions to create infix expression Parsers, this is not sufficient for our purposes, since the desugaring is
@@ -100,6 +105,6 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
             parse op1 (p :< Apply (p :< Apply (p :< Fun s2) e1) r) rest'
        where
         (_, Fixity (prec1, fix1))  = op1
-        op2 = (s2, fixityTable Map.! s2)
+        op2 = (s2, Map.findWithDefault (Fixity (6, Leftfix)) s2 fixityTable)
         (_, Fixity (prec2, fix2)) = op2
 

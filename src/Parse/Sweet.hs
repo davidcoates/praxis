@@ -14,7 +14,7 @@ import Prelude hiding (exp)
 import Control.Applicative ((<|>))
 import Text.Parsec.String (Parser)
 import Text.ParserCombinators.Parsec.Prim (many, getPosition)
-import Text.ParserCombinators.Parsec.Combinator (eof, option)
+import Text.ParserCombinators.Parsec.Combinator (eof, many1, option)
 import qualified Text.ParserCombinators.Parsec.Prim as Prim (parse)
 import Text.ParserCombinators.Parsec.Language (haskellStyle)
 import qualified Text.ParserCombinators.Parsec.Token as Token
@@ -39,9 +39,12 @@ parens     = Token.parens     lexer
 integer    = Token.integer    lexer
 natural    = Token.natural    lexer
 reserved   = Token.reserved   lexer
+identifier = Token.identifier lexer
 
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit
+           | Fun String
+           | Apply (a (Exp a)) (a (Exp a))
            | Infix [a (Tok a)]
 
 -- Tok is used for structuring infix expressions.
@@ -82,10 +85,16 @@ int :: Parser (Praxis Exp)
 int = lift $ (Lit . Integer) <$> natural
 
 op :: Parser Op
-op = symbol "+" <|> symbol "=="
+op = operator
 
 qop :: Parser Op
-qop = op
+qop = op -- TODO: Allow qualified operators
+
+var :: Parser String
+var = identifier
+
+qvar :: Parser String
+qvar = var -- TODO: Allow qualflied vars
 
 lit = int
 
@@ -104,8 +113,12 @@ lexp =  ifexp <|> fexp
                 ; reserved "then"; e2 <- exp
                 ; reserved "else"; e3 <- exp
                 ; return (If e1 e2 e3) }
-
 fexp :: Parser (Praxis Exp)
-fexp = aexp
+fexp = do
+  xs <- many1 aexp
+  return (build xs)
+  where build :: [Praxis Exp] -> Praxis Exp
+        build [x] = x
+        build ((px :< x):(py :< y):ys) = let z = px :< Apply (px :< x) (py :< y) in build (z:ys)
 
-aexp = lit <|> parens exp
+aexp = lit <|> (lift (Fun <$> qvar)) <|> parens exp

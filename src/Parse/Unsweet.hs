@@ -5,7 +5,7 @@
 -}
 
 module Parse.Unsweet
-  (parse, ParseError)
+  (parse)
 where
 
 import qualified Parse.Sweet as Sweet
@@ -40,7 +40,7 @@ type ParseError = Error ParseErrorTy
 
 -- This is the primary function, which attempts to parse a string to an annotated desugared AST
 parse :: String -> Either ParseError (Praxis Exp)
-parse s = case Sweet.parse s of Left p -> Left Error{ pos=errorPos p, stage="parsing", message = SugarError p }
+parse s = case Sweet.parse s of Left p -> Left Error{ pos= SourcePos (errorPos p), stage="parsing", message = SugarError p }
                                 Right e -> desugarExp e
 
 data Assoc = Leftfix | Rightfix | Nonfix deriving Eq

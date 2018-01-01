@@ -13,15 +13,14 @@ where
 import Prelude hiding (exp)
 import Control.Applicative ((<|>))
 import Text.Parsec.String (Parser)
-import Text.ParserCombinators.Parsec.Prim (many, getPosition)
+import Text.ParserCombinators.Parsec.Prim (many)
 import Text.ParserCombinators.Parsec.Combinator (eof, many1, option)
 import qualified Text.ParserCombinators.Parsec.Prim as Prim (parse)
 import Text.ParserCombinators.Parsec.Language (haskellStyle)
 import qualified Text.ParserCombinators.Parsec.Token as Token
 import Data.Tree (Tree(..))
-import Data.Tree.Pretty (drawVerticalTree)
 import Text.Parsec.Error (ParseError)
-import AST (Tag(..), Lit(..), Annotate, Praxis, lift, tagTree)
+import AST (Tag(..), Lit(..), Annotate, Praxis, lift, TreeShow(..), tagTree, getPosition)
 
 praxisDef =
   haskellStyle
@@ -52,21 +51,15 @@ data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
 type Op = String
 data Tok a = TExp (a (Exp a)) | TOp Op | TNeg
 
--- Pretty printing
-class TreeShow a where
-  treeShow :: a -> Tree String
-
-instance Show a => TreeShow (Annotate a Exp) where
-  treeShow = tagTree treeShow'
-    where treeShow' (If x y z)  = Node "[if]" [treeShow x, treeShow y, treeShow z]
+instance TreeShow Exp where
+  toTreeString = treeShow
+    where treeShow = tagTree treeShow'
+          treeShow' (If x y z)  = Node "[if]" [treeShow x, treeShow y, treeShow z]
           treeShow' (Lit lit)   = Node (show lit) []
           treeShow' (Infix ts)  = Node "[infix]" (map (tagTree tokShow) ts)
           tokShow TNeg     = Node "prefix[-]" []
           tokShow (TOp o)  = Node o []
           tokShow (TExp e) = treeShow e
-
-instance Show a => Show (Annotate a Exp) where
-  show = drawVerticalTree . treeShow
 
 -- This is the primary function, which attempts to parse a string to an annotated sugared AST
 parse :: String -> Either ParseError (Praxis Exp)

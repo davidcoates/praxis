@@ -1,7 +1,7 @@
-{- 
+{-
   Parse.Unsweet converts the AST of sugared Praxis to an AST of desugared Praxis, defined in AST.hs.
   Every node of the resultant AST is annotated with source positions.
-  This is where infix expressions are structured, taking in to account of local fixity declarations. (that may appear after the operator is used) 
+  This is where infix expressions are structured, taking in to account of local fixity declarations. (that may appear after the operator is used)
 -}
 
 module Parse.Unsweet
@@ -66,7 +66,7 @@ desugarExp (a :< x) = (a :<) <$> desugarExp' x
         desugarExp' (Sweet.If e1 e2 e3) = do
           [x1, x2, x3] <- mapM desugarExp [e1, e2, e3]
           return (If x1 x2 x3)
-        desugarExp' (Sweet.Fun s) = Right (Fun s)
+        desugarExp' (Sweet.Var s) = Right (Var s)
         desugarExp' (Sweet.Apply x y) = do
           x' <- desugarExp x
           y' <- desugarExp y
@@ -84,7 +84,7 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
     parseNeg op1 (p :< TNeg : rest)
       = do unless (prec1 < 6) (Left Error{pos=p, stage="desugaring", message = DesugarError (InfixError (BadNeg op1))})
            (r, rest') <- parseNeg ("-", Fixity (6, Leftfix)) rest
-           parse op1 (p :< Apply (p :< Prim Neg) r) rest'
+           parse op1 (p :< Apply (p :< Var "negate") r) rest'
       where
         (s1, Fixity (prec1, fix1)) = op1
 
@@ -102,7 +102,7 @@ resolve fixityTable ts = fst <$> parseNeg ("", Fixity (-1, Nonfix)) ts
        -- case (3): op1 and op2 should associate to the right
        | otherwise
        = do (r, rest') <- parseNeg op2 rest
-            parse op1 (p :< Apply (p :< Apply (p :< Fun s2) e1) r) rest'
+            parse op1 (p :< Apply (p :< Apply (p :< Var s2) e1) r) rest'
        where
         (_, Fixity (prec1, fix1))  = op1
         op2 = (s2, Map.findWithDefault (Fixity (6, Leftfix)) s2 fixityTable)

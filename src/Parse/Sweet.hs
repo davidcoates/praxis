@@ -12,6 +12,7 @@ where
 
 import Prelude hiding (exp)
 import Control.Applicative ((<|>))
+import Text.Parsec.Char (string)
 import Text.Parsec.String (Parser)
 import Text.ParserCombinators.Parsec.Prim (many)
 import Text.ParserCombinators.Parsec.Combinator (eof, many1, option)
@@ -24,7 +25,7 @@ import AST (Tag(..), Lit(..), Annotate, Praxis, lift, TreeShow(..), tagTree, get
 
 praxisDef =
   haskellStyle
-    { Token.reservedNames   = ["if", "then", "else"]
+    { Token.reservedNames   = ["if", "then", "else", "True", "False"] -- TODO: Eventually treat True False just like any other data constructor
     , Token.reservedOpNames = ["=", "\\", "->", "=>", "@", "?", ":", "::"]
     }
 
@@ -42,7 +43,7 @@ identifier = Token.identifier lexer
 
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit
-           | Fun String
+           | Var String
            | Apply (a (Exp a)) (a (Exp a))
            | Infix [a (Tok a)]
 
@@ -87,9 +88,13 @@ var :: Parser String
 var = identifier
 
 qvar :: Parser String
-qvar = var -- TODO: Allow qualflied vars
+qvar = var -- TODO: Allow qualified vars
 
-lit = int
+bool :: Parser (Praxis Exp)
+bool = lift $ (Lit . Bool) <$> ((reserved "True" >> return True) <|> (reserved "False" >> return False))
+
+lit :: Parser (Praxis Exp)
+lit = bool <|> int
 
 exp :: Parser (Praxis Exp)
 exp = infixexp
@@ -114,4 +119,4 @@ fexp = do
         build [x] = x
         build ((px :< x):(py :< y):ys) = let z = px :< Apply (px :< x) (py :< y) in build (z:ys)
 
-aexp = lit <|> (lift (Fun <$> qvar)) <|> parens exp
+aexp = lit <|> (lift (Var <$> qvar)) <|> parens exp

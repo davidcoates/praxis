@@ -12,6 +12,7 @@ where
 
 import Prelude hiding (exp)
 import Control.Applicative ((<|>))
+import Text.Parsec.Char (string)
 import Text.Parsec.String (Parser)
 import Text.ParserCombinators.Parsec.Prim (many)
 import Text.ParserCombinators.Parsec.Combinator (eof, many1, option)
@@ -87,9 +88,13 @@ var :: Parser String
 var = identifier
 
 qvar :: Parser String
-qvar = var -- TODO: Allow qualflied vars
+qvar = var -- TODO: Allow qualified vars
 
-lit = int
+bool :: Parser (Praxis Exp)
+bool = lift $ (Lit . Bool) <$> ((string "True" >> return True) <|> (string "False" >> return False))
+
+lit :: Parser (Praxis Exp)
+lit = bool <|> int
 
 exp :: Parser (Praxis Exp)
 exp = infixexp

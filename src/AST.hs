@@ -42,7 +42,7 @@ instance Show a => Show (Error a) where
 getPosition = SourcePos <$> Parsec.getPosition
 
 
-data Lit = Integer Integer
+data Lit = Integer Integer | Bool Bool
 
 instance Show Lit where
   show (Integer i) = show i

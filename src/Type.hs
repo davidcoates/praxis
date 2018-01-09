@@ -8,6 +8,7 @@ module Type
   , QType(..)
   , subsEffects
   , subsType
+  , pureType
   ) where
 
 import Data.Set (Set)
@@ -32,10 +33,14 @@ data Pure = TyPrim Prim              -- A primitive type
           | TyData String [Pure]     -- A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
           | TyVar String             -- A type variable (e.g., a in forall a. a -> a)
 
+-- Perhaps ultiamtely replace this with TyData "Bool" [], TyData "Int" []
 data Prim = TyBool | TyInt
 
 
 data Type = Ty Pure Effects          -- `a # e` is respresented as `TyImpure a e`. A pure type `a` is represented as `TyImpure a []`
+
+pureType :: Pure -> Type
+pureType p = Ty p Set.empty
 
 data Constraint = Constraint String Type
 

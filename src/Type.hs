@@ -4,6 +4,8 @@ module Type
   , Pure(..)
   , Prim(..)
   , Type(..)
+  , Constraint(..)
+  , QType(..)
   , subsEffects
   , subsType
   ) where
@@ -35,7 +37,9 @@ data Prim = TyBool | TyInt
 
 data Type = Ty Pure Effects          -- `a # e` is respresented as `TyImpure a e`. A pure type `a` is represented as `TyImpure a []`
 
-data QType = Forall [String] Type
+data Constraint = Constraint String Type
+
+data QType = Forall [Constraint] [String] Type
 
 
 instance Show Effect where
@@ -55,8 +59,12 @@ instance Show Pure where
 instance Show Type where
   show (Ty p es) = show p ++ (if Set.null es then "" else " # " ++ show es)
 
+instance Show Constraint where
+  show (Constraint s t) = s ++ " " ++ show t
+
 instance Show QType where
-  show (Forall xs t) = "forall " ++ intercalate " " xs ++ ". " ++ show t
+  show (Forall cs xs t) = "forall " ++ intercalate " " xs ++ ". " ++ cs' ++ show t
+    where cs' = if null cs then "" else "(" ++ intercalate " "  (map show cs) ++ ") => "
 
 subsEffects :: (String -> Effects) -> Effects -> Effects
 subsEffects f m = Set.foldl' Set.union Set.empty (Set.map g m)

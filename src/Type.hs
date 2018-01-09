@@ -28,11 +28,15 @@ data Pure = TyPrim Prim              -- A primitive type
           | TyUni String             -- A (pure) type unification variable
           | TyFun Pure Type          -- `a -> b # e` is represented as TyFun a (TyImpure b e)
           | TyData String [Pure]     -- A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
+          | TyVar String             -- A type variable (e.g., a in forall a. a -> a)
 
 data Prim = TyBool | TyInt
 
 
 data Type = Ty Pure Effects          -- `a # e` is respresented as `TyImpure a e`. A pure type `a` is represented as `TyImpure a []`
+
+data QType = Forall [String] Type
+
 
 instance Show Effect where
   show (Ef s)    = s
@@ -50,6 +54,9 @@ instance Show Pure where
 
 instance Show Type where
   show (Ty p es) = show p ++ (if Set.null es then "" else " # " ++ show es)
+
+instance Show QType where
+  show (Forall xs t) = "forall " ++ intercalate " " xs ++ ". " ++ show t
 
 subsEffects :: (String -> Effects) -> Effects -> Effects
 subsEffects f m = Set.foldl' Set.union Set.empty (Set.map g m)

@@ -1,7 +1,7 @@
-{- 
+{-
   Parse.Unsweet converts the AST of sugared Praxis to an AST of desugared Praxis, defined in AST.hs.
   Every node of the resultant AST is annotated with source positions.
-  This is where infix expressions are structured, taking in to account of local fixity declarations. (that may appear after the operator is used) 
+  This is where infix expressions are structured, taking in to account of local fixity declarations. (that may appear after the operator is used)
 -}
 
 module Parse.Unsweet

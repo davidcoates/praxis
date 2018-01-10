@@ -43,7 +43,7 @@ identifier = Token.identifier lexer
 
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit
-           | Fun String
+           | Var String
            | Apply (a (Exp a)) (a (Exp a))
            | Infix [a (Tok a)]
 
@@ -119,4 +119,4 @@ fexp = do
         build [x] = x
         build ((px :< x):(py :< y):ys) = let z = px :< Apply (px :< x) (py :< y) in build (z:ys)
 
-aexp = lit <|> (lift (Fun <$> qvar)) <|> parens exp
+aexp = lit <|> (lift (Var <$> qvar)) <|> parens exp

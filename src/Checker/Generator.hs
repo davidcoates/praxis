@@ -10,7 +10,7 @@ import AST
 import Type hiding (Constraint(..))
 import qualified Type as T (Constraint(..))
 import Prelude hiding (error)
-
+import Control.Exception.Base (assert)
 
 error :: SourcePos -> TypeErrorTy -> TypeError
 error p t = Error { pos = p, stage = "inference(generator)", message = t }
@@ -45,11 +45,20 @@ topContext = map (\(s, t) -> (s, (t,0))) topFuns
 {-
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit
-           | Fun String
+           | Var String
            | Apply (a (Exp a)) (a (Exp a))
-           | Prim Prim
 -}
 
+{-
+
+-}
+contextJoin :: Context -> Context -> Context -> (Context, [Constraint])
+contextJoin [] [] [] = ([],[])
+contextJoin ((x,(xt,xi)):xs) ((y,(yt,yi)):ys) ((z,(zt,zi)):zs) =
+  assert ((x,xt) == (y,yt) && (y,yt) == (z,zt)) r
+  where (l, c1)  = ((x,(xt,max yi zi)), if (xi == yi) == (yi == zi) then [] else [C.drop (pureType xt)])
+        (ls, c2) = contextJoin xs ys zs
+        r = (l:ls, c1 ++ c2)
 
 generateExp :: Annotate SourcePos Exp -> TC (Annotate (Type, SourcePos) Exp, [Constraint])
 generateExp e = do
@@ -61,12 +70,19 @@ generateExp e = do
 generateExp' :: (Context, Annotate SourcePos Exp, Type) -> TC (Annotate (Type, SourcePos) Exp, Context, [Constraint])
 generateExp' (l1, p :< e, t) = (\(e', l2, cs) -> ((t,p) :< e', l2, cs)) <$> exp l1 t e
   where exp l1 t e = exp' e
-        exp' (Lit (Integer i)) = pure $ (Lit (Integer i), l1, [Eq t intTy])
+
+        exp' (Lit x) = return (Lit x, l1, [Sub t' t])
+          where t' = case x of { Integer _ -> intTy ; Bool _ -> boolTy }
 
         exp' (If a b c)        = do
           (a', l2, c1) <- generateExp' (l1, a, boolTy)
-          (b', l3, c2) <- generateExp' (l2, b, t)
-          (c', l4, c3) <- generateExp' (l3, c, t)
-          return (If a' b' c', l4, c1 ++ c2 ++ c3)
+          (b', l3, c2)  <- generateExp' (l2, b, t)
+          (c', l3', c3) <- generateExp' (l2, c, t)
+          let (l4, c4) = contextJoin l2 l3 l3'
+          return (If a' b' c', l4, c1 ++ c2 ++ c3 ++ c4)
 
---        exp' (Fun s)          = let t' = fromJust (lookup s l1)
+        exp' (Var s) = do
+          (t', l2, c1) <- use p s l1
+          return (Var s, l2, (Sub (pureType t') t):c1)
+
+        exp' (Apply _ _) = undefined

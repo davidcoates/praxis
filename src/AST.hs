@@ -6,7 +6,6 @@ module AST
   , getPosition
   , indent
   , Lit(..)
-  , Prim(..)
   , Exp(..)
   , Tag(..)
   , Annotate
@@ -49,23 +48,15 @@ instance Show Lit where
 
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit
-           | Fun String
+           | Var String
            | Apply (a (Exp a)) (a (Exp a))
-           | Prim Prim
 
 mapExp :: (a -> b) -> Annotate a Exp -> Annotate b Exp
 mapExp f (p :< x) = f p :< mapExp' x
   where mapExp' (If x y z)  = If (mapExp f x) (mapExp f y) (mapExp f z)
         mapExp' (Lit l)     = Lit l
-        mapExp' (Fun s)     = Fun s
+        mapExp' (Var s)     = Var s
         mapExp' (Apply a b) = Apply (mapExp f a) (mapExp f b)
-        mapExp' (Prim p)    = Prim p
-
--- Primitive terms such as prefix negation
-data Prim = Neg
-
-instance Show Prim where
-  show Neg = "[-]"
 
 data Tag a b = a :< b
 
@@ -100,13 +91,11 @@ instance TreeShow Exp where
             treeShow = tagTree treeShow'
             treeShow' (If x y z)  = Node "[if]" [treeShow x, treeShow y, treeShow z]
             treeShow' (Lit lit)   = Node (show lit) []
-            treeShow' (Fun s)     = Node s []
-            treeShow' (Prim p)    = Node (show p) []
+            treeShow' (Var s)     = Node s []
             treeShow' (Apply (_ :< e) x) = let (a, b) = compress e in Node a (b ++ [treeShow x])
 
             compress :: Show a => Exp (Tag a) -> (String, [Tree String])
-            compress (Prim p)           = (show p, [])
-            compress (Fun s)            = (s, [])
+            compress (Var s)            = (s, [])
             compress (Apply (_ :< e) x) = let (f, y) = compress e in (f, y ++ [treeShow x])
             compress x                  = ("$", [treeShow' x])
 

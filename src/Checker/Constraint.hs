@@ -10,13 +10,13 @@ import qualified Type as T (Constraint(..))
 
 data Constraint = Top
                 | Bottom
-                | Eq Type Type
+                | Sub Type Type
                 | Prim T.Constraint
 
 instance Show Constraint where
   show Top      = "⊤"
   show Bottom   = "⊥"
-  show (Eq a b) = show a  ++ " ~ " ++ show b
+  show (Sub a b) = show a  ++ " <= " ++ show b
   show (Prim c) = show c
 
 share :: Type -> Constraint

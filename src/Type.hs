@@ -32,12 +32,14 @@ data Pure = TyPrim Prim              -- A primitive type
           | TyFun Pure Type          -- `a -> b # e` is represented as TyFun a (TyImpure b e)
           | TyData String [Pure]     -- A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
           | TyVar String             -- A type variable (e.g., a in forall a. a -> a)
+          deriving (Ord, Eq)
 
 -- Perhaps ultiamtely replace this with TyData "Bool" [], TyData "Int" []
 data Prim = TyBool | TyInt
-
+          deriving (Ord, Eq)
 
 data Type = Ty Pure Effects          -- `a # e` is respresented as `TyImpure a e`. A pure type `a` is represented as `TyImpure a []`
+          deriving (Ord, Eq)
 
 pureType :: Pure -> Type
 pureType p = Ty p Set.empty

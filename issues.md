@@ -44,3 +44,8 @@ fst a in Pair a b ?
 Or:
 type Pair a b = { fst :: a, snd :: b }
 i.e., do we really need it to be data?
+
+
+
+The type of generalised functions must be known before use.
+Requiring all top-level functions to have type signatures would guarantee this.

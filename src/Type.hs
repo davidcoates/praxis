@@ -14,6 +14,7 @@ module Type
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.List (intercalate)
+import Data.Maybe (fromMaybe)
 
 {-
   Effects functions as a *flat set* of effect.
@@ -38,15 +39,16 @@ data Pure = TyPrim Prim              -- A primitive type
 data Prim = TyBool | TyInt
           deriving (Ord, Eq)
 
-data Type = Ty Pure Effects          -- `a # e` is respresented as `TyImpure a e`. A pure type `a` is represented as `TyImpure a []`
+data Type = Ty Pure Effects          -- `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
           deriving (Ord, Eq)
 
 pureType :: Pure -> Type
 pureType p = Ty p Set.empty
 
+-- TODO: Allow multi-parameter type classes
 data Constraint = Constraint String Type
 
--- TODO: Allow quantified effects
+-- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
 data QType = Forall [Constraint] [String] Type
 
 
@@ -58,11 +60,19 @@ instance Show Prim where
   show TyBool = "Bool"
   show TyInt  = "Int"
 
+parens True  x = "(" ++ x ++ ")"
+parens False x = x
+
 instance Show Pure where
   show (TyPrim p)    = show p
   show (TyUni s)     = s
-  show (TyFun a b)   = show a ++ " -> " ++ show b
-  show (TyData s ts) = s ++ intercalate " " (map show ts)
+  show (TyFun a b)   = parens p (show a) ++ " -> " ++ show b
+    where p = case a of (TyFun _ _) -> True
+                        _           -> False
+  show (TyData s ts) = s ++ intercalate " " (map (\t -> parens (p t) (show t)) ts)
+    where p t = case t of (TyFun _ _)  -> True
+                          (TyData _ _) -> True
+                          _            -> False
   show (TyVar s)     = s
 
 instance Show Type where
@@ -76,20 +86,20 @@ instance Show QType where
     where cs' = if null cs then "" else "(" ++ intercalate " "  (map show cs) ++ ") => "
 
 
-subsEffects :: (String -> Effects) -> Effects -> Effects
+subsEffects :: (String -> Maybe Effects) -> Effects -> Effects
 subsEffects f m = Set.foldl' Set.union Set.empty (Set.map g m)
                   where g :: Effect -> Set Effect
                         g (Ef s) = Set.singleton (Ef s)
-                        g (EfUni s) = f s
+                        g e@(EfUni s) = fromMaybe (Set.singleton e) (f s)
 
-subsType :: (String -> Pure) -> (String -> Effects) -> Type -> Type
+subsType :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Type -> Type
 subsType ft fe (Ty p es) = Ty (subsPure ft fe p) (subsEffects fe es)
 
-subsPure :: (String -> Pure) -> (String -> Effects) -> Pure -> Pure
+subsPure :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Pure -> Pure
 subsPure ft fe = subsPure'
   where subsPure' :: Pure -> Pure
         subsPure' (TyPrim p)    = TyPrim p
-        subsPure' (TyUni s)     = ft s
+        subsPure' t@(TyUni s)   = fromMaybe t (ft s)
         subsPure' (TyFun a b)   = TyFun (subsPure' a) (subsType ft fe b)
         subsPure' (TyData s ts) = TyData s (map subsPure' ts)
-        subsPure' (TyVar s)     = ft s
+        subsPure' t@(TyVar s)   = fromMaybe t (ft s)

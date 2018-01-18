@@ -60,7 +60,7 @@ freshTyUni = TC $ \(x:xs) -> Right (xs, TyUni x)
 ungeneralise :: QType -> TC ([Constraint], Type)
 ungeneralise (Forall cs as t) = do
   bs <- sequence (replicate (length as) freshTyUni)
-  let ft x = case lookup x (zip as bs) of Just y -> y
-  let fe = undefined
+  let ft = (`lookup` (zip as bs))
+  let fe = const Nothing
   let subsT = subsType ft fe
   return (map (\c -> case c of Constraint s t -> Constraint s (subsT t)) cs, subsT t)

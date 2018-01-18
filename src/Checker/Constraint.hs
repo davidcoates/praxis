@@ -1,7 +1,8 @@
-module Checker.Constraint 
+module Checker.Constraint
   ( Constraint(..)
   , share
   , drop
+  , subsConstraint
   ) where
 
 import Prelude hiding (drop)
@@ -24,3 +25,11 @@ share = Prim . T.Constraint "Share"
 
 drop :: Type -> Constraint
 drop = Prim . T.Constraint "Drop"
+
+subsConstraint :: (String -> Pure) -> (String -> Effects) -> Constraint -> Constraint
+subsConstraint ft fe = subsC
+  where subsC Top = Top
+        subsC Bottom = Bottom
+        subsC (Sub t1 t2) = Sub (subsT t1) (subsT t2)
+        subsC (Prim (T.Constraint s t)) = Prim  (T.Constraint s (subsT t))
+        subsT = subsType ft fe

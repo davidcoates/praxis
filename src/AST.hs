@@ -45,6 +45,7 @@ data Lit = Integer Integer | Bool Bool
 
 instance Show Lit where
   show (Integer i) = show i
+  show (Bool b) = show b
 
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit
@@ -92,12 +93,16 @@ instance TreeShow Exp where
             treeShow' (If x y z)  = Node "[if]" [treeShow x, treeShow y, treeShow z]
             treeShow' (Lit lit)   = Node (show lit) []
             treeShow' (Var s)     = Node s []
-            treeShow' (Apply (_ :< e) x) = let (a, b) = compress e in Node a (b ++ [treeShow x])
+            -- treeShow' (Apply (_ :< e) x) = let (a, b) = compress e in Node a (b ++ [treeShow x])
+            treeShow' (Apply f x) = Node "[$]" [treeShow f, treeShow x]
 
             compress :: Show a => Exp (Tag a) -> (String, [Tree String])
             compress (Var s)            = (s, [])
             compress (Apply (_ :< e) x) = let (f, y) = compress e in (f, y ++ [treeShow x])
             compress x                  = ("$", [treeShow' x])
 
-instance Show (Praxis Exp) where
+-- instance Show (Praxis Exp) where
+--  show t = showTree t
+
+instance Show t => Show (Annotate t Exp) where
   show t = showTree t

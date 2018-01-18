@@ -37,7 +37,8 @@ intTy = pureType (TyPrim TyInt)
 boolTy :: Type
 boolTy = pureType (TyPrim TyBool)
 
-topFuns = [("Prelude.+", TyFun (TyPrim TyInt) intTy)]
+-- TODO Qualify with Prelude or Base or some other sentinel
+topFuns = [("+", TyFun (TyPrim TyInt) (pureType (TyFun (TyPrim TyInt) intTy)))]
 
 topContext :: Context
 topContext = map (\(s, t) -> (s, (t,0))) topFuns
@@ -66,7 +67,7 @@ generateExp e = do
   (e', _, cs) <- generateExp' (topContext, e, pureType t)
   return (e', cs)
 
-
+-- TODO: Effects
 generateExp' :: (Context, Annotate SourcePos Exp, Type) -> TC (Annotate (Type, SourcePos) Exp, Context, [Constraint])
 generateExp' (l1, p :< e, t) = (\(e', l2, cs) -> ((t,p) :< e', l2, cs)) <$> exp l1 t e
   where exp l1 t e = exp' e
@@ -76,13 +77,18 @@ generateExp' (l1, p :< e, t) = (\(e', l2, cs) -> ((t,p) :< e', l2, cs)) <$> exp 
 
         exp' (If a b c)        = do
           (a', l2, c1) <- generateExp' (l1, a, boolTy)
-          (b', l3, c2)  <- generateExp' (l2, b, t)
-          (c', l3', c3) <- generateExp' (l2, c, t)
+          (b', l3, c2) <- generateExp' (l2, b, t)
+          (c', l3',c3) <- generateExp' (l2, c, t)
           let (l4, c4) = contextJoin l2 l3 l3'
           return (If a' b' c', l4, c1 ++ c2 ++ c3 ++ c4)
 
+        -- TODO: forall quantified functions
         exp' (Var s) = do
           (t', l2, c1) <- use p s l1
           return (Var s, l2, (Sub (pureType t') t):c1)
 
-        exp' (Apply _ _) = undefined
+        exp' (Apply f x) = do
+          a  <- freshTyUni
+          (f', l2, c1) <- generateExp' (l1, f, pureType (TyFun a t) )
+          (x', l3, c2) <- generateExp' (l2, x, pureType a)
+          return (Apply f' x', l3, c1 ++ c2)

@@ -25,7 +25,7 @@ import AST (Tag(..), Lit(..), Annotate, Praxis, lift, TreeShow(..), tagTree, get
 
 praxisDef =
   haskellStyle
-    { Token.reservedNames   = ["if", "then", "else"]
+    { Token.reservedNames   = ["if", "then", "else", "True", "False"] -- TODO: Eventually treat True False just like any other data constructor
     , Token.reservedOpNames = ["=", "\\", "->", "=>", "@", "?", ":", "::"]
     }
 
@@ -91,7 +91,7 @@ qvar :: Parser String
 qvar = var -- TODO: Allow qualified vars
 
 bool :: Parser (Praxis Exp)
-bool = lift $ (Lit . Bool) <$> ((string "True" >> return True) <|> (string "False" >> return False))
+bool = lift $ (Lit . Bool) <$> ((reserved "True" >> return True) <|> (reserved "False" >> return False))
 
 lit :: Parser (Praxis Exp)
 lit = bool <|> int

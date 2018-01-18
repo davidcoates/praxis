@@ -9,13 +9,16 @@ module Checker.TCMonad
   , runTC
   , typeError
   , freshTyUni
+  , ungeneralise
   )
 where
 
 import Control.Applicative (Applicative(..))
 import Control.Monad (liftM, ap)
 import Checker.Error
-import Type (Pure(..))
+import Type (QType(..), Pure(..), Type(..), Constraint(..), subsType)
+import Checker.Constraint (subsConstraint)
+
 
 newtype TC a = TC ([String] -> Either TypeError ([String], a))
 
@@ -37,7 +40,11 @@ fresh alpha = concatMap perm [1..]
         perm 1 = map (:[]) alpha
         perm n = do { x <- alpha; y <- perm (n-1); return (x:y) }
 
-freshGreekNames = fresh ['α'..'ω']
+freshGreekNames :: [String]
+freshGreekNames = map ('~':) (fresh ['a'..'z'])
+-- freshGreekNames = fresh ['α'..'ω']
+
+freshLatinNames :: [String]
 freshLatinNames = fresh ['a'..'z']
 
 runTC :: TC a -> Either TypeError a
@@ -48,3 +55,12 @@ typeError = TC . const . Left
 
 freshTyUni :: TC Pure
 freshTyUni = TC $ \(x:xs) -> Right (xs, TyUni x)
+
+-- TODO: Allow quantified effects
+ungeneralise :: QType -> TC ([Constraint], Type)
+ungeneralise (Forall cs as t) = do
+  bs <- sequence (replicate (length as) freshTyUni)
+  let ft x = case lookup x (zip as bs) of Just y -> y
+  let fe = undefined
+  let subsT = subsType ft fe
+  return (map (\c -> case c of Constraint s t -> Constraint s (subsT t)) cs, subsT t)

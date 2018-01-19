@@ -11,6 +11,7 @@ import Type hiding (Constraint(..))
 import qualified Type as T (Constraint(..))
 import Prelude hiding (error)
 import Control.Exception.Base (assert)
+import Inbuilts
 
 error :: SourcePos -> TypeErrorTy -> TypeError
 error p t = Error { pos = p, stage = "inference(generator)", message = t }
@@ -26,45 +27,26 @@ inc s (l@(s',(t,i)):ls) = if s == s' then (s',(t,i+1)):ls else l : inc s ls
 
 -- Increment the usage count of a particular variable, and generate a Share constraint if it has already been used.
 use :: SourcePos -> String -> Context -> TC (Pure, Context, [Constraint])
-use p s l = case lookup s l of Just (t, i) -> pure (t, inc s l, if i == 0 then [] else [C.share (pureType t)])
+use p s l = case lookup s l of Just (t, i) -> pure (t, inc s l, if i == 0 then [] else [C.share (pureTy t)])
                                Nothing     -> typeError (error p (NotInScope s))
 
-intTy :: Type
-intTy = pureType (TyPrim TyInt)
-
--- integerTy = pureType $ TyData "Integer" []
-
-boolTy :: Type
-boolTy = pureType (TyPrim TyBool)
-
--- TODO Qualify with Prelude or Base or some other sentinel
-topFuns = [("+", TyFun (TyPrim TyInt) (pureType (TyFun (TyPrim TyInt) intTy)))]
+topFuns = map (\(a,td) -> (a,ty td)) inbuilts
 
 topContext :: Context
 topContext = map (\(s, t) -> (s, (t,0))) topFuns
 
-{-
-data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
-           | Lit Lit
-           | Var String
-           | Apply (a (Exp a)) (a (Exp a))
--}
-
-{-
-
--}
 contextJoin :: Context -> Context -> Context -> (Context, [Constraint])
 contextJoin [] [] [] = ([],[])
 contextJoin ((x,(xt,xi)):xs) ((y,(yt,yi)):ys) ((z,(zt,zi)):zs) =
   assert ((x,xt) == (y,yt) && (y,yt) == (z,zt)) r
-  where (l, c1)  = ((x,(xt,max yi zi)), if (xi == yi) == (yi == zi) then [] else [C.drop (pureType xt)])
+  where (l, c1)  = ((x,(xt,max yi zi)), if (xi == yi) == (yi == zi) then [] else [C.drop (pureTy xt)])
         (ls, c2) = contextJoin xs ys zs
         r = (l:ls, c1 ++ c2)
 
 generateExp :: Annotate SourcePos Exp -> TC (Annotate (Type, SourcePos) Exp, [Constraint])
 generateExp e = do
   t <- freshTyUni
-  (e', _, cs) <- generateExp' (topContext, e, pureType t)
+  (e', _, cs) <- generateExp' (topContext, e, pureTy t)
   return (e', cs)
 
 -- TODO: Effects
@@ -85,10 +67,10 @@ generateExp' (l1, p :< e, t) = (\(e', l2, cs) -> ((t,p) :< e', l2, cs)) <$> exp 
         -- TODO: forall quantified functions
         exp' (Var s) = do
           (t', l2, c1) <- use p s l1
-          return (Var s, l2, (Sub (pureType t') t):c1)
+          return (Var s, l2, (Sub (pureTy t') t):c1)
 
         exp' (Apply f x) = do
           a  <- freshTyUni
-          (f', l2, c1) <- generateExp' (l1, f, pureType (TyFun a t) )
-          (x', l3, c2) <- generateExp' (l2, x, pureType a)
+          (f', l2, c1) <- generateExp' (l1, f, pureTy (TyFun a t) )
+          (x', l3, c2) <- generateExp' (l2, x, pureTy a)
           return (Apply f' x', l3, c1 ++ c2)

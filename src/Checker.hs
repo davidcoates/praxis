@@ -1,7 +1,7 @@
 -- Type checker
 
 module Checker
-  ( test
+  ( infer
   ) where
 
 import AST hiding (Praxis)
@@ -14,12 +14,10 @@ import Checker.Error
 
 type Praxis a = Annotate (Type, SourcePos) a
 
-
--- infer :: Annotate SourcePos Exp -> Either TypeError (Praxis Exp)
--- infer = 
-
-test :: Annotate SourcePos Exp -> Either TypeError (Annotate (Type, SourcePos) Exp, [Constraint], [(String,Pure)])
-test a = runTC $ do
-  (ast, cs) <- generateExp a
+infer :: Annotate SourcePos Exp -> Either TypeError (Praxis Exp)
+infer e = runTC $ do
+  (ast, cs) <- generateExp e
   subs <- solve cs
-  return (ast, cs, subs)
+  let ft x = lookup x subs
+  let fe x = Nothing
+  return (mapExp (\(t,p) -> (subsType ft fe t,p)) ast)

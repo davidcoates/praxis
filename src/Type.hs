@@ -8,7 +8,9 @@ module Type
   , QType(..)
   , subsEffects
   , subsType
-  , pureType
+  , pureTy
+  , intTy
+  , boolTy
   ) where
 
 import Data.Set (Set)
@@ -42,8 +44,11 @@ data Prim = TyBool | TyInt
 data Type = Ty Pure Effects          -- `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
           deriving (Ord, Eq)
 
-pureType :: Pure -> Type
-pureType p = Ty p Set.empty
+pureTy :: Pure -> Type
+pureTy p = Ty p Set.empty
+
+intTy = pureTy (TyPrim TyInt)
+boolTy = pureTy (TyPrim TyBool)
 
 -- TODO: Allow multi-parameter type classes
 data Constraint = Constraint String Type

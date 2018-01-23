@@ -4,10 +4,13 @@ module Checker.Error
   ) where
 
 import AST (Error)
-import Checker.Constraint (Constraint)
+import Checker.Constraint (TConstraint)
 
-data TypeErrorTy = Contradiction Constraint
+data TypeErrorTy = Contradiction TConstraint
                  | NotInScope String
-                 deriving (Show)
+
+instance Show TypeErrorTy where
+  show (Contradiction c) = show c
+  show (NotInScope s) = "Not in scope: " ++ s
 
 type TypeError = Error TypeErrorTy

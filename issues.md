@@ -49,3 +49,7 @@ i.e., do we really need it to be data?
 
 The type of generalised functions must be known before use.
 Requiring all top-level functions to have type signatures would guarantee this.
+
+Should top-level functions be shareable and discardable?
+Should be top pure.
+Top pure even after instantiation.

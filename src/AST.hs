@@ -1,108 +1,95 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module AST
-  ( Error(..)
-  , SourcePos(..)
-  , getPosition
-  , indent
+  ( Exp(..)
+  , Decl(..)
   , Lit(..)
-  , Exp(..)
-  , Tag(..)
-  , Annotate
-  , Praxis
-  , PraxisTail
-  , mapExp
-  , lift
-  , tagTree
+  , Name
+  , Annotate(..)
   , TreeShow(..)
   ) where
 
 import Data.Tree (Tree(..))
 import Data.Tree.Pretty (drawVerticalTree)
-import Text.Parsec.Pos (sourceName, sourceLine, sourceColumn)
-import qualified Text.Parsec.Pos as Parsec (SourcePos)
 import Text.Parsec.String (Parser)
-import qualified Text.ParserCombinators.Parsec.Prim as Parsec (getPosition)
+import Type
+import Control.Lens (Lens')
 
-newtype SourcePos = SourcePos Parsec.SourcePos
+{-
+-- TODO module import, export
+data Program a = Program [TopDecl a]
 
-instance Show SourcePos where
-  show (SourcePos p) = sourceName p ++ ":" ++ show (sourceLine p) ++ ":" ++ show (sourceColumn p)
+-- TODO type, data, newtype, class, instance, default, foreign
+type TopDecl a = Decl a
 
-data Error a = Error { pos :: SourcePos, stage :: String,  message :: a }
+data Decl a = ...
+-}
 
-indent :: String -> String
-indent = unlines . map ("  " ++) . lines
+data Exp a = If a (Exp a) (Exp a) (Exp a)
+           | Lit a Lit
+           | Var a Name
+           | Apply a (Exp a) (Exp a)
+           | Let a (Decl a) (Exp a)
+           | LetBang a Name (Exp a)
+           | Signature a (Exp a) Type
 
-instance Show a => Show (Error a) where
-  show e = "error in stage <<" ++ stage e ++ ">> at " ++ show p ++ indent (show (message e))
-         where p = pos e
-
-getPosition = SourcePos <$> Parsec.getPosition
+data Decl a = FunDecl a Name (Exp a)
+            -- TODO: Fixity declarations
 
 
-data Lit = Integer Integer | Bool Bool
+-- ^ AST for Literals
+data Lit = Integer Integer
+         | Bool Bool
 
 instance Show Lit where
   show (Integer i) = show i
   show (Bool b) = show b
 
-data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
-           | Lit Lit
-           | Var String
-           | Apply (a (Exp a)) (a (Exp a))
 
-mapExp :: (a -> b) -> Annotate a Exp -> Annotate b Exp
-mapExp f (p :< x) = f p :< mapExp' x
-  where mapExp' (If x y z)  = If (mapExp f x) (mapExp f y) (mapExp f z)
-        mapExp' (Lit l)     = Lit l
-        mapExp' (Var s)     = Var s
-        mapExp' (Apply a b) = Apply (mapExp f a) (mapExp f b)
+-- ^ Getting and setting annotations to ASTs
+class Annotate e where
+  annotation :: Lens' (e a) a
 
-data Tag a b = a :< b
+instance Annotate Exp where
+  annotation f (If a x y z)      = (flip fmap) (f a) (\a -> If a x y z)
+  annotation f (Lit a l)         = (flip fmap) (f a) (\a -> Lit a l)
+  annotation f (Var a v)         = (flip fmap) (f a) (\a -> Var a v)
+  annotation f (Apply a x y)     = (flip fmap) (f a) (\a -> Apply a x y)
+  annotation f (LetBang a d e)   = (flip fmap) (f a) (\a -> LetBang a d e)
+  annotation f (Signature a e t) = (flip fmap) (f a) (\a -> Signature a e t)
 
-{-
-instance Functor (Tag a) where
-  fmap f (a :< x) = a :< f x
--}
-
-type Annotate a b = Tag a (b (Tag a))
-
-type Praxis a = Annotate SourcePos a
-type PraxisTail a = a (Tag SourcePos) -- Praxis a without the top tag
+instance Annotate Decl where
+  annotation f (FunDecl a n e) = (flip fmap) (f a) (\a -> FunDecl a n e)
 
 
-lift :: Parser a -> Parser (Tag SourcePos a)
-lift f = do
-  p <- getPosition
-  x <- f
-  return (p :< x)
+-- ^ Showing ASTs
+class TreeShow a where
+  treeString :: a -> Tree String
+  showTree :: a -> String
+  showTree = drawVerticalTree . treeString
 
-tagTree :: Show a => (b -> Tree String) -> Tag a b -> Tree String
-tagTree f (a :< x) = let Node y bs = f x in Node (show a ++ " :< " ++ y) bs
+instance Show a => TreeShow (Decl a) where
+  treeString (FunDecl a f e) = Node ("[fun " ++ f ++ "]" ++ " @ " ++ show a) [treeString e]
 
-class TreeShow b where
-  toTreeString :: Show a => Annotate a b -> Tree String
-  showTree :: Show a => Annotate a b -> String
-  showTree = drawVerticalTree . toTreeString
+instance Show a => TreeShow (Exp a) where
+  treeString (If a x y z)      = Node ("[if]"               ++ " @ " ++ show a) [treeString x, treeString y, treeString z]
+  treeString (Lit a lit)       = Node (show lit             ++ " @ " ++ show a) []
+  treeString (Var a s)         = Node (s                    ++ " @ " ++ show a) []
+  -- treeString (Apply a e x)     = let (n, b) = compress e in
+  --                               Node (n                    ++ " @ " ++ show a) (b ++ [treeString x])
+  treeString (Apply a f x)     = Node ("[$]"                ++ " @ " ++ show a) [treeString f, treeString x]
+  treeString (Let a d e)       = Node ("[let]"              ++ " @ " ++ show a) [treeString d, treeString e]
+  treeString (LetBang a n e)   = Node ("[let " ++ n ++ "!]" ++ " @ " ++ show a) [treeString e]
+  treeString (Signature a e t) = Node (":: " ++ show t      ++ " @ " ++ show a) [treeString e]
 
-instance TreeShow Exp where
-  toTreeString = treeShow
-      where treeShow :: Show a => Annotate a Exp -> Tree String
-            treeShow = tagTree treeShow'
-            treeShow' (If x y z)  = Node "[if]" [treeShow x, treeShow y, treeShow z]
-            treeShow' (Lit lit)   = Node (show lit) []
-            treeShow' (Var s)     = Node s []
-            -- treeShow' (Apply (_ :< e) x) = let (a, b) = compress e in Node a (b ++ [treeShow x])
-            treeShow' (Apply f x) = Node "[$]" [treeShow f, treeShow x]
+  --compress :: Show a => Exp a -> (String, [Tree String])
+  --compress (Var s)            = (s, [])
+  --compress (Apply (_ :< e) x) = let (f, y) = compress e in (f, y ++ [treeString x])
+  --compress x                  = ("$", [treeString' x])
 
-            compress :: Show a => Exp (Tag a) -> (String, [Tree String])
-            compress (Var s)            = (s, [])
-            compress (Apply (_ :< e) x) = let (f, y) = compress e in (f, y ++ [treeShow x])
-            compress x                  = ("$", [treeShow' x])
+instance Show a => Show (Exp a) where
+  show = showTree
 
--- instance Show (Praxis Exp) where
---  show t = showTree t
+instance Show a => Show (Decl a) where
+  show = showTree
 
-instance Show t => Show (Annotate t Exp) where
-  show t = showTree t

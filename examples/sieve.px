@@ -13,13 +13,13 @@ import Array (update, replicate, (!), filter)
 -- replicate :: Int -> a -> Array a
 -- 'replicate n x' returns an array of n copies of x
 
--- (!) :: (Array a)! -> Int -> a!
+-- (!) :: Array! a -> Int -> a!
 -- Don't confuse (!) (the element access operator) with ! the type operator.
 -- T! refers to a read-only reference to value of type T.
 -- So if a :: (Array Bool)!  (a read only reference to an array of bools), 
 --  then a ! 0 :: Bool!  (a read only reference to a boolean). 
 
--- filter :: (a -> Bool) -> (Array a)! -> [a!]
+-- filter :: (a -> Bool) -> Array! a -> [a!]
 
 class Kill a where
   kill :: a -> ()
@@ -40,9 +40,12 @@ sieve :: Int -> [Int]
 sieve n = filter id primes !primes finally kill primes
   where
         primes :: Array Bool
-        primes = fold f (replicate n True) [2 .. sqrt n]
+        primes = fold f (fill n True) [2 .. sqrt n]
         f :: Array Bool -> Int -> Array Bool
         f a k = fold (\b k -> update k False b) a [2*k,3*k..n]
+
+-- b[k] <- False      for  update k False b ? update (k, False, b)
+-- Fold should be ((a,b) -> a) -> (a, [b]) -> a  instead?
 
 -- Notes:
 -- 'filter id primes !primes finally kill primes' desugars to

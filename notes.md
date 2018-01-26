@@ -355,3 +355,52 @@ or 4 :: Num a. 4I :: Integer or 4i :: Int
 
 Pumpkins idea: Might be a good idea to have syntax construct to temporarily un-linearise linear type to avoid lots of dupe's and bindings.
 
+
+f x! should desugar to
+let x! in f x
+
+x :: (Array Int, Array Bool)!
+size (view fst x!) -- Type error
+(size . view fst) x! -- OK
+
+
+
+Proposal: Named Instances
+
+instance list :: Show a => Show [a]
+(score of list is relative to Show, so we can use list for instances of other Classes)
+instance bitstring :: Show [Bool]
+
+module (list, bitstring)
+
+show boolList using list :: Show [Bool]
+show boolList using bitstring :: Show [Bool]
+
+
+Constraints aren't simplified implicitly:
+f :: forall a. (Show [a]) => a -> String 
+f x = show [x, x, x]
+
+But could explicitly say
+f :: forall a. Show a => a -> String
+f x = show [x, x, x] using list :: Show [a]
+
+top-level using:
+using list :: Show [a]
+
+using bitstring :: Show [Bool]
+^--- This would be used for Show [Bool] (which ever applies and is latest is used)
+
+
+Can we specify 'defaults'? Or just rely on usings
+
+
+
+Proposal: Simple overloads
+
+instance Show a => Show [a] ...
+instance Show [Bool] overloads Show [a] ...
+
+LHS of => have to be equivalent, so that Show a --> Show [a] is still true.
+Show a is the only way Show [a] can be true ?
+

@@ -1,7 +1,10 @@
 module Main where
 
+main = putStrLn "Hey!"
+
+{-
 import Parse
-import Checker
+import Check
 import CodeGen
 
 wrap :: Show a => Either a b -> Either (IO ()) b
@@ -19,3 +22,4 @@ compile :: String -> Either (IO ()) String
 compile x = do
   y <- wrap (parse x) >>= wrap . infer
   return (codeGen y)
+-}

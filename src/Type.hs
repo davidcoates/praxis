@@ -1,22 +1,30 @@
 module Type
-  ( Effect(..)
+  ( Name
+  , Effect(..)
   , Effects
   , Pure(..)
   , Prim(..)
   , Type(..)
   , Constraint(..)
-  , QType(..)
+  , QPure(..)
   , subsEffects
   , subsType
+  , subsPure
+  , subsConstraint
+  , shareC
+  , dropC
   , pureTy
   , intTy
   , boolTy
+  , mono
   ) where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
+
+type Name = String
 
 {-
   Effects functions as a *flat set* of effect.
@@ -37,25 +45,19 @@ data Pure = TyPrim Prim              -- A primitive type
           | TyVar String             -- A type variable (e.g., a in forall a. a -> a)
           deriving (Ord, Eq)
 
--- Perhaps ultiamtely replace this with TyData "Bool" [], TyData "Int" []
+-- Perhaps ultimately replace this with TyData "Bool" [], TyData "Int" []
 data Prim = TyBool | TyInt
           deriving (Ord, Eq)
 
 data Type = Ty Pure Effects          -- `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
           deriving (Ord, Eq)
 
-pureTy :: Pure -> Type
-pureTy p = Ty p Set.empty
-
-intTy = pureTy (TyPrim TyInt)
-boolTy = pureTy (TyPrim TyBool)
-
--- TODO: Allow multi-parameter type classes
-data Constraint = Constraint String Type
+data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types in Classes
+                | Sub Type Type
+                deriving (Ord, Eq)
 
 -- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
-data QType = Forall [Constraint] [String] Type
-
+data QPure = Forall [Constraint] [String] Pure deriving (Ord, Eq)
 
 instance Show Effect where
   show (Ef s)    = s
@@ -65,8 +67,9 @@ instance Show Prim where
   show TyBool = "Bool"
   show TyInt  = "Int"
 
-parens True  x = "(" ++ x ++ ")"
-parens False x = x
+instance Show Constraint where
+  show (Sub a b) = show a  ++ " <= " ++ show b
+  show (Class c t) = show c ++ " " ++ show t
 
 instance Show Pure where
   show (TyPrim p)    = show p
@@ -83,12 +86,12 @@ instance Show Pure where
 instance Show Type where
   show (Ty p es) = show p ++ (if Set.null es then "" else " # " ++ show es)
 
-instance Show Constraint where
-  show (Constraint s t) = s ++ " (" ++ show t ++ ")"
-
-instance Show QType where
+instance Show QPure where
   show (Forall cs xs t) = "forall " ++ intercalate " " xs ++ ". " ++ cs' ++ show t
     where cs' = if null cs then "" else "(" ++ intercalate " "  (map show cs) ++ ") => "
+
+parens True  x = "(" ++ x ++ ")"
+parens False x = x
 
 
 subsEffects :: (String -> Maybe Effects) -> Effects -> Effects
@@ -108,3 +111,28 @@ subsPure ft fe = subsPure'
         subsPure' (TyFun a b)   = TyFun (subsPure' a) (subsType ft fe b)
         subsPure' (TyData s ts) = TyData s (map subsPure' ts)
         subsPure' t@(TyVar s)   = fromMaybe t (ft s)
+
+subsConstraint :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Constraint -> Constraint
+subsConstraint ft fe = subsC
+  where subsC (Class s t) = Class s (subsP t)
+        subsC (Sub t1 t2) = Sub (subsT t1) (subsT t2)
+        subsP = subsPure ft fe
+        subsT = subsType ft fe
+
+shareC :: Pure -> Constraint
+shareC = Class "Share"
+
+dropC :: Pure -> Constraint
+dropC = Class "Drop"
+
+pureTy :: Pure -> Type
+pureTy p = Ty p Set.empty
+
+intTy :: Type
+intTy = pureTy (TyPrim TyInt)
+
+boolTy :: Type
+boolTy = pureTy (TyPrim TyBool)
+
+mono :: Pure -> QPure
+mono t = Forall [] [] t

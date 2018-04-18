@@ -21,7 +21,7 @@ instance Applicative Sourced where
 
 
 data Source = Source { start :: Pos, end :: Pos, spelling :: String }
-            | Phony        
+            | Phony
 
 instance Monoid Source where
   mempty = Phony

@@ -1,27 +1,18 @@
-module Parse.Parse
+module Parse.Parse.Parse
   ( parse
   , module Parse.Parse.AST
-  , module Parse.Parse.Error
   ) where
 
 import Parse.Parse.AST
-import Parse.Parse.Error
 import Parse.Parse.Language
+import Parse.Parse.Parser
 
 import Type
 import Prelude hiding (exp)
-import Text.Parsec (Parsec)
-import qualified Text.Parsec as Parsec (parse)
 import Control.Applicative ((<|>), (<**>), liftA2, liftA3)
-import Text.Parsec.Char (string)
-import Text.ParserCombinators.Parsec.Prim (many)
-import Text.ParserCombinators.Parsec.Combinator (eof, many1, option, sepBy1)
 import Pos
 import Compile
 import Control.Lens (view)
-
-type Parser a = Parsec String () a
--- TODO Parsec Token () a
 
 
 -- This is the primary function, which attempts to parse a string to an annotated sugared AST
@@ -31,8 +22,8 @@ parse = do
   s <- get src
   f <- filenameDisplay
   case Parsec.parse program f s of
-    Left e    -> throwError (errorPos e) e
-    Right ast -> set sugaredAST (Just ast)
+    Left e    -> throwError e
+    Right ast -> set sugaredAST ast
 
 tag :: (Pos -> a) -> Parser a
 tag = (<$> currentPos)

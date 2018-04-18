@@ -3,6 +3,8 @@
 module Parse.Parse.AST
   ( module AST
   , AST
+  , Annotation
+  , Annotated
   , Exp(..)
   , Decl(..)
   , Op
@@ -15,30 +17,30 @@ import Source
 import Type
 
 type Annotation = Source
-type Annotated a = a Source
+type Annotated a = a Annotation
 
 type AST = Annotated Exp
 
-data Exp = If (Annotated Exp) (Annotated Exp) (Annotated Exp)
-         | Lit Lit
-         | Var Name
-         | Apply (Annotated Exp) (Annotated Exp)
-         | Infix [Annotated Tok]
-         | Let [Annotated Decl] (Annotated Exp)
-         | Signature (Annotated Exp) Type
+data Exp a = If a (Exp a) (Exp a) (Exp a)
+           | Lit a Lit
+           | Var a Name
+           | Apply a (Exp a) (Exp a)
+           | Infix a [Tok a]
+           | Let a [Decl a] (Exp a)
+           | Signature a (Exp a) Type
 
-data Decl = Bang Name
-          | FunType Name Type
-          | FunDecl Name (Annotated Exp)
+data Decl a = Bang a Name
+            | FunType a Name Type
+            | FunDecl a Name (Annotated Exp)
 
 -- Tok is used for structuring infix expressions.
 -- It represents a token in an unstructure infix expression, where a token is either an expression, a binary operator, or prefix negation.
 
-type Op = String
+type Op = String -- TODO qualified string
 
-data Tok = TExp (Annotated Exp)
-         | TOp Op
-         | TNeg
+data Tok a = TExp a (Exp a)
+           | TOp a Op
+           | TNeg a -- TODO remove this after integrating mixfix parser
 
 
 instance Show a => TreeShow (Decl a) where

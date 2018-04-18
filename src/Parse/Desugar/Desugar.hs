@@ -1,4 +1,4 @@
-module Parse.Desugar
+module Parse.Desugar.Desugar
   ( desugar
   , module Parse.Desugar.AST
   , module Parse.Desugar.Error

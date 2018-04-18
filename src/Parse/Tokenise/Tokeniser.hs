@@ -10,6 +10,7 @@ module Parse.Tokenise.Tokeniser
 import qualified Parse.Prim as Prim
 import Parse.Prim (Error(..))
 import Source
+import Pos
 
 import Control.Applicative (Applicative(..), Alternative(..))
 import Control.Arrow (left)
@@ -34,18 +35,30 @@ instance Monad Tokeniser where
   Tokeniser a >>= f = Tokeniser (a >>= (\x -> attachSource x <$> _runTokeniser (f (value x))))
     where attachSource x x' = Sourced { source = mappend (source x) (source x'), value = value x' }
 
-runTokeniser :: Tokeniser a -> [Sourced Char] -> Either String [Sourced a]
-runTokeniser (Tokeniser p) cs = left showE $ Prim.runParser (all p) cs
+runTokeniser :: Tokeniser a -> String -> Either String [Sourced a]
+runTokeniser (Tokeniser p) cs = left show' $ Prim.runParser (all p) (sourced cs)
   where all p = (Prim.eof *> pure []) <|> liftA2 (:) (p Prim.<?> info) (all p)
         info ts ts' = "Lexical error " ++ case take (length ts - length ts') ts of {
       [] -> if null ts then "at end of file" else "" ;
       cs -> "on " ++ formatSpelling (map value cs) ++ " starting at " ++ show (start (source (head cs)))
   }
 
-showE :: Error -> String
-showE (Option xs) = concatMap showE xs
-showE (Head s e) = s ++ "\n" ++ indent (showE e)
+show' :: Error -> String
+show' (Option xs) = concatMap show' xs
+show' (Head s e) = s ++ "\n" ++ indent (show' e)
   where indent s = unlines (map ("    " ++) (lines s))
+
+sourced :: String -> [Sourced Char]
+sourced = sourced' Pos { line = 1, column = 1 }
+  where sourced' _     [] = []
+        sourced' p (c:cs) = let p' = advance c p in make p c : sourced' p' cs
+        make p c = Sourced { value = c, source = Source { start = p, end = p, spelling = [c] } }
+
+        advance :: Char -> Pos -> Pos
+        advance '\t' p = p { column = math (column p) }
+          where math = (+ 1) . (* 8) . (+ 1) . (`div` 8) . subtract 1
+        advance '\n' p = Pos { line = line p + 1, column = 1 }
+        advance _    p = p { column = column p + 1 }
 
 satisfy :: (Char -> Bool) -> Tokeniser Char
 satisfy f = Tokeniser $ Prim.satisfy (f . value)

@@ -1,43 +1,26 @@
-module Tokenise
+module Parse.Tokenise.Tokenise
   ( tokenise
   ) where
 
 import Parse.Tokenise.Tokeniser
 import Parse.Tokenise.Token
 import Source
-import Pos
 import Data.Digits (unDigits)
 
 import Control.Applicative (Applicative, Alternative, liftA2, (<|>), empty)
 import Data.Char
 
--- import Compile
+import Compile
 
-{-
 tokenise :: Compiler String ()
 tokenise = do
   cs <- get src
-  case runTokeniser token (sourced cs) of
+  case runTokeniser token cs of
     (Left e) -> throwError e
     (Right ts) -> set tokens ts
--}
 
-tokenise = undefined
-
-parse :: String -> IO ()
-parse x = putStrLn $ (\x -> case x of { Left s -> s; Right x -> show x} ) $ runTokeniser token (sourced x)
-
-sourced :: String -> [Sourced Char]
-sourced = sourced' Pos { line = 1, column = 1 }
-  where sourced' _     [] = []
-        sourced' p (c:cs) = let p' = advance c p in make p c : sourced' p' cs
-        make p c = Sourced { value = c, source = Source { start = p, end = p, spelling = [c] } }
-
-advance :: Char -> Pos -> Pos
-advance '\t' p = p { column = math (column p) }
-  where math = (+ 1) . (* 8) . (+ 1) . (`div` 8) . subtract 1
-advance '\n' p = Pos { line = line p + 1, column = 1 }
-advance _    p = p { column = column p + 1 }
+-- parse :: String -> IO ()
+-- parse x = putStrLn $ (\x -> case x of { Left s -> s; Right x -> concatMap (("\n" ++) . show) x} ) $ runTokeniser token x
 
 many :: Tokeniser p -> Tokeniser [p]
 many p = liftA2 (:) (try p) (many p) <|> pure []
@@ -50,7 +33,7 @@ expected :: String -> String
 expected s = "Expected: " ++ s
 
 exclude :: Eq p => Tokeniser p -> p -> Tokeniser p
-exclude p x = p >>= (\y -> if y == x then empty else pure y)
+exclude p x = excludes p [x]
 
 excludes :: Eq p => Tokeniser p -> [p] -> Tokeniser p
 excludes p xs = p >>= (\y -> if y `elem` xs then empty else pure y)
@@ -61,6 +44,9 @@ char c = satisfy (== c)
 anyChar :: Tokeniser Char
 anyChar = satisfy (const True)
 
+oneOf :: [Char] -> Tokeniser Char
+oneOf cs = satisfy (`elem` cs)
+
 string :: String -> Tokeniser String
 string [c] = (:[]) <$> char c
 string (c:cs) = liftA2 (:) (char c) (string cs) 
@@ -68,11 +54,29 @@ string (c:cs) = liftA2 (:) (char c) (string cs)
 token :: Tokeniser Type
 token = (whitespace *> pure Whitespace) <|> lexeme
 
+-- The parsers below here all have a 'prefix' which they match without consuming on failure
+
+
 lexeme :: Tokeniser Type
-lexeme = literal <?> "lexeme"-- char 'a' *> pure (ReservedId "na")
+lexeme = qvarid <|> literal <|> special <?> "lexeme"
+
+qvarid :: Tokeniser Type
+qvarid = qualify <$> varid <?> "qvarid" -- TODO: Qualify
+  where qualify s = QVarId (QString {qualification = [], name = s})
+
+varid :: Tokeniser String
+varid = q <?> "varid"
+  where q = p `excludes` ["if","then","else","let","in"]
+        p = liftA2 (:) (try small) (many small) -- TODO
+
+small :: Tokeniser Char
+small = satisfy isLower <?> "small" 
+
+special :: Tokeniser Type
+special = Special <$> oneOf "(),;[]`{}" <?> "special"
 
 literal :: Tokeniser Type
-literal = integer <|> char' <|> string' <?> "literal"-- <|> char <|> string <?> "Expected literal"
+literal = integer <|> char' <|> string' <?> "literal"
 
 char' :: Tokeniser Type
 char' = try (char '\'') *> (Literal . Char <$> inner) <* (char '\'' <?> expected "terminating '") <?> "char" 

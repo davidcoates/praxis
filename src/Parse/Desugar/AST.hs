@@ -1,6 +1,8 @@
 module Parse.Desugar.AST
   ( module AST
   , AST
+  , Annotation
+  , Annotated
   ) where
 
 import AST

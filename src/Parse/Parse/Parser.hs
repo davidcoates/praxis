@@ -35,18 +35,12 @@ instance Monad Parser where
   Parser a >>= f = Parser (a >>= \x -> _runParser (f x))
 
 runParser :: Parser a -> [Token] -> Either String a
-runParser (Parser p) ts = left show' $ Prim.runParser (p Prim.<?> info) ts
+runParser (Parser p) ts = left show $ Prim.runParser (p Prim.<?> info) ts
   where info :: [Token] -> [Token] -> String
         info es es' = "Syntax error " ++ case take (length es - length es') es of {
       [] -> if null ts then "at end of file" else "" ;
       ts -> "on " ++ show ts ++ " starting at " ++ show (start (source (head ts)))
   }
-
--- TODO make this instance Show Error?
-show' :: Error -> String
-show' (Option xs) = concatMap show' xs
-show' (Head s e) = s ++ "\n" ++ indent (show' e)
-  where indent s = unlines (map ("    " ++) (lines s))
 
 satisfy :: (Type -> Bool) -> Parser Token
 satisfy f = Parser $ Prim.satisfy (f . value)

@@ -36,17 +36,12 @@ instance Monad Tokeniser where
     where attachSource x x' = Sourced { source = mappend (source x) (source x'), value = value x' }
 
 runTokeniser :: Tokeniser a -> String -> Either String [Sourced a]
-runTokeniser (Tokeniser p) cs = left show' $ Prim.runParser (all p) (sourced cs)
+runTokeniser (Tokeniser p) cs = left show $ Prim.runParser (all p) (sourced cs)
   where all p = (Prim.eof *> pure []) <|> liftA2 (:) (p Prim.<?> info) (all p)
         info ts ts' = "Lexical error " ++ case take (length ts - length ts') ts of {
       [] -> if null ts then "at end of file" else "" ;
       cs -> "on " ++ formatSpelling (map value cs) ++ " starting at " ++ show (start (source (head cs)))
   }
-
-show' :: Error -> String
-show' (Option xs) = concatMap show' xs
-show' (Head s e) = s ++ "\n" ++ indent (show' e)
-  where indent s = unlines (map ("    " ++) (lines s))
 
 sourced :: String -> [Sourced Char]
 sourced = sourced' Pos { line = 1, column = 1 }

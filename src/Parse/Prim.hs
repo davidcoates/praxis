@@ -16,6 +16,11 @@ import Control.Arrow (left)
 data Error = Option [Error]
            | Head String Error
 
+instance Show Error where
+  show (Option xs) = concatMap show xs
+  show (Head s e) = s ++ "\n" ++ indent (show e)
+    where indent s = unlines (map ("    " ++) (lines s))
+
 err :: Either Error b
 err = Left (Option [])
 

@@ -15,11 +15,11 @@ import Control.Lens (over, _1)
 infer :: Compiler TypeError ()
 infer = do
   cs <- generate
-  Just e <- get typedAST
+  e <- get typedAST
   subs <- solve cs
   let ft x = lookup x subs
   let fe x = Nothing
   let e' = over (annotation . _1) (subsType ft fe) e
-  set typedAST (Just e')
+  set typedAST e'
 
 -- TODO: Do we need to check no unification variables left?

@@ -37,7 +37,7 @@ data Decl a = FunDecl a Name (Exp a)
             -- TODO: Fixity declarations
 
 
--- ^ AST for Literals
+-- |AST for Literals
 data Lit = Integer Integer
          | Bool Bool
 
@@ -46,7 +46,7 @@ instance Show Lit where
   show (Bool b) = show b
 
 
--- ^ Getting and setting annotations to ASTs
+-- |Getting and setting annotations to ASTs
 class Annotate e where
   annotation :: Lens' (e a) a
 
@@ -62,7 +62,7 @@ instance Annotate Decl where
   annotation f (FunDecl a n e) = (flip fmap) (f a) (\a -> FunDecl a n e)
 
 
--- ^ Showing ASTs
+-- |Showing ASTs
 class TreeShow a where
   treeString :: a -> Tree String
   showTree :: a -> String

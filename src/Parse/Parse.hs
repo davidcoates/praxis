@@ -1,4 +1,4 @@
-module Parse.Parse.Parse
+module Parse.Parse
   ( parse
   , module Parse.Parse.AST
   ) where
@@ -16,23 +16,21 @@ import Control.Lens (view)
 
 
 -- This is the primary function, which attempts to parse a string to an annotated sugared AST
-parse :: Compiler ParseError ()
+parse :: Compiler String ()
 parse = do
   set stage Parse
-  s <- get src
-  f <- filenameDisplay
-  case Parsec.parse program f s of
+  ts <- get tokens
+  case runParser program ts of
     Left e    -> throwError e
     Right ast -> set sugaredAST ast
 
-tag :: (Pos -> a) -> Parser a
-tag = (<$> currentPos)
-
-block :: Parser a -> Parser [a]
-block p = braces (sepBy1 p semi)
 
 program :: Parser (Annotated Exp)
-program = whiteSpace *> exp <* eof
+program = undefined
+
+{-
+block :: Parser a -> Parser [a]
+block p = braces (sepBy1 p semi)
 
 -- ^ sepBy1' is similar to sepBy1 except it includes the separator in the result
 sepBy1' :: Parser a -> Parser a -> Parser [a]
@@ -102,3 +100,4 @@ fexp = do
         build (x:y:ys) = let z = Apply (view annotation x) x y in build (z:ys)
 
 aexp = lit <|> (tag Var <*> qvar <|> parens exp)
+-}

@@ -1,4 +1,4 @@
-module Parse.Tokenise.Tokenise
+module Parse.Tokenise
   ( tokenise
   ) where
 

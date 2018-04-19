@@ -8,4 +8,4 @@ import Parse.Desugar (desugar)
 import Compile
 
 parse :: Compiler String ()
-parse =  tokenise >> Innter.parse >> desugar
+parse =  tokenise >> Inner.parse >> desugar

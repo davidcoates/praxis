@@ -7,8 +7,8 @@ module Check.AST
 
 import AST
 import Type
-import Pos
+import Source (Source)
 
-type Annotation = (Type, Pos)
+type Annotation = (Type, Source)
 type Annotated a = a Annotation
 type AST = Annotated Exp

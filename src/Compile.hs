@@ -64,10 +64,10 @@ instance Show Stage where
   show Solve              = "inference(solving)"
   show Interpret          = "interpreting"
 
--- ^ A Context stores all in-scope variables along with their type and how many times they are used.
+-- |A Context stores all in-scope variables along with their type and how many times they are used.
 type Env = [(Name, (Pure, Int))]
 
--- ^ Context for top-level declarations
+-- |Context for top-level declarations
 type QEnv = [(Name, QPure)]
 
 data CompilerState = CompilerState

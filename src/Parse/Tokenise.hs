@@ -49,18 +49,18 @@ oneOf cs = satisfy (`elem` cs)
 
 string :: String -> Tokeniser String
 string [c] = (:[]) <$> char c
-string (c:cs) = liftA2 (:) (char c) (string cs) 
+string (c:cs) = liftA2 (:) (char c) (string cs)
 
-token :: Tokeniser Type
+token :: Tokeniser Token
 token = (whitespace *> pure Whitespace) <|> lexeme
 
 -- The parsers below here all have a 'prefix' which they match without consuming on failure
 
 
-lexeme :: Tokeniser Type
+lexeme :: Tokeniser Token
 lexeme = qvarid <|> literal <|> special <?> "lexeme"
 
-qvarid :: Tokeniser Type
+qvarid :: Tokeniser Token
 qvarid = qualify <$> varid <?> "qvarid" -- TODO: Qualify
   where qualify s = QVarId (QString {qualification = [], name = s})
 
@@ -72,21 +72,21 @@ varid = q <?> "varid"
 small :: Tokeniser Char
 small = satisfy isLower <?> "small" 
 
-special :: Tokeniser Type
+special :: Tokeniser Token
 special = Special <$> oneOf "(),;[]`{}" <?> "special"
 
-literal :: Tokeniser Type
+literal :: Tokeniser Token
 literal = integer <|> char' <|> string' <?> "literal"
 
-char' :: Tokeniser Type
+char' :: Tokeniser Token
 char' = try (char '\'') *> (Literal . Char <$> inner) <* (char '\'' <?> expected "terminating '") <?> "char" 
   where inner = anyChar `excludes` ['\\', '\''] -- TODO
 
-string' :: Tokeniser Type
+string' :: Tokeniser Token
 string' = try (char '\"') *> (Literal . String <$> inner) <* char '\"' <?> "string"
   where inner = many (anyChar `excludes` ['\\','\"']) -- TODO
 
-integer :: Tokeniser Type
+integer :: Tokeniser Token
 integer = Literal . Int <$> decimal <?> "integer"
 
 decimal :: Tokeniser Int

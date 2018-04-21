@@ -1,14 +1,14 @@
 module Check.AST
   ( AST
-  , Annotation
   , Annotated
   , module AST
   ) where
 
 import AST
 import Type
-import Source (Source)
+import Source
+import Tag
 
-type Annotation = (Type, Source)
-type Annotated a = a Annotation
+type Annotated a = Tagged (Type, Source) a
+
 type AST = Annotated Exp

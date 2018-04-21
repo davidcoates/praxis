@@ -3,7 +3,6 @@
 module Parse.Parse.AST
   ( module AST
   , AST
-  , Annotation
   , Annotated
   , Exp(..)
   , Decl(..)
@@ -11,56 +10,53 @@ module Parse.Parse.AST
   , Tok(..)
   ) where
 
-import Data.Tree (Tree(..))
-import AST (Lit(..), Name, Annotate(..), TreeShow(..))
+import Pretty
+import AST (Lit(..), Name)
 import Source
+import Tag
 import Type
 
-type Annotation = Source
-type Annotated a = a Annotation
+type Annotated a = Tagged Source a
 
 type AST = Annotated Exp
 
-data Exp a = If a (Exp a) (Exp a) (Exp a)
-           | Lit a Lit
-           | Var a Name
-           | Apply a (Exp a) (Exp a)
-           | Infix a [Tok a]
-           | Let a [Decl a] (Exp a)
-           | Signature a (Exp a) Type
+data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
+           | Lit Lit
+           | Var Name
+           | Apply (a (Exp a)) (a (Exp a))
+           | Infix [a (Tok a)]
+           | Let [a (Decl a)] (a (Exp a))
+           | Signature (a (Exp a)) Type
 
-data Decl a = Bang a Name
-            | FunType a Name Type
-            | FunDecl a Name (Annotated Exp)
+data Decl a = Bang Name
+            | FunType Name Type
+            | FunDecl Name (a (Exp a))
 
--- Tok is used for structuring infix expressions.
--- It represents a token in an unstructure infix expression, where a token is either an expression, a binary operator, or prefix negation.
+type Op = String -- TODO qualified string?
 
-type Op = String -- TODO qualified string
+data Tok a = TExp (a (Exp a))
+           | TOp Op
 
-data Tok a = TExp a (Exp a)
-           | TOp a Op
-           | TNeg a -- TODO remove this after integrating mixfix parser
+instance TreeString (Annotated Decl) where
+  treeString = treeRec $ \x -> case x of
+    Bang n      -> Node ("!" ++ n)              []
+    FunType f t -> Node (f ++ " :: " ++ show t) []
+    FunDecl f e -> Node (f ++ " = ")            [treeString e]
 
+instance TreeString (Annotated Exp) where
+  treeString = treeRec $ \x -> case x of
+    If x y z      -> Node "[if]"            [treeString x, treeString y, treeString z]
+    Lit l         -> Node (show l)          []
+    Var v         -> Node (show v)          []
+    Let ds e      -> Node "[let]"           (map treeString ds ++ [treeString e])
+    Signature e t -> Node (":: " ++ show t) [treeString e]
+    Infix ts      -> Node "[infix]"         (map tokShow ts)
+    where tokShow :: Annotated Tok -> Tree String
+          tokShow (a :< TExp e) = treeString e -- Don't show redundant source (same as source of e)
+          tokShow op            = treeRec (\(TOp o) -> Node o []) op
 
-instance Show a => TreeShow (Decl a) where
-  treeString (Bang a n)      = Node ("!" ++ n              ++ " @ " ++ show a) []
-  treeString (FunType a f t) = Node (f ++ " :: " ++ show t ++ " @ " ++ show a) []
-  treeString (FunDecl a f e) = Node (f ++ " = "            ++ " @ " ++ show a) [treeString e]
-
-instance Show a => TreeShow (Exp a) where
-  treeString (If a x y z)      = Node ("[if]"          ++ " @ " ++ show a) [treeString x, treeString y, treeString z]
-  treeString (Lit a lit)       = Node (show lit        ++ " @ " ++ show a) []
-  treeString (Var a v)         = Node (show v          ++ " @ " ++ show a) []
-  treeString (Let a ds e)      = Node ("[let]"         ++ " @ " ++ show a) (map treeString ds ++ [treeString e])
-  treeString (Signature a e t) = Node (":: " ++ show t ++ " @ " ++ show a) [treeString e]
-  treeString (Infix a ts)      = Node ("[infix]"       ++ " @ " ++ show a) (map tokShow ts)
-    where tokShow (TExp a e) = treeString e
-          tokShow (TOp a o)  = Node (o           ++ " @ " ++ show a) []
-          tokShow (TNeg a)   = Node ("prefix[-]" ++ " @ " ++ show a) []
-
-instance Show a => Show (Decl a) where
+instance Show (Annotated Decl) where
   show = showTree
 
-instance Show a => Show (Exp a) where
+instance Show (Annotated Exp) where
   show = showTree

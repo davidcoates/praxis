@@ -9,13 +9,15 @@ import qualified Parse.Parse.AST as Parse
 import Parse.Desugar.AST
 import Parse.Desugar.Error
 import Parse.Desugar.Infix
+import Tag
+import Compile
+
 import Control.Monad (unless)
 import Control.Applicative (liftA2, liftA3)
 import Control.Arrow (left)
-
-import Compile
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Source
 
 opTable :: Map Op Fixity
 opTable = Map.fromList [("+", Fixity (6, Leftfix)), ("==", Fixity (4, Nonfix))]
@@ -28,13 +30,14 @@ desugar = do
   set desugaredAST e'
 
 desugarExp :: Parse.AST -> Compiler String (Annotated Exp)
-desugarExp (Parse.Infix _ ts)    = resolve opTable ts
-desugarExp (Parse.Lit a lit)     = pure (Lit a lit)
-desugarExp (Parse.Var a s)       = pure (Var a s)
-desugarExp (Parse.If a e1 e2 e3) = liftA3 (If a) (desugarExp e1) (desugarExp e2) (desugarExp e3)
-desugarExp (Parse.Apply a x y)   = liftA2 (Apply a) (desugarExp x) (desugarExp y) 
+desugarExp = rec $ \a x -> fmap (a :<) $ case x of
+  Parse.Infix ts    -> resolve opTable ts
+  Parse.Lit lit     -> pure (Lit lit)
+  Parse.Var s       -> pure (Var s)
+  Parse.If e1 e2 e3 -> liftA3 If (desugarExp e1) (desugarExp e2) (desugarExp e3)
+  Parse.Apply x y   -> liftA2 Apply (desugarExp x) (desugarExp y)
 
 -- TODO
 -- REPLACE WITH MY MIXFIX PARSER
-resolve :: Map Op Fixity -> [Annotated Tok] -> Compiler String (Annotated Exp)
+resolve :: Map Op Fixity -> [Annotated Tok] -> Compiler String (Exp (Tag Source))
 resolve fixityTable ts = undefined

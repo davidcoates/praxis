@@ -10,16 +10,16 @@ import Check.Solve (solve)
 import Check.Error
 import Compile
 import Type
-import Control.Lens (over, _1)
+import Tag
 
 infer :: Compiler TypeError ()
 infer = do
   cs <- generate
-  e <- get typedAST
+  ((t, s) :< e) <- get typedAST
   subs <- solve cs
   let ft x = lookup x subs
   let fe x = Nothing
-  let e' = over (annotation . _1) (subsType ft fe) e
+  let e' = (subsType ft fe t, s) :< e
   set typedAST e'
 
 -- TODO: Do we need to check no unification variables left?

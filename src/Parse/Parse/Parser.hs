@@ -8,41 +8,43 @@ module Parse.Parse.Parser
   ) where
 
 import qualified Parse.Prim as Prim
-import Parse.Prim (Error(..))
-import Parse.Tokenise.Token (Token, Type)
+import qualified Parse.Tokenise.Token as Token
 import Parse.Parse.AST
+import Tag
 import Source
 
 import Control.Applicative (Applicative(..), Alternative(..))
 import Control.Arrow (left)
 
-newtype Parser a = Parser { _runParser :: Prim.Parser Token a }
+type Token = Token.Annotated Token.Token
+
+newtype Parser a = Parser { _runParser :: Prim.Parser Token (Tag Source a) }
 
 lift f (Parser a) = Parser (f a)
 
 instance Functor Parser where
-  fmap f = lift (fmap f)
+  fmap f = lift (fmap (fmap f))
 
 instance Applicative Parser where
-  pure x = Parser (pure x)
-  liftA2 f (Parser a) (Parser b) = Parser (liftA2 f a b)
+  pure x = Parser (pure (pure x))
+  liftA2 f (Parser a) (Parser b) = Parser (liftA2 (liftA2 f) a b)
 
 instance Alternative Parser where
   empty = Parser empty
   Parser a <|> Parser b = Parser (a <|> b)
 
 instance Monad Parser where
-  Parser a >>= f = Parser (a >>= \x -> _runParser (f x))
+  Parser a >>= f = Parser (a >>= \x -> _runParser (f (value x)))
 
-runParser :: Parser a -> [Token] -> Either String a
+runParser :: Parser a -> [Token] -> Either String (Tag Source a)
 runParser (Parser p) ts = left show $ Prim.runParser (p Prim.<?> info) ts
   where info :: [Token] -> [Token] -> String
         info es es' = "Syntax error " ++ case take (length es - length es') es of {
       [] -> if null ts then "at end of file" else "" ;
-      ts -> "on " ++ show ts ++ " starting at " ++ show (start (source (head ts)))
+      ts -> "on " ++ show ts ++ " starting at " ++ show (start (tag (head ts)))
   }
 
-satisfy :: (Type -> Bool) -> Parser Token
+satisfy :: (Token.Token -> Bool) -> Parser Token.Token
 satisfy f = Parser $ Prim.satisfy (f . value)
 
 try :: Parser a -> Parser a

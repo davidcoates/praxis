@@ -7,8 +7,9 @@ import Type
 import Inbuilts
 import Data.List (intercalate)
 import Source
+import Tag
 
-codeGen :: Exp (Type, Source) -> String
+codeGen :: Tagged (Type, Source) Exp -> String
 codeGen = undefined
 
 {-

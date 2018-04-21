@@ -8,9 +8,10 @@ import Check.Derivation
 import Check.Error
 import Check.Env
 import Check.AST
-import Source (Source)
+import Source
 import AST
 import Type
+import Tag
 import Prelude hiding (error)
 import Control.Exception.Base (assert)
 import Inbuilts
@@ -40,27 +41,28 @@ generateExp = do
 
 -- TODO: Effects
 ge :: (Env, Parse.Annotated Exp, Type) -> Compiler TypeError (Annotated Exp, Env, [Derivation])
-ge (l1, e, t) = ge' e
-  where ge' :: Parse.Annotated Exp -> Compiler TypeError (Annotated Exp, Env, [Derivation])
-        ge' (Lit s x) = return (Lit (t, s) x, l1, [newDerivation (Sub t' t) ("Literal " ++ show x) s])
-          where t' = case x of { Integer _ -> intTy ; Bool _ -> boolTy }
+ge (l1, e, t) = ($ e) $ rec $ \s x -> case x of
 
-        ge' (If s a b c) = do
-          (a', l2, c1) <- ge (l1, a, boolTy)
-          (b', l3, c2) <- ge (l2, b, t)
-          (c', l3',c3) <- ge (l2, c, t)
-          let (l4, c4) = contextJoin s l2 l3 l3'
-          return (If (t, s) a' b' c', l4, c1 ++ c2 ++ c3 ++ c4)
+  Lit x -> return ((t, s) :< Lit x, l1, [newDerivation (Sub t' t) ("Literal " ++ show x) s])
+    where t' = case x of { Integer _ -> intTy ; Bool _ -> boolTy }
 
-        ge' (Var s n) = do
-          (t', l2, c1) <- use s n l1
-          return (Var (t, s) n, l2, newDerivation (Sub (pureTy t') t) ("Variable " ++ n) s : c1)
+  If a b c -> do
+    (a', l2, c1) <- ge (l1, a, boolTy)
+    (b', l3, c2) <- ge (l2, b, t)
+    (c', l3',c3) <- ge (l2, c, t)
+    let (l4, c4) = contextJoin s l2 l3 l3'
+    return ((t, s) :< If a' b' c', l4, c1 ++ c2 ++ c3 ++ c4)
 
-        ge' (Apply s f x) = do
-          a  <- freshTyUni
-          (f', l2, c1) <- ge (l1, f, pureTy (TyFun a t) )
-          (x', l3, c2) <- ge (l2, x, pureTy a)
-          return (Apply (t, s) f' x', l3, c1 ++ c2)
+
+  Var n -> do
+    (t', l2, c1) <- use s n l1
+    return ((t, s) :< Var n, l2, newDerivation (Sub (pureTy t') t) ("Variable " ++ n) s : c1)
+
+  Apply f x -> do
+    a  <- freshTyUni
+    (f', l2, c1) <- ge (l1, f, pureTy (TyFun a t) )
+    (x', l3, c2) <- ge (l2, x, pureTy a)
+    return ((t, s) :< Apply f' x', l3, c1 ++ c2)
 
 {- |Captures e returns a list of all free variables in e.
    This is used to ensure functions don't capture linear variables.

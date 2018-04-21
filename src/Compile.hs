@@ -69,6 +69,8 @@ type Env = [(Name, (Pure, Int))]
 -- |Context for top-level declarations
 type QEnv = [(Name, QPure)]
 
+type Token = Tokenise.Annotated Tokenise.Token
+
 data CompilerState = CompilerState
   { _stage        :: Maybe Stage               -- ^ Current stage of compilation
   , _freshUnis    :: Maybe [String]            -- ^ Infinite list of distinct dummy names to use for unification types
@@ -76,7 +78,7 @@ data CompilerState = CompilerState
   , _imports      :: Maybe [FilePath]          -- ^ Loaded modules
   , _filename     :: Maybe FilePath            -- ^ File path
   , _src          :: Maybe String              -- ^ Source to compile
-  , _tokens       :: Maybe [Tokenise.Token]    -- ^ List of tokens produced by tokeniser
+  , _tokens       :: Maybe [Token]             -- ^ List of tokens produced by tokeniser
   , _sugaredAST   :: Maybe (Parse.AST)         -- ^ AST after parsing of tokens
   , _desugaredAST :: Maybe (Desugar.AST)       -- ^ AST after desugaring
   , _qtEnv        :: Maybe QEnv                -- ^ Type environment of top-level functions

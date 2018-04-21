@@ -4,10 +4,12 @@ module Parse.Parse
   ) where
 
 import Parse.Parse.AST
-import Parse.Parse.Language
 import Parse.Parse.Parser
 
 import Type
+import Tag
+import Source
+
 import Prelude hiding (exp)
 import Control.Applicative ((<|>), (<**>), liftA2, liftA3)
 import Compile
@@ -24,7 +26,7 @@ parse = do
     Right ast -> set sugaredAST ast
 
 
-program :: Parser (Annotated Exp)
+program :: Parser (Exp (Tag Source))
 program = undefined
 
 {-

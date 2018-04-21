@@ -1,18 +1,13 @@
 module Source
   ( Pos(..)
   , Source(..)
-  , Sourced(..)
   , formatSpelling
   , showStart
   , showEnd
   , showSpelling
   ) where
 
-import Control.Applicative
-
 data Pos = Pos { line :: Int, column :: Int }
-
-data Sourced a = Sourced { source :: Source, value :: a }
 
 data Source = Source { start :: Pos, end :: Pos, spelling :: String }
             | Phony
@@ -38,13 +33,6 @@ instance Show Pos where
 
 instance Show Source where
   show s = showSpelling s ++ " @ " ++ showStart s
-
-instance Functor Sourced where
-  fmap f x = x { value = f (value x) }
-
-instance Applicative Sourced where
-  pure x = Sourced { source = mempty, value = x }
-  liftA2 f x y = Sourced { source = mappend (source x) (source y), value = f (value x) (value y) }
 
 instance Monoid Source where
   mempty = Phony

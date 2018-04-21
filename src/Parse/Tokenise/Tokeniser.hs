@@ -10,7 +10,6 @@ module Parse.Tokenise.Tokeniser
 import qualified Parse.Prim as Prim
 import Parse.Prim (Error(..))
 import Source
-import Pos
 
 import Control.Applicative (Applicative(..), Alternative(..))
 import Control.Arrow (left)

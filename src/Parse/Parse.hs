@@ -10,7 +10,6 @@ import Parse.Parse.Parser
 import Type
 import Prelude hiding (exp)
 import Control.Applicative ((<|>), (<**>), liftA2, liftA3)
-import Pos
 import Compile
 import Control.Lens (view)
 

@@ -3,7 +3,6 @@ module Check.Error
   ) where
 
 import Check.Derivation
-import Pos
 import AST (Name)
 
 data TypeError = Contradiction Derivation

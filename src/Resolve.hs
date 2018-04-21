@@ -4,9 +4,9 @@ module Resolve
 
 import AST
 import Parse
-import Pos
+import Source
 
-data ResolverError = UnknownName String Pos
+data ResolverError = UnknownName String Source
 
 instance Show ResolverError where
   show (UnknownName s p) = "Unknown name '" ++ s ++ "' at " ++ show p

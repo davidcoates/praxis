@@ -36,7 +36,6 @@ import qualified Parse.Parse.AST as Parse
 import qualified Parse.Desugar.AST as Desugar
 import qualified Parse.Tokenise.Token as Tokenise
 import qualified Check.AST as Check
-import Pos
 import AST (Name)
 import Type
 import Inbuilts (inbuilts, TopDecl(..))

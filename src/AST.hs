@@ -33,11 +33,11 @@ data Decl a = FunDecl Name (a (Exp a))
             -- TODO: Fixity declarations
 
 -- |AST for Literals
-data Lit = Integer Integer
+data Lit = Int Int
          | Bool Bool
 
 instance Show Lit where
-  show (Integer i) = show i
+  show (Int i)  = show i
   show (Bool b) = show b
 
 -- |Showing ASTs

@@ -1,6 +1,21 @@
 module Main where
 
-main = putStrLn "Hey!"
+import Compiler
+import Interpret
+
+main :: IO ()
+main = do
+  (x, _) <- run single
+  case x of
+    Left e  -> print e
+    Right x -> putStrLn "Success"
+
+single :: Compiler ()
+single = do
+  liftIO $ putStrLn "Enter expression: "
+  x <- liftIO $ getLine
+  set src x
+  interpret
 
 {-
 import Parse

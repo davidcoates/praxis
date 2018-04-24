@@ -15,7 +15,7 @@ import Tag
 import Prelude hiding (error)
 import Control.Exception.Base (assert)
 import Inbuilts
-import Compile
+import Compiler
 
 contextJoin :: Source -> Env -> Env -> Env -> (Env, [Derivation])
 contextJoin _ [] [] [] = ([],[])
@@ -26,25 +26,25 @@ contextJoin s ((x,(xt,xi)):xs) ((y,(yt,yi)):ys) ((z,(zt,zi)):zs) =
         r = (l:ls, c1 ++ c2)
 
 
-generate :: Compiler TypeError [Derivation]
-generate = set stage Generate >> generateExp
-
-generateExp :: Compiler TypeError [Derivation]
-generateExp = do
+generate :: Compiler [Derivation]
+generate = do
+  set stage Generate
   t <- freshTyUni
   e <- get desugaredAST
   l <- get tEnv
   (e', l', cs) <- ge (l, e, pureTy t)
   set tEnv l'
   set typedAST e'
+  debugPrint e'
+  debugPrint cs
   return cs
 
 -- TODO: Effects
-ge :: (Env, Parse.Annotated Exp, Type) -> Compiler TypeError (Annotated Exp, Env, [Derivation])
+ge :: (Env, Parse.Annotated Exp, Type) -> Compiler (Annotated Exp, Env, [Derivation])
 ge (l1, e, t) = ($ e) $ rec $ \s x -> case x of
 
   Lit x -> return ((t, s) :< Lit x, l1, [newDerivation (Sub t' t) ("Literal " ++ show x) s])
-    where t' = case x of { Integer _ -> intTy ; Bool _ -> boolTy }
+    where t' = case x of { Int _ -> intTy ; Bool _ -> boolTy }
 
   If a b c -> do
     (a', l2, c1) <- ge (l1, a, boolTy)

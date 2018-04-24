@@ -1,19 +1,19 @@
 -- Type checker
 
 module Check
-  ( infer
+  ( check
   ) where
 
 import Check.AST
 import Check.Generate (generate)
 import Check.Solve (solve)
 import Check.Error
-import Compile
+import Compiler
 import Type
 import Tag
 
-infer :: Compiler TypeError ()
-infer = do
+check :: Compiler ()
+check = do
   cs <- generate
   ((t, s) :< e) <- get typedAST
   subs <- solve cs

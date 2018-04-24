@@ -3,7 +3,7 @@
 module Parse.Tokenise.Token
   ( Annotated
   , Token(..)
-  , Literal(..)
+  , Lit(..)
   , QString(..)
   ) where
 
@@ -19,16 +19,16 @@ data Token = QVarId QString
            | QConSym QString
            | ReservedOp String
            | ReservedId String
-           | Literal Literal
+           | Lit Lit
            | Special Char
            | Whitespace -- ^ Consider whitespace a token to allow parser to construct accurate spelling
   deriving (Show)
 
-data Literal = Int Int | Float Float | Char Char | String String
+data Lit = Int Int | Float Float | Char Char | String String
   deriving (Show)
 
 data QString = QString { qualification :: [String], name :: String }
   deriving (Show)
 
 instance Show (Annotated Token) where
-  show (a :< x) = show x ++ "\n" ++ indents [showStart a ++ "->" ++ showEnd a, showSpelling a]
+  show (a :< x) = show x ++ " @ " ++ show a

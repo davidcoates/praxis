@@ -11,7 +11,7 @@ import Data.Maybe (fromJust)
 import Check.Error
 import Text.Parsec.Pos (newPos)
 import qualified Data.Set as Set (null)
-import Compile
+import Compiler
 
 data System = System
   { vars     :: [(Name, Pure)]
@@ -36,11 +36,12 @@ unisP _             = []
 unisT :: Type -> [Name]
 unisT (Ty t _) = unisP t
 
-solve :: [Derivation] -> Compiler TypeError [(String, Pure)]
+solve :: [Derivation] -> Compiler [(String, Pure)]
 solve xs = do
   set stage Solve
   s <- solveProgress System { vars = map (\t -> (t, TyUni t)) (concatMap unis xs), progress = filter isProgress xs, check = filter isCheck xs }
   verifyCheck s
+  debugPrint (vars s)
   return (vars s)
     where isProgress d = case constraint d of { Sub _ _ -> True; _ -> False }
           isCheck = not . isProgress
@@ -66,13 +67,13 @@ sub (n,t) s = s{ vars = vars', progress = progress', check = check' }
         progress' = map subsD (progress s)
         check'    = map subsD (check s)
 
-contradiction :: Derivation -> Compiler TypeError a
-contradiction d = throwError (Contradiction d)
+contradiction :: Derivation -> Compiler a
+contradiction = throwError . CheckError . Contradiction
 
-underdefined :: Derivation -> Compiler TypeError a
-underdefined d = throwError (Underdefined d)
+underdefined :: Derivation -> Compiler a
+underdefined = throwError . CheckError . Underdefined
 
-solveProgress :: System -> Compiler TypeError System
+solveProgress :: System -> Compiler System
 solveProgress s@System { progress = [] } = return s
 solveProgress s@System { progress = d:ds } = case constraint d of
   Sub (Ty t1 e1) (Ty t2 e2) | null e1 && null e2 -> solveSub t1 t2
@@ -91,13 +92,13 @@ solveProgress s@System { progress = d:ds } = case constraint d of
 
           contra t1 t2 = contradiction (d `implies` Sub (pureTy t1) (pureTy t2))
 
-verifyCheck :: System -> Compiler TypeError ()
+verifyCheck :: System -> Compiler ()
 verifyCheck s@System { check = [] } = return ()
 verifyCheck s@System { check = d:ds } = case constraint d of
   Class x t -> do
     if x == "Share" || x == "Drop" then sd t else contradiction d
     verifyCheck s{ check = ds }
-      where sd :: Pure -> Compiler TypeError ()
+      where sd :: Pure -> Compiler ()
             sd (TyPrim _)  = return ()
             sd (TyUni _)   = underdefined d
             sd (TyFun _ _) = return ()

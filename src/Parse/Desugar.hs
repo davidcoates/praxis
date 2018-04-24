@@ -10,7 +10,7 @@ import Parse.Desugar.AST
 import Parse.Desugar.Error
 import Parse.Desugar.Infix
 import Tag
-import Compile
+import Compiler
 
 import Control.Monad (unless)
 import Control.Applicative (liftA2, liftA3)
@@ -22,14 +22,15 @@ import Source
 opTable :: Map Op Fixity
 opTable = Map.fromList [("+", Fixity (6, Leftfix)), ("==", Fixity (4, Nonfix))]
 
-desugar :: Compiler String ()
+desugar :: Compiler ()
 desugar = do
   set stage Desugar
   e  <- get sugaredAST
   e' <- desugarExp e
   set desugaredAST e'
+  debugPrint e'
 
-desugarExp :: Parse.AST -> Compiler String (Annotated Exp)
+desugarExp :: Parse.AST -> Compiler (Annotated Exp)
 desugarExp = rec $ \a x -> fmap (a :<) $ case x of
   Parse.Infix ts    -> resolve opTable ts
   Parse.Lit lit     -> pure (Lit lit)
@@ -39,5 +40,5 @@ desugarExp = rec $ \a x -> fmap (a :<) $ case x of
 
 -- TODO
 -- REPLACE WITH MY MIXFIX PARSER
-resolve :: Map Op Fixity -> [Annotated Tok] -> Compiler String (Exp (Tag Source))
+resolve :: Map Op Fixity -> [Annotated Tok] -> Compiler (Exp (Tag Source))
 resolve fixityTable ts = undefined

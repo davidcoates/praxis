@@ -5,7 +5,7 @@ module Parse
 import Parse.Tokenise (tokenise)
 import qualified Parse.Parse as Inner (parse)
 import Parse.Desugar (desugar)
-import Compile
+import Compiler
 
-parse :: Compiler String ()
+parse :: Compiler ()
 parse =  tokenise >> Inner.parse >> desugar

@@ -1,16 +1,16 @@
 module Check.Error
-  ( TypeError(..)
+  ( Error(..)
   ) where
 
 import Check.Derivation
 import AST (Name)
 
-data TypeError = Contradiction Derivation
-               | Underdefined Derivation
-               | NotInScope String
+data Error = Contradiction Derivation
+           | Underdefined Derivation
+           | NotInScope String
 
-instance Show TypeError where
+instance Show Error where
   show (Contradiction d) = show d
   show (Underdefined d)  = "Failed to completely deduce the unification variable(s) present in: " ++ show d
-  show (NotInScope s) = "Not in scope: " ++ s
+  show (NotInScope s)    = "Not in scope: " ++ s
 

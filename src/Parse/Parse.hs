@@ -1,33 +1,40 @@
 module Parse.Parse
   ( parse
-  , module Parse.Parse.AST
+  -- , module Parse.Parse.AST
   ) where
 
-import Parse.Parse.AST
+import Parse.Parse.AST as Parse
+import Parse.Tokenise.Token as Token
 import Parse.Parse.Parser
 
 import Type
 import Tag
 import Source
+import Compiler
 
 import Prelude hiding (exp)
 import Control.Applicative ((<|>), (<**>), liftA2, liftA3)
-import Compile
 import Control.Lens (view)
+import Data.Maybe (isJust, fromJust)
 
+type T a = a (Tag Source)
 
 -- This is the primary function, which attempts to parse a string to an annotated sugared AST
-parse :: Compiler String ()
+parse :: Compiler ()
 parse = do
   set stage Parse
   ts <- get tokens
   case runParser program ts of
     Left e    -> throwError e
-    Right ast -> set sugaredAST ast
+    Right ast -> set sugaredAST ast >> debugPrint ast
 
+program :: Parser (T Exp)
+program = int
 
-program :: Parser (Exp (Tag Source))
-program = undefined
+int :: Parser (T Exp)
+int = Parse.Lit . Parse.Int <$> token int'
+  where int' (Token.Lit (Token.Int x)) = Just x
+        int' _                         = Nothing
 
 {-
 block :: Parser a -> Parser [a]

@@ -1,20 +1,22 @@
 module Parse.Tokenise.Tokeniser
   ( Tokeniser(..)
   , runTokeniser
+  , token
   , satisfy
   , try
   , lookAhead
   , (<?>)
+  , (<|?>)
   ) where
 
 import qualified Parse.Prim as Prim
-import Parse.Prim (Error(..))
+import Parse.Prim (ParseError(..))
 import Source
 import Tag
 import Parse.Tokenise.Token
+import Compiler (Error(..))
 
 import Control.Applicative (Applicative(..), Alternative(..))
-import Control.Arrow (left)
 import Data.List (intercalate)
 
 newtype Tokeniser a = Tokeniser { _runTokeniser :: Prim.Parser (Annotated Char) (Annotated a) }
@@ -35,13 +37,11 @@ instance Alternative Tokeniser where
 instance Monad Tokeniser where
   Tokeniser a >>= f = Tokeniser (a >>= \(a :< x) -> liftA2 (\_ y -> y) (a :< x) <$> _runTokeniser (f x))
 
-runTokeniser :: Tokeniser a -> String -> Either String [Annotated a]
-runTokeniser (Tokeniser p) cs = left show $ Prim.runParser (all p) (sourced cs)
-  where all p = (Prim.eof *> pure []) <|> liftA2 (:) (p Prim.<?> info) (all p)
-        info ts ts' = "Lexical error " ++ case take (length ts - length ts') ts of {
-      [] -> if null ts then "at end of file" else "" ;
-      cs -> "on " ++ formatSpelling (map value cs) ++ " starting at " ++ show (start (tag (head cs)))
-  }
+runTokeniser :: Tokeniser a -> String -> Either Error [Annotated a]
+runTokeniser (Tokeniser p) cs = makeError $ Prim.runParser (all p) (sourced cs)
+  where all p = (Prim.eof *> pure []) <|> liftA2 (:) p (all p)
+        makeError (Left e, ts) = Left $ LexicalError (if null ts then EOF else tag (head ts)) (show e)
+        makeError (Right x, _) = Right x
 
 sourced :: String -> [Annotated Char]
 sourced = sourced' Pos { line = 1, column = 1 }
@@ -55,6 +55,11 @@ sourced = sourced' Pos { line = 1, column = 1 }
         advance '\n' p = Pos { line = line p + 1, column = 1 }
         advance _    p = p { column = column p + 1 }
 
+token :: (Char -> Maybe a) -> Tokeniser a
+token f = Tokeniser $ Prim.token (lift . fmap f)
+  where lift (a :< Just x) = Just (a :< x)
+        lift _             = Nothing
+
 satisfy :: (Char -> Bool) -> Tokeniser Char
 satisfy f = Tokeniser $ Prim.satisfy (f . value)
 
@@ -66,5 +71,8 @@ lookAhead = lift Prim.lookAhead
 
 infix 0 <?>
 (<?>) :: Tokeniser a -> String -> Tokeniser a
-Tokeniser p <?> s = Tokeniser (p Prim.<?> (\_ _ -> s))
+Tokeniser p <?> s = Tokeniser (p Prim.<?> s)
 
+infix 0 <|?>
+(<|?>) :: Tokeniser a -> String -> Tokeniser a
+Tokeniser p <|?> s = Tokeniser (p Prim.<|?> s)

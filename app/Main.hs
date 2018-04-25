@@ -2,20 +2,20 @@ module Main where
 
 import Compiler
 import Interpret
+import System.IO
 
 main :: IO ()
-main = do
-  (x, _) <- run single
-  case x of
-    Left e  -> print e
-    Right x -> putStrLn "Success"
+main = single >> main
 
-single :: Compiler ()
+single :: IO ()
 single = do
-  liftIO $ putStrLn "Enter expression: "
-  x <- liftIO $ getLine
-  set src x
-  interpret
+  putStr "> "
+  hFlush stdout
+  s <- getLine
+  (x, _) <- run (set src s >> interpret)
+  case x of
+    Left e  -> print e >> putStrLn "^^^ ERRORS OCCURED ^^^"
+    Right _ -> return ()
 
 {-
 import Parse

@@ -43,11 +43,10 @@ generate = do
 ge :: (Env, Parse.Annotated Exp, Type) -> Compiler (Annotated Exp, Env, [Derivation])
 ge (l1, e, t) = ($ e) $ rec $ \s x -> case x of
 
-  Lit x -> return ((t, s) :< Lit x, l1, [newDerivation (Sub t' t) ("Literal " ++ show x) s])
-    where t' = case x of { Int _ -> intTy ; Bool _ -> boolTy }
+  Lit x -> return ((t, s) :< Lit x, l1, [newDerivation (Sub (litTy x) t) ("Literal " ++ show x) s])
 
   If a b c -> do
-    (a', l2, c1) <- ge (l1, a, boolTy)
+    (a', l2, c1) <- ge (l1, a, pureTy (TyPrim TyBool))
     (b', l3, c2) <- ge (l2, b, t)
     (c', l3',c3) <- ge (l2, c, t)
     let (l4, c4) = contextJoin s l2 l3 l3'

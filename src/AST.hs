@@ -5,6 +5,7 @@ module AST
   , Decl(..)
   , Lit(..)
   , Name
+  , litTy
   ) where
 
 import Tag
@@ -35,10 +36,21 @@ data Decl a = FunDecl Name (a (Exp a))
 -- |AST for Literals
 data Lit = Int Int
          | Bool Bool
+         | Char Char
+         | String String
+
+litTy :: Lit -> Type
+litTy = pureTy . TyPrim . litTy'
+  where litTy' (Int _) = TyInt
+        litTy' (Bool _) = TyBool
+        litTy' (Char _) = TyChar
+        litTy' (String _) = TyString
 
 instance Show Lit where
-  show (Int i)  = show i
-  show (Bool b) = show b
+  show (Int i)    = show i
+  show (Bool b)   = show b
+  show (Char c)   = show c
+  show (String s) = show s
 
 -- |Showing ASTs
 instance Show a => TreeString (Tagged a Decl) where

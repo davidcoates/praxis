@@ -49,6 +49,7 @@ import Source
 import Error (Error)
 
 import Inbuilts (inbuilts, TopDecl(..))
+import Control.Monad (when)
 import Control.Monad.State hiding (get, liftIO)
 import Control.Monad.Except hiding (throwError, liftIO)
 import qualified Control.Monad.Except (throwError)
@@ -166,15 +167,10 @@ runWith c s = (runStateT . runExceptT) c s
 debugPrint :: Show a => a -> Compiler ()
 debugPrint x = do
   b <- get (flags . debug)
-  if b then do
+  when b $ do
     s <- get stage
     liftIO $ putStrLn ("Output from stage: " ++ show s)
     liftIO $ print x
-    liftIO $ putStrLn ""
-    return ()
-  else
-    return ()
-
 
 fresh :: String -> [String]
 fresh alpha = concatMap perm [1..]
@@ -193,7 +189,7 @@ freshTyUni = do
 ungeneralise :: QPure -> Compiler ([Constraint], Pure)
 ungeneralise (Forall cs as t) = do
   bs <- sequence (replicate (length as) freshTyUni)
-  let ft = (`lookup` (zip as bs))
+  let ft = (`lookup` zip as bs)
   let fe = const Nothing
   let subsP = subsPure ft fe
   return (map (\c -> case c of Class s t -> Class s (subsP t)) cs, subsP t)

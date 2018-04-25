@@ -10,6 +10,7 @@ module Parse.Tokenise.Token
 import Source
 import Tag
 import Pretty
+import AST (Lit(..))
 
 type Annotated a = Tag Source a
 
@@ -22,9 +23,6 @@ data Token = QVarId QString
            | Lit Lit
            | Special Char
            | Whitespace -- ^Consider whitespace a token to allow parser to construct accurate spelling
-  deriving (Show)
-
-data Lit = Int Int | Float Float | Char Char | String String
   deriving (Show)
 
 data QString = QString { qualification :: [String], name :: String }

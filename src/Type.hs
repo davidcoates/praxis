@@ -14,14 +14,11 @@ module Type
   , shareC
   , dropC
   , pureTy
-  , intTy
-  , boolTy
   , mono
   ) where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 
 type Name = String
@@ -46,7 +43,7 @@ data Pure = TyPrim Prim              -- ^A primitive type
           deriving (Ord, Eq)
 
 -- Perhaps ultimately replace this with TyData "Bool" [], TyData "Int" []
-data Prim = TyBool | TyInt
+data Prim = TyBool | TyInt | TyChar | TyString
           deriving (Ord, Eq)
 
 data Type = Ty Pure Effects          -- ^An impure type `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
@@ -66,6 +63,8 @@ instance Show Effect where
 instance Show Prim where
   show TyBool = "Bool"
   show TyInt  = "Int"
+  show TyChar = "Char"
+  show TyString = "String"
 
 instance Show Constraint where
   show (Sub a b) = show a  ++ " <= " ++ show b
@@ -77,7 +76,7 @@ instance Show Pure where
   show (TyFun a b)   = parens p (show a) ++ " -> " ++ show b
     where p = case a of (TyFun _ _) -> True
                         _           -> False
-  show (TyData s ts) = s ++ intercalate " " (map (\t -> parens (p t) (show t)) ts)
+  show (TyData s ts) = s ++ unwords (map (\t -> parens (p t) (show t)) ts)
     where p t = case t of (TyFun _ _)  -> True
                           (TyData _ _) -> True
                           _            -> False
@@ -87,8 +86,8 @@ instance Show Type where
   show (Ty p es) = show p ++ (if Set.null es then "" else " # " ++ show es)
 
 instance Show QPure where
-  show (Forall cs xs t) = "forall " ++ intercalate " " xs ++ ". " ++ cs' ++ show t
-    where cs' = if null cs then "" else "(" ++ intercalate " "  (map show cs) ++ ") => "
+  show (Forall cs xs t) = "forall " ++ unwords xs ++ ". " ++ cs' ++ show t
+    where cs' = if null cs then "" else "(" ++ unwords  (map show cs) ++ ") => "
 
 parens True  x = "(" ++ x ++ ")"
 parens False x = x
@@ -128,11 +127,5 @@ dropC = Class "Drop"
 pureTy :: Pure -> Type
 pureTy p = Ty p Set.empty
 
-intTy :: Type
-intTy = pureTy (TyPrim TyInt)
-
-boolTy :: Type
-boolTy = pureTy (TyPrim TyBool)
-
 mono :: Pure -> QPure
-mono t = Forall [] [] t
+mono = Forall [] []

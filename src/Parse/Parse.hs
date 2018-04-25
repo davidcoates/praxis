@@ -29,12 +29,12 @@ parse = do
     Right ast -> set sugaredAST ast >> debugPrint ast
 
 program :: Parser (T Exp)
-program = int
+program = literal <|?> "program"
 
-int :: Parser (T Exp)
-int = Parse.Lit . Parse.Int <$> token int'
-  where int' (Token.Lit (Token.Int x)) = Just x
-        int' _                         = Nothing
+literal :: Parser (T Exp)
+literal = token literal' <?> "literal"
+  where literal' (Token.Lit x) = Just (Parse.Lit x)
+        literal' _             = Nothing
 
 {-
 block :: Parser a -> Parser [a]
@@ -44,9 +44,6 @@ block p = braces (sepBy1 p semi)
 sepBy1' :: Parser a -> Parser a -> Parser [a]
 sepBy1' p sep = liftA2 (:) p (concat <$> many (liftA2 join sep p))
   where join x y = [x,y]
-
-int :: Parser (Annotated Exp)
-int = tag Lit <*> (Integer <$> natural)
 
 op :: Parser Op
 op = operator

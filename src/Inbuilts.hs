@@ -12,7 +12,7 @@ data TopDecl = TopDecl { ty :: QPure, name :: String, defn :: String }
 inbuilts :: [(String, TopDecl)]
 inbuilts =
   [
-  ("+", TopDecl { ty = mono (TyFun (TyPrim (TyInt)) (pureTy (TyFun (TyPrim TyInt) intTy)))
+  ("+", TopDecl { ty = mono (TyFun (TyPrim (TyInt)) (pureTy (TyFun (TyPrim TyInt) (pureTy (TyPrim TyInt)))))
                 , name = "plus"
                 , defn = "auto plus = [](int x) -> { return ([](int y) -> { return x + y; }); };"
                 })

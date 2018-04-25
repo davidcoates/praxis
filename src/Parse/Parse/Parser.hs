@@ -10,12 +10,11 @@ module Parse.Parse.Parser
   ) where
 
 import qualified Parse.Prim as Prim
-import Parse.Prim (ParseError)
 import qualified Parse.Tokenise.Token as Token
 import Parse.Parse.AST
 import Tag
-import Source
-import Compiler (Error(..))
+import Source (Source)
+import Error
 
 import Control.Applicative (Applicative(..), Alternative(..))
 
@@ -40,9 +39,9 @@ instance Monad Parser where
   Parser a >>= f = Parser (a >>= \x -> _runParser (f (value x)))
 
 runParser :: Parser a -> [Token] -> Either Error (Tag Source a)
-runParser (Parser p) ts = makeError $ Prim.runParser p ts
-  where makeError (Left e, ts) = Left $ SyntaxError (if null ts then EOF else tag (head ts)) (show e)
-        makeError (Right x, _) = Right x
+runParser (Parser p) ts = makeError $ Prim.runParser p ts tag
+  where makeError (Left (s, e)) = Left $ SyntaxError s e
+        makeError (Right x)     = Right x
 
 token :: (Token.Token -> Maybe a) -> Parser a
 token f = Parser $ Prim.token (lift . fmap f)

@@ -1,6 +1,5 @@
 module Parse.Prim
   ( Parser(..)
-  , ParseError(..)
   , runParser
   , eof
   , token
@@ -12,21 +11,11 @@ module Parse.Prim
   , (<|?>)
   ) where
 
+import Source (Source)
+import Error
+
 import Control.Applicative (Applicative, Alternative, pure, liftA2, empty, (<|>))
 import Control.Arrow (left)
-
-data ParseError = Option ParseError ParseError
-                | Atom String
-                | Generic
-
-instance Show ParseError where
-  show e = case toList e of
-    []  -> "<unknown>"
-    [x] -> "expected " ++ x
-    xs  -> "expected one of " ++ show xs
-    where toList (Option a b) = toList a ++ toList b
-          toList (Atom s)     = [s]
-          toList Generic      = []
 
 -- |Parser takes a list of tokens, and returns a triple of:
 -- | 1) Left <error> on parse error, or Right <AST>
@@ -56,8 +45,10 @@ instance Monad (Parser t) where
     (Right x, ts', c) -> let (y, ts'', c') = _runParser (f x) ts' in (y, ts'', c || c')
     (Left e,  ts', c) -> (Left e, ts', c)
 
-runParser :: Parser t a -> [t] -> (Either ParseError a, [t])
-runParser p ts = let (x,y,_) = _runParser p ts in (x,y)
+runParser :: Parser t a -> [t] -> (t -> Source) -> Either (ParseSource, ParseError) a
+runParser p ts f = let (x,y,_) = _runParser p ts in
+  case x of Left e  -> Left (if null y then EOF else Source (f (head y)), e)
+            Right x -> Right x
 
 eof :: Parser t ()
 eof = Parser $ \ts -> (if null ts then Right () else Left Generic, ts, False)

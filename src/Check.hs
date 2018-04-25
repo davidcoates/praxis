@@ -7,7 +7,7 @@ module Check
 import Check.AST
 import Check.Generate (generate)
 import Check.Solve (solve)
-import Check.Error
+import Error
 import Compiler
 import Type
 import Tag

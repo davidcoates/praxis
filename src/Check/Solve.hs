@@ -3,15 +3,14 @@ module Check.Solve
   ) where
 
 import Check.Derivation
-import Check.Error
 import AST
 import Type
 import Prelude hiding (error)
 import Data.Maybe (fromJust)
-import Check.Error
 import Text.Parsec.Pos (newPos)
 import qualified Data.Set as Set (null)
 import Compiler
+import Error
 
 data System = System
   { vars     :: [(Name, Pure)]

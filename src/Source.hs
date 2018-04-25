@@ -7,12 +7,10 @@ module Source
 data Pos = Pos { line :: Int, column :: Int }
 
 data Source = Source { start :: Pos, end :: Pos, spelling :: String }
-            | EOF
-            | Phantom
+            | Phantom -- ^Used for phantom tokens e.g., layout tokens inserted by the tokeniser 
 
 showSource :: ((Pos, Pos, String) -> String) -> Source -> String
 showSource _ Phantom = "\x26A1\x26A1\x26A1PHONY\x26A1\x26A1\x26A1"
-showSource _ EOF     = "<end of file>"
 showSource f s       = f (start s, end s, spelling s)
 
 instance Show Pos where
@@ -25,5 +23,4 @@ instance Monoid Source where
   mempty = Phantom
   mappend Phantom s = s
   mappend s Phantom = s
-  mappend _ EOF     = EOF
-  mappend s1@(Source _ _ _) s2@(Source _ _ _) = Source { start = start s1, end = end s2, spelling = spelling s1 ++ spelling s2 }
+  mappend s1     s2 = Source { start = start s1, end = end s2, spelling = spelling s1 ++ spelling s2 }

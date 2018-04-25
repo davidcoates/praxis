@@ -10,11 +10,10 @@ module Parse.Tokenise.Tokeniser
   ) where
 
 import qualified Parse.Prim as Prim
-import Parse.Prim (ParseError(..))
 import Source
 import Tag
 import Parse.Tokenise.Token
-import Compiler (Error(..))
+import Error (Error(..))
 
 import Control.Applicative (Applicative(..), Alternative(..))
 import Data.List (intercalate)
@@ -38,10 +37,10 @@ instance Monad Tokeniser where
   Tokeniser a >>= f = Tokeniser (a >>= \(a :< x) -> liftA2 (\_ y -> y) (a :< x) <$> _runTokeniser (f x))
 
 runTokeniser :: Tokeniser a -> String -> Either Error [Annotated a]
-runTokeniser (Tokeniser p) cs = makeError $ Prim.runParser (all p) (sourced cs)
+runTokeniser (Tokeniser p) cs = makeError $ Prim.runParser (all p) (sourced cs) tag
   where all p = (Prim.eof *> pure []) <|> liftA2 (:) p (all p)
-        makeError (Left e, ts) = Left $ LexicalError (if null ts then EOF else tag (head ts)) (show e)
-        makeError (Right x, _) = Right x
+        makeError (Left (s, e)) = Left $ LexicalError s e
+        makeError (Right x)    = Right x
 
 sourced :: String -> [Annotated Char]
 sourced = sourced' Pos { line = 1, column = 1 }

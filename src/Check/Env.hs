@@ -8,8 +8,8 @@ import Source (Source)
 import Type
 import AST (Name)
 import Check.Derivation
-import Check.Error
 import Compiler
+import Error
 
 -- |Increment the usage count of a particular variable
 inc :: Name -> Env -> Env

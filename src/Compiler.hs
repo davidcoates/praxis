@@ -3,7 +3,6 @@
 module Compiler
   ( Compiler
   , CompilerState
-  , Error(..)
   , initialState
   , throwError
   , Stage(..)
@@ -44,10 +43,10 @@ import qualified Parse.Parse.AST as Parse
 import qualified Parse.Desugar.AST as Desugar
 import qualified Parse.Tokenise.Token as Tokenise
 import qualified Check.AST as Check
-import qualified Check.Error as Check
 import AST (Name)
 import Type
 import Source
+import Error (Error)
 
 import Inbuilts (inbuilts, TopDecl(..))
 import Control.Monad.State hiding (get, liftIO)
@@ -63,16 +62,6 @@ data Stage = Tokenise
            | Generate
            | Solve
            | Interpret
-
--- TODO Perhaps move this to its own module
-data Error = LexicalError Source String
-           | SyntaxError Source String
-           | CheckError Check.Error
-
-instance Show Error where
-  show (LexicalError p s) = "Lexical error: " ++ show p ++ " ... " ++ s
-  show (SyntaxError p s)  = "Syntax error: "  ++ show p ++ " ... " ++ s
-  show (CheckError e)     = "Check error: "   ++ show e
 
 instance Show Stage where
   show Tokenise           = "Tokeniser"

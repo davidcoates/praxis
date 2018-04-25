@@ -5,7 +5,6 @@ module Check.Generate
 import qualified Parse.Parse.AST as Parse
 
 import Check.Derivation
-import Check.Error
 import Check.Env
 import Check.AST
 import Source
@@ -16,6 +15,7 @@ import Prelude hiding (error)
 import Control.Exception.Base (assert)
 import Inbuilts
 import Compiler
+import Error
 
 contextJoin :: Source -> Env -> Env -> Env -> (Env, [Derivation])
 contextJoin _ [] [] [] = ([],[])

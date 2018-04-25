@@ -40,7 +40,7 @@ instance Monad Parser where
 
 runParser :: Parser a -> [Token] -> Either Error (Tag Source a)
 runParser (Parser p) ts = makeError $ Prim.runParser p ts tag
-  where makeError (Left (s, e)) = Left $ SyntaxError s e
+  where makeError (Left (s, e)) = Left $ SyntaxError (SweetError s e)
         makeError (Right x)     = Right x
 
 token :: (Token.Token -> Maybe a) -> Parser a

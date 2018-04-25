@@ -1,16 +1,15 @@
 module Parse.Desugar
   ( desugar
   , module Parse.Desugar.AST
-  , module Parse.Desugar.Error
   ) where
 
 import Parse.Parse.AST (Op, Tok(..))
 import qualified Parse.Parse.AST as Parse
 import Parse.Desugar.AST
-import Parse.Desugar.Error
 import Parse.Desugar.Infix
 import Tag
 import Compiler
+import Error
 
 import Control.Monad (unless)
 import Control.Applicative (liftA2, liftA3)

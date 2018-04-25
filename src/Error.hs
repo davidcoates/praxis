@@ -1,15 +1,16 @@
 module Error
   ( Error(..)
+  , SyntaxError(..)
+  , CheckError(..)
   , ParseSource(..)
   , ParseError(..)
-  , CheckError(..)
   ) where
 
 import Check.Derivation (Derivation)
 import Source (Source)
 
 data Error = LexicalError ParseSource ParseError
-           | SyntaxError  ParseSource ParseError
+           | SyntaxError  SyntaxError
            | CheckError   CheckError
 
 data ParseSource = Source Source
@@ -19,9 +20,17 @@ data ParseError = Option ParseError ParseError
                 | Atom String
                 | Generic
 
+data SyntaxError = SweetError ParseSource ParseError
+                 | InfixError -- TODO
+
 data CheckError = Contradiction Derivation
                 | Underdefined Derivation
                 | NotInScope String
+
+instance Show Error where
+  show (LexicalError s e) = "Lexical error: " ++ show s ++ " ... " ++ show e
+  show (SyntaxError e)    = "Syntax error: "  ++ show e
+  show (CheckError e)     = "Check error: "   ++ show e
 
 instance Show ParseSource where
   show EOF = "<end of file>"
@@ -36,10 +45,9 @@ instance Show ParseError where
           toList (Atom s)     = [s]
           toList Generic      = []
 
-instance Show Error where
-  show (LexicalError p s) = "Lexical error: " ++ show p ++ " ... " ++ show s
-  show (SyntaxError p s)  = "Syntax error: "  ++ show p ++ " ... " ++ show s
-  show (CheckError e)     = "Check error: "   ++ show e
+instance Show SyntaxError where
+  show (SweetError s e) = show s ++ " ... " ++ show e
+  show InfixError       = "TODO <infix error>"
 
 instance Show CheckError where
   show (Contradiction d) = show d

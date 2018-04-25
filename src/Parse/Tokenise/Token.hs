@@ -21,7 +21,7 @@ data Token = QVarId QString
            | ReservedId String
            | Lit Lit
            | Special Char
-           | Whitespace -- ^ Consider whitespace a token to allow parser to construct accurate spelling
+           | Whitespace -- ^Consider whitespace a token to allow parser to construct accurate spelling
   deriving (Show)
 
 data Lit = Int Int | Float Float | Char Char | String String

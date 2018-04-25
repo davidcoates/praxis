@@ -26,30 +26,30 @@ import Data.Maybe (fromMaybe)
 
 type Name = String
 
-{-
+{-|
   Effects functions as a *flat set* of effect.
   An effect unification variable can be replaced with a flat set of effects, e.g.,
   { EfUni α, EfString "Read IO" } if α ~> { Ef "WriteIO", Ef "ReadHeap" } then the result is { Ef "WriteIO", Ef "ReadHeap", Ef "Read IO" }
 -}
-data Effect = Ef String              -- A concrete effect e.g., Eg `ReadIO`
-            | EfUni String           -- An effect unification variable
+data Effect = Ef String              -- ^A concrete effect e.g., Eg `ReadIO`
+            | EfUni String           -- ^An effect unification variable
             deriving (Ord, Eq)
 
 type Effects = Set Effect
 
--- A *top-level* pure type
-data Pure = TyPrim Prim              -- A primitive type
-          | TyUni String             -- A (pure) type unification variable
-          | TyFun Pure Type          -- `a -> b # e` is represented as TyFun a (TyImpure b e)
-          | TyData String [Pure]     -- A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
-          | TyVar String             -- A type variable (e.g., a in forall a. a -> a)
+-- |A *top-level* pure type
+data Pure = TyPrim Prim              -- ^A primitive type
+          | TyUni String             -- ^A (pure) type unification variable
+          | TyFun Pure Type          -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
+          | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
+          | TyVar String             -- ^A type variable (e.g., a in forall a. a -> a)
           deriving (Ord, Eq)
 
 -- Perhaps ultimately replace this with TyData "Bool" [], TyData "Int" []
 data Prim = TyBool | TyInt
           deriving (Ord, Eq)
 
-data Type = Ty Pure Effects          -- `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
+data Type = Ty Pure Effects          -- ^An impure type `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
           deriving (Ord, Eq)
 
 data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types in Classes

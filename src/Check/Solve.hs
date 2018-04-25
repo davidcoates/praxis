@@ -45,7 +45,7 @@ solve xs = do
     where isProgress d = case constraint d of { Sub _ _ -> True; _ -> False }
           isCheck = not . isProgress
 
--- | occurs t1 t2 returns True iff t1 is contained within t2
+-- |occurs t1 t2 returns True iff t1 is contained within t2
 occurs :: Pure -> Pure -> Bool
 occurs t1 t2 = t1 == t2 || occurs' t2
   where occurs' (TyPrim _)    = False
@@ -55,8 +55,8 @@ occurs t1 t2 = t1 == t2 || occurs' t2
         occurs' (TyVar _)     = False
         occursT t1 (Ty t2 es) = occurs t1 t2
 
--- | Applies a substitution to the system.
--- | Does NOT perform occurs check
+-- |Applies a substitution to the system.
+-- Does NOT perform occurs check
 sub :: (Name, Pure) -> System -> System
 sub (n,t) s = s{ vars = vars', progress = progress', check = check' }
   where ft x = lookup x [(n,t)]

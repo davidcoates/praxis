@@ -17,10 +17,12 @@ import Error
 import Control.Applicative (Applicative, Alternative, pure, liftA2, empty, (<|>))
 import Control.Arrow (left)
 
--- |Parser takes a list of tokens, and returns a triple of:
--- | 1) Left <error> on parse error, or Right <AST>
--- | 2) List of remaining tokens
--- | 3) Whether or not any tokens were consumed
+{-|
+  Parser takes a list of tokens, and returns a triple of:
+  1) Left <error> on parse error, or Right <AST>
+  2) List of remaining tokens
+  3) Whether or not any tokens were consumed
+-}
 newtype Parser t a = Parser { _runParser :: [t] -> (Either ParseError a, [t], Bool) }
 
 instance Functor (Parser t) where

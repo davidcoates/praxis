@@ -19,7 +19,7 @@ import Data.Maybe (isJust, fromJust)
 
 type T a = a (Tag Source)
 
--- This is the primary function, which attempts to parse a string to an annotated sugared AST
+-- |The primary function, which attempts to parse a string to an annotated sugared AST
 parse :: Compiler ()
 parse = do
   set stage Parse
@@ -40,7 +40,7 @@ int = Parse.Lit . Parse.Int <$> token int'
 block :: Parser a -> Parser [a]
 block p = braces (sepBy1 p semi)
 
--- ^ sepBy1' is similar to sepBy1 except it includes the separator in the result
+-- |sepBy1' is similar to sepBy1 except it includes the separator in the result
 sepBy1' :: Parser a -> Parser a -> Parser [a]
 sepBy1' p sep = liftA2 (:) p (concat <$> many (liftA2 join sep p))
   where join x y = [x,y]

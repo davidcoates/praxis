@@ -12,7 +12,7 @@ module Compiler
   , run
   , runWith
   , lift
-  , liftIO -- ^ Lifts an IO computation to the Compiler monad
+  , liftIO -- ^Lifts an IO computation to the Compiler monad
 
   -- |Flag lenses
   , debug
@@ -85,33 +85,33 @@ makeLenses ''Flags
 
 data CompilerState = CompilerState
   { _flags        :: Flags
-  , _stage        :: Stage               -- ^ Current stage of compilation
-  , _freshUnis    :: [String]            -- ^ Infinite list of distinct dummy names to use for unification types
-  , _freshVars    :: [String]            -- ^ Infinite list of distinct dummy names to use for phantom variables
-  , _imports      :: [FilePath]          -- ^ Loaded modules
-  , _filename     :: FilePath            -- ^ File path
-  , _src          :: String              -- ^ Source to compile
-  , _tokens       :: [Token]             -- ^ List of tokens produced by tokeniser
-  , _sugaredAST   :: (Parse.AST)         -- ^ AST after parsing of tokens
-  , _desugaredAST :: (Desugar.AST)       -- ^ AST after desugaring
-  , _qtEnv        :: QEnv                -- ^ Type environment of top-level functions
-  , _tEnv         :: Env                 -- ^ Type environment of local functions
+  , _stage        :: Stage               -- ^Current stage of compilation
+  , _freshUnis    :: [String]            -- ^Infinite list of distinct dummy names to use for unification types
+  , _freshVars    :: [String]            -- ^Infinite list of distinct dummy names to use for phantom variables
+  , _imports      :: [FilePath]          -- ^Loaded modules
+  , _filename     :: FilePath            -- ^File path
+  , _src          :: String              -- ^Source to compile
+  , _tokens       :: [Token]             -- ^List of tokens produced by tokeniser
+  , _sugaredAST   :: (Parse.AST)         -- ^AST after parsing of tokens
+  , _desugaredAST :: (Desugar.AST)       -- ^AST after desugaring
+  , _qtEnv        :: QEnv                -- ^Type environment of top-level functions
+  , _tEnv         :: Env                 -- ^Type environment of local functions
   , _kEnv         :: ()                  -- TODO (Kind environment)
-  , _typedAST     :: (Check.AST)         -- ^ AST after type inference
+  , _typedAST     :: (Check.AST)         -- ^AST after type inference
 
   {-
-  , _fname    :: Maybe FilePath            -- ^ File path
-  , _imports  :: [FilePath]                -- ^ Loaded modules
-  , _src      :: Maybe L.Text              -- ^ File source
-  , _ast      :: Maybe Syn.Module          -- ^ Frontend AST
-  , _tenv     :: Env.Env                   -- ^ Typing environment
-  , _kenv     :: Map.Map Name Kind         -- ^ Kind environment
-  , _cenv     :: ClassEnv.ClassEnv         -- ^ Typeclass environment
-  , _cast     :: Maybe Core.Module         -- ^ Core AST
-  , _flags    :: Flags.Flags               -- ^ Compiler flags
-  , _venv     :: CoreEval.ValEnv Core.Expr -- ^ Core interpreter environment
-  , _denv     :: DataEnv.DataEnv           -- ^ Entity dictionary
-  , _clenv    :: ClassEnv.ClassHier        -- ^ Typeclass hierarchy
+  , _fname    :: Maybe FilePath            -- ^File path
+  , _imports  :: [FilePath]                -- ^Loaded modules
+  , _src      :: Maybe L.Text              -- ^File source
+  , _ast      :: Maybe Syn.Module          -- ^Frontend AST
+  , _tenv     :: Env.Env                   -- ^Typing environment
+  , _kenv     :: Map.Map Name Kind         -- ^Kind environment
+  , _cenv     :: ClassEnv.ClassEnv         -- ^Typeclass environment
+  , _cast     :: Maybe Core.Module         -- ^Core AST
+  , _flags    :: Flags.Flags               -- ^Compiler flags
+  , _venv     :: CoreEval.ValEnv Core.Expr -- ^Core interpreter environment
+  , _denv     :: DataEnv.DataEnv           -- ^Entity dictionary
+  , _clenv    :: ClassEnv.ClassHier        -- ^Typeclass hierarchy
   -}
 
   } deriving (Show)

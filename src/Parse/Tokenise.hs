@@ -19,8 +19,6 @@ tokenise = do
   case runTokeniser atom cs of
     Left e   -> throwError e
     Right ts -> set tokens ts >> debugPrint ts
--- parse :: String -> IO ()
--- parse x = putStrLn $ (\x -> case x of { Left s -> s; Right x -> concatMap (("\n" ++) . show) x} ) $ runTokeniser token x
 
 many :: Tokeniser p -> Tokeniser [p]
 many p = liftA2 (:) (try p) (many p) <|> pure []

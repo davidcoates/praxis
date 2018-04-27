@@ -68,10 +68,13 @@ modid :: Tokeniser [String]
 modid = liftA2 (:) conid (many (try (char '.' *> conid)))
 
 conid :: Tokeniser String
-conid = try (liftA2 (:) large (many small)) <?> "conid"
+conid = liftA2 (:) (try large) (many idLetter) <?> "conid"
 
 varid :: Tokeniser String
-varid = try (some small `excludes` reservedids) <?> "varid"
+varid = liftA2 (:) (try small) (many idLetter) `excludes` reservedids <?> "varid"
+
+idLetter :: Tokeniser Char
+idLetter = try (satisfy isAlphaNum) <|> try (char '\'')
 
 varsym :: Tokeniser String
 varsym = try (liftA2 (:) (symbol `exclude` ':') (many symbol) `excludes` reservedops) <?> "varsym" -- TODO exclude dashes

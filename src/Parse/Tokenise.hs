@@ -59,7 +59,7 @@ whitestuff = whitechar -- TODO <:> comment <:> ncomment
 
 
 reservedids = ["let", "in", "if", "then", "else"]
-reservedops = [":", "=", "\\", "->", "@", "=>", "|"]
+reservedops = [":", "=>", "=", "\\", "->", "@", "|"]
 
 lexeme :: Tokeniser Token
 lexeme = qstuff <|> reservedid <|> reservedop <|> literal <|> special <|?> "lexeme"

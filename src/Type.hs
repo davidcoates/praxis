@@ -13,8 +13,10 @@ module Type
   , subsConstraint
   , shareC
   , dropC
-  , pureTy
   , mono
+  , empty
+  , unions
+  , singleton
   ) where
 
 import Data.Set (Set)
@@ -34,23 +36,34 @@ data Effect = Ef String              -- ^A concrete effect e.g., Eg `ReadIO`
 
 type Effects = Set Effect
 
+empty :: Effects
+empty = Set.empty
+
+unions :: [Effects] -> Effects
+unions = Set.unions
+
+singleton :: Effect -> Effects
+singleton = Set.singleton
+
 -- |A *top-level* pure type
 data Pure = TyPrim Prim              -- ^A primitive type
           | TyUni String             -- ^A (pure) type unification variable
           | TyFun Pure Type          -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
           | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
           | TyVar String             -- ^A type variable (e.g., a in forall a. a -> a)
+          | TyBang Pure              -- ^A read-only reference
           deriving (Ord, Eq)
 
 -- Perhaps ultimately replace this with TyData "Bool" [], TyData "Int" []
 data Prim = TyBool | TyInt | TyChar | TyString
           deriving (Ord, Eq)
 
-data Type = Ty Pure Effects          -- ^An impure type `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
+data Type = Pure :# Effects          -- ^An impure type `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
           deriving (Ord, Eq)
 
 data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types in Classes
-                | Sub Type Type
+                | EqualP Pure Pure
+                | EqualE Effects Effects
                 deriving (Ord, Eq)
 
 -- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
@@ -67,7 +80,8 @@ instance Show Prim where
   show TyString = "String"
 
 instance Show Constraint where
-  show (Sub a b) = show a  ++ " <= " ++ show b
+  show (EqualP a b) = show a  ++ " ~ " ++ show b
+  show (EqualE a b) = show a  ++ " ~ " ++ show b
   show (Class c t) = show c ++ " " ++ show t
 
 instance Show Pure where
@@ -82,8 +96,10 @@ instance Show Pure where
                           _            -> False
   show (TyVar s)     = s
 
+  show (TyBang p)    = "bang(" ++ show p ++ ")"
+
 instance Show Type where
-  show (Ty p es) = show p ++ (if Set.null es then "" else " # " ++ show es)
+  show (p :# es) = show p ++ (if Set.null es then "" else " # " ++ show es)
 
 instance Show QPure where
   show (Forall cs xs t) = "forall " ++ unwords xs ++ ". " ++ cs' ++ show t
@@ -96,11 +112,11 @@ parens False x = x
 subsEffects :: (String -> Maybe Effects) -> Effects -> Effects
 subsEffects f m = Set.foldl' Set.union Set.empty (Set.map g m)
                   where g :: Effect -> Set Effect
-                        g (Ef s) = Set.singleton (Ef s)
-                        g e@(EfUni s) = fromMaybe (Set.singleton e) (f s)
+                        g (Ef s) = singleton (Ef s)
+                        g e@(EfUni s) = fromMaybe (singleton e) (f s)
 
 subsType :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Type -> Type
-subsType ft fe (Ty p es) = Ty (subsPure ft fe p) (subsEffects fe es)
+subsType ft fe (p :# es) = subsPure ft fe p :# subsEffects fe es
 
 subsPure :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Pure -> Pure
 subsPure ft fe = subsPure'
@@ -114,18 +130,16 @@ subsPure ft fe = subsPure'
 subsConstraint :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Constraint -> Constraint
 subsConstraint ft fe = subsC
   where subsC (Class s t) = Class s (subsP t)
-        subsC (Sub t1 t2) = Sub (subsT t1) (subsT t2)
+        subsC (EqualP p1 p2) = EqualP (subsP p1) (subsP p2)
+        subsC (EqualE e1 e2) = EqualE (subsE e1) (subsE e2)
         subsP = subsPure ft fe
-        subsT = subsType ft fe
+        subsE = subsEffects fe
 
 shareC :: Pure -> Constraint
 shareC = Class "Share"
 
 dropC :: Pure -> Constraint
 dropC = Class "Drop"
-
-pureTy :: Pure -> Type
-pureTy p = Ty p Set.empty
 
 mono :: Pure -> QPure
 mono = Forall [] []

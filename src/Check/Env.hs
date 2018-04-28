@@ -1,6 +1,9 @@
 module Check.Env
   ( inc
   , use
+  , readUse
+  , intro
+  , elim
   )
 where
 
@@ -22,3 +25,15 @@ use s n l = case lookup n l of
   Just (t, i) -> let cs = [ newDerivation (shareC t) ("Variable '" ++ n ++ "' used for a second time") s | i /= 0 ]
                   in pure (t, inc n l, cs)
   Nothing     -> throwError (CheckError (NotInScope n))
+
+readUse :: Source -> Name -> Env -> Compiler (Pure, [Derivation])
+readUse s n l = case lookup n l of
+  Just (t, i) -> let cs = [ newDerivation (shareC t) ("Variable '" ++ n ++ "' used before let bang") s | i == 0 ]
+                  in pure (t, cs)
+  Nothing     -> throwError (CheckError (NotInScope n))
+
+intro :: (Name, Pure) -> Env -> Env
+intro (n, p) l = (n, (p, 0)) : l
+
+elim :: Source -> Env -> (Env, [Derivation])
+elim s ((n, (p, i)) : l) = (l, [ newDerivation (dropC p) ("Variable '" ++ n ++ "' not used") s | i == 0 ])

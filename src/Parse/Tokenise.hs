@@ -83,7 +83,7 @@ consym :: Tokeniser String
 consym = try (liftA2 (:) (char ':') (many symbol) `excludes` reservedops) <?> "consym"
 
 qstuff :: Tokeniser Token
-qstuff = do
+qstuff = try $ do
   qs <- modid <|> pure []
   let simple = fmap (\(f, s) -> f QString{qualification=[], name=s}) stuff
   let full   = fmap (\(f, s) -> f QString{qualification=qs, name=s}) (try (char '.' *> stuff)) <|> pure (QConId QString{qualification = init qs, name = last qs})

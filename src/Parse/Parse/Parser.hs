@@ -5,6 +5,7 @@ module Parse.Parse.Parser
   , satisfy
   , try
   , lookAhead
+  , annotated
   , (<?>)
   , (<|?>)
   ) where
@@ -56,6 +57,10 @@ try = lift Prim.try
 
 lookAhead :: Parser a -> Parser a
 lookAhead = lift Prim.lookAhead
+
+-- Used to extract annotation
+annotated :: Parser a -> Parser (Tag Source a)
+annotated = lift (fmap (\(a :< x) -> a :< (a :< x)))
 
 infix 0 <?>
 (<?>) :: Parser a -> String -> Parser a

@@ -13,11 +13,56 @@ import Source
 import Compiler
 
 import Prelude hiding (exp)
-import Control.Applicative ((<|>), (<**>), liftA2, liftA3)
+import Control.Applicative ((<|>), (<**>), liftA2, liftA3, empty)
 import Control.Lens (view)
 import Data.Maybe (isJust, fromJust)
 
 type T a = a (Tag Source)
+
+-- TODO move these to Parse/Parser?
+optional :: Parser a -> Parser ()
+optional p = p *> pure () <|> pure ()
+
+liftT2 :: (a -> b -> c) -> Parser a -> Parser b -> Parser c
+liftT2 f a b = liftA2 f a (optional whitespace *> b)
+
+liftT3 :: (a -> b -> c -> d) -> Parser a -> Parser b -> Parser c -> Parser d
+liftT3 f a b c = liftT2 f a b <*> (optional whitespace *> c)
+
+liftT4 :: (a -> b -> c -> d -> e) -> Parser a -> Parser b -> Parser c -> Parser d -> Parser e
+liftT4 f a b c d = liftT3 f a b c <*> (optional whitespace *> d)
+
+-- Non back-tracking
+many :: Parser p -> Parser [p]
+many p = liftA2 (:) (try p) (many p) <|> pure []
+
+some :: Parser p -> Parser [p]
+some p = liftA2 (:) p (many p)
+
+lit :: Parser (T Exp)
+lit = token lit' <?> "literal"
+  where lit' (Token.Lit x) = Just (Parse.Lit x)
+        lit' _             = Nothing
+
+qvarid :: Parser QString
+qvarid = token qvarid' <?> "qvarid"
+  where qvarid' (Token.QVarId n) = Just n
+        qvarid' _                = Nothing
+
+varid :: Parser String
+varid = token varid' <?> "varid"
+  where varid' (Token.QVarId n) | qualification n == [] = Just (name n)
+        varid' _                                        = Nothing
+
+reservedId :: String -> Parser ()
+reservedId s = satisfy reservedId' *> pure () <?> "reserved id '" ++ s ++ "'"
+  where reservedId' (Token.ReservedId s') | s == s' = True
+        reservedId' _                               = False
+
+reservedOp :: String -> Parser ()
+reservedOp s = satisfy reservedOp' *> pure () <?> "reserved op '" ++ s ++ "'"
+  where reservedOp' (Token.ReservedOp s') | s == s' = True
+        reservedOp' _                               = False
 
 -- |The primary function, which attempts to parse a string to an annotated sugared AST
 parse :: Compiler ()
@@ -29,13 +74,29 @@ parse = do
     Right ast -> set sugaredAST ast >> debugPrint ast
 
 program :: Parser (T Exp)
-program = literal <|?> "program"
+program = optional whitespace *> exp <* optional whitespace
+
+exp :: Parser (T Exp)
+exp = letExp <|> varExp <|> literal <|?> "exp"
+
+varExp :: Parser (T Exp)
+varExp = Var <$> try varid <?> "var" -- TODO should be qvarid
+
+whitespace :: Parser ()
+whitespace = try (token whitespace') <?> "whitespace"
+  where whitespace' Token.Whitespace = Just ()
+        whitespace' _                = Nothing
 
 literal :: Parser (T Exp)
-literal = token literal' <?> "literal"
+literal = try (token literal') <?> "literal"
   where literal' (Token.Lit x) = Just (Parse.Lit x)
         literal' _             = Nothing
 
+decl :: Parser (T Decl)
+decl = liftT3 (\n _ e -> FunDecl n e) varid (reservedOp "=") (annotated exp) <?> "decl"  -- TODO
+
+letExp :: Parser (T Exp)
+letExp = liftT4 (\_ x _ e -> Parse.Let x e) (try (reservedId "let")) (annotated decl) (reservedId "in") (annotated exp) <?> "let expression"
 {-
 block :: Parser a -> Parser [a]
 block p = braces (sepBy1 p semi)

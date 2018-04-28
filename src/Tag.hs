@@ -2,9 +2,9 @@ module Tag
   ( Tag(..)
   , Tagged
   , rec
-  , tmap
   , tag
   , value
+  , DeepTagFunctor(..)
   ) where
 
 import Data.Bifunctor
@@ -26,12 +26,15 @@ value (a :< x) = x
 instance Bifunctor Tag where
   bimap f g (a :< x) = f a :< g x
 
-tmap :: (a -> b) -> Tag a c -> Tag b c
-tmap = first
-
 instance Functor (Tag a) where
   fmap = second
 
 instance Monoid a => Applicative (Tag a) where
   pure x = mempty :< x
   liftA2 f (a :< x) (b :< y) = mappend a b :< f x y
+
+-- Map over all the tags in an AST
+class DeepTagFunctor b where
+  tmap :: (a -> a) -> Tagged a b -> Tagged a b
+  tmap f (a :< x) = f a :< tmap' f x
+  tmap' :: (a -> a) -> b (Tag a) -> b (Tag a)

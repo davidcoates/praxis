@@ -31,7 +31,10 @@ module Compiler
 
   , Env
   , QEnv
-  , freshTyUni
+  , freshUniT
+  , freshUniP
+  , freshUniE
+
   , ungeneralise
 
   , debugPrint
@@ -56,6 +59,8 @@ import qualified Control.Monad.Except (throwError)
 import Control.Lens hiding (set)
 import qualified Control.Lens (set)
 import Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
+import Control.Applicative (liftA2)
 
 data Stage = Tokenise
            | Parse
@@ -179,16 +184,25 @@ fresh alpha = concatMap perm [1..]
         perm n = do { x <- alpha; y <- perm (n-1); return (x:y) }
 
 -- TODO: Stuff below this probably shouldn't be here...
-freshTyUni :: Compiler Pure
-freshTyUni = do
+freshUniT :: Compiler Type
+freshUniT = liftA2 (:#) freshUniP freshUniE
+
+freshUniP :: Compiler Pure
+freshUniP = do
   (x:xs) <- get freshUnis
   set freshUnis xs
   return (TyUni x)
 
+freshUniE :: Compiler Effects
+freshUniE = do
+  (x:xs) <- get freshUnis
+  set freshUnis xs
+  return (singleton (EfUni x))
+
 -- TODO: Allow quantified effects
 ungeneralise :: QPure -> Compiler ([Constraint], Pure)
 ungeneralise (Forall cs as t) = do
-  bs <- sequence (replicate (length as) freshTyUni)
+  bs <- sequence (replicate (length as) freshUniP)
   let ft = (`lookup` zip as bs)
   let fe = const Nothing
   let subsP = subsPure ft fe

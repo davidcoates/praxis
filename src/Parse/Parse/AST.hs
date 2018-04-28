@@ -25,10 +25,10 @@ data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Var Name
            | Apply (a (Exp a)) (a (Exp a))
            | Infix [a (Tok a)]
-           | Let [a (Decl a)] (a (Exp a))
+           | Let (a (Decl a)) (a (Exp a)) -- TODO: multiple bindings
            | Signature (a (Exp a)) Type
 
-data Decl a = Bang Name
+data Decl a = Bang Name -- TODO Patterns
             | FunType Name Type
             | FunDecl Name (a (Exp a))
 
@@ -48,7 +48,7 @@ instance TreeString (Annotated Exp) where
     If x y z      -> Node "[if]"            [treeString x, treeString y, treeString z]
     Lit l         -> Node (show l)          []
     Var v         -> Node (show v)          []
-    Let ds e      -> Node "[let]"           (map treeString ds ++ [treeString e])
+    Let d e       -> Node "[let]"           [treeString d, treeString e]
     Signature e t -> Node (":: " ++ show t) [treeString e]
     Infix ts      -> Node "[infix]"         (map tokShow ts)
     where tokShow :: Annotated Tok -> Tree String

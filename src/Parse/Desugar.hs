@@ -29,13 +29,14 @@ desugar = do
   set desugaredAST e'
   debugPrint e'
 
-desugarExp :: Parse.AST -> Compiler (Annotated Exp)
+desugarExp :: Parse.Annotated Parse.Exp -> Compiler (Annotated Exp)
 desugarExp = rec $ \a x -> fmap (a :<) $ case x of
   Parse.Infix ts    -> resolve opTable ts
   Parse.Lit lit     -> pure (Lit lit)
   Parse.Var s       -> pure (Var s)
   Parse.If e1 e2 e3 -> liftA3 If (desugarExp e1) (desugarExp e2) (desugarExp e3)
   Parse.Apply x y   -> liftA2 Apply (desugarExp x) (desugarExp y)
+  Parse.Let (_ :< Parse.FunDecl n e1) e2 -> liftA2 (\e1 e2 -> Let n e1 e2) (desugarExp e1) (desugarExp e2)  -- TODO fixity decls
 
 -- TODO
 -- REPLACE WITH MY MIXFIX PARSER

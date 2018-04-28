@@ -13,7 +13,7 @@ import Type
 import Tag
 import Prelude hiding (error)
 import Control.Exception.Base (assert)
-import Inbuilts
+import Inbuilts hiding (ty)
 import Compiler
 import Error
 
@@ -25,43 +25,72 @@ contextJoin s ((x,(xt,xi)):xs) ((y,(yt,yi)):ys) ((z,(zt,zi)):zs) =
         (ls, c2) = contextJoin s xs ys zs
         r = (l:ls, c1 ++ c2)
 
-
 generate :: Compiler [Derivation]
 generate = do
   set stage Generate
-  t <- freshTyUni
   e <- get desugaredAST
   l <- get tEnv
-  (e', l', cs) <- ge (l, e, pureTy t)
+  (l', e', cs) <- ge (l, e)
   set tEnv l'
   set typedAST e'
   debugPrint e'
   debugPrint cs
   return cs
 
--- TODO: Effects
-ge :: (Env, Parse.Annotated Exp, Type) -> Compiler (Annotated Exp, Env, [Derivation])
-ge (l1, e, t) = ($ e) $ rec $ \s x -> case x of
+ty :: Annotated Exp -> (Pure, Effects)
+ty ((p :# e, _) :< _) = (p, e)
 
-  Lit x -> return ((t, s) :< Lit x, l1, [newDerivation (Sub (litTy x) t) ("Literal " ++ show x) s])
+ge :: (Env, Parse.Annotated Exp) -> Compiler (Env, Annotated Exp, [Derivation])
+ge (l1, e) = ($ e) $ rec $ \s x -> case x of
+
+  Lit x -> do
+    let p = litTy x -- TODO polymorphic literals
+    return (l1, (p :# empty, s) :< Lit x, [])
 
   If a b c -> do
-    (a', l2, c1) <- ge (l1, a, pureTy (TyPrim TyBool))
-    (b', l3, c2) <- ge (l2, b, t)
-    (c', l3',c3) <- ge (l2, c, t)
+    (l2, a', c1) <- ge (l1, a)
+    (l3, b', c2) <- ge (l2, b)
+    (l3', c', c3) <- ge (l2, c)
     let (l4, c4) = contextJoin s l2 l3 l3'
-    return ((t, s) :< If a' b' c', l4, c1 ++ c2 ++ c3 ++ c4)
-
+    let (ap, ae) = ty a'
+    let (bp, be) = ty b'
+    let (cp, ce) = ty c'
+    let c5 = [ newDerivation (EqualP ap (TyPrim TyBool)) "condition of if expression must be Bool" s, newDerivation (EqualP bp cp) "branches of if expression must have the same type" s ]
+    let e = unions [ae, be, ce]
+    return (l4, (bp :# e, s) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4 ++ c5)
 
   Var n -> do
-    (t', l2, c1) <- use s n l1
-    return ((t, s) :< Var n, l2, newDerivation (Sub (pureTy t') t) ("Variable " ++ n) s : c1)
+    (p, l2, c1) <- use s n l1
+    return (l2, (p :# empty, s) :< Var n, c1)
 
   Apply f x -> do
-    a  <- freshTyUni
-    (f', l2, c1) <- ge (l1, f, pureTy (TyFun a t) )
-    (x', l3, c2) <- ge (l2, x, pureTy a)
-    return ((t, s) :< Apply f' x', l3, c1 ++ c2)
+    yp :# ye  <- freshUniT
+    (l2, f', c1) <- ge (l1, f)
+    (l3, x', c2) <- ge (l2, x)
+    let (fp, fe) = ty f'
+    let (xp, xe) = ty x'
+    let c3 = [ newDerivation (EqualP fp (TyFun xp (yp :# ye))) "fun app" s ]
+    let e = unions [fe, xe, ye]
+    return (l3, (yp :# e, s) :< Apply f' x', c1 ++ c2 ++ c3)
+
+  Let n a b -> do
+    (l2, a', c1) <- ge (l1, a)
+    let (ap, ae) = ty a'
+    (l3, b', c2) <- ge (intro (n, ap) l2, b)
+    let (l4, c3) = elim s l3
+    let (bp, be) = ty b'
+    return (l4, (bp :# unions [ae, be], s) :< Let n a' b', c1 ++ c2 ++ c3)
+
+  LetBang n a -> do
+    (p, c1) <- readUse s n l1
+    (l2, a', c2) <- ge (intro (n, TyBang p) l1, a)
+    return (l2, a', c1 ++ c2)
+
+  Signature a (sp :# se) -> do
+    (l2, a', c1) <- ge (l1, a)
+    let (ap, ae) = ty a'
+    let c2 = [ newDerivation (EqualP sp ap) "user-supplied signature" s, newDerivation (EqualE se ae) "user-supplied signature" s ]
+    return (l2, a', c1 ++ c2)
 
 {- |Captures e returns a list of all free variables in e.
    This is used to ensure functions don't capture linear variables.

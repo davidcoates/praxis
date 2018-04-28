@@ -2,7 +2,6 @@
 
 module AST
   ( Exp(..)
-  , Decl(..)
   , Lit(..)
   , Name
   , litTy
@@ -26,12 +25,9 @@ data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit
            | Var Name
            | Apply (a (Exp a)) (a (Exp a))
-           | Let (a (Decl a)) (a (Exp a))
+           | Let Name (a (Exp a)) (a (Exp a))
            | LetBang Name (a (Exp a))
            | Signature (a (Exp a)) Type
-
-data Decl a = FunDecl Name (a (Exp a))
-            -- TODO: Fixity declarations
 
 -- |AST for Literals
 data Lit = Int Int
@@ -39,8 +35,19 @@ data Lit = Int Int
          | Char Char
          | String String
 
-litTy :: Lit -> Type
-litTy = pureTy . TyPrim . litTy'
+--class Annotatable b where
+--  tmap :: (a -> a) -> a (b a) -> a (b a)
+
+instance DeepTagFunctor Exp where
+  tmap' f (If a b c)  = If (tmap f a) (tmap f b) (tmap f c)
+  tmap' f (Apply a b) = Apply (tmap f a) (tmap f b)
+  tmap' f (Let n a b) = Let n (tmap f a) (tmap f b)
+  tmap' f (LetBang n e)   = LetBang n (tmap f e)
+  tmap' f (Signature e t) = Signature (tmap f e) t
+  tmap' f x               = x
+
+litTy :: Lit -> Pure
+litTy = TyPrim . litTy'
   where litTy' (Int _) = TyInt
         litTy' (Bool _) = TyBool
         litTy' (Char _) = TyChar
@@ -53,10 +60,6 @@ instance Show Lit where
   show (String s) = show s
 
 -- |Showing ASTs
-instance Show a => TreeString (Tagged a Decl) where
-  treeString = treeRec $ \x -> case x of
-    FunDecl f e -> Node ("[fun " ++ f ++ "]") [treeString e]
-
 instance Show a => TreeString (Tagged a Exp) where
   treeString = treeRec $ \x -> case x of
     If x y z      -> Node ("[if]"              ) [treeString x, treeString y, treeString z]
@@ -65,7 +68,7 @@ instance Show a => TreeString (Tagged a Exp) where
   --   Apply a e x     -> let (n, b) = compress e in
   --                               Node (n                    ) (b ++ [treeString x])
     Apply f x     -> Node ("[$]"               ) [treeString f, treeString x]
-    Let d e       -> Node ("[let]"             ) [treeString d, treeString e]
+    Let n x y     -> Node ("[let " ++ n ++ "]" ) [treeString x, treeString y]
     LetBang n e   -> Node ("[let " ++ n ++ "!]") [treeString e]
     Signature e t -> Node (":: " ++ show t     ) [treeString e]
 
@@ -73,9 +76,6 @@ instance Show a => TreeString (Tagged a Exp) where
   --compress (Var s)            = (s, [])
   --compress (Apply (_ :< e) x) = let (f, y) = compress e in (f, y ++ [treeString x])
   --compress x                  = ("$", [treeString' x])
-
-instance Show a => Show (Tagged a Decl) where
-  show = showTree
 
 instance Show a => Show (Tagged a Exp) where
   show = showTree

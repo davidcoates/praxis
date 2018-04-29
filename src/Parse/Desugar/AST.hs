@@ -10,4 +10,4 @@ import Source
 
 type Annotated a = Tagged Source a
 
-type AST = Annotated Exp
+type AST = Annotated Program

@@ -11,4 +11,4 @@ import Tag
 
 type Annotated a = Tagged (Type, Source) a
 
-type AST = Annotated Exp
+type AST = Annotated Program

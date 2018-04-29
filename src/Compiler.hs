@@ -34,10 +34,12 @@ module Compiler
   , freshUniT
   , freshUniP
   , freshUniE
+  , freshVar
 
   , ungeneralise
 
   , debugPrint
+  , debugPutStr
 
   )
   where
@@ -46,7 +48,7 @@ import qualified Parse.Parse.AST as Parse
 import qualified Parse.Desugar.AST as Desugar
 import qualified Parse.Tokenise.Token as Tokenise
 import qualified Check.AST as Check
-import AST (Name)
+import Common
 import Type
 import Source
 import Error (Error)
@@ -95,7 +97,7 @@ data CompilerState = CompilerState
   , _freshUnis    :: [String]            -- ^Infinite list of distinct dummy names to use for unification types
   , _freshVars    :: [String]            -- ^Infinite list of distinct dummy names to use for phantom variables
   , _imports      :: [FilePath]          -- ^Loaded modules
-  , _filename     :: FilePath            -- ^File path
+  , _filename     :: FilePath            -- ^File path (for error messages)
   , _src          :: String              -- ^Source to compile
   , _tokens       :: [Token]             -- ^List of tokens produced by tokeniser
   , _sugaredAST   :: (Parse.AST)         -- ^AST after parsing of tokens
@@ -147,7 +149,7 @@ initialState  = CompilerState
   , _freshUnis    = map ('~':) (fresh ['a'..'z'])
   , _freshVars    = map ('_':) (fresh ['a'..'z'])
   , _imports      = unset "imports" 
-  , _filename     = unset "filename"
+  , _filename     = "<stdin>"
   , _src          = unset "src"
   , _tokens       = unset "tokens"
   , _sugaredAST   = unset "sugaredAST"
@@ -170,12 +172,15 @@ runWith c s = (runStateT . runExceptT) c s
 
 -- TODO this possibly shouldnt be here
 debugPrint :: Show a => a -> Compiler ()
-debugPrint x = do
+debugPrint = debugPutStr . show
+
+debugPutStr :: String -> Compiler ()
+debugPutStr x = do
   b <- get (flags . debug)
   when b $ do
     s <- get stage
     liftIO $ putStrLn ("Output from stage: " ++ show s)
-    liftIO $ print x
+    liftIO $ putStr x
 
 fresh :: String -> [String]
 fresh alpha = concatMap perm [1..]
@@ -198,6 +203,13 @@ freshUniE = do
   (x:xs) <- get freshUnis
   set freshUnis xs
   return (singleton (EfUni x))
+
+freshVar :: Compiler Name
+freshVar = do
+  (x:xs) <- get freshVars
+  set freshVars xs
+  return x
+
 
 -- TODO: Allow quantified effects
 ungeneralise :: QPure -> Compiler ([Constraint], Pure)

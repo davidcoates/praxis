@@ -4,23 +4,25 @@ module Parse.Tokenise
 
 import Parse.Tokenise.Tokeniser
 import Parse.Tokenise.Token
+import Parse.Tokenise.Layout
+import Tag
 import Source
-import Data.Digits (unDigits)
+import Compiler
+import AST (QString(..))
 
+import Data.List (intercalate)
 import Control.Applicative (Applicative, Alternative, liftA2, (<|>), empty)
 import Data.Foldable (asum)
 import Data.Char
-
-import Compiler
 
 tokenise :: Compiler ()
 tokenise = do
   set stage Tokenise
   cs <- get src
-  case runTokeniser atom cs of
-    Left e   -> throwError e
-    Right ts -> set tokens ts >> debugPrint ts
-
+  ts <- layout <$> runTokeniser atom cs
+  set tokens ts
+  debugPutStr (showTokens ts ++ "\n")
+    where showTokens = intercalate " " . map (show . value) . filter (\x -> case value x of { Whitespace -> False ; _ -> True })
 
 -- // START OF NON-BACKTRACKING PARSER COMBINATORS
 
@@ -52,14 +54,11 @@ string (c:cs) = liftA2 (:) (char c) (string cs)
 atom :: Tokeniser Token
 atom = (whitespace *> pure Whitespace) <|> lexeme
 
-whitestuff :: Tokeniser String
-whitestuff = whitechar -- TODO <:> comment <:> ncomment
-
 -- // END OF NON-BACKTRACKING PARSER COMBINATORS
 
 
 reservedids = ["let", "in", "if", "then", "else"]
-reservedops = [":", "=>", "=", "\\", "->", "@", "|"]
+reservedops = [":", "=>", "=", "\\", "->", "#", "@", "|"]
 
 lexeme :: Tokeniser Token
 lexeme = qstuff <|> reservedid <|> reservedop <|> literal <|> special <|?> "lexeme"
@@ -132,8 +131,14 @@ integer = Lit . Int <$> decimal <?> "integer"
 whitespace :: Tokeniser String
 whitespace = try (concat <$> some whitestuff) <?> "whitespace"
 
+whitestuff :: Tokeniser String
+whitestuff = whitechar <|> comment
+
+comment :: Tokeniser String
+comment = try (string "--") *> many (satisfy (\x -> not (x `elem` "\r\n\f"))) *> newline
+
 whitechar :: Tokeniser String
-whitechar = try newline <|> ((:[]) <$> satisfy isSpace)
+whitechar = try newline <|> try ((:[]) <$> satisfy isSpace)
 
 newline :: Tokeniser String
 newline = try (string "\r\n") <|> try (string "\r") <|> try (string "\n") <|> string "\f"

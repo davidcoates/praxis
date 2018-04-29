@@ -2,12 +2,14 @@ module Error
   ( Error(..)
   , SyntaxError(..)
   , CheckError(..)
+  , DeclError(..)
   , ParseSource(..)
   , ParseError(..)
   ) where
 
 import Check.Derivation (Derivation)
 import Source (Source)
+import Common
 
 data Error = LexicalError ParseSource ParseError
            | SyntaxError  SyntaxError
@@ -21,14 +23,18 @@ data ParseError = Option ParseError ParseError
                 | Generic
 
 data SyntaxError = SweetError ParseSource ParseError
+                 | DeclError DeclError
                  | InfixError -- TODO
+
+data DeclError = MismatchedArity Name (Source, Int) (Source, Int)
+               | LacksBinding Name Source
 
 data CheckError = Contradiction Derivation
                 | Underdefined Derivation
                 | NotInScope String
 
 instance Show Error where
-  show (LexicalError s e) = "Lexical error: " ++ show s ++ " ... " ++ show e
+  show (LexicalError s e) = "Lexical error: " ++ show e ++ " at " ++ show s
   show (SyntaxError e)    = "Syntax error: "  ++ show e
   show (CheckError e)     = "Check error: "   ++ show e
 
@@ -47,7 +53,12 @@ instance Show ParseError where
 
 instance Show SyntaxError where
   show (SweetError s e) = show s ++ " ... " ++ show e
+  show (DeclError e)    = show e
   show InfixError       = "TODO <infix error>"
+
+instance Show DeclError where
+  show (MismatchedArity n (s1,i1) (s2,i2)) = "Mismatched arities for function '" ++ n ++ "'. Declared with arities " ++ show i1 ++ " at " ++ show s1 ++ " and " ++ show i2 ++ " at " ++ show s2
+  show (LacksBinding n s) = "The function '" ++ n ++ "' at " ++ show s ++ " lacks an accompanying binding" 
 
 instance Show CheckError where
   show (Contradiction d) = show d

@@ -15,6 +15,8 @@ import Tag
 import Parse.Tokenise.Token
 import Error (Error(..))
 
+import Compiler hiding (lift) -- Why is this exported
+
 import Control.Applicative (Applicative(..), Alternative(..))
 import Data.List (intercalate)
 
@@ -36,11 +38,11 @@ instance Alternative Tokeniser where
 instance Monad Tokeniser where
   Tokeniser a >>= f = Tokeniser (a >>= \(a :< x) -> liftA2 (\_ y -> y) (a :< x) <$> _runTokeniser (f x))
 
-runTokeniser :: Tokeniser a -> String -> Either Error [Annotated a]
+runTokeniser :: Tokeniser a -> String -> Compiler [Annotated a]
 runTokeniser (Tokeniser p) cs = makeError $ Prim.runParser (all p) (sourced cs) tag
   where all p = (Prim.eof *> pure []) <|> liftA2 (:) p (all p)
-        makeError (Left (s, e)) = Left $ LexicalError s e
-        makeError (Right x)    = Right x
+        makeError (Left (s, e)) = throwError (LexicalError s e)
+        makeError (Right x)     = pure x
 
 sourced :: String -> [Annotated Char]
 sourced = sourced' Pos { line = 1, column = 1 }

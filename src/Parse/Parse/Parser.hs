@@ -6,6 +6,7 @@ module Parse.Parse.Parser
   , try
   , lookAhead
   , annotated
+  , eof
   , (<?>)
   , (<|?>)
   ) where
@@ -14,8 +15,9 @@ import qualified Parse.Prim as Prim
 import qualified Parse.Tokenise.Token as Token
 import Parse.Parse.AST
 import Tag
-import Source (Source)
+import Source (Source(..))
 import Error
+import Compiler hiding (lift)
 
 import Control.Applicative (Applicative(..), Alternative(..))
 
@@ -39,10 +41,13 @@ instance Alternative Parser where
 instance Monad Parser where
   Parser a >>= f = Parser (a >>= \x -> _runParser (f (value x)))
 
-runParser :: Parser a -> [Token] -> Either Error (Tag Source a)
-runParser (Parser p) ts = makeError $ Prim.runParser (p <* Prim.eof) ts tag
-  where makeError (Left (s, e)) = Left $ SyntaxError (SweetError s e)
-        makeError (Right x)     = Right x
+runParser :: Parser a -> [Token] -> Compiler (Tag Source a)
+runParser (Parser p) ts = makeError $ Prim.runParser p ts tag
+  where makeError (Left (s, e)) = throwError $ SyntaxError (SweetError s e)
+        makeError (Right x)     = pure x
+
+eof :: Parser ()
+eof = Parser (Prim.eof *> pure (Phantom :< ())) -- TODO?
 
 token :: (Token.Token -> Maybe a) -> Parser a
 token f = Parser $ Prim.token (lift . fmap f)

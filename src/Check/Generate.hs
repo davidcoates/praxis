@@ -11,7 +11,6 @@ import Source
 import AST
 import Type
 import Tag
-import Prelude hiding (error)
 import Control.Exception.Base (assert)
 import Inbuilts hiding (ty)
 import Compiler
@@ -28,17 +27,20 @@ contextJoin s ((x,(xt,xi)):xs) ((y,(yt,yi)):ys) ((z,(zt,zi)):zs) =
 generate :: Compiler [Derivation]
 generate = do
   set stage Generate
-  e <- get desugaredAST
+  p <- get desugaredAST
   l <- get tEnv
-  (l', e', cs) <- ge (l, e)
+  (l', p', cs) <- gp (l, p)
   set tEnv l'
-  set typedAST e'
-  debugPrint e'
+  set typedAST p'
+  debugPrint p'
   debugPrint cs
   return cs
 
 ty :: Annotated Exp -> (Pure, Effects)
 ty ((p :# e, _) :< _) = (p, e)
+
+gp :: (Env, Parse.Annotated Program) -> Compiler (Env, Annotated Program, [Derivation])
+gp = error "TODO: gp in Generate.hs"
 
 ge :: (Env, Parse.Annotated Exp) -> Compiler (Env, Annotated Exp, [Derivation])
 ge (l1, e) = ($ e) $ rec $ \s x -> case x of

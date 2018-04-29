@@ -1,5 +1,6 @@
 module Type
   ( Name
+  , Kind(..)
   , Effect(..)
   , Effects
   , Pure(..)
@@ -22,15 +23,22 @@ module Type
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Maybe (fromMaybe)
+import Common
+import Record
 
-type Name = String
+-- TODO need more kinds?
+data Kind = KindEffects     -- 
+          | KindPure        -- 
+          | KindImpure      -- 
+          | KindConstraint  -- 
 
 {-|
   Effects functions as a *flat set* of effect.
   An effect unification variable can be replaced with a flat set of effects, e.g.,
-  { EfUni α, EfString "Read IO" } if α ~> { Ef "WriteIO", Ef "ReadHeap" } then the result is { Ef "WriteIO", Ef "ReadHeap", Ef "Read IO" }
+  { EfUni α, EfLit "Read IO" } if α ~> { EfLit "WriteIO", EfLit "ReadHeap" } then the result is { EfLit "WriteIO", EfLit "ReadHeap", EfLit "Read IO" }
 -}
-data Effect = Ef String              -- ^A concrete effect e.g., Eg `ReadIO`
+data Effect = EfLit String           -- ^A concrete effect e.g., Eg `ReadIO`
+            | EfVar String           -- ^An effect variable (e.g., e in forall a b e. (a -> b # e) -> [a] -> [b] # e)
             | EfUni String           -- ^An effect unification variable
             deriving (Ord, Eq)
 
@@ -46,7 +54,9 @@ singleton :: Effect -> Effects
 singleton = Set.singleton
 
 -- |A *top-level* pure type
-data Pure = TyPrim Prim              -- ^A primitive type
+data Pure = TyPrim Prim              -- ^A primitive type -- TODO get rid of this, replacing with TyUnit and TyRecord
+          | TyUnit                   -- TODO treat this separately from record?
+          | TyRecord Type            -- ^A record type
           | TyUni String             -- ^A (pure) type unification variable
           | TyFun Pure Type          -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
           | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
@@ -58,6 +68,7 @@ data Pure = TyPrim Prim              -- ^A primitive type
 data Prim = TyBool | TyInt | TyChar | TyString
           deriving (Ord, Eq)
 
+-- TODO deep annotations?
 data Type = Pure :# Effects          -- ^An impure type `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
           deriving (Ord, Eq)
 
@@ -69,9 +80,16 @@ data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types
 -- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
 data QPure = Forall [Constraint] [String] Pure deriving (Ord, Eq)
 
+instance Show Kind where
+  show KindEffects    = "E"
+  show KindPure       = "P"
+  show KindImpure     = "I"
+  show KindConstraint = "C"
+
 instance Show Effect where
-  show (Ef s)    = s
+  show (EfLit s) = s
   show (EfUni s) = s
+  show (EfVar s) = s
 
 instance Show Prim where
   show TyBool = "Bool"
@@ -82,10 +100,12 @@ instance Show Prim where
 instance Show Constraint where
   show (EqualP a b) = show a  ++ " ~ " ++ show b
   show (EqualE a b) = show a  ++ " ~ " ++ show b
-  show (Class c t) = show c ++ " " ++ show t
+  show (Class c t)  = show c ++ " " ++ show t
 
 instance Show Pure where
   show (TyPrim p)    = show p
+  show (TyUnit)      = "()"
+  show (TyRecord r)  = show r
   show (TyUni s)     = s
   show (TyFun a b)   = parens p (show a) ++ " -> " ++ show b
     where p = case a of (TyFun _ _) -> True
@@ -112,8 +132,8 @@ parens False x = x
 subsEffects :: (String -> Maybe Effects) -> Effects -> Effects
 subsEffects f m = Set.foldl' Set.union Set.empty (Set.map g m)
                   where g :: Effect -> Set Effect
-                        g (Ef s) = singleton (Ef s)
                         g e@(EfUni s) = fromMaybe (singleton e) (f s)
+                        g e           = singleton e
 
 subsType :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Type -> Type
 subsType ft fe (p :# es) = subsPure ft fe p :# subsEffects fe es

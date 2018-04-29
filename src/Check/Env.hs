@@ -9,7 +9,7 @@ where
 
 import Source (Source)
 import Type
-import AST (Name)
+import Common
 import Check.Derivation
 import Compiler
 import Error

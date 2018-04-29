@@ -38,8 +38,8 @@ unisP _             = []
 
 unisE :: Effects -> [Name]
 unisE = Set.elems . Set.map (\(EfUni n) -> n) . Set.filter efUni
-  where efUni  (Ef _)    = False
-        efUni (EfUni _) = True
+  where efUni (EfUni _) = True
+        efUni _         = False
 
 solve :: [Derivation] -> Compiler [(String, Pure)]
 solve xs = do

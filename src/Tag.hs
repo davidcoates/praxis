@@ -23,6 +23,9 @@ tag (a :< x) = a
 value :: Tag a b -> b
 value (a :< x) = x
 
+instance Eq b => Eq (Tag a b) where
+  (_ :< a) == (_ :< b) = a == b
+
 instance Bifunctor Tag where
   bimap f g (a :< x) = f a :< g x
 

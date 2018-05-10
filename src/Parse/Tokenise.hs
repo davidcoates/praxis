@@ -21,7 +21,7 @@ tokenise = do
   cs <- get src
   ts <- layout <$> runTokeniser atom cs
   set tokens ts
-  debugPutStr (showTokens ts ++ "\n")
+  debugPutStrLn (showTokens ts)
     where showTokens = intercalate " " . map (show . value) . filter (\x -> case value x of { Whitespace -> False ; _ -> True })
 
 -- // START OF NON-BACKTRACKING PARSER COMBINATORS

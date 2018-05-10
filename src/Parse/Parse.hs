@@ -1,3 +1,5 @@
+{-# LANGUAGE KindSignatures #-}
+
 module Parse.Parse
   ( parse
   -- , module Parse.Parse.AST
@@ -42,6 +44,11 @@ liftT4 f a b c d = liftT3 f a b c <*> (optional whitespace *> d)
 liftT2O :: (a -> b -> c) -> Parser a -> b -> Parser b -> Parser c
 liftT2O f pa b pb = liftA2 f pa (try (optional whitespace *> pb) <|> pure b)
 
+liftT2M :: (a -> b -> a) -> Parser a -> Parser b -> Parser a
+liftT2M f pa pb = liftT2O f' pa Nothing (Just <$> pb)
+  where f' a (Just b) = f a b
+        f' a Nothing  = a
+
 (#>) :: Parser a -> Parser b -> Parser b
 (#>) = liftT2 (\_ b -> b)
 
@@ -80,6 +87,16 @@ varid = token varid' <?> "varid"
   where varid' (Token.QVarId n) | qualification n == [] = Just (name n)
         varid' _                                        = Nothing
 
+qvarsym :: Parser QString
+qvarsym = token qvarsym' <?> "qvarsym"
+  where qvarsym' (Token.QVarSym n) = Just n
+        qvarsym' _                 = Nothing
+
+varsym :: Parser String
+varsym = token varsym' <?> "varsym"
+  where varsym' (Token.QVarSym n) | qualification n == [] = Just (name n)
+        varsym' _                                         = Nothing
+
 reservedId :: String -> Parser ()
 reservedId s = satisfy reservedId' *> pure () <?> "reserved id '" ++ s ++ "'"
   where reservedId' (Token.ReservedId s') | s == s' = True
@@ -114,8 +131,9 @@ parse = do
   debugPrint ast
 
 block :: Parser a -> Parser [a]
-block p = lbrace #> block' p
-  where block' p = liftT2 (:) p ((try rbrace *> pure []) <|> (semi #> block' p))
+block p = liftT3 (\_ p ps -> p:ps) lbrace p block'
+  where block' = (try rbrace *> pure []) <|> liftT2 (:) (semi #> p) block'
+
 
 program :: Parser (T Program)
 program = fmap Program (optional whitespace *> block (annotated topDecl) <* optional whitespace)
@@ -132,24 +150,48 @@ funDecl :: Parser (T Decl)
 funDecl = liftT2 ($) (try prefix) (annotated exp) <?> "funDecl"
   where prefix = liftT3 (\v ps _ -> FunDecl v ps) varid (many (annotated pat)) (reservedOp "=")
 
+-- TODO
 exp :: Parser (T Exp)
-exp = unroll <$> some (annotated lexp)
-  where unroll [a :< x] = x
-        unroll (x:y:ys) = unroll ((tag x :< Apply x y):ys)
+exp = infixexp
+
+left :: (a -> a -> a) -> Parser [a] -> Parser a
+left f p = unroll <$> p
+  where unroll [x]      = x
+        unroll (x:y:ys) = unroll ((f x y):ys)
+
+leftT :: (Parse.Annotated a -> Parse.Annotated a -> T a) -> Parser [Parse.Annotated a] -> Parser (T a)
+leftT f p = value <$> left (\x y -> tag x :< f x y) p
+
+-- TODO
+infixexp :: Parser (T Exp)
+infixexp = Infix <$> some (try top <|> texp)
+  where top = (\t -> tag t :< TOp (value t)) <$> annotated qop
+        texp = (\t -> tag t :< TExp t) <$> annotated lexp
+
+qop :: Parser Op
+qop = qvarsym -- TODO
 
 lexp :: Parser (T Exp)
-lexp = expLet <|> expVar <|> expLit <|?> "lexp"
+lexp = expLet <|> fexp <|?> "lexp"
+
+fexp :: Parser (T Exp)
+fexp = leftT Apply (some (annotated aexp))
+
+aexp :: Parser (T Exp)
+aexp = parens <|> expVar <|> expLit <|?> "aexp"
+  where parens = liftT3 (\_ e _ -> e) (try (special '(')) exp (special ')')
 
 expVar :: Parser (T Exp)
 expVar = Var <$> try varid <?> "var" -- TODO should be qvarid
+
+expLit :: Parser (T Exp)
+expLit = Parse.Lit <$> lit
+
 
 whitespace :: Parser ()
 whitespace = try (token whitespace') <?> "whitespace"
   where whitespace' Token.Whitespace = Just ()
         whitespace' _                = Nothing
-
-expLit :: Parser (T Exp)
-expLit = Parse.Lit <$> lit
 
 lit :: Parser Lit
 lit = try (token lit') <?> "literal"

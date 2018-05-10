@@ -9,6 +9,6 @@ import Type
 import Source
 import Tag
 
-type Annotated a = Tagged (Type, Source) a
+type Annotated a = Tagged (Maybe Type, Source) a
 
 type AST = Annotated Program

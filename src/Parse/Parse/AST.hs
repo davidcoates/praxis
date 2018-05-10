@@ -40,13 +40,14 @@ data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Var Name
            | Apply (a (Exp a)) (a (Exp a))
            | Infix [a (Tok a)]
-           | Let [a (Decl a)] (a (Exp a)) -- TODO: multiple bindings
+           | Let [a (Decl a)] (a (Exp a))
            | Signature (a (Exp a)) Type
 
 type Op = QString
 
-data Tok a = TExp (a (Exp a))
-           | TOp Op
+-- TODO do we really need Annotated Tok?
+data Tok a = TOp Op
+           | TExp (a (Exp a))
 
 instance TreeString (Annotated Program) where
   treeString = treeRec $ \x -> case x of
@@ -70,12 +71,13 @@ instance TreeString (Annotated Exp) where
     Case e alts   -> Node "[case]"          (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
     Lit l         -> Node (show l)          []
     Var v         -> Node (show v)          []
+    Apply e1 e2   -> Node "[$]"             [treeString e1, treeString e2]
     Let ds e      -> Node "[let]"           (map treeString ds ++ [treeString e])
     Signature e t -> Node (":: " ++ show t) [treeString e]
     Infix ts      -> Node "[infix]"         (map tokShow ts)
     where tokShow :: Annotated Tok -> Tree String
           tokShow (a :< TExp e) = treeString e -- Don't show redundant source (same as source of e)
-          tokShow op            = treeRec (\(TOp o) -> Node (show o) []) op
+          tokShow op             = treeRec (\(TOp o) -> Node (show o) []) op
 
 instance Show (Annotated Program) where
   show = showTree

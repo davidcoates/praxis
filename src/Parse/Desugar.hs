@@ -3,7 +3,7 @@ module Parse.Desugar
   , module Parse.Desugar.AST
   ) where
 
-import Parse.Parse.AST (Op, Tok(..))
+import Parse.Parse.AST (Op)
 import qualified Parse.Parse.AST as Parse
 import Parse.Desugar.AST
 import Parse.Desugar.Infix
@@ -18,8 +18,11 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Source
 
-opTable :: Map Op Fixity
-opTable = undefined -- Map.fromList [("+", Fixity (6, Leftfix)), ("==", Fixity (4, Nonfix))]
+import Record (pair)
+
+import Text.Earley
+import qualified Text.Earley.Mixfix.DAG as DAG
+import Data.List (intersperse)
 
 desugar :: Compiler ()
 desugar = do
@@ -36,7 +39,7 @@ desugarProgram (a :< Parse.Program ds) = do
 
 desugarExp :: Parse.Annotated Parse.Exp -> Compiler (Annotated Exp)
 desugarExp = rec $ \a x -> fmap (a :<) $ case x of
-  Parse.Infix ts    -> resolve opTable ts
+  Parse.Infix ts    -> (\(_ :< e) -> e) <$> desugarInfix ts
   Parse.Lit lit     -> pure (Lit lit)
   Parse.Var s       -> pure (Var s)
   Parse.If e1 e2 e3 -> liftA3 If (desugarExp e1) (desugarExp e2) (desugarExp e3)
@@ -72,9 +75,9 @@ desugarDecls ((a :< d) : ds) = case d of
     let hasName :: Name -> (Parse.Annotated Parse.Decl -> Bool)
         hasName n (_ :< Parse.FunDecl m _ _) | n == m = True
         hasName _ _ = False
-    
+
     let (as, bs) = span (hasName n) ds
-    
+
     if any (hasName n) bs then error "make a proper error message here about multiple definitions" else pure ()
 
     -- Check arity
@@ -105,7 +108,42 @@ desugarDecls ((a :< d) : ds) = case d of
 desugarPat :: Parse.Annotated Parse.Pat -> Compiler (Annotated Pat)
 desugarPat = undefined
 
--- TODO
--- REPLACE WITH MY MIXFIX PARSER
-resolve :: Map Op Fixity -> [Annotated Tok] -> Compiler (Exp (Tag Source))
-resolve fixityTable ts = undefined
+
+type Tok = DAG.Tok (Tag Source Op) (Annotated Exp)
+
+desugarTok :: Parse.Annotated Parse.Tok -> Compiler Tok
+desugarTok (a :< Parse.TOp op) = pure (DAG.TOp (a :< op))
+desugarTok (a :< Parse.TExp e) = DAG.TExpr <$> desugarExp e
+
+desugarInfix :: [Parse.Annotated Parse.Tok] -> Compiler (Annotated Exp)
+desugarInfix ts = do
+  ts' <- sequence (map desugarTok ts)
+  -- TODO do something with report?
+  let (parses, _) = fullParses (parser (DAG.simpleMixfixExpression opTable)) ts'
+  case parses of [e] -> return e
+                 _   -> error "TODO resolve error make a proper error for this (ambiguous infix parse)"
+
+type OpTable = DAG.DAG Int [DAG.Op (Tag Source Op) (Annotated Exp)]
+
+-- TODO build this dynamically from bindings
+opTable :: OpTable
+opTable = DAG.DAG
+  { DAG.nodes = [6, 7]
+  , DAG.neighbors = \x -> case x of
+      6   -> [7]
+      7   -> []
+  , DAG.value = \x -> case x of
+      6   -> [ add, sub ]
+      7   -> [ mul ]
+  }
+  where build s n = DAG.Op { DAG.fixity = DAG.Infix DAG.LeftAssoc, DAG.parts = [Phantom :< QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
+        build' n e1 e2 = Phantom :< Apply (Phantom :< Var n) (Phantom :< Record (pair e1 e2)) -- TODO annotations?
+        add = build "+" "add"
+        sub = build "-" "sub"
+        mul = build "*" "mul"
+{-
+  where plus  = Op { fixity = Infix LeftAssoc, parts = QString { qualification = [], name = "+" }, build = \[(a :< e1),_,e2] -> }
+        sub   = Op { fixity = Infix LeftAssoc, parts = QString { qualification = [], name = "-" }, build = \[e1,_,e2] }
+        times = Op { fixity = Infix LeftAssoc, parts = QString { qualification = [], name = "*" }, build = \[e1,_,e2] }
+              }undefined -- Map.fromList [("+", Fixity (6, Leftfix)), ("==", Fixity (4, Nonfix))]
+-}

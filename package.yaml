@@ -28,6 +28,7 @@ dependencies:
 - lens >= 4.15.4 && <5
 - array >= 0.5.2.0 && <0.6
 - digits >= 0.3
+- earley-mixfix-extra >= 0.1
 library:
   source-dirs: src
 

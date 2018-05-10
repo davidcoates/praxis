@@ -31,7 +31,7 @@ data Pat (a :: * -> *) = PatUnit -- TODO records
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a)) -- TODO replace this with Case
            | Case (a (Exp a)) [(a (Pat a), a (Exp a))] -- TODO only need (pat, exp) exp ?
            | Lambda Name (a (Exp a)) -- TODO allow pattern 
-           | Record (a (Exp a))
+           | Record (Record (a (Exp a)))
            | Lit Lit
            | Var Name
            | Apply (a (Exp a)) (a (Exp a))
@@ -46,6 +46,7 @@ data Lit = Int Int
          | String String
 
 data QString = QString { qualification :: [String], name :: String }
+  deriving (Ord, Eq)
 
 instance Show QString where
   show s = (if prefix == "" then "" else prefix ++ ".") ++ name s
@@ -71,6 +72,7 @@ instance DeepTagFunctor Exp where
   tmap' f (If a b c)      = If (tmap f a) (tmap f b) (tmap f c)
   tmap' f (Case e alts)   = Case (tmap f e) (map (\(a,b) -> (tmap f a, tmap f b)) alts)
   tmap' f (Lambda n e)    = Lambda n (tmap f e)
+  tmap' f (Record r)      = Record (fmap (tmap f) r)
   tmap' f (Apply a b)     = Apply (tmap f a) (tmap f b)
   tmap' f (Let n a b)     = Let n (tmap f a) (tmap f b)
   tmap' f (LetBang n e)   = LetBang n (tmap f e)
@@ -95,7 +97,8 @@ instance Show a => TreeString (Tagged a Exp) where
   treeString = treeRec $ \x -> case x of
     If x y z      -> Node ("[if]"              ) [treeString x, treeString y, treeString z]
     Case e alts   -> Node ("[case]"            ) (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
-    Lambda n e    -> Node ("\\" ++ n ++ " -> " ) [treeString e] 
+    Lambda n e    -> Node ("\\" ++ n ++ " -> " ) [treeString e]
+    Record r      -> Node ("[record]"          ) (map (\(n, e) -> treeString e) (Record.toList r)) -- TODO (show n if it is explicit)
     Lit lit       -> Node (show lit            ) []
     Var s         -> Node (s                   ) []
     Apply f x     -> Node ("[$]"               ) [treeString f, treeString x]

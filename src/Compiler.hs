@@ -39,7 +39,7 @@ module Compiler
   , ungeneralise
 
   , debugPrint
-  , debugPutStr
+  , debugPutStrLn
 
   )
   where
@@ -172,15 +172,15 @@ runWith c s = (runStateT . runExceptT) c s
 
 -- TODO this possibly shouldnt be here
 debugPrint :: Show a => a -> Compiler ()
-debugPrint = debugPutStr . show
+debugPrint = debugPutStrLn . show
 
-debugPutStr :: String -> Compiler ()
-debugPutStr x = do
+debugPutStrLn :: String -> Compiler ()
+debugPutStrLn x = do
   b <- get (flags . debug)
   when b $ do
     s <- get stage
     liftIO $ putStrLn ("Output from stage: " ++ show s)
-    liftIO $ putStr x
+    liftIO $ putStrLn x
 
 fresh :: String -> [String]
 fresh alpha = concatMap perm [1..]

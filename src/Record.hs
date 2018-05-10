@@ -2,6 +2,7 @@ module Record
   ( Record
   , fromList
   , toList
+  , pair
   ) where
 
 import Common
@@ -16,6 +17,12 @@ data Field = Implicit Int
 
 newtype Record a = Record { _record :: Map Field a }
   deriving (Eq)
+
+instance Functor Record where
+  fmap f (Record r) = Record (Map.map f r)
+
+pair :: a -> a -> Record a
+pair x y = fromList [(Nothing, x), (Nothing, y)]
 
 -- TODO what to do on duplicate names? What if names contain the implicit descriptors first second etc?
 fromList :: [(Maybe Name, a)] -> Record a

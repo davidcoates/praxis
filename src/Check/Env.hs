@@ -4,6 +4,7 @@ module Check.Env
   , readUse
   , intro
   , elim
+  , elimN
   )
 where
 
@@ -24,16 +25,22 @@ use :: Source -> Name -> Env -> Compiler (Pure, Env, [Derivation])
 use s n l = case lookup n l of
   Just (t, i) -> let cs = [ newDerivation (shareC t) ("Variable '" ++ n ++ "' used for a second time") s | i /= 0 ]
                   in pure (t, inc n l, cs)
-  Nothing     -> throwError (CheckError (NotInScope n))
+  Nothing     -> throwError (CheckError (NotInScope n s))
 
 readUse :: Source -> Name -> Env -> Compiler (Pure, [Derivation])
 readUse s n l = case lookup n l of
   Just (t, i) -> let cs = [ newDerivation (shareC t) ("Variable '" ++ n ++ "' used before let bang") s | i == 0 ]
                   in pure (t, cs)
-  Nothing     -> throwError (CheckError (NotInScope n))
+  Nothing     -> throwError (CheckError (NotInScope n s))
 
 intro :: (Name, Pure) -> Env -> Env
 intro (n, p) l = (n, (p, 0)) : l
 
 elim :: Source -> Env -> (Env, [Derivation])
 elim s ((n, (p, i)) : l) = (l, [ newDerivation (dropC p) ("Variable '" ++ n ++ "' not used") s | i == 0 ])
+
+elimN :: Int -> Source -> Env -> (Env, [Derivation])
+elimN 0 _ l = (l, [])
+elimN n s l = let (l1, c1) = elim s l
+                  (l2, c2) = elimN (n-1) s l1
+              in (l2, c1 ++ c2)

@@ -6,7 +6,6 @@ module Parse.Desugar
 import Parse.Parse.AST (Op)
 import qualified Parse.Parse.AST as Parse
 import Parse.Desugar.AST
-import Parse.Desugar.Infix
 import Tag
 import Compiler
 import Error
@@ -40,6 +39,7 @@ desugarProgram (a :< Parse.Program ds) = do
 desugarExp :: Parse.Annotated Parse.Exp -> Compiler (Annotated Exp)
 desugarExp = rec $ \a x -> fmap (a :<) $ case x of
   Parse.Infix ts    -> (\(_ :< e) -> e) <$> desugarInfix ts
+  Parse.Unit        -> pure Unit
   Parse.Lit lit     -> pure (Lit lit)
   Parse.Var s       -> pure (Var s)
   Parse.If e1 e2 e3 -> liftA3 If (desugarExp e1) (desugarExp e2) (desugarExp e3)
@@ -70,13 +70,14 @@ desugarDecls ((a :< d) : ds) = case d of
     case ds of (Right (a :< FunDecl m e)) : ds | m == n -> return $ Right (a :< FunDecl n (a :< Signature e t)) : ds
                _                                        -> throwDeclError (LacksBinding n a)
   Parse.FunDecl n ps e -> do
+    
     let i = length ps
 
     let hasName :: Name -> (Parse.Annotated Parse.Decl -> Bool)
         hasName n (_ :< Parse.FunDecl m _ _) | n == m = True
         hasName _ _ = False
 
-    let (as, bs) = span (hasName n) ds
+    let (as, bs) = span (hasName n) ((a :< d): ds)
 
     if any (hasName n) bs then error "make a proper error message here about multiple definitions" else pure ()
 
@@ -84,7 +85,7 @@ desugarDecls ((a :< d) : ds) = case d of
     sequence . (flip map) as $ \(a' :< Parse.FunDecl _ ps _) -> let j = length ps in
       if i /= j then throwDeclError (MismatchedArity n (a, i) (a', j)) else pure ()
 
-    ds <- desugarDecls ds
+    ds <- desugarDecls bs
 
     if i == 0
     then
@@ -100,14 +101,16 @@ desugarDecls ((a :< d) : ds) = case d of
       then do
         alts <- sequence . (flip map) as $ \(_ :< Parse.FunDecl _ [p] e) -> liftA2 (,) (desugarPat p) (desugarExp e)
         v <- freshVar
-        let d = Right (a :< FunDecl n (a :< Lambda v (a :< Case (a :< Var v) alts))) -- TODO phony pos?
+        let d = Right (a :< FunDecl n (a :< Lambda v (a :< Case (a :< Var v) alts))) -- TODO phantom pos?
         return (d : ds)
       else
         error "only unary or nullary functions currently supported"
 
 desugarPat :: Parse.Annotated Parse.Pat -> Compiler (Annotated Pat)
-desugarPat = undefined
-
+desugarPat = rec $ \a x -> fmap (a :<) $ case x of
+  Parse.PatUnit  -> pure PatUnit
+  Parse.PatVar x -> pure (PatVar x) 
+  Parse.PatLit l -> pure (PatLit l)
 
 type Tok = DAG.Tok (Tag Source Op) (Annotated Exp)
 

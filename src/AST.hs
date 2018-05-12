@@ -32,6 +32,7 @@ data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a)) -- TODO replace this with Ca
            | Case (a (Exp a)) [(a (Pat a), a (Exp a))] -- TODO only need (pat, exp) exp ?
            | Lambda Name (a (Exp a)) -- TODO allow pattern 
            | Record (Record (a (Exp a)))
+           | Unit -- TODO: Consider Unit as part of Record?
            | Lit Lit
            | Var Name
            | Apply (a (Exp a)) (a (Exp a))
@@ -98,6 +99,7 @@ instance Show a => TreeString (Tagged a Exp) where
     If x y z      -> Node ("[if]"              ) [treeString x, treeString y, treeString z]
     Case e alts   -> Node ("[case]"            ) (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
     Lambda n e    -> Node ("\\" ++ n ++ " -> " ) [treeString e]
+    Unit          -> Node ("()"                ) []
     Record r      -> Node ("[record]"          ) (map (\(n, e) -> treeString e) (Record.toList r)) -- TODO (show n if it is explicit)
     Lit lit       -> Node (show lit            ) []
     Var s         -> Node (s                   ) []

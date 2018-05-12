@@ -12,6 +12,7 @@ import qualified Data.Set as Set
 import Data.List (nub)
 import Compiler
 import Error
+import Record
 
 data System = System
   { vars     :: [(Name, Pure)]
@@ -60,6 +61,9 @@ occurs t1 t2 = t1 == t2 || occurs' t2
         occurs' (TyFun a b)   = occurs t1 a || occursT t1 b
         occurs' (TyData _ ts) = any (occurs t1) ts
         occurs' (TyVar _)     = False
+        occurs' (TyRecord r)  = or (fmap (occurs t1) r)
+        occurs' TyUnit        = False
+        occurs' (TyBang p)    = occurs t1 p
         occursT t1 (t2 :# es) = occurs t1 t2
 
 
@@ -68,7 +72,7 @@ occurs t1 t2 = t1 == t2 || occurs' t2
 sub :: (Name, Pure) -> System -> System
 sub (n,t) s = s{ vars = vars', progress = progress', check = check' }
   where ft x = lookup x [(n,t)]
-        fe x = undefined
+        fe x = lookup x [] -- TODO ?
         vars' = map (\(n,t) -> (n, subsPure ft fe t)) (vars s)
         subsD = \d -> d { constraint = subsConstraint ft fe (constraint d) }
         progress' = map subsD (progress s)
@@ -85,24 +89,36 @@ solveProgress s@System { progress = [] } = return s
 solveProgress s@System { progress = d:ds } = case constraint d of
 
   EqualP t1 t2 -> do
-    s <- solveSub t1 t2
+    s <- solveEqualP t1 t2
     solveProgress s
-      where solveSub (TyUni s1) (TyUni s2) | s1 == s2 = return s{ progress = ds }
-            solveSub (TyUni s1) t2 = if occurs (TyUni s1) t2 then contradiction d else return $ sub (s1,t2) s{ progress = ds }
-            solveSub t1 t2@(TyUni _) = solveSub t2 t1
+      where solveEqualP (TyUni s1) (TyUni s2) | s1 == s2 = return s{ progress = ds }
+            solveEqualP (TyUni s1) t2 = if occurs (TyUni s1) t2 then contradiction d else return $ sub (s1,t2) s{ progress = ds }
+            solveEqualP t1 t2@(TyUni _) = solveEqualP t2 t1
 
-            solveSub (TyFun t1 (t2 :# e2)) (TyFun t3 (t4 :# e4)) = return s{ progress = d `implies` EqualP t1 t3 : d `implies` EqualP t2 t4 : d `implies` EqualE e2 e4 : ds }
-            solveSub t1@(TyFun _ _) t2 = contra t1 t2
-            solveSub t1 t2@(TyFun _ _) = solveSub t2 t1
+            solveEqualP (TyFun t1 (t2 :# e2)) (TyFun t3 (t4 :# e4)) = return s{ progress = d `implies` EqualP t1 t3 : d `implies` EqualP t2 t4 : d `implies` EqualE e2 e4 : ds }
+            solveEqualP t1@(TyFun _ _) t2 = contra t1 t2
+            solveEqualP t1 t2@(TyFun _ _) = solveEqualP t2 t1
 
-            solveSub t1@(TyPrim l1) t2@(TyPrim l2) | l1 == l2  = return s{ progress = ds }
+            solveEqualP t1@(TyPrim l1) t2@(TyPrim l2) | l1 == l2  = return s{ progress = ds }
                                                    | otherwise = contra t1 t2
 
-            solveSub t1 t2 = contra t1 t2
+            solveEqualP t1@(TyRecord r1) t2@(TyRecord r2) = let
+              (r1', r2') = (toCanonicalList r1, toCanonicalList r2)
+              keysEq = all (uncurry (==)) (zip (map fst r1') (map fst r2'))
+              ds' = map (\(p1, p2) -> d `implies` EqualP p1 p2) $ zip (map snd r1') (map snd r2')
+                in if keysEq then return s{ progress = ds' ++ ds } else contra t1 t2
+
+            solveEqualP TyUnit TyUnit = return s{ progress = ds }
+
+            solveEqualP t1 t2 = contra t1 t2
 
             contra t1 t2 = contradiction (d `implies` EqualP t1 t2)
 
-  EqualE e1 e2 -> undefined -- TODO
+  EqualE e1 e2 -> do -- TODO
+    s <- solveEqualE e1 e2
+    solveProgress s
+      where solveEqualE e1 e2 | e1 == empty && e2 == empty = return s{ progress = ds }
+            solveEqualE e1 e2 = debugPutStrLn ("Skippng effect constraint " ++ show (e1, e2)) >> return s{ progress = ds }
 
 verifyCheck :: System -> Compiler ()
 verifyCheck s@System { check = [] } = return ()

@@ -56,7 +56,7 @@ singleton = Set.singleton
 -- |A *top-level* pure type
 data Pure = TyPrim Prim              -- ^A primitive type -- TODO get rid of this, replacing with TyUnit and TyRecord
           | TyUnit                   -- TODO treat this separately from record?
-          | TyRecord Type            -- ^A record type
+          | TyRecord (Record Pure)   -- ^A record type
           | TyUni String             -- ^A (pure) type unification variable
           | TyFun Pure Type          -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
           | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
@@ -141,11 +141,13 @@ subsType ft fe (p :# es) = subsPure ft fe p :# subsEffects fe es
 subsPure :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Pure -> Pure
 subsPure ft fe = subsPure'
   where subsPure' :: Pure -> Pure
+        subsPure' (TyRecord r)  = TyRecord (fmap subsPure' r)
         subsPure' (TyPrim p)    = TyPrim p
         subsPure' t@(TyUni s)   = fromMaybe t (ft s)
         subsPure' (TyFun a b)   = TyFun (subsPure' a) (subsType ft fe b)
         subsPure' (TyData s ts) = TyData s (map subsPure' ts)
         subsPure' t@(TyVar s)   = fromMaybe t (ft s)
+        subsPure' TyUnit        = TyUnit
 
 subsConstraint :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Constraint -> Constraint
 subsConstraint ft fe = subsC

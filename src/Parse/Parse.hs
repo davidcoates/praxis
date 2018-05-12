@@ -137,7 +137,6 @@ block p = liftT3 (\_ p ps -> p:ps) lbrace p block'
 
 program :: Parser (T Program)
 program = fmap Program (optional whitespace *> block (annotated topDecl) <* optional whitespace)
---  where repeat p = (try eof *> pure []) <|> liftT2 (:) (p <* optional whitespace) (repeat p)
 
 topDecl :: Parser (T Decl)
 topDecl = funType <|> funDecl <|?> "topDecl"
@@ -150,7 +149,6 @@ funDecl :: Parser (T Decl)
 funDecl = liftT2 ($) (try prefix) (annotated exp) <?> "funDecl"
   where prefix = liftT3 (\v ps _ -> FunDecl v ps) varid (many (annotated pat)) (reservedOp "=")
 
--- TODO
 exp :: Parser (T Exp)
 exp = infixexp
 
@@ -162,7 +160,6 @@ left f p = unroll <$> p
 leftT :: (Parse.Annotated a -> Parse.Annotated a -> T a) -> Parser [Parse.Annotated a] -> Parser (T a)
 leftT f p = value <$> left (\x y -> tag x :< f x y) p
 
--- TODO
 infixexp :: Parser (T Exp)
 infixexp = Infix <$> some (try top <|> texp)
   where top = (\t -> tag t :< TOp (value t)) <$> annotated qop
@@ -178,7 +175,7 @@ fexp :: Parser (T Exp)
 fexp = leftT Apply (some (annotated aexp))
 
 aexp :: Parser (T Exp)
-aexp = parens <|> expVar <|> expLit <|?> "aexp"
+aexp = expUnit <|> parens <|> expVar <|> expLit <|?> "aexp"
   where parens = liftT3 (\_ e _ -> e) (try (special '(')) exp (special ')')
 
 expVar :: Parser (T Exp)
@@ -187,6 +184,8 @@ expVar = Var <$> try varid <?> "var" -- TODO should be qvarid
 expLit :: Parser (T Exp)
 expLit = Parse.Lit <$> lit
 
+expUnit :: Parser (T Exp)
+expUnit = unit *> pure Unit
 
 whitespace :: Parser ()
 whitespace = try (token whitespace') <?> "whitespace"
@@ -205,7 +204,7 @@ pat :: Parser (T Pat)
 pat = patUnit <|> patVar <|> patLit <|?> "pat"
 
 unit :: Parser ()
-unit = try (reservedOp "(" *> reservedOp ")") *> return ()
+unit = try (special '(' *> special ')') *> return () -- Note: No whitespace
 
 patUnit :: Parser (T Pat)
 patUnit = unit *> return PatUnit
@@ -224,22 +223,23 @@ ty :: Parser Type
 ty = liftT2O (:#) tyPure empty (reservedOp "#" #> effs)
 
 effs :: Parser Effects
-effs = Set.fromList <$> sepBy1 eff (reservedOp ",")
+effs = Set.fromList <$> sepBy1 eff (special ',')
 
 eff :: Parser Effect
 eff = EfLit <$> conid -- TODO vars, qualified effects?
 
 tyPure :: Parser Pure
-tyPure = liftT2O join tyPrim Nothing (reservedOp "->" #>  (Just <$> ty)) <?> "tyPure"
-  where join :: Prim -> Maybe Type -> Pure
-        join p Nothing  = TyPrim p
-        join p (Just t) = TyFun (TyPrim p) t
+tyPure = liftT2O join tyPure' Nothing (reservedOp "->" #> (Just <$> ty)) <?> "tyPure"
+  where join :: Pure -> Maybe Type -> Pure
+        join p Nothing  = p
+        join p (Just t) = TyFun p t
+        tyPure' = try tyUnit <|> tyPrim
 
 tyUnit :: Parser Pure
 tyUnit = unit *> return TyUnit
 
-tyPrim :: Parser Prim
-tyPrim = do
+tyPrim :: Parser Pure
+tyPrim = TyPrim <$> do
   s <- conid
   case s of
     "Bool" -> return TyBool

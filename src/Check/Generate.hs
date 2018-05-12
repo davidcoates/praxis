@@ -15,6 +15,7 @@ import Control.Exception.Base (assert)
 import Inbuilts hiding (ty)
 import Compiler
 import Error
+import Record
 
 import Control.Monad (foldM)
 
@@ -41,6 +42,15 @@ generate = do
 ty :: Annotated Exp -> (Pure, Effects)
 ty ((Just (p :# e), _) :< _) = (p, e)
 
+gParallel :: Source -> Env -> [Compiler (Env, a, [Derivation])] -> Compiler (Env, [a], [Derivation])
+gParallel s l [x] = do
+  (l1, a, c1) <- x
+  return (l1, [a], c1)
+gParallel s l (x:xs) = do
+  (l1, a, c1) <- x
+  (l2, as, c2) <- gParallel s l xs
+  let (l3, c3) = contextJoin s l l1 l2
+  return (l3, a:as, c1 ++ c2 ++ c3)
 
 gFoldM :: ((Env, Parse.Annotated a) -> Compiler (Env, Annotated a, [Derivation])) -> Env -> [Parse.Annotated a] -> Compiler (Env, [Annotated a], [Derivation])
 gFoldM _ l1 []     = pure (l1, [], [])
@@ -59,9 +69,9 @@ gd :: (Env, Parse.Annotated Decl) -> Compiler (Env, Annotated Decl, [Derivation]
 gd (l1, d) = ($ d) $ rec $ \s x -> case x of
 
   FunDecl n e -> do
-    (l2, e', c1) <- ge (l1, e)
-    let t = fst (ty e')
-    return (intro (n, t) l2, (Nothing, s) :< FunDecl n e', c1)
+    p <- freshUniP
+    (l2, e', c1) <- ge (intro (n, p) l1, e) -- TODO need to check safety of recursive functions
+    return (l2, (Just (p :# empty), s) :< FunDecl n e', c1)
 
 
 ge :: (Env, Parse.Annotated Exp) -> Compiler (Env, Annotated Exp, [Derivation])
@@ -116,6 +126,56 @@ ge (l1, e) = ($ e) $ rec $ \s x -> case x of
     let c2 = [ newDerivation (EqualP sp ap) "user-supplied signature" s, newDerivation (EqualE se ae) "user-supplied signature" s ]
     return (l2, a', c1 ++ c2)
 
+  Lambda n e -> do
+    np <- freshUniP
+    (l2, e', c1) <- ge (intro (n, np) l1, e)
+    let (l3, c2) = elim s l2
+    let (ep, ee) = ty e'
+    return (l3, (Just (TyFun np (ep :# ee) :# empty), s) :< Lambda n e', c1 ++ c2)
+
+  Case e alts -> do
+    (l2, e', c1) <- ge (l1, e)
+    (l3, alts', c2) <- gParallel s l2 (map (\a -> gbind (l2, a)) alts)
+    let (t, c3) = tParallel (map (\(_, (Just t, s) :< _) -> (t,s)) alts')
+    return (l3, (Just t, s) :< Case e' alts', c1 ++ c2 ++ c3)
+
+  Unit -> return (l1, (Just (TyUnit :# empty), s) :< Unit, [])
+
+  Record r -> do
+    (l2, es, c1) <- gFoldM ge l1 (map snd (toList r))
+    let r' = Record.fromList (zip (map fst (toList r)) es)
+    let e = unions (map (snd . ty) es)
+    let p = TyRecord (fmap (fst . ty) r')
+    return (l2, (Just (p :# e), s) :< Record r', c1)
+
+tParallel :: [(Type, Source)] -> (Type, [Derivation])
+tParallel [(t, _)] = (t, [])
+tParallel ((p :# e, s):ts) = let (p' :# e', cs) = tParallel ts
+                                 c = newDerivation (EqualP p p') "case alternatives must have the same type" s
+                             in (p :# unions [e, e'], c:cs)
+
+gbind :: (Env, (Parse.Annotated Pat, Parse.Annotated Exp)) -> Compiler (Env, (Annotated Pat, Annotated Exp), [Derivation])
+gbind (l1, (s :< p,e)) = do
+  (l2, p', i) <- gpat (l1, s :< p)
+  (l3, e', c1) <- ge (l2, e)
+  let (l4, c2) = elimN i s l3
+  return (l4, (p', e'), c1 ++ c2)
+
+gpat :: (Env, Parse.Annotated Pat) -> Compiler (Env, Annotated Pat, Int)
+gpat (l1, p) = ($ p) $ rec $ \s x -> case x of
+
+  PatUnit -> return (l1, (Just (TyUnit :# empty), s) :< PatUnit, 0)
+
+  PatLit l -> return (l1, (Just (TyPrim (tyLit l) :# empty), s) :< PatLit l,  0)
+    where tyLit (Int _) = TyInt
+          tyLit (Bool _) = TyBool
+          tyLit (Char _) = TyChar
+          tyLit (String _) = TyString
+
+  PatVar v -> do
+    vp <- freshUniP
+    return (intro (v, vp) l1, (Just (vp :# empty), s) :< PatVar v, 1)
+ 
 {- |Captures e returns a list of all free variables in e.
    This is used to ensure functions don't capture linear variables.
    There is a slight difference between captures and used free variables,

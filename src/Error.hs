@@ -7,7 +7,7 @@ module Error
   , ParseError(..)
   ) where
 
-import Check.Derivation (Derivation)
+import Check.Derivation (Derivation, showDerivation)
 import Source (Source)
 import Common
 
@@ -31,7 +31,7 @@ data DeclError = MismatchedArity Name (Source, Int) (Source, Int)
 
 data CheckError = Contradiction Derivation
                 | Underdefined Derivation
-                | NotInScope String
+                | NotInScope String Source
 
 instance Show Error where
   show (LexicalError s e) = "Lexical error: " ++ show e ++ " at " ++ show s
@@ -61,6 +61,6 @@ instance Show DeclError where
   show (LacksBinding n s) = "The function '" ++ n ++ "' at " ++ show s ++ " lacks an accompanying binding" 
 
 instance Show CheckError where
-  show (Contradiction d) = show d
-  show (Underdefined d)  = "Failed to completely deduce the unification variable(s) present in: " ++ show d
-  show (NotInScope s)    = "Not in scope: " ++ s
+  show (Contradiction d) = showDerivation d
+  show (Underdefined d)  = "Failed to completely deduce the unification variable(s) present in: " ++ showDerivation d
+  show (NotInScope n s)    = "Not in scope: " ++ n ++ " at " ++ show s

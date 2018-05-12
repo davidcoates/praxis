@@ -23,7 +23,7 @@ class TreeString a where
   treeString :: a -> Tree String
 
 showTree :: TreeString a => a -> String
-showTree = strip . drawVerticalTree . treeString
+showTree = strip . drawTree . treeString
   where strip []     = ""
         strip ['\n'] = ""
         strip [x]    = [x]

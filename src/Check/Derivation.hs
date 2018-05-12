@@ -2,6 +2,7 @@ module Check.Derivation
   ( Derivation(..)
   , newDerivation
   , implies
+  , showDerivation
   ) where
 
 import Prelude hiding (drop)

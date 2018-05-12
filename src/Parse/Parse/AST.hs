@@ -34,10 +34,12 @@ data Pat (a :: * -> *) = PatUnit -- TODO records
                        | PatVar Name
                        | PatLit Lit
 
+-- TODO Records
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Case (a (Exp a)) [(a (Pat a), a (Exp a))]
            | Lit Lit
            | Var Name
+           | Unit
            | Apply (a (Exp a)) (a (Exp a))
            | Infix [a (Tok a)]
            | Let [a (Decl a)] (a (Exp a))
@@ -67,14 +69,15 @@ instance TreeString (Annotated Pat) where
 
 instance TreeString (Annotated Exp) where
   treeString = treeRec $ \x -> case x of
-    If x y z      -> Node "[if]"            [treeString x, treeString y, treeString z]
-    Case e alts   -> Node "[case]"          (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
-    Lit l         -> Node (show l)          []
-    Var v         -> Node (show v)          []
-    Apply e1 e2   -> Node "[$]"             [treeString e1, treeString e2]
-    Let ds e      -> Node "[let]"           (map treeString ds ++ [treeString e])
+    If x y z      -> Node ("[if]"         ) [treeString x, treeString y, treeString z]
+    Case e alts   -> Node ("[case]"       ) (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
+    Unit          -> Node ("()"           ) []
+    Lit l         -> Node (show l         ) []
+    Var v         -> Node (v              ) []
+    Apply e1 e2   -> Node ("[$]"          ) [treeString e1, treeString e2]
+    Let ds e      -> Node ("[let]"        ) (map treeString ds ++ [treeString e])
     Signature e t -> Node (":: " ++ show t) [treeString e]
-    Infix ts      -> Node "[infix]"         (map tokShow ts)
+    Infix ts      -> Node ("[infix]"      ) (map tokShow ts)
     where tokShow :: Annotated Tok -> Tree String
           tokShow (a :< TExp e) = treeString e -- Don't show redundant source (same as source of e)
           tokShow op             = treeRec (\(TOp o) -> Node (show o) []) op

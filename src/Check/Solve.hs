@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+
 module Check.Solve
   ( solve
   ) where
@@ -14,44 +16,76 @@ import Compiler
 import Error
 import Record
 
+-- TODO: Make system part of Compiler state?
 data System = System
   { vars     :: [(Name, Pure)]
   , progress :: [Derivation]
   , check    :: [Derivation]
   }
 
-unis :: Derivation -> [Name]
-unis d = unisC (constraint d)
+data UniType = UniTy | UniEf
 
-unisC :: Constraint -> [Name]
-unisC (EqualP p1 p2) = unisP p1 ++ unisP p2
-unisC (EqualE e1 e2) = unisE e1 ++ unisE e2
-unisC (Class _ t) = unisP t
+class Unis a where
+  unis :: UniType -> a -> [Name]
 
-unisT :: Type -> [Name]
-unisT (t :# e) = unisP t ++ unisE e
+  tyUnis :: a -> [Name]
+  tyUnis = unis UniTy
+  efUnis :: a -> [Name]
+  efUnis = unis UniEf
+  allUnis :: a -> [Name]
+  allUnis x = tyUnis x ++ efUnis x
 
-unisP :: Pure -> [Name]
-unisP (TyFun t1 t2) = unisP t1 ++ unisT t2
-unisP (TyData _ ts) = concatMap unisP ts
-unisP (TyUni s)     = [s]
-unisP _             = []
+instance Unis Derivation where
+  unis s d = unis s (constraint d)
 
-unisE :: Effects -> [Name]
-unisE = Set.elems . Set.map (\(EfUni n) -> n) . Set.filter efUni
-  where efUni (EfUni _) = True
-        efUni _         = False
+instance Unis Constraint where
+  unis s (EqualP p1 p2) = unis s p1 ++ unis s p2
+  unis s (EqualE e1 e2) = unis s e1 ++ unis s e2
+  unis s (Class _ t)    = unis s t 
+
+instance Unis Type where
+  unis s (t :# e) = unis s t ++ unis s e
+
+instance Unis Effect where
+  unis UniEf (EfUni n) = [n]
+  unis _     _         = []
+
+instance Unis Effects where
+  unis s = concat . Set.elems . Set.map (unis s)
+
+instance Unis Pure where
+  unis s (TyFun t1 t2) = unis s t1 ++ unis s t2
+  unis s (TyData _ ts) = concatMap (unis s) ts
+  unis s (TyRecord r)  = concatMap (unis s) r
+  unis s (TyBang p)    = unis s p
+  
+  unis UniTy (TyUni n) = [n]
+  unis _     (TyUni _) = []
+
+  unis s (TyVar _)     = []
+  unis s TyUnit        = []
+  unis s (TyPrim _)    = []
 
 solve :: [Derivation] -> Compiler [(String, Pure)]
 solve xs = do
   set stage Solve
-  let s = System { vars = map (\t -> (t, TyUni t)) (nub (concatMap unis xs)), progress = filter isProgress xs, check = filter isCheck xs }
+  let s = System { vars = map (\t -> (t, TyUni t)) (nub (concatMap allUnis xs)), progress = filter isProgress xs, check = filter isCheck xs }
   s <- solveProgress s
+  verifyProgressComplete s
   verifyCheck s
   debugPrint (vars s)
   return (vars s)
     where isProgress d = case constraint d of { EqualP _ _ -> True; EqualE _ _ -> True;  _ -> False }
           isCheck = not . isProgress
+
+-- |Checks all EqualP constraints are of the form uni ~ concrete 
+-- TODO Check effects also
+verifyProgressComplete :: System -> Compiler ()
+verifyProgressComplete s = mapM_ ok (progress s)
+  where ok d = case constraint d of
+          EqualP (TyUni _) p -> if null (tyUnis p) then pure () else underdefined d -- TODO need a different error
+          EqualP _         _ -> underdefined d -- TODO this shouldn't happen? better error messsage?
+          _                  -> pure ()
 
 -- |occurs t1 t2 returns True iff t1 is contained within t2
 occurs :: Pure -> Pure -> Bool
@@ -118,7 +152,7 @@ solveProgress s@System { progress = d:ds } = case constraint d of
     s <- solveEqualE e1 e2
     solveProgress s
       where solveEqualE e1 e2 | e1 == empty && e2 == empty = return s{ progress = ds }
-            solveEqualE e1 e2 = debugPutStrLn ("Skippng effect constraint " ++ show (e1, e2)) >> return s{ progress = ds }
+            solveEqualE e1 e2 = return s{ progress = ds } -- FIXME
 
 verifyCheck :: System -> Compiler ()
 verifyCheck s@System { check = [] } = return ()

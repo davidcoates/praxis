@@ -71,7 +71,9 @@ gd (l1, d) = ($ d) $ rec $ \s x -> case x of
   FunDecl n e -> do
     p <- freshUniP
     (l2, e', c1) <- ge (intro (n, p) l1, e) -- TODO need to check safety of recursive functions
-    return (l2, (Just (p :# empty), s) :< FunDecl n e', c1)
+    let (tp, te) = ty e'
+    let c2 = [ newDerivation (EqualP p tp) "TODO" s, newDerivation (EqualE te empty) "top-level function must be pure" s]
+    return (l2, (Just (p :# empty), s) :< FunDecl n e', c1 ++ c2)
 
 
 ge :: (Env, Parse.Annotated Exp) -> Compiler (Env, Annotated Exp, [Derivation])

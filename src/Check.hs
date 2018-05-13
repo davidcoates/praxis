@@ -30,8 +30,7 @@ check = do
   let ft x = lookup x subs
   let fe x = Nothing
   e <- get typedAST
-  let e' = tmap (\(t, s) -> (subsType ft fe <$> t, s)) e
+  let e' = tagMap (\(t, s) -> (subsType ft fe <$> t, s)) e
   debugPrint e'
   set typedAST e'
 
--- TODO: Do we need to check no unification variables left?

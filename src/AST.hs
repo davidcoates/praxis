@@ -17,6 +17,8 @@ import Pretty
 import Data.Map (Map) -- TODO records
 import qualified Data.Map as Map
 import Data.List (intercalate)
+import Data.Traversable (sequenceA)
+import Control.Applicative (liftA2, liftA3)
 import Record
 
 data Program a = Program [a (Decl a)]
@@ -60,25 +62,30 @@ litTy = TyPrim . litTy'
         litTy' (Char _) = TyChar
         litTy' (String _) = TyString
 
-instance DeepTagFunctor Program where
-  tmap' f (Program ds)    = Program (map (tmap f) ds)
+instance TagTraversable Program where
+  tagTraverse' f (Program ds) = Program <$> sequenceA (map (tagTraverse f) ds)
 
-instance DeepTagFunctor Decl where
-  tmap' f (FunDecl n e)   = FunDecl n (tmap f e)
+instance TagTraversable Decl where
+  tagTraverse' f (FunDecl n e) = FunDecl n <$> tagTraverse f e
 
-instance DeepTagFunctor Pat where
-  tmap' f p = p
+instance TagTraversable Pat where
+  tagTraverse' f (PatRecord r) = PatRecord <$> sequenceA (fmap (tagTraverse f) r)
+  tagTraverse' f PatUnit       = pure $ PatUnit
+  tagTraverse' f (PatLit l)    = pure $ PatLit l
+  tagTraverse' f (PatVar v)    = pure $ PatVar v
 
-instance DeepTagFunctor Exp where
-  tmap' f (If a b c)      = If (tmap f a) (tmap f b) (tmap f c)
-  tmap' f (Case e alts)   = Case (tmap f e) (map (\(a,b) -> (tmap f a, tmap f b)) alts)
-  tmap' f (Lambda n e)    = Lambda n (tmap f e)
-  tmap' f (Record r)      = Record (fmap (tmap f) r)
-  tmap' f (Apply a b)     = Apply (tmap f a) (tmap f b)
-  tmap' f (Let n a b)     = Let n (tmap f a) (tmap f b)
-  tmap' f (LetBang n e)   = LetBang n (tmap f e)
-  tmap' f (Signature e t) = Signature (tmap f e) t
-  tmap' f x               = x
+instance TagTraversable Exp where
+  tagTraverse' f (If a b c)      = liftA3 If (tagTraverse f a) (tagTraverse f b) (tagTraverse f c)
+  tagTraverse' f (Case e alts)   = liftA2 Case (tagTraverse f e) (sequenceA (map (\(a,b) -> liftA2 (,) (tagTraverse f a) (tagTraverse f b)) alts))
+  tagTraverse' f (Lambda n e)    = Lambda n <$> tagTraverse f e
+  tagTraverse' f (Record r)      = Record <$> sequenceA (fmap (tagTraverse f) r)
+  tagTraverse' f (Apply a b)     = liftA2 Apply (tagTraverse f a) (tagTraverse f b)
+  tagTraverse' f (Let n a b)     = liftA2 (Let n) (tagTraverse f a) (tagTraverse f b)
+  tagTraverse' f (LetBang n e)   = LetBang n <$> tagTraverse f e
+  tagTraverse' f (Signature e t) = (`Signature` t) <$> tagTraverse f e
+  tagTraverse' f Unit            = pure $ Unit
+  tagTraverse' f (Lit l)         = pure $ Lit l
+  tagTraverse' f (Var v)         = pure $ Var v
 
 instance Show a => TreeString (Tagged a Program) where
   treeString = treeRec $ \x -> case x of

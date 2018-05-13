@@ -25,6 +25,9 @@ instance Functor Record where
 instance Foldable Record where
   foldr f x (Record r) = foldr f x (map snd r)
 
+instance Traversable Record where
+  traverse f (Record r) = Record <$> traverse (\(k,v) -> (\v -> (k,v)) <$> f v) r
+
 pair :: a -> a -> Record a
 pair x y = fromList [(Nothing, x), (Nothing, y)]
 

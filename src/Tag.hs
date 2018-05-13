@@ -4,11 +4,12 @@ module Tag
   , rec
   , tag
   , value
-  , DeepTagFunctor(..)
+  , TagTraversable(..)
   ) where
 
 import Data.Bifunctor
 import Control.Applicative
+import Data.Functor.Identity
 
 data Tag a b = a :< b
 
@@ -37,7 +38,15 @@ instance Monoid a => Applicative (Tag a) where
   liftA2 f (a :< x) (b :< y) = mappend a b :< f x y
 
 -- Map over all the tags in an AST
-class DeepTagFunctor b where
-  tmap :: (a -> a) -> Tagged a b -> Tagged a b
-  tmap f (a :< x) = f a :< tmap' f x
-  tmap' :: (a -> a) -> b (Tag a) -> b (Tag a)
+class TagTraversable c where
+
+  tagTraverse :: Applicative f => (a -> f b) -> Tagged a c -> f (Tagged b c)
+  tagTraverse f (a :< x) = liftA2 (:<) (f a) (tagTraverse' f x)
+  tagTraverse' :: Applicative f => (a -> f b) -> c (Tag a) -> f (c (Tag b))
+
+  tagMap :: (a -> b) -> Tagged a c -> Tagged b c
+  tagMap f = runIdentity . tagTraverse (Identity . f)
+
+  tagFoldMap :: Monoid m => (a -> m) -> Tagged a c -> m
+  tagFoldMap f = getConst . tagTraverse (Const . f)
+

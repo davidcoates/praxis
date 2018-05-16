@@ -31,7 +31,7 @@ data Pat (a :: * -> *) = PatUnit -- TODO records
                        | PatRecord (Record (a (Pat a)))
 
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a)) -- TODO replace this with Case
-           | Case (a (Exp a)) [(a (Pat a), a (Exp a))] -- TODO only need (pat, exp) exp ?
+           | Case (a (Exp a)) [(a (Pat a), a (Exp a))] -- TODO only need Case exp (pat, exp) exp ? Or even Case (pat, exp) exp
            | Lambda Name (a (Exp a)) -- TODO allow pattern 
            | Record (Record (a (Exp a)))
            | Unit -- TODO: Consider Unit as part of Record?
@@ -47,6 +47,7 @@ data Lit = Int Int
          | Bool Bool
          | Char Char
          | String String
+  deriving (Eq)
 
 data QString = QString { qualification :: [String], name :: String }
   deriving (Ord, Eq)

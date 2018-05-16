@@ -4,6 +4,7 @@ module Record
   , toList
   , toCanonicalList
   , pair
+  , unpair
   ) where
 
 import Common
@@ -30,6 +31,12 @@ instance Traversable Record where
 
 pair :: a -> a -> Record a
 pair x y = fromList [(Nothing, x), (Nothing, y)]
+
+unpair :: Record a -> (a, a)
+unpair (Record [(Implicit 0, x), (Implicit 1, y)]) = (x, y)
+-- TODO do a nice lookup function
+
+
 
 -- TODO what to do on duplicate names? What if names contain the implicit descriptors first second etc?
 fromList :: [(Maybe Name, a)] -> Record a

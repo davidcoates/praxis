@@ -17,6 +17,9 @@ import Error
 import Record
 
 -- TODO: Make system part of Compiler state?
+-- TODO: Batch all effect constraints (or treat them as check?)
+--    so progress -> effects -> check
+
 data System = System
   { vars     :: [(Name, Pure)]
   , progress :: [Derivation]
@@ -83,7 +86,7 @@ solve xs = do
 verifyProgressComplete :: System -> Compiler ()
 verifyProgressComplete s = mapM_ ok (progress s)
   where ok d = case constraint d of
-          EqualP (TyUni _) p -> if null (tyUnis p) then pure () else underdefined d -- TODO need a different error
+          EqualP (TyUni _) p -> if null (tyUnis p) then pure () else underdefined d -- TODO need a different error? (internal error? or underdefined?)
           EqualP _         _ -> underdefined d -- TODO this shouldn't happen? better error messsage?
           _                  -> pure ()
 

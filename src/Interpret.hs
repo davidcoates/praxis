@@ -6,12 +6,14 @@ module Interpret
 import Compiler
 import Parse
 import Check
+import Eval
 
 interpret :: String -> Compiler ()
 interpret s = do
   set src s
   parse
   check
+  eval
 
 interpretFile :: FilePath -> Compiler ()
 interpretFile f = do
@@ -20,3 +22,4 @@ interpretFile f = do
   set src s
   parse
   check
+  eval

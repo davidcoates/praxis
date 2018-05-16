@@ -7,6 +7,8 @@ main : () -> () # StdIn, StdOut
 main () = putInt (fac (getInt ()))
 
 -- Alternatives:
+
 -- main = putInt . fac . getInt
--- main = let x = getInt() 
+
+-- main = let x = getInt ()
 --         in putInt (fac x)

@@ -5,10 +5,14 @@ module Compiler
   , CompilerState
   , initialState
   , throwError
+  , internalError -- Prefer this over Prelude.error
   , Stage(..)
 
   , get
+  , getWith
   , set
+  , over
+
   , run
   , runWith
   , lift
@@ -27,10 +31,12 @@ module Compiler
   , sugaredAST
   , desugaredAST
   , tEnv
+  , vEnv
   , typedAST
 
   , Env
   , QEnv
+  , VEnv
   , freshUniT
   , freshUniP
   , freshUniE
@@ -41,6 +47,7 @@ module Compiler
   , debugPrint
   , debugPutStrLn
 
+  , Value(..) -- TODO
   )
   where
 
@@ -58,18 +65,23 @@ import Control.Monad (when)
 import Control.Monad.State hiding (get, liftIO)
 import Control.Monad.Except hiding (throwError, liftIO)
 import qualified Control.Monad.Except (throwError)
-import Control.Lens hiding (set)
-import qualified Control.Lens (set)
+import Control.Lens hiding (set, over)
+import qualified Control.Lens (set, over)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Control.Applicative (liftA2)
+
+import Record (Record)
+import AST (Lit)
+
 
 data Stage = Tokenise
            | Parse
            | Desugar
            | Generate
            | Solve
-           | Interpret
+           | Evaluate
+-- TODO CodeGenerate
 
 instance Show Stage where
   show Tokenise           = "Tokeniser"
@@ -77,7 +89,7 @@ instance Show Stage where
   show Desugar            = "Desugarer"
   show Generate           = "Inference (Constraint Generator)"
   show Solve              = "Inference (Contraint Solver)"
-  show Interpret          = "Interpreter"
+  show Evaluate           = "Evaluate"
 
 -- |A Context stores all in-scope variables along with their type and how many times they are used.
 type Env = [(Name, (Pure, Int))]
@@ -85,11 +97,12 @@ type Env = [(Name, (Pure, Int))]
 -- |Context for top-level declarations
 type QEnv = [(Name, QPure)]
 
+type VEnv = [(Name, Value)]
+
 type Token = Tokenise.Annotated Tokenise.Token
 
 data Flags = Flags { _debug :: Bool }
   deriving (Show)
-makeLenses ''Flags
 
 data CompilerState = CompilerState
   { _flags        :: Flags
@@ -106,7 +119,7 @@ data CompilerState = CompilerState
   , _tEnv         :: Env                 -- ^Type environment of local functions
   , _kEnv         :: ()                  -- TODO (Kind environment)
   , _typedAST     :: (Check.AST)         -- ^AST after type inference
-
+  , _vEnv         :: VEnv                -- ^Value environment for interpreter
   {-
   , _fname    :: Maybe FilePath            -- ^File path
   , _imports  :: [FilePath]                -- ^Loaded modules
@@ -123,7 +136,6 @@ data CompilerState = CompilerState
   -}
 
   } deriving (Show)
-makeLenses ''CompilerState
 
 type Compiler a = ExceptT Error (StateT CompilerState IO) a
 
@@ -133,8 +145,18 @@ defaultFlags = Flags { _debug = True }
 get :: Lens' CompilerState a -> Compiler a
 get = lift . gets . view
 
+getWith :: Lens' CompilerState a -> (a -> b) -> Compiler b
+getWith l f = do
+  x <- get l
+  return (f x)
+
 set :: Lens' CompilerState a -> a -> Compiler ()
 set l x = lift . modify $ Control.Lens.set l x
+
+over :: Lens' CompilerState a -> (a -> a) -> Compiler ()
+over l f = do
+  x <- get l
+  set l (f x)
 
 throwError :: Error -> Compiler a
 throwError = Control.Monad.Except.throwError
@@ -158,8 +180,43 @@ initialState  = CompilerState
   , _tEnv         = unset "tenv"
   , _kEnv         = unset "kenv"
   , _typedAST     = unset "typedAST"
+  , _vEnv         = unset "vEnv"
   }
-  where unset s = error ("INTERNAL COMPILER ERROR: unset " ++ s)
+  where unset s = internalError ("unset " ++ s)
+
+
+
+
+-- TODO
+data Value = U
+           | L Lit
+           | R (Record Value)
+           | F (Value -> Compiler Value)
+
+instance Show Value where
+  show U     = "()"
+  show (L l) = show l
+  show (R r) = show r
+  show (F f) = "<function>"
+
+
+
+
+fresh :: String -> [String]
+fresh alpha = concatMap perm [1..]
+  where perm :: Int -> [String]
+        perm 1 = map (:[]) alpha
+        perm n = do { x <- alpha; y <- perm (n-1); return (x:y) }
+
+
+internalError :: String -> a
+internalError s = error ("INTERNAL COMPILER ERROR! " ++ s)
+
+
+makeLenses ''Flags
+makeLenses ''CompilerState
+
+
 
 liftIO :: IO a -> Compiler a
 liftIO = lift . lift
@@ -181,12 +238,6 @@ debugPutStrLn x = do
     s <- get stage
     liftIO $ putStrLn ("Output from stage: " ++ show s)
     liftIO $ putStrLn x
-
-fresh :: String -> [String]
-fresh alpha = concatMap perm [1..]
-  where perm :: Int -> [String]
-        perm 1 = map (:[]) alpha
-        perm n = do { x <- alpha; y <- perm (n-1); return (x:y) }
 
 -- TODO: Stuff below this probably shouldn't be here...
 freshUniT :: Compiler Type

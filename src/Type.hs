@@ -26,11 +26,25 @@ import Data.Maybe (fromMaybe)
 import Common
 import Record
 
--- TODO need more kinds?
+-- TODO need more kinds? KindRecord?
 data Kind = KindEffects     -- 
           | KindPure        -- 
-          | KindImpure      -- 
+          | KindImpure      -- Do we need this? This is basically (KindPure, KindEffects)
           | KindConstraint  -- 
+          | KindRecord (Record Kind)
+
+{-
+data XType = XTyEffects Effects
+           | XTyPure Pure
+           | XTyImpure Type -- TODO do we need this? -- TODO Rename Type to Impure? type Type = Pure ?
+           | XTyConstraint Constraint
+           | XTyLambda Name IType -- TODO
+           | XTyRecord (Record IType)
+
+data XKind = XKindBase Kind
+           | XKindLambda Kind XKind -- TODO Kind Pure ?
+           | XKindRecord (Record XKind)
+-}
 
 {-|
   Effects functions as a *flat set* of effect.
@@ -75,6 +89,7 @@ data Type = Pure :# Effects          -- ^An impure type `a # e` is respresented 
 data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types in Classes
                 | EqualP Pure Pure
                 | EqualE Effects Effects
+                -- TODO need EqualK at least internally?
                 deriving (Ord, Eq)
 
 -- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
@@ -85,6 +100,7 @@ instance Show Kind where
   show KindPure       = "P"
   show KindImpure     = "I"
   show KindConstraint = "C"
+  show (KindRecord r) = show r
 
 instance Show Effect where
   show (EfLit s) = s

@@ -147,7 +147,7 @@ funType = liftT2 ($) (try prefix) ty <?> "funType"
 
 funDecl :: Parser (T Decl)
 funDecl = liftT2 ($) (try prefix) (annotated exp) <?> "funDecl"
-  where prefix = liftT3 (\v ps _ -> FunDecl v ps) varid (many (annotated pat)) (reservedOp "=")
+  where prefix = liftT3 (\v ps _ -> DeclFun v ps) varid (many (annotated pat)) (reservedOp "=")
 
 exp :: Parser (T Exp)
 exp = infixexp
@@ -198,13 +198,16 @@ lit = try (token lit') <?> "literal"
         lit' _             = Nothing
 
 decl :: Parser (T Decl)
-decl = liftT4 (\n ps _ e -> FunDecl n ps e) varid (some (annotated pat)) (reservedOp "=") (annotated exp) <?> "decl"  -- TODO
+decl = liftT4 (\n ps _ e -> DeclFun n ps e) varid (some (annotated pat)) (reservedOp "=") (annotated exp) <?> "decl"  -- TODO
 
 pat :: Parser (T Pat)
-pat = patUnit <|> patVar <|> patLit <|?> "pat"
+pat = patHole <|> patUnit <|> patVar <|> patLit <|?> "pat"
 
 unit :: Parser ()
 unit = try (special '(' *> special ')') *> return () -- Note: No whitespace
+
+patHole :: Parser (T Pat)
+patHole = try (special '_') *> return PatHole
 
 patUnit :: Parser (T Pat)
 patUnit = unit *> return PatUnit

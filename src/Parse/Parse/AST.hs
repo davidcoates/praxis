@@ -13,7 +13,7 @@ module Parse.Parse.AST
   ) where
 
 import Pretty
-import AST (Lit(..), Name, QString)
+import AST (Lit(..), Name, QString, Pat(..))
 import Source
 import Tag
 import Type
@@ -28,11 +28,7 @@ data Program a = Program [a (Decl a)]
 -- However, Bang will never appear in top-level declarations.
 data Decl a = Bang Name
             | FunType Name Type
-            | FunDecl Name [a (Pat a)] (a (Exp a))
-
-data Pat (a :: * -> *) = PatUnit -- TODO records
-                       | PatVar Name
-                       | PatLit Lit
+            | DeclFun Name [a (Pat a)] (a (Exp a))
 
 -- TODO Records
 data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a))
@@ -59,13 +55,7 @@ instance TreeString (Annotated Decl) where
   treeString = treeRec $ \x -> case x of
     Bang n         -> Node ("!" ++ n)              []
     FunType f t    -> Node (f ++ " :: " ++ show t) []
-    FunDecl f ps e -> Node (f ++ show ps ++ " = ") [treeString e]
-
-instance TreeString (Annotated Pat) where
-  treeString = treeRec $ \x -> case x of
-    PatUnit  -> Node "()"     []
-    PatVar n -> Node n        []
-    PatLit l -> Node (show l) []
+    DeclFun f ps e -> Node (f ++ show ps ++ " = ") [treeString e]
 
 instance TreeString (Annotated Exp) where
   treeString = treeRec $ \x -> case x of
@@ -86,9 +76,6 @@ instance Show (Annotated Program) where
   show = showTree
 
 instance Show (Annotated Decl) where
-  show = showTree
-
-instance Show (Annotated Pat) where
   show = showTree
 
 instance Show (Annotated Exp) where

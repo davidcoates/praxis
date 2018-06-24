@@ -51,7 +51,7 @@ desugarExp = rec $ \a x -> fmap (a :<) $ case x of
       where build :: [Either Name (Annotated Decl)] -> Annotated Exp -> Annotated Exp
             build [] e = e
             build (Left n : ds)  e = a :< LetBang n (build ds e)
-            build (Right (a :< FunDecl n d) : ds) e = a :< Let n d (build ds e)
+            build (Right (a :< DeclFun n d) : ds) e = a :< Let n d (build ds e)
 
 throwDeclError :: DeclError -> Compiler a
 throwDeclError = throwError . SyntaxError . DeclError
@@ -67,14 +67,14 @@ desugarDecls ((a :< d) : ds) = case d of
 
   Parse.FunType n t -> do
     ds <- desugarDecls ds
-    case ds of (Right (a :< FunDecl m e)) : ds | m == n -> return $ Right (a :< FunDecl n (a :< Signature e t)) : ds
+    case ds of (Right (a :< DeclFun m e)) : ds | m == n -> return $ Right (a :< DeclFun n (a :< Signature e t)) : ds
                _                                        -> throwDeclError (LacksBinding n a)
-  Parse.FunDecl n ps e -> do
+  Parse.DeclFun n ps e -> do
     
     let i = length ps
 
     let hasName :: Name -> (Parse.Annotated Parse.Decl -> Bool)
-        hasName n (_ :< Parse.FunDecl m _ _) | n == m = True
+        hasName n (_ :< Parse.DeclFun m _ _) | n == m = True
         hasName _ _ = False
 
     let (as, bs) = span (hasName n) ((a :< d): ds)
@@ -82,7 +82,7 @@ desugarDecls ((a :< d) : ds) = case d of
     if any (hasName n) bs then error "make a proper error message here about multiple definitions" else pure ()
 
     -- Check arity
-    sequence . (flip map) as $ \(a' :< Parse.FunDecl _ ps _) -> let j = length ps in
+    sequence . (flip map) as $ \(a' :< Parse.DeclFun _ ps _) -> let j = length ps in
       if i /= j then throwDeclError (MismatchedArity n (a, i) (a', j)) else pure ()
 
     ds <- desugarDecls bs
@@ -92,16 +92,16 @@ desugarDecls ((a :< d) : ds) = case d of
       if length as == 0
       then do
         e <- desugarExp e
-        let d = Right (a :< FunDecl n e)
+        let d = Right (a :< DeclFun n e)
         return (d : ds)
       else
         error "blah multiple definitions for nullary" -- TODO make this a propery error
     else
       if i == 1
       then do
-        alts <- sequence . (flip map) as $ \(_ :< Parse.FunDecl _ [p] e) -> liftA2 (,) (desugarPat p) (desugarExp e)
+        alts <- sequence . (flip map) as $ \(_ :< Parse.DeclFun _ [p] e) -> liftA2 (,) (desugarPat p) (desugarExp e)
         v <- freshVar
-        let d = Right (a :< FunDecl n (a :< Lambda v (a :< Case (a :< Var v) alts))) -- TODO phantom pos?
+        let d = Right (a :< DeclFun n (a :< Lambda v (a :< Case (a :< Var v) alts))) -- TODO phantom pos?
         return (d : ds)
       else
         error "only unary or nullary functions currently supported"

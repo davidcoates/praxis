@@ -57,7 +57,7 @@ atom = (whitespace *> pure Whitespace) <|> lexeme
 -- // END OF NON-BACKTRACKING PARSER COMBINATORS
 
 
-reservedids = ["let", "in", "if", "then", "else"]
+reservedids = ["let", "in", "if", "then", "else", "using", "data", "case", "of", "where"]
 reservedops = [":", "=>", "=", "\\", "->", "#", "@", "|"]
 
 lexeme :: Tokeniser Token
@@ -110,7 +110,7 @@ ascSymbol :: Tokeniser Char
 ascSymbol = try $ oneOf "!#$%&*+./<=>?@\\^|-~:"
 
 special :: Tokeniser Token
-special = Special <$> try (oneOf "(),;[]`{}") <?> "special"
+special = Special <$> try (oneOf "(),;[]`{}_") <?> "special"  -- TODO should _ be special?
 
 literal :: Tokeniser Token
 literal = integer <|> charLit <|> stringLit <|?> "literal"

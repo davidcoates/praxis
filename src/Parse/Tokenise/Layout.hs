@@ -32,6 +32,6 @@ layout ts = l (-1) True [] ts
                                | otherwise = t : l i' b' cs ts
           where i' = line . end $ a
                 j  = column . start $ a
-                b' = case x of ReservedId x -> x `elem` ["of", "let", "where"]
+                b' = case x of ReservedId x -> x `elem` ["do", "of", "where"]
                                _            -> False
 

@@ -23,9 +23,21 @@ import Record
 
 data Program a = Program [a (Decl a)]
 
-data Decl a = FunDecl Name (a (Exp a))
+data Decl a = DeclFun Name (a (Exp a))
+--            | DeclData Name (Maybe (a (DataKind a))) [a (DataAlt a)]
 
-data Pat (a :: * -> *) = PatUnit -- TODO records
+-- data DataKind a = DataKindVar Name 
+{-
+                | DataKindRecord (Record (a (DataKind a)))
+                | DataKindSignature (a (DataKind a)) Kind
+-}
+
+-- TODO
+-- data DataAlt a = 
+
+data Pat (a :: * -> *) = PatUnit
+                       | PatHole
+                       | PatAt Name (a (Pat a))
                        | PatVar Name
                        | PatLit Lit
                        | PatRecord (Record (a (Pat a)))
@@ -67,13 +79,15 @@ instance TagTraversable Program where
   tagTraverse' f (Program ds) = Program <$> sequenceA (map (tagTraverse f) ds)
 
 instance TagTraversable Decl where
-  tagTraverse' f (FunDecl n e) = FunDecl n <$> tagTraverse f e
+  tagTraverse' f (DeclFun n e) = DeclFun n <$> tagTraverse f e
 
 instance TagTraversable Pat where
   tagTraverse' f (PatRecord r) = PatRecord <$> sequenceA (fmap (tagTraverse f) r)
   tagTraverse' f PatUnit       = pure $ PatUnit
+  tagTraverse' f PatHole       = pure $ PatHole
   tagTraverse' f (PatLit l)    = pure $ PatLit l
   tagTraverse' f (PatVar v)    = pure $ PatVar v
+  tagTraverse' f (PatAt v p)   = PatAt v <$> tagTraverse f p
 
 instance TagTraversable Exp where
   tagTraverse' f (If a b c)      = liftA3 If (tagTraverse f a) (tagTraverse f b) (tagTraverse f c)
@@ -94,13 +108,16 @@ instance Show a => TreeString (Tagged a Program) where
 
 instance Show a => TreeString (Tagged a Decl) where
   treeString = treeRec $ \x -> case x of
-    FunDecl n e -> Node (n ++ " = ") [treeString e]
+    DeclFun n e -> Node (n ++ " = ") [treeString e]
 
 instance Show a => TreeString (Tagged a Pat) where
   treeString = treeRec $ \x -> case x of
     PatUnit  -> Node "()"     []
-    PatVar n -> Node n        []
+    PatHole  -> Node "_"      []
+    PatVar v -> Node v        []
     PatLit l -> Node (show l) []
+    PatRecord r -> undefined -- TODO
+    PatAt v p -> Node (v ++ " @ ") [treeString p]
 
 instance Show a => TreeString (Tagged a Exp) where
   treeString = treeRec $ \x -> case x of

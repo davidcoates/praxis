@@ -32,7 +32,7 @@ eval = do
     _          -> error "missing or illtyped main" -- TODO this shuld be checked earlier!
 
 evalDecl :: Annotated Decl -> Compiler ()
-evalDecl (_ :< FunDecl n e) = do
+evalDecl (_ :< DeclFun n e) = do
   e' <- evalExp e
   l <- get vEnv
   set vEnv ((n, e'):l)

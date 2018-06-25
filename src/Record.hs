@@ -5,6 +5,8 @@ module Record
   , toCanonicalList
   , pair
   , unpair
+  , unit
+  , showKeys
   ) where
 
 import Common
@@ -29,6 +31,9 @@ instance Foldable Record where
 instance Traversable Record where
   traverse f (Record r) = Record <$> traverse (\(k,v) -> (\v -> (k,v)) <$> f v) r
 
+unit :: Record a
+unit = Record []
+
 pair :: a -> a -> Record a
 pair x y = fromList [(Nothing, x), (Nothing, y)]
 
@@ -36,13 +41,11 @@ unpair :: Record a -> (a, a)
 unpair (Record [(Implicit 0, x), (Implicit 1, y)]) = (x, y)
 -- TODO do a nice lookup function
 
-
-
--- TODO what to do on duplicate names? What if names contain the implicit descriptors first second etc?
+-- TODO what to do on duplicate names? What if names contain the implicit descriptors _1 _2 etc?
 fromList :: [(Maybe Name, a)] -> Record a
 fromList = Record . addDefaults [0..]
   where addDefaults :: [Int] -> [(Maybe Name, a)] -> [(Field, a)]
-        addDefaults _ [] = []
+        addDefaults _      []                = []
         addDefaults is     ((Just n, a):xs)  = (Explicit n, a) : addDefaults is xs
         addDefaults (i:is) ((Nothing, a):xs) = (Implicit i, a) : addDefaults is xs
 
@@ -60,3 +63,7 @@ instance Show a => Show (Record a) where
     where showEntry (Nothing, a) = show a
           showEntry (Just n,  a) = n ++ "=" ++ show a
 
+showKeys :: Record a -> String
+showKeys r = "(" ++ intercalate "," (map showKey (toList r)) ++ ")"
+  where showKey (Nothing, _) = "_"
+        showKey (Just n,  _) = n ++ "=_"

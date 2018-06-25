@@ -9,10 +9,11 @@ import Parse.Parse.AST as Parse
 import Parse.Tokenise.Token as Token
 import Parse.Parse.Parser
 
-import Type
-import Tag
-import Source
 import Compiler
+import qualified Record
+import Source
+import Tag
+import Type
 
 import Prelude hiding (exp)
 import Control.Applicative ((<|>), (<**>), liftA2, liftA3)
@@ -143,7 +144,7 @@ topDecl = funType <|> funDecl <|?> "topDecl"
 
 funType :: Parser (T Decl)
 funType = liftT2 ($) (try prefix) ty <?> "funType"
-  where prefix = liftT2 (\v _ -> FunType v) varid (reservedOp ":")
+  where prefix = liftT2 (\v _ -> DeclSig v) varid (reservedOp ":")
 
 funDecl :: Parser (T Decl)
 funDecl = liftT2 ($) (try prefix) (annotated exp) <?> "funDecl"
@@ -169,13 +170,13 @@ qop :: Parser Op
 qop = qvarsym -- TODO
 
 lexp :: Parser (T Exp)
-lexp = expLet <|> fexp <|?> "lexp"
+lexp = expRead <|> fexp <|?> "lexp"
 
 fexp :: Parser (T Exp)
 fexp = leftT Apply (some (annotated aexp))
 
 aexp :: Parser (T Exp)
-aexp = expUnit <|> parens <|> expVar <|> expLit <|?> "aexp"
+aexp = expRecord <|> parens <|> expVar <|> expLit <|?> "aexp"
   where parens = liftT3 (\_ e _ -> e) (try (special '(')) exp (special ')')
 
 expVar :: Parser (T Exp)
@@ -184,8 +185,9 @@ expVar = Var <$> try varid <?> "var" -- TODO should be qvarid
 expLit :: Parser (T Exp)
 expLit = Parse.Lit <$> lit
 
-expUnit :: Parser (T Exp)
-expUnit = unit *> pure Unit
+expRecord :: Parser (T Exp)
+expRecord = expUnit -- TODO
+  where expUnit = unit *> pure (Record Record.unit)
 
 whitespace :: Parser ()
 whitespace = try (token whitespace') <?> "whitespace"
@@ -201,7 +203,7 @@ decl :: Parser (T Decl)
 decl = liftT4 (\n ps _ e -> DeclFun n ps e) varid (some (annotated pat)) (reservedOp "=") (annotated exp) <?> "decl"  -- TODO
 
 pat :: Parser (T Pat)
-pat = patHole <|> patUnit <|> patVar <|> patLit <|?> "pat"
+pat = patHole <|> patVar <|> patLit <|> patRecord <|?> "pat"
 
 unit :: Parser ()
 unit = try (special '(' *> special ')') *> return () -- Note: No whitespace
@@ -209,8 +211,10 @@ unit = try (special '(' *> special ')') *> return () -- Note: No whitespace
 patHole :: Parser (T Pat)
 patHole = try (special '_') *> return PatHole
 
-patUnit :: Parser (T Pat)
-patUnit = unit *> return PatUnit
+patRecord :: Parser (T Pat)
+patRecord = patUnit -- TODO
+  where patUnit :: Parser (T Pat)
+        patUnit = unit *> return (PatRecord Record.unit)
 
 patVar :: Parser (T Pat)
 patVar = PatVar <$> try varid
@@ -218,9 +222,9 @@ patVar = PatVar <$> try varid
 patLit :: Parser (T Pat)
 patLit = PatLit <$> lit
 
-expLet :: Parser (T Exp)
-expLet = liftT4 (\_ x _ e -> Parse.Let x e) (try prefix) (some (annotated decl)) (reservedId "in") (annotated exp) <?> "let expression"
-  where prefix = reservedId "let"
+expRead :: Parser (T Exp)
+expRead = liftT4 (\_ x _ e -> Parse.Read x e) (try prefix) varid (reservedId "in") (annotated exp) <?> "read expression"
+  where prefix = reservedId "read"
 
 ty :: Parser Type
 ty = liftT2O (:#) tyPure empty (reservedOp "#" #> effs)
@@ -246,7 +250,7 @@ tyPrim = TyPrim <$> do
   s <- conid
   case s of
     "Bool" -> return TyBool
-    "Int"  -> return TyInt
     "Char" -> return TyChar
+    "Int"  -> return TyInt
     "String" -> return TyString
     _        -> Applicative.empty

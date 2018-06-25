@@ -7,9 +7,10 @@ module Tag
   , TagTraversable(..)
   ) where
 
-import Data.Bifunctor
 import Control.Applicative
+import Data.Bifunctor
 import Data.Functor.Identity
+import Data.Monoid ((<>))
 
 data Tag a b = a :< b
 
@@ -35,7 +36,7 @@ instance Functor (Tag a) where
 
 instance Monoid a => Applicative (Tag a) where
   pure x = mempty :< x
-  liftA2 f (a :< x) (b :< y) = mappend a b :< f x y
+  liftA2 f (a :< x) (b :< y) = (a <> b) :< f x y
 
 -- Map over all the tags in an AST
 class TagTraversable c where

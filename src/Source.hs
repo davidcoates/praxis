@@ -1,7 +1,10 @@
 module Source
   ( Pos(..)
   , Source(..)
+  , (<>)
   ) where
+
+import Data.Monoid ((<>))
 
 data Pos = Pos { line :: Int, column :: Int }
 
@@ -16,7 +19,6 @@ instance Show Source where
   show s       = show (start s)
 --  show s       = show (start s) ++ " " ++ sanitise (show (spelling s))
 --    where sanitise xs = if length xs < 30 then xs else take 30 xs ++ "..."
-
 
 instance Monoid Source where
   mempty = Phantom

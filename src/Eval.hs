@@ -32,52 +32,46 @@ eval = do
     _          -> error "missing or illtyped main" -- TODO this shuld be checked earlier!
 
 evalDecl :: Annotated Decl -> Compiler ()
-evalDecl (_ :< DeclFun n e) = do
+evalDecl (_ :< DeclFun n t i as) = undefined -- TODO FIXME
+{-
+do
   e' <- evalExp e
   l <- get vEnv
   set vEnv ((n, e'):l)
+-}
+
 
 evalExp :: Annotated Exp -> Compiler Value
 evalExp (t :< e) = case e of
-
-  Unit -> pure U
-
-  If a b c -> do
-    L (Bool a') <- evalExp a
-    v <- if a' then evalExp b else evalExp c
-    return v
-
-  Var n -> do
-    Just v <- getWith vEnv (lookup n)
-    return v
 
   Apply f x -> do
     F f' <- evalExp f
     x' <- evalExp x
     f' x'
- 
-  Lit l -> return (L l)
-
-  Let x a b -> do
-    a' <- evalExp a
-    over vEnv ((x,a'):)
-    b' <- evalExp b
-    over vEnv tail
-    return b'
-
-  Record r -> do
-    x <- mapM evalExp r
-    return (R x)
 
   Case e ps -> do
     e' <- evalExp e
     cases e' ps
 
-  Lambda n e -> return $ F $ \v -> do
+  If a b c -> do
+    L (Bool a') <- evalExp a
+    if a' then evalExp b else evalExp c
+
+  Lambda (_ :< PatVar n) e -> return $ F $ \v -> do -- TODO FIXME
     over vEnv ((n,v):)
     e' <- evalExp e
     over vEnv tail
     return e'
+ 
+  Lit l -> return (L l)
+
+  Record r -> do
+    x <- mapM evalExp r
+    return (R x)
+
+  Var n -> do
+    Just v <- getWith vEnv (lookup n)
+    return v
 
   _ -> error (show (t :< e))
 
@@ -94,21 +88,7 @@ cases x ((p,e):ps) = case bind x p of
 
 -- TODO
 bind :: Value -> Annotated Pat -> Maybe (Compiler Int)
-bind x (_ :< PatVar v) = Just $ over vEnv ((v, x):) >> return 1
+bind x     (_ :< PatVar v)            = Just $ over vEnv ((v, x):) >> return 1
 bind (L l) (_ :< PatLit l') | l == l' = Just $ return 0
-bind _ (_ :< PatUnit) = Just $ return 0
-bind _ _ = Nothing
-
-{-
-data Exp a = If (a (Exp a)) (a (Exp a)) (a (Exp a)) -- TODO replace this with Case
-           | Case (a (Exp a)) [(a (Pat a), a (Exp a))] -- TODO only need (pat, exp) exp ?
-           | Lambda Name (a (Exp a)) -- TODO allow pattern 
-           | Record (Record (a (Exp a)))
-           | Unit -- TODO: Consider Unit as part of Record?
-           | Lit Lit
-           | Var Name
-           | Apply (a (Exp a)) (a (Exp a))
-           | Let Name (a (Exp a)) (a (Exp a)) -- TODO allow pattern
-           | LetBang Name (a (Exp a))
-           | Signature (a (Exp a)) Type
--}
+bind _     (_ :< PatRecord _)         = Just $ return 0 -- TODO FIXME
+bind _     _ = Nothing

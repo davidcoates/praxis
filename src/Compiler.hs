@@ -115,10 +115,10 @@ data CompilerState = CompilerState
   , _tokens       :: [Token]             -- ^List of tokens produced by tokeniser
   , _sugaredAST   :: (Parse.AST)         -- ^AST after parsing of tokens
   , _desugaredAST :: (Desugar.AST)       -- ^AST after desugaring
+  , _typedAST     :: (Check.AST)         -- ^AST after type inference
   , _qtEnv        :: QEnv                -- ^Type environment of top-level functions
   , _tEnv         :: Env                 -- ^Type environment of local functions
   , _kEnv         :: ()                  -- TODO (Kind environment)
-  , _typedAST     :: (Check.AST)         -- ^AST after type inference
   , _vEnv         :: VEnv                -- ^Value environment for interpreter
   {-
   , _fname    :: Maybe FilePath            -- ^File path

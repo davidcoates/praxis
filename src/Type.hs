@@ -83,7 +83,7 @@ data Prim = TyBool | TyInt | TyChar | TyString
           deriving (Ord, Eq)
 
 -- TODO deep annotations?
-data Type = Pure :# Effects          -- ^An impure type `a # e` is respresented as `Ty a e`. A pure type `a` is represented as `Ty a []`
+data Type = Pure :# Effects
           deriving (Ord, Eq)
 
 data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types in Classes

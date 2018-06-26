@@ -11,6 +11,7 @@ module Compiler
   , get
   , getWith
   , set
+  , setIn
   , over
 
   , run
@@ -21,7 +22,7 @@ module Compiler
   -- |Flag lenses
   , debug
 
-  -- |Compiler lenses
+  -- |Compiler lenses (TODO order these)
   , flags
   , stage
   , imports
@@ -33,6 +34,7 @@ module Compiler
   , tEnv
   , vEnv
   , typedAST
+  , inClosure
 
   , Env
   , QEnv
@@ -120,6 +122,8 @@ data CompilerState = CompilerState
   , _tEnv         :: Env                 -- ^Type environment of local functions
   , _kEnv         :: ()                  -- TODO (Kind environment)
   , _vEnv         :: VEnv                -- ^Value environment for interpreter
+
+  , _inClosure    :: Bool                -- ^Checker (Generator) internal
   {-
   , _fname    :: Maybe FilePath            -- ^File path
   , _imports  :: [FilePath]                -- ^Loaded modules
@@ -153,6 +157,14 @@ getWith l f = do
 set :: Lens' CompilerState a -> a -> Compiler ()
 set l x = lift . modify $ Control.Lens.set l x
 
+setIn :: Lens' CompilerState a -> a -> Compiler b -> Compiler b
+setIn l x c = do
+  old <- get l
+  set l x
+  r <- c
+  set l old
+  return r
+
 over :: Lens' CompilerState a -> (a -> a) -> Compiler ()
 over l f = do
   x <- get l
@@ -181,6 +193,7 @@ initialState  = CompilerState
   , _kEnv         = unset "kenv"
   , _typedAST     = unset "typedAST"
   , _vEnv         = unset "vEnv"
+  , _inClosure    = unset "inClosure"
   }
   where unset s = internalError ("unset " ++ s)
 

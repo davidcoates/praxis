@@ -67,12 +67,11 @@ singleton :: Effect -> Effects
 singleton = Set.singleton
 
 -- |A *top-level* pure type
-data Pure = TyPrim Prim              -- ^A primitive type -- TODO get rid of this, replacing with TyUnit and TyRecord
-          | TyUnit                   -- TODO treat this separately from record?
+data Pure = TyPrim Prim              -- ^A primitive type -- TODO get rid of this eventually
           | TyRecord (Record Pure)   -- ^A record type
           | TyUni String             -- ^A (pure) type unification variable
           | TyFun Pure Type          -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
-          | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool]
+          | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool] -- TODO not [Pure], but XPure?
           | TyVar String             -- ^A type variable (e.g., a in forall a. a -> a)
           | TyBang Pure              -- ^A read-only reference
           deriving (Ord, Eq)
@@ -119,7 +118,6 @@ instance Show Constraint where
 
 instance Show Pure where
   show (TyPrim p)    = show p
-  show (TyUnit)      = "()"
   show (TyRecord r)  = show r
   show (TyUni s)     = s
   show (TyFun a b)   = parens p (show a) ++ " -> " ++ show b
@@ -162,7 +160,6 @@ subsPure ft fe = subsPure'
         subsPure' (TyFun a b)   = TyFun (subsPure' a) (subsType ft fe b)
         subsPure' (TyData s ts) = TyData s (map subsPure' ts)
         subsPure' t@(TyVar s)   = fromMaybe t (ft s)
-        subsPure' TyUnit        = TyUnit
 
 subsConstraint :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Constraint -> Constraint
 subsConstraint ft fe = subsC

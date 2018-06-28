@@ -28,9 +28,9 @@ initialTEnv = TEnv.fromList
   [ ("add", t)
   , ("mul", t)
   , ("sub", t)
-  , ("putInt", TyFun (TyPrim TyInt) (TyUnit :# singleton (EfLit "StdOut")))
-  , ("getInt", TyFun TyUnit (TyPrim TyInt :# singleton (EfLit "StdIn")))
-  , ("putStrLn", TyFun (TyPrim TyString) (TyUnit :# singleton (EfLit "StdOut")))
+  , ("putInt",   TyFun    (TyPrim TyInt) (TyRecord unit :# singleton (EfLit "StdOut")))
+  , ("getInt",   TyFun   (TyRecord unit)  (TyPrim TyInt :# singleton (EfLit  "StdIn")))
+  , ("putStrLn", TyFun (TyPrim TyString) (TyRecord unit :# singleton (EfLit "StdOut")))
   ]
   where t = TyFun (TyRecord (pair (TyPrim TyInt) (TyPrim TyInt))) (TyPrim TyInt :# empty)
 

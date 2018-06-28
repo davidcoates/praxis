@@ -66,7 +66,6 @@ instance Unis Pure where
   unis _     (TyUni _) = []
 
   unis s (TyVar _)     = []
-  unis s TyUnit        = []
   unis s (TyPrim _)    = []
 
 solve :: [Derivation] -> Compiler [(String, Pure)]
@@ -98,7 +97,6 @@ occurs t1 t2 = t1 == t2 || occurs' t2
         occurs' (TyData _ ts) = any (occurs t1) ts
         occurs' (TyVar _)     = False
         occurs' (TyRecord r)  = or (fmap (occurs t1) r)
-        occurs' TyUnit        = False
         occurs' (TyBang p)    = occurs t1 p
         occursT t1 (t2 :# es) = occurs t1 t2
 
@@ -143,8 +141,6 @@ solveProgress s@System { progress = d:ds } = case constraint d of
               keysEq = all (uncurry (==)) (zip (map fst r1') (map fst r2'))
               ds' = map (\(p1, p2) -> d `implies` EqualP p1 p2) $ zip (map snd r1') (map snd r2')
                 in if keysEq then return s{ progress = ds' ++ ds } else contra t1 t2
-
-            solveEqualP TyUnit TyUnit = return s{ progress = ds }
 
             solveEqualP t1 t2 = contra t1 t2
 

@@ -242,7 +242,7 @@ tyPure = liftT2O join tyPure' Nothing (reservedOp "->" #> (Just <$> ty)) <?> "ty
         tyPure' = try tyUnit <|> tyPrim
 
 tyUnit :: Parser Pure
-tyUnit = unit *> return TyUnit
+tyUnit = unit *> return (TyRecord Record.unit)
 
 tyPrim :: Parser Pure
 tyPrim = TyPrim <$> do

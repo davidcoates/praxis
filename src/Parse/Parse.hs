@@ -124,8 +124,7 @@ semi = special ';'
 
 -- |The primary function, which attempts to parse a string to an annotated sugared AST
 parse :: Compiler ()
-parse = do
-  set stage Parse
+parse = setIn stage Parse $ do
   ts <- get tokens
   ast <- runParser program ts
   set sugaredAST ast
@@ -151,7 +150,7 @@ funDecl = liftT2 ($) (try prefix) (annotated exp) <?> "funDecl"
   where prefix = liftT3 (\v ps _ -> DeclFun v ps) varid (many (annotated pat)) (reservedOp "=")
 
 exp :: Parser (T Exp)
-exp = infixexp
+exp = mixfixexp
 
 left :: (a -> a -> a) -> Parser [a] -> Parser a
 left f p = unroll <$> p
@@ -161,8 +160,8 @@ left f p = unroll <$> p
 leftT :: (Parse.Annotated a -> Parse.Annotated a -> T a) -> Parser [Parse.Annotated a] -> Parser (T a)
 leftT f p = value <$> left (\x y -> tag x :< f x y) p
 
-infixexp :: Parser (T Exp)
-infixexp = Infix <$> some (try top <|> texp)
+mixfixexp :: Parser (T Exp)
+mixfixexp = Mixfix <$> some (try top <|> texp)
   where top = (\t -> tag t :< TOp (value t)) <$> annotated qop
         texp = (\t -> tag t :< TExp t) <$> annotated lexp
 

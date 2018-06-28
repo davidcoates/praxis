@@ -2,39 +2,26 @@ module Check.Generate
   ( generate
   ) where
 
-import Prelude hiding (exp)
-
-import qualified Parse.Parse.AST as Parse
-
-import Check.Derivation
-import Check.Env
-import Check.AST
-import Common (traverseF)
-import Source
 import AST
+import Check.Derivation
+import Check.AST
+import Common (traverseM)
+import Compiler
+import Env.TEnv
+import Error
+import Inbuilts hiding (ty)
+import qualified Parse.Parse.AST as Parse
+import Record
+import Source
 import Type
 import Tag
-import Control.Exception.Base (assert)
-import Inbuilts hiding (ty)
-import Compiler
-import Error
-import Record
 
 import Data.Foldable (foldlM)
 import Data.List (transpose)
 import Data.Monoid (Sum(..))
+import Prelude hiding (read, exp)
 
 -- TODO data for constraint reasons?
-
-contextJoin :: Source -> Env -> Env -> Env -> Compiler [Derivation]
-contextJoin s l lb1 lb2 = let (l', cs) = contextJoin' s l lb1 lb2 in set tEnv l' >> return cs
-  where contextJoin' _ [] [] [] = ([],[])
-        contextJoin' s ((x,(xt,xi)):xs) ((y,(yt,yi)):ys) ((z,(zt,zi)):zs) =
-          assert ((x,xt) == (y,yt) && (y,yt) == (z,zt)) r
-          where (l, c1)  = ((x,(xt,max yi zi)), if (xi == yi) == (yi == zi) then [] else [newDerivation (dropC xt) "Env join" s])
-                (ls, c2) = contextJoin' s xs ys zs
-                r = (l:ls, c1 ++ c2)
-
 generate :: Compiler [Derivation]
 generate = setIn stage Generate $ setIn inClosure False $ do
   p <- get desugaredAST
@@ -57,24 +44,18 @@ ty ((Just t, _) :< _) = t
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc 
 -- The output environments are all contextJoined
-parallel :: Source -> [Compiler (a, [Derivation])] -> Compiler ([a], [Derivation])
-parallel s []     = return ( [], [])
-parallel s [x]    = (\(a, cs) -> ([a], cs)) <$> x
-parallel s (x:xs) = do
-  l <- get tEnv
-  (y,  c1) <- x
-  lb1 <- get tEnv
-  set tEnv l
-  (ys, c2) <- parallel s xs
-  lb2 <- get tEnv
-  c3 <- contextJoin s l lb1 lb2
-  return (y:ys, c1 ++ c2 ++ c3)
+parallel :: [Compiler (a, [Derivation])] -> Compiler ([a], [Derivation])
+parallel []     = return ( [], [])
+parallel [x]    = (\(a, cs) -> ([a], cs)) <$> x
+parallel (x:xs) = do
+  ((a, c1), (as, c2)) <- join x (parallel xs)
+  return (a:as, c1 ++ c2) 
 
 program :: Parse.Annotated Program -> Compiler (Annotated Program, [Derivation])
 program (s :< p) = case p of
 
   Program ds -> do
-    (ds', cs) <- traverseF decl ds
+    (ds', cs) <- traverseM decl ds
     -- TODO remove from tEnv
     return ((Nothing, s) :< Program ds', cs)
 
@@ -88,12 +69,12 @@ decl (s :< d) = case d of
     if i == 0 then do
       -- Special case, the binding is not a function (and is non-recursive)
       let [([], e)] = as
-      (e', c) <- exp e
+      (e', c1) <- exp e
       let t' = ty e'
       intro n (getPure t')
-      let c = case t of Just t  -> equalT t t' "user-supplied signature TODO" s
-                        Nothing -> []
-      return ((Just t', s) :< DeclFun n t i [([], e')], c)
+      let c2 = case t of Just t  -> equalT t t' "user-supplied signature TODO" s
+                         Nothing -> []
+      return ((Just t', s) :< DeclFun n t i [([], e')], c1 ++ c2)
     else do
       -- TODO clean this up
       p <- freshUniP
@@ -142,52 +123,47 @@ exp (s :< e) = case e of
 
   Case e alts -> do
     (e', c1) <- exp e
-    (alts', c2) <- parallel s (map bind alts)
+    (alts', c2) <- parallel (map bind alts)
     let (t, c3) = equalTs (map (\(_, (Just t, s) :< _) -> (t,s)) alts') "case alternatives must have the same type"
     return ((Just t, s) :< Case e' alts', c1 ++ c2 ++ c3)
 
   Do ss -> do
-    (ss', (c1, Sum i)) <- traverseF stmt ss
+    (ss', (cs, Sum i)) <- traverseM stmt ss
     let es = unions $ map (getEffects . ty) ss'
     let t = ty (last ss')
-    c2 <- elimN i s
-    return ((Just t, s) :< Do ss', c1 ++ c2)
+    elimN i
+    return ((Just t, s) :< Do ss', cs)
 
   If a b c -> do
     (a', c1) <- exp a
-    l <- get tEnv
-    (b', c2) <- exp b
-    lb1 <- get tEnv
-    (c', c3) <- exp c
-    lb2 <- get tEnv
-    c4 <- contextJoin s l lb1 lb2
+    ((b', c2), (c', c3)) <- join (exp b) (exp c)
     let ap :# ae = ty a'
     let bp :# be = ty b'
     let cp :# ce = ty c'
-    let c5 = [ newDerivation (EqualP ap (TyPrim TyBool)) "condition of if expression must be Bool" s, newDerivation (EqualP bp cp) "branches of if expression must have the same type" s ]
+    let c4 = [ newDerivation (EqualP ap (TyPrim TyBool)) "condition of if expression must be Bool" s, newDerivation (EqualP bp cp) "branches of if expression must have the same type" s ]
     let e = unions [ae, be, ce]
-    return ((Just (bp :# e), s) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4 ++ c5)
+    return ((Just (bp :# e), s) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4)
 
   Lambda p e -> do
     (p', Sum i) <- pat p
     let t :# _ = ty p'
-    (e', c1) <- setIn inClosure True (exp e)
+    (e', cs) <- setIn inClosure True (exp e)
     let tp :# te = ty e'
-    c2 <- elimN i s
-    return ((Just (TyFun t (tp :# te) :# empty), s) :< Lambda p' e', c1 ++ c2)
+    elimN i
+    return ((Just (TyFun t (tp :# te) :# empty), s) :< Lambda p' e', cs)
 
   Lit x -> do
     let p = litTy x -- TODO polymorphic literals
     return ((Just (p :# empty), s) :< Lit x, [])
 
   Read n a -> do
-    (p, c1) <- readUse s n
+    (p, c1) <- read s n
     intro n (TyBang p)
     (a', c2) <- exp a
     return (a', c1 ++ c2)
 
   Record r -> do
-    (r', c1) <- traverseF exp r
+    (r', c1) <- traverseM exp r
     let e = unions (map (getEffects . ty . snd) (Record.toList r'))
     let p = TyRecord (fmap (getPure . ty) r')
     return ((Just (p :# e), s) :< Record r', c1)
@@ -214,16 +190,16 @@ binds ([], e) = do
   return (([], e'), c)
 binds ((s :< p) : ps, e) = do
   (p', Sum i) <- pat (s :< p)
-  ((ps', e'), c1) <- setIn inClosure True $ binds (ps, e)
-  c2 <- elimN i s
-  return ((p':ps', e'), c1 ++ c2)
+  ((ps', e'), cs) <- setIn inClosure True $ binds (ps, e)
+  elimN i
+  return ((p':ps', e'), cs)
 
 bind :: (Parse.Annotated Pat, Parse.Annotated Exp) -> Compiler ((Annotated Pat, Annotated Exp), [Derivation])
 bind (s :< p, e) = do
   (p', Sum i) <- pat (s :< p)
-  (e', c1) <- exp e
-  c2 <- elimN i s
-  return ((p', e'), c1 ++ c2)
+  (e', cs) <- exp e
+  elimN i
+  return ((p', e'), cs)
 
 
 pat :: Parse.Annotated Pat -> Compiler (Annotated Pat, Sum Int)
@@ -248,7 +224,7 @@ pat (s :< p) = case p of
           tyLit (String _) = TyString
   
   PatRecord r -> do
-    (r', i) <- traverseF pat r
+    (r', i) <- traverseM pat r
     let p = TyRecord (fmap (getPure . ty) r')
     return ((Just (p :# empty), s) :< PatRecord r', i)
     -- TODO check no duplicate variables? Perhaps not here - in decl instead?

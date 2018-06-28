@@ -33,12 +33,10 @@ module Compiler
   , desugaredAST
   , tEnv
   , vEnv
+  , qtEnv
   , typedAST
   , inClosure
 
-  , Env
-  , QEnv
-  , VEnv
   , freshUniT
   , freshUniP
   , freshUniE
@@ -48,58 +46,50 @@ module Compiler
 
   , debugPrint
   , debugPutStrLn
-
-  , Value(..) -- TODO
   )
   where
 
+import AST (Lit)
+import qualified Check.AST as Check
+import Common
+import Env (QTEnv, TEnv, VEnv)
+import Error (Error)
 import qualified Parse.Parse.AST as Parse
 import qualified Parse.Desugar.AST as Desugar
 import qualified Parse.Tokenise.Token as Tokenise
-import qualified Check.AST as Check
-import Common
-import Type
+import Record (Record)
 import Source
-import Error (Error)
+import Type
 
-import Inbuilts (inbuilts, TopDecl(..))
-import Control.Monad (when)
-import Control.Monad.State hiding (get, liftIO)
-import Control.Monad.Except hiding (throwError, liftIO)
-import qualified Control.Monad.Except (throwError)
+import Control.Applicative (liftA2)
 import Control.Lens hiding (set, over)
 import qualified Control.Lens (set, over)
+import Control.Monad (when)
+import Control.Monad.Except hiding (throwError, liftIO)
+import qualified Control.Monad.Except (throwError)
+import Control.Monad.State hiding (get, liftIO)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
-import Control.Applicative (liftA2)
-
-import Record (Record)
-import AST (Lit)
 
 
 data Stage = Tokenise
            | Parse
            | Desugar
+           | Check
            | Generate
            | Solve
            | Evaluate
 -- TODO CodeGenerate
-
+ 
 instance Show Stage where
   show Tokenise           = "Tokeniser"
   show Parse              = "Parser"
   show Desugar            = "Desugarer"
+  show Check              = "Inference"
   show Generate           = "Inference (Constraint Generator)"
   show Solve              = "Inference (Contraint Solver)"
   show Evaluate           = "Evaluate"
 
--- |A Context stores all in-scope variables along with their type and how many times they are used.
-type Env = [(Name, (Pure, Int))]
-
--- |Context for top-level declarations
-type QEnv = [(Name, QPure)]
-
-type VEnv = [(Name, Value)]
 
 type Token = Tokenise.Annotated Tokenise.Token
 
@@ -115,11 +105,11 @@ data CompilerState = CompilerState
   , _filename     :: FilePath            -- ^File path (for error messages)
   , _src          :: String              -- ^Source to compile
   , _tokens       :: [Token]             -- ^List of tokens produced by tokeniser
-  , _sugaredAST   :: (Parse.AST)         -- ^AST after parsing of tokens
-  , _desugaredAST :: (Desugar.AST)       -- ^AST after desugaring
-  , _typedAST     :: (Check.AST)         -- ^AST after type inference
-  , _qtEnv        :: QEnv                -- ^Type environment of top-level functions
-  , _tEnv         :: Env                 -- ^Type environment of local functions
+  , _sugaredAST   :: Parse.AST           -- ^AST after parsing of tokens
+  , _desugaredAST :: Desugar.AST         -- ^AST after desugaring
+  , _typedAST     :: Check.AST           -- ^AST after type inference
+  , _qtEnv        :: QTEnv               -- ^Type environment of top-level functions
+  , _tEnv         :: TEnv                -- ^Type environment of local functions
   , _kEnv         :: ()                  -- TODO (Kind environment)
   , _vEnv         :: VEnv                -- ^Value environment for interpreter
 
@@ -188,7 +178,7 @@ initialState  = CompilerState
   , _tokens       = unset "tokens"
   , _sugaredAST   = unset "sugaredAST"
   , _desugaredAST = unset "desugaredAST"
-  , _qtEnv        = map (\(s, t) -> (s, ty t)) inbuilts
+  , _qtEnv        = unset "qtEnv"
   , _tEnv         = unset "tenv"
   , _kEnv         = unset "kenv"
   , _typedAST     = unset "typedAST"
@@ -197,20 +187,6 @@ initialState  = CompilerState
   }
   where unset s = internalError ("unset " ++ s)
 
-
-
-
--- TODO
-data Value = U
-           | L Lit
-           | R (Record Value)
-           | F (Value -> Compiler Value)
-
-instance Show Value where
-  show U     = "()"
-  show (L l) = show l
-  show (R r) = show r
-  show (F f) = "<function>"
 
 
 

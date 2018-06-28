@@ -110,7 +110,7 @@ instance TagTraversable Stmt where
 
 instance Show a => TreeString (Tagged a Decl) where
   treeString = treeRec $ \x -> case x of
-    DeclFun n t i ds -> Node ("[decl " ++ n ++ t' ++ "]") (map (\(ps, e) -> Node "_* = _" (map treeString ps ++ [treeString e])) ds)
+    DeclFun n t i ds -> Node ("[decl " ++ n ++ t' ++ "]") (map (\(ps, e) -> Node "[_* = _]" (map treeString ps ++ [treeString e])) ds)
       where t' = case t of Just t' -> " : " ++ show t'
                            Nothing -> ""
 
@@ -120,12 +120,12 @@ instance Show a => TreeString (Tagged a Exp) where
     Case e alts   -> Node "[case]"                   (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
     Do ss         -> Node "[do]"                     (map treeString ss)
     If x y z      -> Node "[if]"                     [treeString x, treeString y, treeString z]
-    Lambda p e    -> Node "\\ _ -> _"                [treeString p, treeString e]
+    Lambda p e    -> Node "[\\ _ -> _]"              [treeString p, treeString e]
     Lit lit       -> Node (show lit)                 []
     Record r      -> Node (showKeys r)               (map (treeString . snd) (Record.toList r))
     Read n e      -> Node ("[read " ++ n ++ "]")     [treeString e]
     Var s         -> Node s                          []
-    Sig e t       -> Node (": " ++ show t)           [treeString e]
+    Sig e t       -> Node ("[_ : " ++ show t ++ "]") [treeString e]
 
 instance Show a => TreeString (Tagged a Pat) where
   treeString = treeRec $ \x -> case x of

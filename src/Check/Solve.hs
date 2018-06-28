@@ -70,8 +70,7 @@ instance Unis Pure where
   unis s (TyPrim _)    = []
 
 solve :: [Derivation] -> Compiler [(String, Pure)]
-solve xs = do
-  set stage Solve
+solve xs = setIn stage Solve $ do
   let s = System { vars = map (\t -> (t, TyUni t)) (nub (concatMap allUnis xs)), progress = filter isProgress xs, check = filter isCheck xs }
   s <- solveProgress s
   verifyProgressComplete s

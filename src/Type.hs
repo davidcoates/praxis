@@ -12,8 +12,7 @@ module Type
   , subsType
   , subsPure
   , subsConstraint
-  , shareC
-  , dropC
+  , share
   , mono
   , empty
   , unions
@@ -173,11 +172,8 @@ subsConstraint ft fe = subsC
         subsP = subsPure ft fe
         subsE = subsEffects fe
 
-shareC :: Pure -> Constraint
-shareC = Class "Share"
-
-dropC :: Pure -> Constraint
-dropC = Class "Drop"
+share :: Pure -> Constraint
+share = Class "Share"
 
 mono :: Pure -> QPure
 mono = Forall [] []

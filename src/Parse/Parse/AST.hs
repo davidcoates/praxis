@@ -31,8 +31,8 @@ data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Case (a (Exp a)) [(a (Pat a), a (Exp a))]
            | Do [a (Stmt a)]
            | If (a (Exp a)) (a (Exp a)) (a (Exp a))
-           | Infix [a (Tok a)]
            | Lit Lit
+           | Mixfix [a (Tok a)]
            | Read Name (a (Exp a))
            | Record (Record (a (Exp a)))
            | Sig (a (Exp a)) Type
@@ -60,8 +60,8 @@ instance TreeString (Annotated Exp) where
     Case e alts -> Node "[case]"               (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
     Do ss       -> Node "[do]"                 (map treeString ss)
     If x y z    -> Node "[if]"                 [treeString x, treeString y, treeString z]
-    Infix ts    -> Node "[infix]"              (map tokShow ts)
     Lit l       -> Node (show l)               []
+    Mixfix ts    -> Node "[infix]"              (map tokShow ts)
     Read v e    -> Node ("[read " ++ v ++ "]") [treeString e]
     Record r    -> Node (showKeys r)           (map (treeString . snd) (Record.toList r))
     Sig e t     -> Node (": " ++ show t)       [treeString e]

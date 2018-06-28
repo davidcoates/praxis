@@ -3,66 +3,72 @@ module Parse.Desugar
   , module Parse.Desugar.AST
   ) where
 
-import Parse.Parse.AST (Op)
-import qualified Parse.Parse.AST as Parse
-import Parse.Desugar.AST
-import Tag
+import Common
 import Compiler
 import Error
+import Parse.Desugar.AST
+import Parse.Parse.AST (Op)
+import qualified Parse.Parse.AST as Parse
+import Record (pair)
+import Source
+import Tag
 
-import Control.Monad (unless)
-import Data.Monoid ((<>))
 import Control.Applicative (liftA2, liftA3)
 import Control.Arrow (left)
+import Control.Monad (unless)
+import Data.List (intersperse)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Source
-
-import Record (pair)
-
+import Data.Monoid ((<>))
+import Prelude hiding (exp)
 import Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
-import Data.List (intersperse)
+
 
 desugar :: Compiler ()
-desugar = do
-  set stage Desugar
+desugar = setIn stage Desugar $ do
   p  <- get sugaredAST
-  p' <- desugarProgram p
+  p' <- program p
   set desugaredAST p'
   debugPrint p'
 
-desugarProgram :: Parse.Annotated Parse.Program -> Compiler (Annotated Program)
-desugarProgram (a :< Parse.Program ds) = do
-  ds <- desugarDecls ds
+program :: Parse.Annotated Parse.Program -> Compiler (Annotated Program)
+program (a :< Parse.Program ds) = do
+  ds <- decls ds
   return (a :< Program ds)
 
-desugarExp :: Parse.Annotated Parse.Exp -> Compiler (Annotated Exp)
-desugarExp = rec $ \a x -> fmap (a :<) $ case x of
-  Parse.Apply x y   -> liftA2 Apply (desugarExp x) (desugarExp y)
-  Parse.If e1 e2 e3 -> liftA3 If (desugarExp e1) (desugarExp e2) (desugarExp e3)
-  Parse.Infix ts    -> (\(_ :< e) -> e) <$> desugarInfix ts
-  Parse.Do ss       -> undefined -- TODO FIXME
+exp :: Parse.Annotated Parse.Exp -> Compiler (Annotated Exp)
+exp = rec $ \a x -> fmap (a :<) $ case x of
+  Parse.Apply x y   -> liftA2 Apply (exp x) (exp y)
+  Parse.Case _ _    -> error "TODO case"
+  Parse.Do _        -> error "TODO do"
+  Parse.If e1 e2 e3 -> liftA3 If (exp e1) (exp e2) (exp e3)
+  Parse.Mixfix ts    -> (\(_ :< e) -> e) <$> mixfix ts
   Parse.Lit lit     -> pure (Lit lit)
+  Parse.Read n e    -> Read n <$> exp e
+  Parse.Record r    -> Record <$> traverse exp r
+  Parse.Sig e t     -> (\e -> Sig e t) <$> exp e
   Parse.Var s       -> pure (Var s)
+  Parse.VarBang s   -> error "TODO varbang"
+
 
 throwDeclError :: DeclError -> Compiler a
 throwDeclError = throwError . SyntaxError . DeclError
 
-desugarDecls :: [Parse.Annotated Parse.Decl] -> Compiler [Annotated Decl]
-desugarDecls []              = pure []
-desugarDecls ((a :< d) : ds) = case d of
+decls :: [Parse.Annotated Parse.Decl] -> Compiler [Annotated Decl]
+decls []              = pure []
+decls ((a :< d) : ds) = case d of
 
   Parse.DeclSig n t -> do
-    ds <- desugarDecls ds
+    ds <- decls ds
     case ds of (a' :< DeclFun m Nothing i as) : ds | m == n -> return $ ((a <> a') :< DeclFun n (Just t) i as) : ds
                _                                            -> throwDeclError (LacksBinding n a)
   
   Parse.DeclFun n ps e -> do    
-    ps <- mapM desugarPat ps
-    e  <- desugarExp e
+    ps <- mapM pat ps
+    e  <- exp e
 
-    ds <- desugarDecls ds
+    ds <- decls ds
     case ds of (a' :< DeclFun m t i as) : ds' | m /= n         -> return $ (a :< DeclFun n Nothing (length ps) [(ps, e)]) : ds
                                               | i /= length ps -> throwDeclError (MismatchedArity n (a, length ps) (a', i))
                                               | null ps        -> error "TODO multiple definitions for nullary"
@@ -70,25 +76,25 @@ desugarDecls ((a :< d) : ds) = case d of
                []                                              -> return $ [a :< DeclFun n Nothing (length ps) [(ps, e)]]
 
 
-desugarPat :: Parse.Annotated Parse.Pat -> Compiler (Annotated Pat)
-desugarPat = rec $ \a x -> fmap (a :<) $ case x of
-  Parse.PatRecord r -> PatRecord <$> sequence (fmap desugarPat r)
+pat :: Parse.Annotated Parse.Pat -> Compiler (Annotated Pat)
+pat = rec $ \a x -> fmap (a :<) $ case x of
+  Parse.PatRecord r -> PatRecord <$> sequence (fmap pat r)
   Parse.PatVar    x -> pure (PatVar x) 
   Parse.PatLit    l -> pure (PatLit l)
 
 type Tok = DAG.Tok (Tag Source Op) (Annotated Exp)
 
-desugarTok :: Parse.Annotated Parse.Tok -> Compiler Tok
-desugarTok (a :< Parse.TOp op) = pure (DAG.TOp (a :< op))
-desugarTok (a :< Parse.TExp e) = DAG.TExpr <$> desugarExp e
+tok :: Parse.Annotated Parse.Tok -> Compiler Tok
+tok (a :< Parse.TOp op) = pure (DAG.TOp (a :< op))
+tok (a :< Parse.TExp e) = DAG.TExpr <$> exp e
 
-desugarInfix :: [Parse.Annotated Parse.Tok] -> Compiler (Annotated Exp)
-desugarInfix ts = do
-  ts' <- mapM desugarTok ts
+mixfix :: [Parse.Annotated Parse.Tok] -> Compiler (Annotated Exp)
+mixfix ts = do
+  ts' <- mapM tok ts
   -- TODO do something with report?
   let (parses, _) = fullParses (parser (DAG.simpleMixfixExpression opTable)) ts'
   case parses of [e] -> return e
-                 _   -> error "TODO resolve error make a proper error for this (ambiguous infix parse)"
+                 _   -> error "TODO resolve error make a proper error for this (ambiguous mixfix parse)"
 
 type OpTable = DAG.DAG Int [DAG.Op (Tag Source Op) (Annotated Exp)]
 

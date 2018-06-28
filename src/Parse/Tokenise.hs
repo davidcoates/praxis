@@ -16,8 +16,7 @@ import Data.Foldable (asum)
 import Data.Char
 
 tokenise :: Compiler ()
-tokenise = do
-  set stage Tokenise
+tokenise = setIn stage Tokenise $ do
   cs <- get src
   ts <- layout <$> runTokeniser atom cs
   set tokens ts
@@ -57,7 +56,7 @@ atom = (whitespace *> pure Whitespace) <|> lexeme
 -- // END OF NON-BACKTRACKING PARSER COMBINATORS
 
 
-reservedids = ["read", "in", "if", "then", "else", "using", "data", "case", "of", "where"]
+reservedids = ["read", "in", "if", "then", "else", "using", "data", "case", "of", "where", "do"]
 reservedops = [":", "=>", "=", "\\", "->", "#", "@", "|"]
 
 lexeme :: Tokeniser Token

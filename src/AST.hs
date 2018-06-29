@@ -28,12 +28,12 @@ data Decl a = DeclFun Name (Maybe Type) Int [([a (Pat a)], a (Exp a))]
 {- TODO
             | DeclData Name (Maybe (a (DataKind a))) [a (DataAlt a)]
 
-data DataKind a = DataKindVar Name 
+data DataKind a = DataKindVar Name
                 | DataKindRecord (Record (a (DataKind a)))
                 | DataKindSignature (a (DataKind a)) Kind
 
 
-data DataAlt a = 
+data DataAlt a =
 -}
 
 data Exp a = Apply (a (Exp a)) (a (Exp a))

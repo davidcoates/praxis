@@ -44,7 +44,7 @@ instance Unis Derivation where
 instance Unis Constraint where
   unis s (EqualP p1 p2) = unis s p1 ++ unis s p2
   unis s (EqualE e1 e2) = unis s e1 ++ unis s e2
-  unis s (Class _ t)    = unis s t 
+  unis s (Class _ t)    = unis s t
 
 instance Unis Type where
   unis s (t :# e) = unis s t ++ unis s e
@@ -61,7 +61,7 @@ instance Unis Pure where
   unis s (TyData _ ts) = concatMap (unis s) ts
   unis s (TyRecord r)  = concatMap (unis s) r
   unis s (TyBang p)    = unis s p
-  
+
   unis UniTy (TyUni n) = [n]
   unis _     (TyUni _) = []
 
@@ -69,7 +69,8 @@ instance Unis Pure where
   unis s (TyPrim _)    = []
 
 solve :: [Derivation] -> Compiler [(String, Pure)]
-solve xs = setIn stage Solve $ do
+solve xs = save stage $ do
+  set stage Solve
   let s = System { vars = map (\t -> (t, TyUni t)) (nub (concatMap allUnis xs)), progress = filter isProgress xs, check = filter isCheck xs }
   s <- solveProgress s
   verifyProgressComplete s
@@ -79,7 +80,7 @@ solve xs = setIn stage Solve $ do
     where isProgress d = case constraint d of { EqualP _ _ -> True; EqualE _ _ -> True;  _ -> False }
           isCheck = not . isProgress
 
--- |Checks all EqualP constraints are of the form uni ~ concrete 
+-- |Checks all EqualP constraints are of the form uni ~ concrete
 -- TODO Check effects also
 verifyProgressComplete :: System -> Compiler ()
 verifyProgressComplete s = mapM_ ok (progress s)

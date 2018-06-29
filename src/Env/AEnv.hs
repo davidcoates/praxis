@@ -24,7 +24,7 @@ fromList :: [(a, b)] -> AEnv a b
 fromList = AEnv . Env.fromList . map (\(a, b) -> (a, (False, b)))
 
 instance (Show a, Show b) => Show (AEnv a b) where
-  show (AEnv (Env l)) = "[" ++ intercalate ", " (map (\(a,(u,b)) -> show a ++ (if u then " :o " else " :* ") ++ show b) l) ++ " ]" 
+  show (AEnv (Env l)) = "[" ++ intercalate ", " (map (\(a,(u,b)) -> show a ++ (if u then " :o " else " :* ") ++ show b) l) ++ " ]"
 
 elim :: AEnv a b -> AEnv a b
 elim (AEnv l) = AEnv $ Env.elim l

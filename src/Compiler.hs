@@ -11,8 +11,10 @@ module Compiler
   , get
   , getWith
   , set
-  , setIn
   , over
+
+  , save
+  , independently
 
   , run
   , runWith
@@ -62,15 +64,17 @@ import Source
 import Type
 
 import Control.Applicative (liftA2)
-import Control.Lens hiding (set, over)
 import qualified Control.Lens (set, over)
-import Control.Monad (when)
-import Control.Monad.Except hiding (throwError, liftIO)
+import Control.Lens (Lens', view, makeLenses)
+import Control.Monad (void)
+import qualified Control.Monad (when, unless)
+import Control.Monad.Except (ExceptT, runExceptT)
 import qualified Control.Monad.Except (throwError)
-import Control.Monad.State hiding (get, liftIO)
+import Control.Monad.State (StateT, runStateT, lift, put, gets, modify)
+import qualified Control.Monad.State as State (get)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
-
+import System.IO.Unsafe (unsafePerformIO)
 
 data Stage = Tokenise
            | Parse
@@ -80,7 +84,7 @@ data Stage = Tokenise
            | Solve
            | Evaluate
 -- TODO CodeGenerate
- 
+
 instance Show Stage where
   show Tokenise           = "Tokeniser"
   show Parse              = "Parser"
@@ -93,7 +97,7 @@ instance Show Stage where
 
 type Token = Tokenise.Annotated Tokenise.Token
 
-data Flags = Flags { _debug :: Bool }
+data Flags = Flags { _debug :: Bool, _static :: Bool } -- static is NOT exported
   deriving (Show)
 
 data CompilerState = CompilerState
@@ -134,7 +138,7 @@ data CompilerState = CompilerState
 type Compiler a = ExceptT Error (StateT CompilerState IO) a
 
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = True }
+defaultFlags = Flags { _debug = True, _static = False }
 
 get :: Lens' CompilerState a -> Compiler a
 get = lift . gets . view
@@ -146,14 +150,6 @@ getWith l f = do
 
 set :: Lens' CompilerState a -> a -> Compiler ()
 set l x = lift . modify $ Control.Lens.set l x
-
-setIn :: Lens' CompilerState a -> a -> Compiler b -> Compiler b
-setIn l x c = do
-  old <- get l
-  set l x
-  r <- c
-  set l old
-  return r
 
 over :: Lens' CompilerState a -> (a -> a) -> Compiler ()
 over l f = do
@@ -172,7 +168,7 @@ initialState  = CompilerState
   , _stage        = unset "stage"
   , _freshUnis    = map ('~':) (fresh ['a'..'z'])
   , _freshVars    = map ('_':) (fresh ['a'..'z'])
-  , _imports      = unset "imports" 
+  , _imports      = unset "imports"
   , _filename     = "<stdin>"
   , _src          = unset "src"
   , _tokens       = unset "tokens"
@@ -188,9 +184,6 @@ initialState  = CompilerState
   where unset s = internalError ("unset " ++ s)
 
 
-
-
-
 fresh :: String -> [String]
 fresh alpha = concatMap perm [1..]
   where perm :: Int -> [String]
@@ -199,31 +192,64 @@ fresh alpha = concatMap perm [1..]
 
 
 internalError :: String -> a
-internalError s = error ("INTERNAL COMPILER ERROR! " ++ s)
-
+internalError s = error ("<<<INTERNAL ERROR>>> " ++ s)
 
 makeLenses ''Flags
 makeLenses ''CompilerState
 
+save :: Lens' CompilerState a -> Compiler b -> Compiler b
+save l c = do
+  x <- get l
+  r <- c
+  set l x
+  return r
 
+runStatic :: Compiler a -> a
+runStatic c = let (Right x, _) = unsafePerformIO (run c') in x
+  where c' = set (flags . static) True >> set (flags . debug) False >> c
+    -- TODO instead of hiding debugging output, perhaps debug* should check static flag
+
+-- | Performs a computation independent from the current state
+independently :: Compiler a -> Compiler a
+independently c = do
+  saved <- lift State.get
+  s <- get (flags . static)
+  lift $ put initialState
+  set (flags . static) s
+  r <- c
+  lift $ put saved
+  return r
+
+assert :: Lens' CompilerState a -> (a -> Bool) -> String -> Compiler b -> Compiler b
+assert l p s c = do
+  x <- get l
+  if p x then c else internalError s
 
 liftIO :: IO a -> Compiler a
-liftIO = lift . lift
+liftIO io = assert (flags . static) (== False) "TODO not static" (lift (lift io))
 
 run :: Compiler a -> IO (Either Error a, CompilerState)
 run c = runWith c initialState
 
 runWith :: Compiler a -> CompilerState -> IO (Either Error a, CompilerState)
-runWith c s = (runStateT . runExceptT) c s
+runWith = runStateT . runExceptT
+
+when :: Lens' CompilerState Bool -> Compiler a -> Compiler ()
+when l c = do
+  b <- get l
+  Control.Monad.when b (void c)
+
+unless :: Lens' CompilerState Bool -> Compiler a -> Compiler ()
+unless l c = do
+  b <- get l
+  Control.Monad.unless b (void c)
 
 -- TODO this possibly shouldnt be here
 debugPrint :: Show a => a -> Compiler ()
 debugPrint = debugPutStrLn . show
 
 debugPutStrLn :: String -> Compiler ()
-debugPutStrLn x = do
-  b <- get (flags . debug)
-  when b $ do
+debugPutStrLn x = when (flags . debug) $ unless (flags . static) $ do
     s <- get stage
     liftIO $ putStrLn ("Output from stage: " ++ show s)
     liftIO $ putStrLn x
@@ -259,3 +285,5 @@ ungeneralise (Forall cs as t) = do
   let fe = const Nothing
   let subsP = subsPure ft fe
   return (map (\c -> case c of Class s t -> Class s (subsP t)) cs, subsP t)
+
+

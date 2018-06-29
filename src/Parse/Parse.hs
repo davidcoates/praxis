@@ -1,7 +1,10 @@
-{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
 
 module Parse.Parse
   ( parse
+
+  , parseFree
+  , Parseable
   -- , module Parse.Parse.AST
   ) where
 
@@ -24,7 +27,29 @@ import qualified Data.Set as Set (fromList) -- TODO effects
 
 import AST (QString(..))
 
+class Parseable a where
+  parser :: Parser a
+
 type T a = a (Tag Source)
+
+instance Parseable (T Program) where
+  parser = program
+
+instance Parseable Type where
+  parser = ty
+
+parseFree :: Parseable a => Compiler (Tag Source a)
+parseFree = save stage $ do
+  set stage Parse
+  ts <- get tokens
+  runParser parser ts
+
+parse :: Compiler ()
+parse = save stage $ do
+  set stage Parse
+  p <- parseFree
+  set sugaredAST p
+  debugPrint p
 
 -- TODO move these to Parse/Parser?
 optional :: Parser a -> Parser ()
@@ -121,14 +146,6 @@ rbrace = special '}'
 
 semi :: Parser ()
 semi = special ';'
-
--- |The primary function, which attempts to parse a string to an annotated sugared AST
-parse :: Compiler ()
-parse = setIn stage Parse $ do
-  ts <- get tokens
-  ast <- runParser program ts
-  set sugaredAST ast
-  debugPrint ast
 
 block :: Parser a -> Parser [a]
 block p = liftT3 (\_ p ps -> p:ps) lbrace p block'

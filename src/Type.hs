@@ -26,10 +26,10 @@ import Common
 import Record
 
 -- TODO need more kinds? KindRecord?
-data Kind = KindEffects     -- 
-          | KindPure        -- 
+data Kind = KindEffects     --
+          | KindPure        --
           | KindImpure      -- Do we need this? This is basically (KindPure, KindEffects)
-          | KindConstraint  -- 
+          | KindConstraint  --
           | KindRecord (Record Kind)
 
 {-

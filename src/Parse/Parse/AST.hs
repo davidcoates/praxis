@@ -61,7 +61,7 @@ instance TreeString (Annotated Exp) where
     Do ss       -> Node "[do]"                 (map treeString ss)
     If x y z    -> Node "[if]"                 [treeString x, treeString y, treeString z]
     Lit l       -> Node (show l)               []
-    Mixfix ts    -> Node "[infix]"              (map tokShow ts)
+    Mixfix ts   -> Node "[mixfix]"             (map tokShow ts)
     Read v e    -> Node ("[read " ++ v ++ "]") [treeString e]
     Record r    -> Node (showKeys r)           (map (treeString . snd) (Record.toList r))
     Sig e t     -> Node (": " ++ show t)       [treeString e]

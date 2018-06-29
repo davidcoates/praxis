@@ -23,7 +23,9 @@ data ParseError = Option ParseError ParseError
                 | Generic
 
 data SyntaxError = SweetError ParseSource ParseError
+                 | BangError Source Name
                  | DeclError DeclError
+                 | DoError Source
                  | InfixError -- TODO
 
 data DeclError = MismatchedArity Name (Source, Int) (Source, Int)
@@ -53,12 +55,14 @@ instance Show ParseError where
 
 instance Show SyntaxError where
   show (SweetError s e) = show s ++ " ... " ++ show e
+  show (BangError s n)  = show s ++ " ... " ++ "Observed variable '" ++ show n ++ "' is not the argument of a function"
   show (DeclError e)    = show e
+  show (DoError s)      = show s ++ " ... " ++ "Last statement of a 'do' block is not an expression"
   show InfixError       = "TODO <infix error>"
 
 instance Show DeclError where
   show (MismatchedArity n (s1,i1) (s2,i2)) = "Mismatched arities for function '" ++ n ++ "'. Declared with arities " ++ show i1 ++ " at " ++ show s1 ++ " and " ++ show i2 ++ " at " ++ show s2
-  show (LacksBinding n s) = "The function '" ++ n ++ "' at " ++ show s ++ " lacks an accompanying binding" 
+  show (LacksBinding n s) = "The function '" ++ n ++ "' at " ++ show s ++ " lacks an accompanying binding"
 
 instance Show CheckError where
   show (Contradiction d) = showDerivation d

@@ -3,6 +3,7 @@ module Eval
   ) where
 
 import Check.AST
+import Common (asum)
 import Compiler
 import Env.VEnv (VEnv, intro, elim, elimN)
 import qualified Env.VEnv as VEnv (fromList, lookup)
@@ -12,6 +13,7 @@ import Tag
 import Value
 
 import Data.List (find)
+import Data.Monoid (Sum(..))
 import Prelude hiding (exp)
 
 initialVEnv :: VEnv
@@ -19,6 +21,7 @@ initialVEnv = VEnv.fromList
   [ ("add", p (+))
   , ("sub", p (-))
   , ("mul", p (*))
+  , ("dot", F (\(R r) -> case unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
   , ("getInt", F (\(R _) -> liftIO ((L . Int) <$> readLn)))
   , ("putInt", F (\(L (Int x)) -> liftIO (print x >> pure (R unit))))
   , ("putStrLn", F (\(L (String x)) -> liftIO (putStrLn x >> pure (R unit))))
@@ -27,7 +30,9 @@ initialVEnv = VEnv.fromList
         p f = F (\(R r) -> case unpair r of (L (Int a), L (Int b)) -> pure (L (Int (f a b))))
 
 eval :: Compiler ()
-eval = setIn stage Evaluate $ setIn vEnv initialVEnv $ do
+eval = save stage $ save vEnv $ do
+  set stage Evaluate
+  set vEnv initialVEnv
   _ :< Program ds <- get typedAST
   mapM_ decl ds
   x <- VEnv.lookup "main"
@@ -40,13 +45,13 @@ decl (a :< e) = case e of
 
   DeclFun n t i as ->
     if i == 0 then do
-      let [(_, e)] = as 
+      let [(_, e)] = as
       e' <- exp e
       intro n e'
     else do
       -- Desugar to lambda and a case
       -- TODO this won't work if the first pattern contains "n" as a var
-      (v:vs) <- sequence $ replicate i freshVar 
+      (v:vs) <- sequence $ replicate i freshVar
       let e = F $ \v' -> do { i <- forceBind v' (undefined :< PatVar v); intro n e; v <- exp e'; elim; elimN i; return v }
           e' = fold vs c
           c = undefined :< Case r (map (\(ps, e) -> (undefined :< PatRecord (Record.fromList (map (\p -> (Nothing, p)) ps)), e)) as)
@@ -55,8 +60,16 @@ decl (a :< e) = case e of
           fold     [] e = e
       intro n e
 
+stmt :: Annotated Stmt -> Compiler (Sum Int)
+stmt (_ :< s) = case s of
+
+  StmtDecl d -> decl d >> return (Sum 0)
+
+  StmtExp e -> exp e >> return (Sum 1)
+
+
 exp :: Annotated Exp -> Compiler Value
-exp (a :< e) = case e of
+exp (_ :< e) = case e of
 
   Apply f x -> do
     F f' <- exp f
@@ -67,6 +80,13 @@ exp (a :< e) = case e of
     e' <- exp e
     cases e' ps
 
+  Do ss -> do
+    Sum i <- asum (map stmt (init ss))
+    let _ :< StmtExp e = last ss
+    v <- exp e
+    elimN i
+    return v
+
   If a b c -> do
     L (Bool a') <- exp a
     if a' then exp b else exp c
@@ -76,18 +96,21 @@ exp (a :< e) = case e of
     e' <- exp e
     elimN i
     return e'
- 
+
   Lit l -> return (L l)
+
+  Read _ e -> exp e
 
   Record r -> do
     x <- mapM exp r
     return (R x)
 
+  Sig e _ -> exp e
+
   Var n -> do
     Just v <- VEnv.lookup n
     return v
 
-  _ -> error (show (a :< e))
 
 cases :: Value -> [(Annotated Pat, Annotated Exp)] -> Compiler Value
 cases x [] = error ("no matching pattern" ++ show x)
@@ -104,13 +127,27 @@ forceBind :: Value -> Annotated Pat -> Compiler Int
 forceBind v p = case bind v p of Just i  -> i
                                  Nothing -> error "no matching pattern" -- TODO
 
--- TODO why is this maybe?
 bind :: Value -> Annotated Pat -> Maybe (Compiler Int)
-bind x     (_ :< PatVar v)     = Just $ intro v x >> return 1
-bind (L l) (_ :< PatLit l')    = if l == l' then Just (return 0) else Nothing
-bind (R r) (_ :< PatRecord r') = do
-  let vs = map snd $ Record.toCanonicalList r
-      ps = map snd $ Record.toCanonicalList r'
-  cs <- sequence $ map (\(a, b) -> bind a b) (zip vs ps)
-  return (sum <$> sequence cs)
-bind _     _ = Nothing
+bind v (_ :< p) = case p of
+
+  PatAt n p
+    -> (\c -> do { intro n v; i <- c; return (i+1) }) <$> bind v p
+
+  PatHole
+    -> Just (return 0)
+
+  PatLit l | L l' <- v
+    -> if l == l' then Just (return 0) else Nothing
+
+  PatRecord r | R r' <- v
+    -> do
+    let vs = map snd $ Record.toCanonicalList r'
+        ps = map snd $ Record.toCanonicalList r
+    cs <- sequence $ map (\(a, b) -> bind a b) (zip vs ps)
+    return (sum <$> sequence cs)
+
+  PatVar n
+    -> Just $ intro n v >> return 1
+
+  _
+    -> Nothing

@@ -21,7 +21,7 @@ fromList :: [(a, b)] -> Env a b
 fromList = Env
 
 instance (Show a, Show b) => Show (Env a b) where
-  show (Env l) = "[" ++ intercalate ", " (map (\(a,b) -> show a ++ " : " ++ show b) l) ++ " ]" 
+  show (Env l) = "[" ++ intercalate ", " (map (\(a,b) -> show a ++ " : " ++ show b) l) ++ " ]"
 
 -- |adjust the value associated with a given key, returns the modified entry if successful
 adjust :: Eq a => (b -> b) -> a -> Env a b -> (Maybe (a, b), Env a b)

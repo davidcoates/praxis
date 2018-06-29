@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module Tag
   ( Tag(..)
   , Tagged
@@ -5,6 +7,7 @@ module Tag
   , tag
   , value
   , TagTraversable(..)
+  , showable
   ) where
 
 import Control.Applicative
@@ -51,3 +54,13 @@ class TagTraversable c where
   tagFoldMap :: Monoid m => (a -> m) -> Tagged a c -> m
   tagFoldMap f = getConst . tagTraverse (Const . f)
 
+newtype Showable a = Showable a
+
+instance Show a => Show (Showable a) where
+  show (Showable x) = show x
+
+instance (Show a, Show b) => Show (Tag (Showable a) b) where
+  show (a :< b) = show a ++ " :< " ++ show b
+
+showable :: Tag a b -> Tag (Showable a) b
+showable (a :< b) = Showable a :< b

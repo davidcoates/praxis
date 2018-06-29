@@ -23,7 +23,9 @@ import Prelude hiding (read, exp)
 
 -- TODO data for constraint reasons?
 generate :: Compiler [Derivation]
-generate = setIn stage Generate $ setIn inClosure False $ do
+generate = save stage $ save inClosure $ do
+  set stage Generate
+  set inClosure False
   p <- get desugaredAST
   (p', cs) <- program p
   set typedAST p'
@@ -42,14 +44,14 @@ ty :: Annotated a -> Type
 ty ((Just t, _) :< _) = t
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
--- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc 
+-- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
 -- The output environments are all contextJoined
 parallel :: [Compiler (a, [Derivation])] -> Compiler ([a], [Derivation])
 parallel []     = return ( [], [])
 parallel [x]    = (\(a, cs) -> ([a], cs)) <$> x
 parallel (x:xs) = do
   ((a, c1), (as, c2)) <- join x (parallel xs)
-  return (a:as, c1 ++ c2) 
+  return (a:as, c1 ++ c2)
 
 program :: Parse.Annotated Program -> Compiler (Annotated Program, [Derivation])
 program (s :< p) = case p of
@@ -147,7 +149,7 @@ exp (s :< e) = case e of
   Lambda p e -> do
     (p', Sum i) <- pat p
     let t :# _ = ty p'
-    (e', cs) <- setIn inClosure True (exp e)
+    (e', cs) <- save inClosure $ set inClosure True >> exp e
     let tp :# te = ty e'
     elimN i
     return ((Just (TyFun t (tp :# te) :# empty), s) :< Lambda p' e', cs)
@@ -178,7 +180,7 @@ exp (s :< e) = case e of
     return ((Just (p :# empty), s) :< Var n, c1)
 
 
-equalTs :: [(Type, Source)] -> String -> (Type, [Derivation]) 
+equalTs :: [(Type, Source)] -> String -> (Type, [Derivation])
 equalTs [(t, _)]         _ = (t, [])
 equalTs ((p :# e, s):ts) m = let (p' :# e', cs) = equalTs ts m
                                  c = newDerivation (EqualP p p') m s
@@ -190,7 +192,7 @@ binds ([], e) = do
   return (([], e'), c)
 binds ((s :< p) : ps, e) = do
   (p', Sum i) <- pat (s :< p)
-  ((ps', e'), cs) <- setIn inClosure True $ binds (ps, e)
+  ((ps', e'), cs) <- save inClosure $ set inClosure True >> binds (ps, e)
   elimN i
   return ((p':ps', e'), cs)
 
@@ -211,18 +213,16 @@ pat (s :< p) = case p of
     intro v vp
     return ((Just (vp :# empty), s) :< PatAt v p', Sum $ i + 1)
 
--- TODO pat to return constraints for PatHole ?
   PatHole -> do
     vp <- freshUniP
-    intro "_" vp
-    return ((Just (vp :# empty), s) :< PatHole, Sum 1) -- TODO?
+    return ((Just (vp :# empty), s) :< PatHole, Sum 0)
 
   PatLit l -> return ((Just (TyPrim (tyLit l) :# empty), s) :< PatLit l,  Sum 0)
     where tyLit (Bool _)   = TyBool
           tyLit (Char _)   = TyChar
           tyLit (Int _)    = TyInt
           tyLit (String _) = TyString
-  
+
   PatRecord r -> do
     (r', i) <- traverseM pat r
     let p = TyRecord (fmap (getPure . ty) r')

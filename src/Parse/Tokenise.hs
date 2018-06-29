@@ -16,7 +16,8 @@ import Data.Foldable (asum)
 import Data.Char
 
 tokenise :: Compiler ()
-tokenise = setIn stage Tokenise $ do
+tokenise = save stage $ do
+  set stage Tokenise
   cs <- get src
   ts <- layout <$> runTokeniser atom cs
   set tokens ts
@@ -45,7 +46,7 @@ anyChar = satisfy (const True)
 
 oneOf :: [Char] -> Tokeniser Char
 oneOf cs = satisfy (`elem` cs)
- 
+
 string :: String -> Tokeniser String
 string [c] = (:[]) <$> char c
 string (c:cs) = liftA2 (:) (char c) (string cs)
@@ -105,7 +106,7 @@ large = try (satisfy isUpper) <?> "large"
 symbol :: Tokeniser Char
 symbol = ascSymbol <|> try (satisfy isSymbol) <?> "symbol"
 
-ascSymbol :: Tokeniser Char 
+ascSymbol :: Tokeniser Char
 ascSymbol = try $ oneOf "!#$%&*+./<=>?@\\^|-~:"
 
 special :: Tokeniser Token

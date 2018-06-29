@@ -18,7 +18,7 @@ interpret s = do
 interpretFile :: FilePath -> Compiler ()
 interpretFile f = do
   set filename f
-  s <- liftIO (readFile f)  
+  s <- liftIO (readFile f)
   set src s
   parse
   check

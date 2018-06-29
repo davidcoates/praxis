@@ -1,11 +1,25 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Parse
   ( parse
+  , parseFree
   ) where
 
-import Parse.Tokenise (tokenise)
-import qualified Parse.Parse as Inner (parse)
-import Parse.Desugar (desugar)
 import Compiler
+import Parse.Desugar (desugar, desugarFree, Desugarable)
+import qualified Parse.Parse as Sweet (parse, parseFree, Parseable)
+import Parse.Tokenise (tokenise)
+import Source (Source)
+import Tag (Tag)
 
 parse :: Compiler ()
-parse =  tokenise >> Inner.parse >> desugar
+parse =  tokenise >> Sweet.parse >> desugar
+
+-- Currently, b can be one of:
+--  * Annotated Program
+--  * Tag Source Type
+--  (where Annotated means Parse.Desugar.Annotated)
+parseFree :: (Sweet.Parseable a, Desugarable (Tag Source a) b) => Compiler b
+parseFree = do
+  x <- Sweet.parseFree
+  desugarFree x

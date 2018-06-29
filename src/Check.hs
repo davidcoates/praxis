@@ -20,9 +20,16 @@ import Env.QTEnv (QTEnv)
 import qualified Env.QTEnv as QTEnv
 
 initialQTEnv :: QTEnv
-initialQTEnv = QTEnv.fromList $ map (\(s, t) -> (s, ty t)) inbuilts
+initialQTEnv = undefined --QTEnv.fromList
+  -- TODO effects
+  -- [ ("dot", Forall [] ["a", "b", "c"] (TyFun (TyRecord (pair (TyFun (TyVar "a") (TyVar "b" :# empty), TyFun (TyVar "b") (TyVar "c" :# empty)))) (TyFun (TyVar "a") (TyVar "c" :# empty) :# empty)))
+ --  ]
+  -- TODO allow reading of types
+  -- "forall a b c. (a -> b, b -> c) -> (a -> c)"
+-- initialQTEnv = QTEnv.fromList $ map (\(s, t) -> (s, ty t)) inbuilts
 
--- TODO move this somewhere else
+-- TODO move this somewhere else (put all in the same place (fixity, value, type))
+--
 initialTEnv :: TEnv
 initialTEnv = TEnv.fromList
   [ ("add", t)
@@ -35,7 +42,10 @@ initialTEnv = TEnv.fromList
   where t = TyFun (TyRecord (pair (TyPrim TyInt) (TyPrim TyInt))) (TyPrim TyInt :# empty)
 
 check :: Compiler ()
-check = setIn stage Check $ setIn tEnv initialTEnv $ setIn qtEnv initialQTEnv $ do
+check = save stage $ save tEnv $ save qtEnv $ do
+  set stage Check
+  set tEnv initialTEnv
+  set qtEnv initialQTEnv
   cs <- generate
   subs <- solve cs
   let ft x = lookup x subs

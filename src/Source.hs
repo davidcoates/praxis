@@ -4,7 +4,7 @@ module Source
   , (<>)
   ) where
 
-import Data.Monoid ((<>))
+import           Data.Monoid ((<>))
 
 data Pos = Pos { line :: Int, column :: Int }
 

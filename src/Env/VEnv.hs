@@ -9,14 +9,14 @@ module Env.VEnv
   )
 where
 
-import Common (Name)
-import Compiler
-import Env (VEnv)
-import Env.Env (Env, fromList)
-import qualified Env.Env as Env
-import Value
+import           Common   (Name)
+import           Compiler
+import           Env      (VEnv)
+import           Env.Env  (Env, fromList)
+import qualified Env.Env  as Env
+import           Value
 
-import Prelude hiding (lookup)
+import           Prelude  hiding (lookup)
 
 
 elim :: Compiler ()

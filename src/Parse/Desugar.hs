@@ -1,4 +1,7 @@
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
 
 module Parse.Desugar
   ( desugar
@@ -9,26 +12,26 @@ module Parse.Desugar
   , module Parse.Desugar.AST
   ) where
 
-import Common
-import Compiler
-import Error
-import Parse.Desugar.AST
-import Parse.Parse.AST (Op)
-import qualified Parse.Parse.AST as Parse
-import Record (pair)
-import Source
-import Tag
-import Type (Type)
+import           Common
+import           Compiler
+import           Error
+import           Parse.Desugar.AST
+import           Parse.Parse.AST        (Op)
+import qualified Parse.Parse.AST        as Parse
+import           Record                 (pair)
+import           Source
+import           Tag
+import           Type                   (Type)
 
-import Control.Applicative (liftA2, liftA3)
-import Control.Arrow (left)
-import Control.Monad (unless)
-import Data.List (intersperse)
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Monoid ((<>))
-import Prelude hiding (exp)
-import Text.Earley
+import           Control.Applicative    (liftA2, liftA3)
+import           Control.Arrow          (left)
+import           Control.Monad          (unless)
+import           Data.List              (intersperse)
+import           Data.Map               (Map)
+import qualified Data.Map               as Map
+import           Data.Monoid            ((<>))
+import           Prelude                hiding (exp)
+import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
 class Desugarable a b | b -> a where
@@ -182,13 +185,13 @@ opTable :: OpTable
 opTable = DAG.DAG
   { DAG.nodes = [6, 7, 9]
   , DAG.neighbors = \x -> case x of
-      6   -> [7,9]
-      7   -> [9]
-      9   -> []
+      6 -> [7,9]
+      7 -> [9]
+      9 -> []
   , DAG.value = \x -> case x of
-      6   -> [ add, sub ]
-      7   -> [ mul ]
-      9   -> [ dot ]
+      6 -> [ add, sub ]
+      7 -> [ mul ]
+      9 -> [ dot ]
   }
   where build a s n = DAG.Op { DAG.fixity = DAG.Infix a, DAG.parts = [Phantom :< QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
         build' n e1 e2 = Phantom :< Apply (Phantom :< Var n) (Phantom :< Record (pair e1 e2)) -- TODO annotations?

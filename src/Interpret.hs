@@ -3,10 +3,10 @@ module Interpret
   , interpretFile
   ) where
 
-import Compiler
-import Parse
-import Check
-import Eval
+import           Check
+import           Compiler
+import           Eval
+import           Parse
 
 interpret :: String -> Compiler ()
 interpret s = do

@@ -10,9 +10,9 @@ module Env.Env
   )
 where
 
-import Data.List (intercalate)
-import Prelude hiding (lookup)
-import qualified Prelude (lookup)
+import           Data.List (intercalate)
+import           Prelude   hiding (lookup)
+import qualified Prelude   (lookup)
 
 -- TODO Cosider putting source in Env
 newtype Env a b = Env [(a, b)]

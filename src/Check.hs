@@ -4,20 +4,20 @@ module Check
   ( check
   ) where
 
-import Check.AST
-import Check.Generate (generate)
-import Check.Solve (solve)
-import Compiler
-import Error
-import Inbuilts (inbuilts, TopDecl(..))
-import Record
-import Tag
-import Type
+import           Check.AST
+import           Check.Generate (generate)
+import           Check.Solve    (solve)
+import           Compiler
+import           Error
+import           Inbuilts       (TopDecl (..), inbuilts)
+import           Record
+import           Tag
+import           Type
 
-import Env.TEnv (TEnv)
-import qualified Env.TEnv as TEnv
-import Env.QTEnv (QTEnv)
-import qualified Env.QTEnv as QTEnv
+import           Env.QTEnv      (QTEnv)
+import qualified Env.QTEnv      as QTEnv
+import           Env.TEnv       (TEnv)
+import qualified Env.TEnv       as TEnv
 
 initialQTEnv :: QTEnv
 initialQTEnv = undefined --QTEnv.fromList

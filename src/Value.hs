@@ -2,9 +2,9 @@ module Value
   ( Value(..)
   ) where
 
-import AST (Lit)
-import Record
+import           AST      (Lit)
 import {-# SOURCE #-} Compiler
+import           Record
 
 data Value = L Lit
            | R (Record Value)

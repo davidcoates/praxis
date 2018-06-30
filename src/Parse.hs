@@ -1,16 +1,17 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Parse
   ( parse
   , parseFree
   ) where
 
-import Compiler
-import Parse.Desugar (desugar, desugarFree, Desugarable)
-import qualified Parse.Parse as Sweet (parse, parseFree, Parseable)
-import Parse.Tokenise (tokenise)
-import Source (Source)
-import Tag (Tag)
+import           Compiler
+import           Parse.Desugar  (Desugarable, desugar, desugarFree)
+import qualified Parse.Parse    as Sweet (Parseable, parse, parseFree)
+import           Parse.Tokenise (tokenise)
+import           Source         (Source)
+import           Tag            (Tag)
 
 parse :: Compiler ()
 parse =  tokenise >> Sweet.parse >> desugar

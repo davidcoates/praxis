@@ -2,12 +2,12 @@ module CodeGen
   ( codeGen
   ) where
 
-import AST
-import Type
-import Inbuilts
-import Data.List (intercalate)
-import Source
-import Tag
+import           AST
+import           Data.List (intercalate)
+import           Inbuilts
+import           Source
+import           Tag
+import           Type
 
 codeGen :: Tagged (Type, Source) Exp -> String
 codeGen = undefined

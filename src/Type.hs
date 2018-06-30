@@ -19,11 +19,11 @@ module Type
   , singleton
   ) where
 
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Maybe (fromMaybe)
-import Common
-import Record
+import           Common
+import           Data.Maybe (fromMaybe)
+import           Data.Set   (Set)
+import qualified Data.Set   as Set
+import           Record
 
 -- TODO need more kinds? KindRecord?
 data Kind = KindEffects     --
@@ -106,9 +106,9 @@ instance Show Effect where
   show (EfVar s) = s
 
 instance Show Prim where
-  show TyBool = "Bool"
-  show TyInt  = "Int"
-  show TyChar = "Char"
+  show TyBool   = "Bool"
+  show TyInt    = "Int"
+  show TyChar   = "Char"
   show TyString = "String"
 
 instance Show Constraint where
@@ -163,7 +163,7 @@ subsPure ft fe = subsPure'
 
 subsConstraint :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Constraint -> Constraint
 subsConstraint ft fe = subsC
-  where subsC (Class s t) = Class s (subsP t)
+  where subsC (Class s t)    = Class s (subsP t)
         subsC (EqualP p1 p2) = EqualP (subsP p1) (subsP p2)
         subsC (EqualE e1 e2) = EqualE (subsE e1) (subsE e2)
         subsP = subsPure ft fe

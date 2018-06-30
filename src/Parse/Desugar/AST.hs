@@ -4,9 +4,9 @@ module Parse.Desugar.AST
   , Annotated
   ) where
 
-import AST
-import Tag
-import Source
+import           AST
+import           Source
+import           Tag
 
 type Annotated a = Tagged Source a
 

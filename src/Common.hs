@@ -5,9 +5,9 @@ module Common
   ) where
 -- TODO Where should this be
 
-import Data.Foldable (fold)
-import Data.Monoid ((<>))
-import Control.Applicative (liftA2)
+import           Control.Applicative (liftA2)
+import           Data.Foldable       (fold)
+import           Data.Monoid         ((<>))
 
 type Name = String
 

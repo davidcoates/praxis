@@ -7,9 +7,9 @@ module Error
   , ParseError(..)
   ) where
 
-import Check.Derivation (Derivation, showDerivation)
-import Source (Source)
-import Common
+import           Check.Derivation (Derivation, showDerivation)
+import           Common
+import           Source           (Source)
 
 data Error = LexicalError ParseSource ParseError
            | SyntaxError  SyntaxError
@@ -41,7 +41,7 @@ instance Show Error where
   show (CheckError e)     = "Check error: "   ++ show e
 
 instance Show ParseSource where
-  show EOF = "<end of file>"
+  show EOF        = "<end of file>"
   show (Source s) = show s
 
 instance Show ParseError where

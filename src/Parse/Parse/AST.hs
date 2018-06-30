@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleInstances, KindSignatures #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures    #-}
 
 module Parse.Parse.AST
   ( module AST
@@ -13,12 +14,12 @@ module Parse.Parse.AST
   , Tok(..)
   ) where
 
-import Pretty
-import AST (Lit(..), Name, QString, Pat(..))
-import Record
-import Source
-import Tag
-import Type
+import           AST    (Lit (..), Name, Pat (..), QString)
+import           Pretty
+import           Record
+import           Source
+import           Tag
+import           Type
 
 type Annotated a = Tagged Source a
 

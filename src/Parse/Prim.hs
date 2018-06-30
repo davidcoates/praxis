@@ -11,11 +11,12 @@ module Parse.Prim
   , (<|?>)
   ) where
 
-import Source (Source)
-import Error
+import           Error
+import           Source              (Source)
 
-import Control.Applicative (Applicative, Alternative, pure, liftA2, empty, (<|>))
-import Control.Arrow (left)
+import           Control.Applicative (Alternative, Applicative, empty, liftA2,
+                                      pure, (<|>))
+import           Control.Arrow       (left)
 
 {-|
   Parser takes a list of tokens, and returns a triple of:

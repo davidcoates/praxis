@@ -10,10 +10,10 @@ module Tag
   , showable
   ) where
 
-import Control.Applicative
-import Data.Bifunctor
-import Data.Functor.Identity
-import Data.Monoid ((<>))
+import           Control.Applicative
+import           Data.Bifunctor
+import           Data.Functor.Identity
+import           Data.Monoid           ((<>))
 
 data Tag a b = a :< b
 

@@ -1,4 +1,6 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Parse.Parse
   ( parse
@@ -8,24 +10,24 @@ module Parse.Parse
   -- , module Parse.Parse.AST
   ) where
 
-import Parse.Parse.AST as Parse
-import Parse.Tokenise.Token as Token
-import Parse.Parse.Parser
+import           Parse.Parse.AST      as Parse
+import           Parse.Parse.Parser
+import           Parse.Tokenise.Token as Token
 
-import Compiler
+import           Compiler
 import qualified Record
-import Source
-import Tag
-import Type
+import           Source
+import           Tag
+import           Type
 
-import Prelude hiding (exp)
-import Control.Applicative ((<|>), (<**>), liftA2, liftA3)
-import qualified Control.Applicative as Applicative (empty)
-import Control.Lens (view)
-import Data.Maybe (isJust, fromJust)
-import qualified Data.Set as Set (fromList) -- TODO effects
+import           Control.Applicative  (liftA2, liftA3, (<**>), (<|>))
+import qualified Control.Applicative  as Applicative (empty)
+import           Control.Lens         (view)
+import           Data.Maybe           (fromJust, isJust)
+import qualified Data.Set             as Set (fromList)
+import           Prelude              hiding (exp)
 
-import AST (QString(..))
+import           AST                  (QString (..))
 
 class Parseable a where
   parser :: Parser a
@@ -101,7 +103,7 @@ qconid = token qconid' <?> "qconid"
 conid :: Parser String
 conid = token conid' <?> "conid"
   where conid' (Token.QConId n) | qualification n == [] = Just (name n)
-        conid' _                                        = Nothing
+        conid' _                = Nothing
 
 qvarid :: Parser QString
 qvarid = token qvarid' <?> "qvarid"
@@ -111,7 +113,7 @@ qvarid = token qvarid' <?> "qvarid"
 varid :: Parser String
 varid = token varid' <?> "varid"
   where varid' (Token.QVarId n) | qualification n == [] = Just (name n)
-        varid' _                                        = Nothing
+        varid' _                = Nothing
 
 qvarsym :: Parser QString
 qvarsym = token qvarsym' <?> "qvarsym"
@@ -121,22 +123,22 @@ qvarsym = token qvarsym' <?> "qvarsym"
 varsym :: Parser String
 varsym = token varsym' <?> "varsym"
   where varsym' (Token.QVarSym n) | qualification n == [] = Just (name n)
-        varsym' _                                         = Nothing
+        varsym' _                 = Nothing
 
 reservedId :: String -> Parser ()
 reservedId s = satisfy reservedId' *> pure () <?> "reserved id '" ++ s ++ "'"
   where reservedId' (Token.ReservedId s') | s == s' = True
-        reservedId' _                               = False
+        reservedId' _                     = False
 
 reservedOp :: String -> Parser ()
 reservedOp s = satisfy reservedOp' *> pure () <?> "reserved op '" ++ s ++ "'"
   where reservedOp' (Token.ReservedOp s') | s == s' = True
-        reservedOp' _                               = False
+        reservedOp' _                     = False
 
 special :: Char -> Parser ()
 special c = satisfy special' *> pure () <?> "special '" ++ [c] ++ "'"
   where special' (Token.Special c') | c == c' = True
-        special' _                            = False
+        special' _                  = False
 
 lbrace :: Parser ()
 lbrace = special '{'
@@ -265,8 +267,8 @@ tyPrim :: Parser Pure
 tyPrim = TyPrim <$> do
   s <- conid
   case s of
-    "Bool" -> return TyBool
-    "Char" -> return TyChar
-    "Int"  -> return TyInt
+    "Bool"   -> return TyBool
+    "Char"   -> return TyChar
+    "Int"    -> return TyInt
     "String" -> return TyString
     _        -> Applicative.empty

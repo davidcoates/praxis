@@ -2,18 +2,19 @@ module Parse.Tokenise
   ( tokenise
   ) where
 
-import Parse.Tokenise.Tokeniser
-import Parse.Tokenise.Token
-import Parse.Tokenise.Layout
-import Tag
-import Source
-import Compiler
-import AST (QString(..))
+import           AST                      (QString (..))
+import           Compiler
+import           Parse.Tokenise.Layout
+import           Parse.Tokenise.Token
+import           Parse.Tokenise.Tokeniser
+import           Source
+import           Tag
 
-import Data.List (intercalate)
-import Control.Applicative (Applicative, Alternative, liftA2, (<|>), empty)
-import Data.Foldable (asum)
-import Data.Char
+import           Control.Applicative      (Alternative, Applicative, empty,
+                                           liftA2, (<|>))
+import           Data.Char
+import           Data.Foldable            (asum)
+import           Data.List                (intercalate)
 
 tokenise :: Compiler ()
 tokenise = save stage $ do
@@ -48,7 +49,7 @@ oneOf :: [Char] -> Tokeniser Char
 oneOf cs = satisfy (`elem` cs)
 
 string :: String -> Tokeniser String
-string [c] = (:[]) <$> char c
+string [c]    = (:[]) <$> char c
 string (c:cs) = liftA2 (:) (char c) (string cs)
 
 atom :: Tokeniser Token

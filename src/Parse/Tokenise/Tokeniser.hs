@@ -9,16 +9,16 @@ module Parse.Tokenise.Tokeniser
   , (<|?>)
   ) where
 
-import qualified Parse.Prim as Prim
-import Source
-import Tag
-import Parse.Tokenise.Token
-import Error (Error(..))
+import           Error                (Error (..))
+import qualified Parse.Prim           as Prim
+import           Parse.Tokenise.Token
+import           Source
+import           Tag
 
-import Compiler hiding (lift) -- Why is this exported
+import           Compiler             hiding (lift)
 
-import Control.Applicative (Applicative(..), Alternative(..))
-import Data.List (intercalate)
+import           Control.Applicative  (Alternative (..), Applicative (..))
+import           Data.List            (intercalate)
 
 newtype Tokeniser a = Tokeniser { _runTokeniser :: Prim.Parser (Annotated Char) (Annotated a) }
 

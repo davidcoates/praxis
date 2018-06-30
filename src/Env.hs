@@ -4,11 +4,11 @@ module Env
   , VEnv
   ) where
 
-import Common (Name)
-import Env.AEnv (AEnv)
-import Env.Env (Env)
-import Type (Pure, QPure)
-import Value
+import           Common   (Name)
+import           Env.AEnv (AEnv)
+import           Env.Env  (Env)
+import           Type     (Pure, QPure)
+import           Value
 
 type TEnv = AEnv Name Pure
 

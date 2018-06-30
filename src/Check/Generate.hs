@@ -2,24 +2,24 @@ module Check.Generate
   ( generate
   ) where
 
-import AST
-import Check.Derivation
-import Check.AST
-import Common (traverseM)
-import Compiler
-import Env.TEnv
-import Error
-import Inbuilts hiding (ty)
-import qualified Parse.Parse.AST as Parse
-import Record
-import Source
-import Type
-import Tag
+import           AST
+import           Check.AST
+import           Check.Derivation
+import           Common           (traverseM)
+import           Compiler
+import           Env.TEnv
+import           Error
+import           Inbuilts         hiding (ty)
+import qualified Parse.Parse.AST  as Parse
+import           Record
+import           Source
+import           Tag
+import           Type
 
-import Data.Foldable (foldlM)
-import Data.List (transpose)
-import Data.Monoid (Sum(..))
-import Prelude hiding (read, exp)
+import           Data.Foldable    (foldlM)
+import           Data.List        (transpose)
+import           Data.Monoid      (Sum (..))
+import           Prelude          hiding (exp, read)
 
 -- TODO data for constraint reasons?
 generate :: Compiler [Derivation]

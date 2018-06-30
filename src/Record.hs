@@ -9,11 +9,11 @@ module Record
   , showKeys
   ) where
 
-import Common
+import           Common
 
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.List (intercalate)
+import           Data.List (intercalate)
+import           Data.Map  (Map)
+import qualified Data.Map  as Map
 
 data Field = Implicit Int
            | Explicit Name

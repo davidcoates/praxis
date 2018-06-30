@@ -6,9 +6,9 @@ module Check.Derivation
   , showDerivation
   ) where
 
-import Prelude hiding (drop)
-import Type
-import Source (Source)
+import           Prelude hiding (drop)
+import           Source  (Source)
+import           Type
 
 -- |A Derivation represents a constraint with a history of why the constraint must be true.
 -- 'original' is the constraint that 'constraint' was ultimately derived from.

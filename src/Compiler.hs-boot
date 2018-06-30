@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Compiler
   ( Compiler
@@ -6,10 +7,10 @@ module Compiler
   )
   where
 
-import Error (Error)
+import           Error                (Error)
 
-import Control.Monad.Except (ExceptT)
-import Control.Monad.State (StateT)
+import           Control.Monad.Except (ExceptT)
+import           Control.Monad.State  (StateT)
 
 data CompilerState
 

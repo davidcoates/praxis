@@ -2,19 +2,19 @@ module Eval
   ( eval
   ) where
 
-import Check.AST
-import Common (asum)
-import Compiler
-import Env.VEnv (VEnv, intro, elim, elimN)
-import qualified Env.VEnv as VEnv (fromList, lookup)
-import Inbuilts (inbuilts, TopDecl(..))
-import Record
-import Tag
-import Value
+import           Check.AST
+import           Common      (asum)
+import           Compiler
+import           Env.VEnv    (VEnv, elim, elimN, intro)
+import qualified Env.VEnv    as VEnv (fromList, lookup)
+import           Inbuilts    (TopDecl (..), inbuilts)
+import           Record
+import           Tag
+import           Value
 
-import Data.List (find)
-import Data.Monoid (Sum(..))
-import Prelude hiding (exp)
+import           Data.List   (find)
+import           Data.Monoid (Sum (..))
+import           Prelude     hiding (exp)
 
 initialVEnv :: VEnv
 initialVEnv = VEnv.fromList
@@ -65,7 +65,7 @@ stmt (_ :< s) = case s of
 
   StmtDecl d -> decl d >> return (Sum 0)
 
-  StmtExp e -> exp e >> return (Sum 1)
+  StmtExp e  -> exp e >> return (Sum 1)
 
 
 exp :: Annotated Exp -> Compiler Value

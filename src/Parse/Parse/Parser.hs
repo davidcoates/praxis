@@ -11,15 +11,15 @@ module Parse.Parse.Parser
   , (<|?>)
   ) where
 
-import qualified Parse.Prim as Prim
+import           Compiler             hiding (lift)
+import           Error
+import           Parse.Parse.AST
+import qualified Parse.Prim           as Prim
 import qualified Parse.Tokenise.Token as Token
-import Parse.Parse.AST
-import Tag
-import Source (Source(..))
-import Error
-import Compiler hiding (lift)
+import           Source               (Source (..))
+import           Tag
 
-import Control.Applicative (Applicative(..), Alternative(..))
+import           Control.Applicative  (Alternative (..), Applicative (..))
 
 type Token = Token.Annotated Token.Token
 

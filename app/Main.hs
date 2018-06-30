@@ -1,9 +1,9 @@
 module Main where
 
-import Compiler
-import Interpret
-import System.IO
-import System.Environment
+import           Compiler
+import           Interpret
+import           System.Environment
+import           System.IO
 
 forever :: Monad m => m a -> m b
 forever m = m >> forever m
@@ -21,7 +21,7 @@ main = do
   case args of
     []  -> forever single
     [f] -> pretty (interpretFile f)
-    _   -> putStrLn "Too many arguments" 
+    _   -> putStrLn "Too many arguments"
 
 single :: IO ()
 single = do

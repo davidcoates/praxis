@@ -2,10 +2,10 @@ module Parse.Tokenise.Layout
   ( layout
   ) where
 
-import Parse.Tokenise.Token
-import Compiler
-import Source
-import Tag
+import           Compiler
+import           Parse.Tokenise.Token
+import           Source
+import           Tag
 
 lbrace :: Annotated Token
 lbrace = Phantom :< Special '{'

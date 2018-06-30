@@ -11,18 +11,18 @@ module Env.TEnv
   )
 where
 
-import Compiler
-import Env (TEnv)
-import Env.AEnv (AEnv, fromList)
-import qualified Env.AEnv as AEnv
+import           Compiler
+import           Env              (TEnv)
+import           Env.AEnv         (AEnv, fromList)
+import qualified Env.AEnv         as AEnv
 
-import Source (Source)
-import Type
-import Common
-import Check.Derivation
-import Error
+import           Check.Derivation
+import           Common
+import           Error
+import           Source           (Source)
+import           Type
 
-import Prelude hiding (read)
+import           Prelude          hiding (read)
 
 
 elim :: Compiler ()

@@ -1,20 +1,21 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Check.Solve
   ( solve
   ) where
 
-import Check.Derivation
-import AST
-import Type
-import Prelude hiding (error)
-import Data.Maybe (fromJust)
-import Text.Parsec.Pos (newPos)
-import qualified Data.Set as Set
-import Data.List (nub)
-import Compiler
-import Error
-import Record
+import           AST
+import           Check.Derivation
+import           Compiler
+import           Data.List        (nub)
+import           Data.Maybe       (fromJust)
+import qualified Data.Set         as Set
+import           Error
+import           Prelude          hiding (error)
+import           Record
+import           Text.Parsec.Pos  (newPos)
+import           Type
 
 -- TODO: Make system part of Compiler state?
 -- TODO: Batch all effect constraints (or treat them as check?)

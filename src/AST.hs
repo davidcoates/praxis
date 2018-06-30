@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleInstances, KindSignatures #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures    #-}
 
 module AST
   ( Decl(..)
@@ -13,15 +14,15 @@ module AST
   , litTy
   ) where
 
-import Tag
-import Type
-import Pretty
-import Data.Map (Map) -- TODO records
-import qualified Data.Map as Map
-import Data.List (intercalate)
-import Data.Traversable (sequenceA)
-import Control.Applicative (liftA2, liftA3)
-import Record
+import           Control.Applicative (liftA2, liftA3)
+import           Data.List           (intercalate)
+import           Data.Map            (Map)
+import qualified Data.Map            as Map
+import           Data.Traversable    (sequenceA)
+import           Pretty
+import           Record
+import           Tag
+import           Type
 
 data Decl a = DeclFun Name (Maybe Type) Int [([a (Pat a)], a (Exp a))]
 

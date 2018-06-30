@@ -11,12 +11,12 @@ module Env.AEnv
   )
 where
 
-import Env.Env (Env(..))
-import qualified Env.Env as Env
+import           Env.Env   (Env (..))
+import qualified Env.Env   as Env
 
-import Data.List (intercalate)
-import Prelude hiding (lookup)
-import qualified Prelude (lookup)
+import           Data.List (intercalate)
+import           Prelude   hiding (lookup)
+import qualified Prelude   (lookup)
 
 newtype AEnv a b = AEnv (Env a (Bool, b))
 

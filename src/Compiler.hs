@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Compiler
   ( Compiler
@@ -51,30 +52,31 @@ module Compiler
   )
   where
 
-import AST (Lit)
-import qualified Check.AST as Check
-import Common
-import Env (QTEnv, TEnv, VEnv)
-import Error (Error)
-import qualified Parse.Parse.AST as Parse
-import qualified Parse.Desugar.AST as Desugar
+import           AST                  (Lit)
+import qualified Check.AST            as Check
+import           Common
+import           Env                  (QTEnv, TEnv, VEnv)
+import           Error                (Error)
+import qualified Parse.Desugar.AST    as Desugar
+import qualified Parse.Parse.AST      as Parse
 import qualified Parse.Tokenise.Token as Tokenise
-import Record (Record)
-import Source
-import Type
+import           Record               (Record)
+import           Source
+import           Type
 
-import Control.Applicative (liftA2)
-import qualified Control.Lens (set, over)
-import Control.Lens (Lens', view, makeLenses)
-import Control.Monad (void)
-import qualified Control.Monad (when, unless)
-import Control.Monad.Except (ExceptT, runExceptT)
+import           Control.Applicative  (liftA2)
+import           Control.Lens         (Lens', makeLenses, view)
+import qualified Control.Lens         (over, set)
+import           Control.Monad        (void)
+import qualified Control.Monad        (unless, when)
+import           Control.Monad.Except (ExceptT, runExceptT)
 import qualified Control.Monad.Except (throwError)
-import Control.Monad.State (StateT, runStateT, lift, put, gets, modify)
-import qualified Control.Monad.State as State (get)
-import Data.Maybe (fromMaybe)
-import qualified Data.Set as Set
-import System.IO.Unsafe (unsafePerformIO)
+import           Control.Monad.State  (StateT, gets, lift, modify, put,
+                                       runStateT)
+import qualified Control.Monad.State  as State (get)
+import           Data.Maybe           (fromMaybe)
+import qualified Data.Set             as Set
+import           System.IO.Unsafe     (unsafePerformIO)
 
 data Stage = Tokenise
            | Parse
@@ -86,13 +88,13 @@ data Stage = Tokenise
 -- TODO CodeGenerate
 
 instance Show Stage where
-  show Tokenise           = "Tokeniser"
-  show Parse              = "Parser"
-  show Desugar            = "Desugarer"
-  show Check              = "Inference"
-  show Generate           = "Inference (Constraint Generator)"
-  show Solve              = "Inference (Contraint Solver)"
-  show Evaluate           = "Evaluate"
+  show Tokenise = "Tokeniser"
+  show Parse    = "Parser"
+  show Desugar  = "Desugarer"
+  show Check    = "Inference"
+  show Generate = "Inference (Constraint Generator)"
+  show Solve    = "Inference (Contraint Solver)"
+  show Evaluate = "Evaluate"
 
 
 type Token = Tokenise.Annotated Tokenise.Token

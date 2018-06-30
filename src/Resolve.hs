@@ -2,9 +2,9 @@ module Resolve
   (
   ) where
 
-import AST
-import Parse
-import Source
+import           AST
+import           Parse
+import           Source
 
 data ResolverError = UnknownName String Source
 

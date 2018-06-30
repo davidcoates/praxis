@@ -8,10 +8,10 @@ module Pretty
   , treeRecWith
   ) where
 
-import Data.Tree (Tree(..), drawTree)
-import Data.Tree.Pretty (drawVerticalTree)
-import Tag
-import Source
+import           Data.Tree        (Tree (..), drawTree)
+import           Data.Tree.Pretty (drawVerticalTree)
+import           Source
+import           Tag
 
 indent :: String -> String
 indent = indents . lines

@@ -2,7 +2,7 @@ module Compile
   ( compile
   ) where
 
-import Compiler
+import           Compiler
 
 compile :: Compiler () -- TODO
 compile = undefined

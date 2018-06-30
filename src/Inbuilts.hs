@@ -4,7 +4,7 @@ module Inbuilts
   , TopDecl(..)
   ) where
 
-import Type
+import           Type
 
 data TopDecl = TopDecl { ty :: QPure, name :: String, defn :: String }
 

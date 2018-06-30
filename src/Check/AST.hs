@@ -4,10 +4,10 @@ module Check.AST
   , module AST
   ) where
 
-import AST
-import Type
-import Source
-import Tag
+import           AST
+import           Source
+import           Tag
+import           Type
 
 type Annotated a = Tagged (Maybe Type, Source) a
 

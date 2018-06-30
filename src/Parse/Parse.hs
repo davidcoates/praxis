@@ -14,7 +14,7 @@ import           Parse.Parse.AST      as Parse
 import           Parse.Parse.Parser
 import           Parse.Tokenise.Token as Token
 
-import           Compiler
+import           Compiler             hiding (try)
 import qualified Record
 import           Source
 import           Tag
@@ -36,6 +36,9 @@ type T a = a (Tag Source)
 
 instance Parseable (T Program) where
   parser = program
+
+instance Parseable (T Exp) where
+  parser = exp
 
 instance Parseable Type where
   parser = ty
@@ -93,7 +96,10 @@ some :: Parser p -> Parser [p]
 some p = liftT2 (:) p (many p)
 
 sepBy1 :: Parser a -> Parser b -> Parser [a]
-sepBy1 p sep = liftT2 (:) p (many (liftT2 (\_ p -> p) sep p))
+sepBy1 p sep = liftT2 (:) p (many (sep #> p))
+
+sepBy2 :: Parser a -> Parser b -> Parser [a]
+sepBy2 p sep = liftT2 (:) p (sep #> sepBy1 p sep)
 
 qconid :: Parser QString
 qconid = token qconid' <?> "qconid"
@@ -170,6 +176,11 @@ funDecl = liftT2 ($) (try prefix) (annotated exp) <?> "funDecl"
 
 exp :: Parser (T Exp)
 exp = mixfixexp
+{- liftT2 f (annotated mixfixexp) (optionMaybe sig)
+  where sig = reservedOp ":" #> ty
+        f (_ :< e) Nothing  = e
+        f e (Just t) = Sig e t
+-}
 
 left :: (a -> a -> a) -> Parser [a] -> Parser a
 left f p = unroll <$> p
@@ -224,7 +235,7 @@ pat :: Parser (T Pat)
 pat = patHole <|> patVar <|> patLit <|> patRecord <|?> "pat"
 
 unit :: Parser ()
-unit = try (special '(' *> special ')') *> return () -- Note: No whitespace
+unit = try (special '(' #> special ')') *> return ()
 
 patHole :: Parser (T Pat)
 patHole = try (special '_') *> return PatHole
@@ -258,14 +269,22 @@ tyPure = liftT2O join tyPure' Nothing (reservedOp "->" #> (Just <$> ty)) <?> "ty
   where join :: Pure -> Maybe Type -> Pure
         join p Nothing  = p
         join p (Just t) = TyFun p t
-        tyPure' = try tyUnit <|> tyPrim
+        tyPure' = tyUnit <|> tyVar <|> tyPrim <|> tyRecord -- TODO
+
+tyRecord :: Parser Pure
+tyRecord = special '(' #> (record <$> sepBy2 tyPure (special ',')) <# special ')'
+  where record :: [Pure] -> Pure
+        record ts = TyRecord $ Record.fromList (zip (repeat Nothing) ts)
 
 tyUnit :: Parser Pure
 tyUnit = unit *> return (TyRecord Record.unit)
 
+tyVar :: Parser Pure
+tyVar = TyVar <$> try varid
+
 tyPrim :: Parser Pure
 tyPrim = TyPrim <$> do
-  s <- conid
+  s <- try conid
   case s of
     "Bool"   -> return TyBool
     "Char"   -> return TyChar

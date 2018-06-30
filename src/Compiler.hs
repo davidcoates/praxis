@@ -4,7 +4,7 @@
 module Compiler
   ( Compiler
   , CompilerState
-  , initialState
+  , emptyState
   , throwError
   , internalError -- Prefer this over Prelude.error
   , Stage(..)
@@ -15,15 +15,17 @@ module Compiler
   , over
 
   , save
-  , independently
+  , try
 
   , run
-  , runWith
+  , runStatic -- TODO think of a better name for this
+
   , lift
   , liftIO -- ^Lifts an IO computation to the Compiler monad
 
   -- |Flag lenses
   , debug
+  , static -- TODO don't export this
 
   -- |Compiler lenses (TODO order these)
   , flags
@@ -99,7 +101,7 @@ instance Show Stage where
 
 type Token = Tokenise.Annotated Tokenise.Token
 
-data Flags = Flags { _debug :: Bool, _static :: Bool } -- static is NOT exported
+data Flags = Flags { _debug :: Bool, _static :: Bool }
   deriving (Show)
 
 data CompilerState = CompilerState
@@ -140,7 +142,7 @@ data CompilerState = CompilerState
 type Compiler a = ExceptT Error (StateT CompilerState IO) a
 
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = True, _static = False }
+defaultFlags = Flags { _debug = False, _static = False }
 
 get :: Lens' CompilerState a -> Compiler a
 get = lift . gets . view
@@ -164,8 +166,8 @@ throwError = Control.Monad.Except.throwError
 -- filenameDisplay :: Compiler e String
 -- filenameDisplay = fromMaybe "<interactive>" <$> getRaw filename
 
-initialState :: CompilerState
-initialState  = CompilerState
+emptyState :: CompilerState
+emptyState = CompilerState
   { _flags        = defaultFlags
   , _stage        = unset "stage"
   , _freshUnis    = map ('~':) (fresh ['a'..'z'])
@@ -206,21 +208,20 @@ save l c = do
   set l x
   return r
 
-runStatic :: Compiler a -> a
-runStatic c = let (Right x, _) = unsafePerformIO (run c') in x
-  where c' = set (flags . static) True >> set (flags . debug) False >> c
-    -- TODO instead of hiding debugging output, perhaps debug* should check static flag
+-- TODO think of a better name for this
+try :: Compiler a -> (Error -> Compiler b) -> (a -> Compiler b) -> Compiler b
+try c f g = do
+  s <- lift State.get
+  (x, s') <- liftIO $ run c s
+  case x of
+    Left  e -> lift (put s)  >> f e
+    Right x -> lift (put s') >> g x
 
--- | Performs a computation independent from the current state
-independently :: Compiler a -> Compiler a
-independently c = do
-  saved <- lift State.get
-  s <- get (flags . static)
-  lift $ put initialState
-  set (flags . static) s
-  r <- c
-  lift $ put saved
-  return r
+runStatic :: Compiler a -> a
+runStatic c = case fst $ unsafePerformIO (run c' emptyState) of
+  Left e  -> internalError (show e)
+  Right x -> x
+  where c' = set (flags . static) True >> c
 
 assert :: Lens' CompilerState a -> (a -> Bool) -> String -> Compiler b -> Compiler b
 assert l p s c = do
@@ -228,13 +229,11 @@ assert l p s c = do
   if p x then c else internalError s
 
 liftIO :: IO a -> Compiler a
-liftIO io = assert (flags . static) (== False) "TODO not static" (lift (lift io))
+-- liftIO io = assert (flags . static) (== False) "TODO not static" (lift (lift io))
+liftIO io = lift (lift io)
 
-run :: Compiler a -> IO (Either Error a, CompilerState)
-run c = runWith c initialState
-
-runWith :: Compiler a -> CompilerState -> IO (Either Error a, CompilerState)
-runWith = runStateT . runExceptT
+run :: Compiler a -> CompilerState -> IO (Either Error a, CompilerState)
+run = runStateT . runExceptT
 
 when :: Lens' CompilerState Bool -> Compiler a -> Compiler ()
 when l c = do
@@ -251,7 +250,7 @@ debugPrint :: Show a => a -> Compiler ()
 debugPrint = debugPutStrLn . show
 
 debugPutStrLn :: String -> Compiler ()
-debugPutStrLn x = when (flags . debug) $ unless (flags . static) $ do
+debugPutStrLn x = when (flags . debug) $ do -- unless (flags . static) $ do
     s <- get stage
     liftIO $ putStrLn ("Output from stage: " ++ show s)
     liftIO $ putStrLn x
@@ -278,7 +277,6 @@ freshVar = do
   set freshVars xs
   return x
 
-
 -- TODO: Allow quantified effects
 ungeneralise :: QPure -> Compiler ([Constraint], Pure)
 ungeneralise (Forall cs as t) = do
@@ -287,5 +285,4 @@ ungeneralise (Forall cs as t) = do
   let fe = const Nothing
   let subsP = subsPure ft fe
   return (map (\c -> case c of Class s t -> Class s (subsP t)) cs, subsP t)
-
 

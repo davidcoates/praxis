@@ -6,12 +6,11 @@ module Parse.Parse.Parser
   , try
   , lookAhead
   , annotated
-  , eof
   , (<?>)
   , (<|?>)
   ) where
 
-import           Compiler             hiding (lift)
+import           Compiler             (Compiler, throwError)
 import           Error
 import           Parse.Parse.AST
 import qualified Parse.Prim           as Prim
@@ -42,12 +41,9 @@ instance Monad Parser where
   Parser a >>= f = Parser (a >>= \x -> _runParser (f (value x)))
 
 runParser :: Parser a -> [Token] -> Compiler (Tag Source a)
-runParser (Parser p) ts = makeError $ Prim.runParser p ts tag
+runParser (Parser p) ts = makeError $ Prim.runParser (p <* Prim.eof) ts tag -- TODO eof here breaks error messages
   where makeError (Left (s, e)) = throwError $ SyntaxError (SweetError s e)
         makeError (Right x)     = pure x
-
-eof :: Parser ()
-eof = Parser (Prim.eof *> pure (Phantom :< ())) -- TODO?
 
 token :: (Token.Token -> Maybe a) -> Parser a
 token f = Parser $ Prim.token (lift . fmap f)

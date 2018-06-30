@@ -1,0 +1,4 @@
+#!/bin/bash
+
+find src \( -name "*.hs" -o -name "*.hs-boot" \) -exec stylish-haskell -i {} \;
+find app \( -name "*.hs" -o -name "*.hs-boot" \) -exec stylish-haskell -i {} \;

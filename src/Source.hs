@@ -17,8 +17,7 @@ instance Show Pos where
 instance Show Source where
   show Phantom = "?"
   show s       = show (start s)
---  show s       = show (start s) ++ " " ++ sanitise (show (spelling s))
---    where sanitise xs = if length xs < 30 then xs else take 30 xs ++ "..."
+--  show s       = show (start s) ++ " to " ++ show (end s) ++ " aka {" ++ spelling s ++ "}"
 
 instance Monoid Source where
   mempty = Phantom

@@ -17,6 +17,8 @@ import           Data.Monoid           ((<>))
 
 data Tag a b = a :< b
 
+infixr 6 :<
+
 type Tagged a b = Tag a (b (Tag a))
 
 rec :: (a -> b -> c) -> Tag a b -> c

@@ -15,7 +15,7 @@ import           Parse.Tokenise.Token
 import           Source
 import           Tag
 
-import           Compiler             hiding (lift)
+import           Compiler             (Compiler, throwError)
 
 import           Control.Applicative  (Alternative (..), Applicative (..))
 import           Data.List            (intercalate)

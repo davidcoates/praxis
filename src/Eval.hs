@@ -7,7 +7,6 @@ import           Common      (asum)
 import           Compiler
 import           Env.VEnv    (VEnv, elim, elimN, intro)
 import qualified Env.VEnv    as VEnv (fromList, lookup)
-import           Inbuilts    (TopDecl (..), inbuilts)
 import           Record
 import           Tag
 import           Value
@@ -16,29 +15,15 @@ import           Data.List   (find)
 import           Data.Monoid (Sum (..))
 import           Prelude     hiding (exp)
 
-initialVEnv :: VEnv
-initialVEnv = VEnv.fromList
-  [ ("add", p (+))
-  , ("sub", p (-))
-  , ("mul", p (*))
-  , ("dot", F (\(R r) -> case unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
-  , ("getInt", F (\(R _) -> liftIO ((L . Int) <$> readLn)))
-  , ("putInt", F (\(L (Int x)) -> liftIO (print x >> pure (R unit))))
-  , ("putStrLn", F (\(L (String x)) -> liftIO (putStrLn x >> pure (R unit))))
-  ]
-  where p :: (Int -> Int -> Int) -> Value
-        p f = F (\(R r) -> case unpair r of (L (Int a), L (Int b)) -> pure (L (Int (f a b))))
-
 eval :: Compiler ()
-eval = save stage $ save vEnv $ do
+eval = save stage $ do
   set stage Evaluate
-  set vEnv initialVEnv
-  _ :< Program ds <- get typedAST
-  mapM_ decl ds
-  x <- VEnv.lookup "main"
-  case x of
-    Just (F f) -> f (R unit) >> pure ()
-    _          -> error "missing or illtyped main" -- TODO this shuld be checked earlier!
+  p <- get typedAST
+  program p
+
+
+program :: Annotated Program -> Compiler ()
+program (_ :< Program ds) = mapM_ decl ds
 
 decl :: Annotated Decl -> Compiler ()
 decl (a :< e) = case e of

@@ -40,6 +40,9 @@ class Desugarable a b | b -> a where
 instance Desugarable (Parse.Annotated Parse.Program) (Annotated Program) where
   desugarer = program
 
+instance Desugarable (Parse.Annotated Parse.Exp) (Annotated Exp) where
+  desugarer = exp
+
 instance Desugarable (Tag Source Type) (Tag Source Type) where
   desugarer = pure
 
@@ -53,8 +56,8 @@ desugar = save stage $ do
   set stage Desugar
   p <- get sugaredAST
   p' <- desugarFree p
-  debugPrint p'
   set desugaredAST p'
+  debugPrint p'
 
 program :: Parse.Annotated Parse.Program -> Compiler (Annotated Program)
 program (a :< Parse.Program ds) = do
@@ -71,7 +74,7 @@ stmts (s:ss) | a :< Parse.StmtExp e <- s = do
                 let (ds, rs) = span isStmtDecl (s:ss)
                 ds' <- decls (map (\(_ :< Parse.StmtDecl d) -> d) ds)
                 rs' <- stmts rs
-                return $ (map (\(a :< d) -> a :< StmtDecl (a :< d)) ds') ++ rs'
+                return $ map (\(a :< d) -> a :< StmtDecl (a :< d)) ds' ++ rs'
                   where isStmtDecl (_ :< Parse.StmtDecl _) = True
                         isStmtDecl _                       = False
 

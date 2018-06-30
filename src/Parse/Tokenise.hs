@@ -3,7 +3,7 @@ module Parse.Tokenise
   ) where
 
 import           AST                      (QString (..))
-import           Compiler
+import           Compiler                 hiding (try)
 import           Parse.Tokenise.Layout
 import           Parse.Tokenise.Token
 import           Parse.Tokenise.Tokeniser
@@ -20,10 +20,11 @@ tokenise :: Compiler ()
 tokenise = save stage $ do
   set stage Tokenise
   cs <- get src
-  ts <- layout <$> runTokeniser atom cs
-  set tokens ts
-  debugPutStrLn (showTokens ts)
-    where showTokens = intercalate " " . map (show . value) . filter (\x -> case value x of { Whitespace -> False ; _ -> True })
+  ts <- runTokeniser atom cs
+  ts' <- layout ts
+  set tokens ts'
+  debugPutStrLn (showTokens ts')
+    where showTokens = unwords . map (show . value) . filter (\x -> case value x of { Whitespace -> False ; _ -> True })
 
 -- // START OF NON-BACKTRACKING PARSER COMBINATORS
 
@@ -74,7 +75,7 @@ varid :: Tokeniser String
 varid = liftA2 (:) (try small) (many idLetter) `excludes` reservedids <?> "varid"
 
 idLetter :: Tokeniser Char
-idLetter = try (satisfy isAlphaNum) <|> try (char '\'')
+idLetter = try (satisfy isAlphaNum) <|> try (char '_') <|> try (char '\'')
 
 varsym :: Tokeniser String
 varsym = try (liftA2 (:) (symbol `exclude` ':') (many symbol) `excludes` reservedops) <?> "varsym" -- TODO exclude dashes

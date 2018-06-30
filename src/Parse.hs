@@ -18,9 +18,12 @@ parse =  tokenise >> Sweet.parse >> desugar
 
 -- Currently, b can be one of:
 --  * Annotated Program
+--  * Annotated Exp
 --  * Tag Source Type
 --  (where Annotated means Parse.Desugar.Annotated)
-parseFree :: (Sweet.Parseable a, Desugarable (Tag Source a) b) => Compiler b
-parseFree = do
+parseFree :: (Sweet.Parseable a, Desugarable (Tag Source a) b) => String -> Compiler b
+parseFree s = do
+  set src s
+  tokenise
   x <- Sweet.parseFree
   desugarFree x

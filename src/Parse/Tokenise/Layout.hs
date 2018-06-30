@@ -17,11 +17,12 @@ semi :: Annotated Token
 semi = Phantom :< Special ';'
 
 -- |Inserts phantom layout tokens based on indentation
--- TODO let ... in on the same line
-layout :: [Annotated Token] -> [Annotated Token]
-layout ts = l (-1) True [] ts
-  where l :: Int -> Bool -> [Int] -> [Annotated Token] -> [Annotated Token]
-        l i b cs (t@(_:<Whitespace):ts) = t : (l i b cs ts)
+layout :: [Annotated Token] -> Compiler [Annotated Token]
+layout ts = do
+  s <- get (flags . static) -- TODO make this more robust
+  return $ l (-1) (not s) [] ts
+  where l :: Int -> Bool -> [Int] -> [Annotated Token] -> [Annotated Token] -- This function works by magic
+        l i b cs (t@(_:<Whitespace):ts) = t : l i b cs ts
         l i b cs [] = replicate (length cs) rbrace
         l i True cs (t@(_:<Special '{'):ts) = t : l i False cs ts
         l i b cs (t@(a:<x):ts) | b         = lbrace : t : l i' b' (j:cs) ts

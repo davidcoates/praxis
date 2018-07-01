@@ -5,11 +5,11 @@ module Type
   , Effects
   , Pure(..)
   , Prim(..)
-  , Type(..)
+  , Impure(..)
   , Constraint(..)
   , QPure(..)
   , subsEffects
-  , subsType
+  , subsImpure
   , subsPure
   , subsConstraint
   , share
@@ -70,7 +70,7 @@ singleton = Set.singleton
 data Pure = TyPrim Prim              -- ^A primitive type -- TODO get rid of this eventually
           | TyRecord (Record Pure)   -- ^A record type
           | TyUni String             -- ^A (pure) type unification variable
-          | TyFun Pure Type          -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
+          | TyFun Pure Impure        -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
           | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool] -- TODO not [Pure], but XPure?
           | TyVar String             -- ^A type variable (e.g., a in forall a. a -> a)
           | TyBang Pure              -- ^A read-only reference
@@ -80,9 +80,8 @@ data Pure = TyPrim Prim              -- ^A primitive type -- TODO get rid of thi
 data Prim = TyBool | TyInt | TyChar | TyString
           deriving (Ord, Eq)
 
--- TODO deep annotations?
-data Type = Pure :# Effects
-          deriving (Ord, Eq)
+data Impure = Pure :# Effects
+  deriving (Ord, Eq)
 
 data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types in Classes
                 | EqualP Pure Pure
@@ -131,7 +130,7 @@ instance Show Pure where
 
   show (TyBang p)    = "bang(" ++ show p ++ ")"
 
-instance Show Type where
+instance Show Impure where
   show (p :# es) = show p ++ (if Set.null es then "" else " # " ++ show es)
 
 instance Show QPure where
@@ -148,8 +147,8 @@ subsEffects f m = Set.foldl' Set.union Set.empty (Set.map g m)
                         g e@(EfUni s) = fromMaybe (singleton e) (f s)
                         g e           = singleton e
 
-subsType :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Type -> Type
-subsType ft fe (p :# es) = subsPure ft fe p :# subsEffects fe es
+subsImpure :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Impure -> Impure
+subsImpure ft fe (p :# es) = subsPure ft fe p :# subsEffects fe es
 
 subsPure :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Pure -> Pure
 subsPure ft fe = subsPure'
@@ -157,7 +156,7 @@ subsPure ft fe = subsPure'
         subsPure' (TyRecord r)  = TyRecord (fmap subsPure' r)
         subsPure' (TyPrim p)    = TyPrim p
         subsPure' t@(TyUni s)   = fromMaybe t (ft s)
-        subsPure' (TyFun a b)   = TyFun (subsPure' a) (subsType ft fe b)
+        subsPure' (TyFun a b)   = TyFun (subsPure' a) (subsImpure ft fe b)
         subsPure' (TyData s ts) = TyData s (map subsPure' ts)
         subsPure' t@(TyVar s)   = fromMaybe t (ft s)
 

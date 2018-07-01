@@ -24,7 +24,7 @@ import           Record
 import           Tag
 import           Type
 
-data Decl a = DeclFun Name (Maybe Type) Int [([a (Pat a)], a (Exp a))]
+data Decl a = DeclFun Name (Maybe Impure) Int [([a (Pat a)], a (Exp a))]
 
 {- TODO
             | DeclData Name (Maybe (a (DataKind a))) [a (DataAlt a)]
@@ -45,7 +45,7 @@ data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Lit Lit
            | Read Name (a (Exp a))
            | Record (Record (a (Exp a)))
-           | Sig (a (Exp a)) Type
+           | Sig (a (Exp a)) Impure
            | Var Name
 
 -- |AST for Literals

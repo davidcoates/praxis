@@ -8,7 +8,7 @@ import           Check.Generate (generate)
 import           Check.Solve    (solve)
 import           Compiler
 import           Tag
-import           Type           (subsType)
+import           Type           (subsImpure)
 
 check :: Compiler ()
 check = save stage $ do
@@ -18,6 +18,6 @@ check = save stage $ do
   let ft x = lookup x subs
   let fe x = Nothing
   e <- get typedAST
-  let e' = tagMap (\(t, s) -> (subsType ft fe <$> t, s)) e
+  let e' = tagMap (\(t, s) -> (subsImpure ft fe <$> t, s)) e
   set typedAST e'
   debugPrint e'

@@ -26,7 +26,7 @@ initialState :: CompilerState
 initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ emptyState
 
 ty :: String -> Pure
-ty s = let (_ :< t :# _) = runStatic (parseFree s) :: Tag Source Type in t
+ty s = let (_ :< t :# _) = runStatic (parseFree s) :: Tag Source Impure in t
 
 prelude :: [(Name, Pure, Value)]
 prelude =

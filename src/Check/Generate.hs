@@ -34,13 +34,13 @@ generate = save stage $ save inClosure $ do
   return cs
 
 -- TODO Consider moving these or renaming these or using lenses
-getPure :: Type -> Pure
+getPure :: Impure -> Pure
 getPure (p :# _) = p
 
-getEffects :: Type -> Effects
+getEffects :: Impure -> Effects
 getEffects (_ :# e) = e
 
-ty :: Annotated a -> Type
+ty :: Annotated a -> Impure
 ty ((Just t, _) :< _) = t
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
@@ -74,7 +74,7 @@ decl (s :< d) = case d of
       (e', c1) <- exp e
       let t' = ty e'
       intro n (getPure t')
-      let c2 = case t of Just t  -> equalT t t' "user-supplied signature TODO" s
+      let c2 = case t of Just t  -> equalI t t' "user-supplied signature TODO" s
                          Nothing -> []
       return ((Just t', s) :< DeclFun n t i [([], e')], c1 ++ c2)
     else do
@@ -84,14 +84,14 @@ decl (s :< d) = case d of
       as' <- mapM binds as
       let c1 = concat $ map snd as'
       let bs = map fst as'
-      let tss = map (\ps -> equalTs (map (\((Just t, s) :< _) -> (t,s)) ps) "TODO") . transpose . map fst $ bs
+      let tss = map (\ps -> equalIs (map (\((Just t, s) :< _) -> (t,s)) ps) "TODO") . transpose . map fst $ bs
       let ts = map fst tss
       let c2 = concat $ map snd tss
       let es = map snd $ bs
-      let (te, c3) = equalTs (map (\((Just t, s) :< _) -> (t,s)) es) "TODO"
+      let (te, c3) = equalIs (map (\((Just t, s) :< _) -> (t,s)) es) "TODO"
       let t'@(p' :# _) = fold ts te
       let c4 = [ newDerivation (EqualP p p') "TODO" s ]
-      let c5 = case t of Just t  -> equalT t t' "user-supplied signature TODO" s
+      let c5 = case t of Just t  -> equalI t t' "user-supplied signature TODO" s
                          Nothing -> []
       return ((Just t', s) :< DeclFun n t i bs, c1 ++ c2 ++ c3 ++ c4 ++ c5)
         where fold            [] te = te
@@ -114,7 +114,7 @@ exp :: Parse.Annotated Exp -> Compiler (Annotated Exp, [Derivation])
 exp (s :< e) = case e of
 
   Apply f x -> do
-    yp :# ye  <- freshUniT
+    yp :# ye  <- freshUniI
     (f', c1) <- exp f
     (x', c2) <- exp x
     let fp :# fe = ty f'
@@ -126,7 +126,7 @@ exp (s :< e) = case e of
   Case e alts -> do
     (e', c1) <- exp e
     (alts', c2) <- parallel (map bind alts)
-    let (t, c3) = equalTs (map (\(_, (Just t, s) :< _) -> (t,s)) alts') "case alternatives must have the same type"
+    let (t, c3) = equalIs (map (\(_, (Just t, s) :< _) -> (t,s)) alts') "case alternatives must have the same type"
     return ((Just t, s) :< Case e' alts', c1 ++ c2 ++ c3)
 
   Do ss -> do
@@ -172,7 +172,7 @@ exp (s :< e) = case e of
 
   Sig e t -> do
     (e', c1) <- exp e
-    let c2 = equalT t (ty e') "User-supplied signature" s
+    let c2 = equalI t (ty e') "User-supplied signature" s
     return (e', c1 ++ c2)
 
   Var n -> do
@@ -180,9 +180,9 @@ exp (s :< e) = case e of
     return ((Just (p :# empty), s) :< Var n, c1)
 
 
-equalTs :: [(Type, Source)] -> String -> (Type, [Derivation])
-equalTs [(t, _)]         _ = (t, [])
-equalTs ((p :# e, s):ts) m = let (p' :# e', cs) = equalTs ts m
+equalIs :: [(Impure, Source)] -> String -> (Impure, [Derivation])
+equalIs [(t, _)]         _ = (t, [])
+equalIs ((p :# e, s):ts) m = let (p' :# e', cs) = equalIs ts m
                                  c = newDerivation (EqualP p p') m s
                              in (p :# unions [e, e'], c:cs)
 

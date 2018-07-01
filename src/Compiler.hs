@@ -42,7 +42,7 @@ module Compiler
   , typedAST
   , inClosure
 
-  , freshUniT
+  , freshUniI
   , freshUniP
   , freshUniE
   , freshVar
@@ -256,8 +256,8 @@ debugPutStrLn x = when (flags . debug) $ do -- unless (flags . static) $ do
     liftIO $ putStrLn x
 
 -- TODO: Stuff below this probably shouldn't be here...
-freshUniT :: Compiler Type
-freshUniT = liftA2 (:#) freshUniP freshUniE
+freshUniI :: Compiler Impure
+freshUniI = liftA2 (:#) freshUniP freshUniE
 
 freshUniP :: Compiler Pure
 freshUniP = do

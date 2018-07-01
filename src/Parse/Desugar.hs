@@ -21,7 +21,7 @@ import qualified Parse.Parse.AST        as Parse
 import           Record                 (pair)
 import           Source
 import           Tag
-import           Type                   (Type)
+import           Type                   (Impure)
 
 import           Control.Applicative    (liftA2, liftA3)
 import           Control.Arrow          (left)
@@ -43,7 +43,7 @@ instance Desugarable (Parse.Annotated Parse.Program) (Annotated Program) where
 instance Desugarable (Parse.Annotated Parse.Exp) (Annotated Exp) where
   desugarer = exp
 
-instance Desugarable (Tag Source Type) (Tag Source Type) where
+instance Desugarable (Tag Source Impure) (Tag Source Impure) where
   desugarer = pure
 
 desugarFree :: Desugarable a b => a -> Compiler b

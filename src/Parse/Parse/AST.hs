@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE KindSignatures    #-}
 
 module Parse.Parse.AST
   ( module AST
@@ -26,7 +25,7 @@ type Annotated a = Tagged Source a
 type AST = Annotated Program
 
 data Decl a = DeclFun Name [a (Pat a)] (a (Exp a))
-            | DeclSig Name Type
+            | DeclSig Name Impure
 
 data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Case (a (Exp a)) [(a (Pat a), a (Exp a))]
@@ -36,7 +35,7 @@ data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Mixfix [a (Tok a)]
            | Read Name (a (Exp a))
            | Record (Record (a (Exp a)))
-           | Sig (a (Exp a)) Type
+           | Sig (a (Exp a)) Impure
            | Var Name
            | VarBang Name
 

@@ -47,7 +47,7 @@ instance Unis Constraint where
   unis s (EqualE e1 e2) = unis s e1 ++ unis s e2
   unis s (Class _ t)    = unis s t
 
-instance Unis Type where
+instance Unis Impure where
   unis s (t :# e) = unis s t ++ unis s e
 
 instance Unis Effect where

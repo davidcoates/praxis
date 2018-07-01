@@ -1,7 +1,7 @@
 module Check.Derivation
   ( Derivation(..)
   , newDerivation
-  , equalT
+  , equalI
   , implies
   , showDerivation
   ) where
@@ -23,8 +23,8 @@ instance Show Derivation where
 newDerivation :: Constraint -> String -> Source -> Derivation
 newDerivation c s a = Derivation { constraint = c, original = c, cause = s, source = a }
 
-equalT :: Type -> Type -> String -> Source -> [Derivation]
-equalT (p1 :# e1) (p2 :# e2) s a = [ newDerivation (EqualP p1 p2) s a, newDerivation (EqualE e1 e2) s a ]
+equalI :: Impure -> Impure -> String -> Source -> [Derivation]
+equalI (p1 :# e1) (p2 :# e2) s a = [ newDerivation (EqualP p1 p2) s a, newDerivation (EqualE e1 e2) s a ]
 
 implies :: Derivation -> Constraint -> Derivation
 implies c c' = c { constraint = c' }

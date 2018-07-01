@@ -40,7 +40,7 @@ instance Parseable (T Program) where
 instance Parseable (T Exp) where
   parser = exp
 
-instance Parseable Type where
+instance Parseable Impure where
   parser = ty
 
 parseFree :: Parseable a => Compiler (Tag Source a)
@@ -255,7 +255,7 @@ expRead :: Parser (T Exp)
 expRead = liftT4 (\_ x _ e -> Parse.Read x e) (try prefix) varid (reservedId "in") (annotated exp) <?> "read expression"
   where prefix = reservedId "read"
 
-ty :: Parser Type
+ty :: Parser Impure
 ty = liftT2O (:#) tyPure empty (reservedOp "#" #> effs)
 
 effs :: Parser Effects
@@ -266,7 +266,7 @@ eff = EfLit <$> conid -- TODO vars, qualified effects?
 
 tyPure :: Parser Pure
 tyPure = liftT2O join tyPure' Nothing (reservedOp "->" #> (Just <$> ty)) <?> "tyPure"
-  where join :: Pure -> Maybe Type -> Pure
+  where join :: Pure -> Maybe Impure -> Pure
         join p Nothing  = p
         join p (Just t) = TyFun p t
         tyPure' = tyUnit <|> tyVar <|> tyPrim <|> tyRecord -- TODO

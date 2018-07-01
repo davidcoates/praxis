@@ -61,39 +61,37 @@ program (s :< p) = case p of
     -- TODO remove from tEnv
     return ((Nothing, s) :< Program ds', cs)
 
-
 decl :: Parse.Annotated Decl -> Compiler (Annotated Decl, [Derivation])
 decl (s :< d) = case d of
 
-  -- TODO tidy this up
-  DeclFun n t i as -> do
+  -- TODO tidy this up, TODO allow polymorpishm
+  DeclFun n ut i as -> do
+
+    dt <- case ut of Nothing -> freshUniI
+                     Just t  -> return t
 
     if i == 0 then do
       -- Special case, the binding is not a function (and is non-recursive)
       let [([], e)] = as
       (e', c1) <- exp e
       let t' = ty e'
-      intro n (getPure t')
-      let c2 = case t of Just t  -> equalI t t' "user-supplied signature TODO" s
-                         Nothing -> []
-      return ((Just t', s) :< DeclFun n t i [([], e')], c1 ++ c2)
+      intro n (Mono dt)
+      let c2 = equalI dt t' "user-supplied signature TODO" s
+      return ((Just dt, s) :< DeclFun n ut i [([], e')], c1 ++ c2)
     else do
       -- TODO clean this up
-      p <- freshUniP
-      intro n p
+      intro n (Mono dt)
       as' <- mapM binds as
-      let c1 = concat $ map snd as'
+      let c1 = concatMap snd as'
       let bs = map fst as'
       let tss = map (\ps -> equalIs (map (\((Just t, s) :< _) -> (t,s)) ps) "TODO") . transpose . map fst $ bs
       let ts = map fst tss
-      let c2 = concat $ map snd tss
-      let es = map snd $ bs
+      let c2 = concatMap snd tss
+      let es = map snd bs
       let (te, c3) = equalIs (map (\((Just t, s) :< _) -> (t,s)) es) "TODO"
-      let t'@(p' :# _) = fold ts te
-      let c4 = [ newDerivation (EqualP p p') "TODO" s ]
-      let c5 = case t of Just t  -> equalI t t' "user-supplied signature TODO" s
-                         Nothing -> []
-      return ((Just t', s) :< DeclFun n t i bs, c1 ++ c2 ++ c3 ++ c4 ++ c5)
+      let t' = fold ts te
+      let c4 = equalI dt t' "user supplied signature TODO" s
+      return ((Just dt, s) :< DeclFun n ut i bs, c1 ++ c2 ++ c3 ++ c4)
         where fold            [] te = te
               fold ((p :# _):ps) te = TyFun p (fold ps te) :# empty
 
@@ -160,7 +158,7 @@ exp (s :< e) = case e of
 
   Read n a -> do
     (p, c1) <- read s n
-    intro n (TyBang p)
+    intro n (Mono (TyBang p :# empty))
     (a', c2) <- exp a
     return (a', c1 ++ c2)
 
@@ -209,13 +207,13 @@ pat (s :< p) = case p of
 
   PatAt v p -> do
     (p', Sum i) <- pat p
-    vp <- freshUniP
-    intro v vp
-    return ((Just (vp :# empty), s) :< PatAt v p', Sum $ i + 1)
+    t <- freshUniP
+    intro v (Mono (t :# empty))
+    return ((Just (t :# empty), s) :< PatAt v p', Sum $ i + 1)
 
   PatHole -> do
-    vp <- freshUniP
-    return ((Just (vp :# empty), s) :< PatHole, Sum 0)
+    t <- freshUniP
+    return ((Just (t :# empty), s) :< PatHole, Sum 0)
 
   PatLit l -> return ((Just (TyPrim (tyLit l) :# empty), s) :< PatLit l,  Sum 0)
     where tyLit (Bool _)   = TyBool
@@ -230,7 +228,7 @@ pat (s :< p) = case p of
     -- TODO check no duplicate variables? Perhaps not here - in decl instead?
 
   PatVar v -> do
-    vp <- freshUniP
-    intro v vp
-    return ((Just (vp :# empty), s) :< PatVar v, Sum 1)
+    t <- freshUniP
+    intro v (Mono (t :# empty))
+    return ((Just (t :# empty), s) :< PatVar v, Sum 1)
 

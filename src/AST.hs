@@ -24,6 +24,7 @@ import           Record
 import           Tag
 import           Type
 
+-- TODO allow poly types
 data Decl a = DeclFun Name (Maybe Impure) Int [([a (Pat a)], a (Exp a))]
 
 {- TODO
@@ -45,7 +46,7 @@ data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Lit Lit
            | Read Name (a (Exp a))
            | Record (Record (a (Exp a)))
-           | Sig (a (Exp a)) Impure
+           | Sig (a (Exp a)) Impure -- TODO Type
            | Var Name
 
 -- |AST for Literals

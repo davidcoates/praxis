@@ -35,7 +35,7 @@ elimN n = do
   l <- get tEnv
   set tEnv (AEnv.elimN n l)
 
-intro :: Name -> Pure -> Compiler ()
+intro :: Name -> Type -> Compiler ()
 intro n p = over tEnv (AEnv.intro n p)
 
 join :: Compiler a -> Compiler b -> Compiler (a, b)
@@ -49,15 +49,19 @@ join f1 f2 = do
   set tEnv (AEnv.join l1 l2)
   return (x, y)
 
+-- TODO reduce duplicaiton here
+
 read :: Source -> Name -> Compiler (Pure, [Derivation])
 read s n = do
   l <- get tEnv
   case AEnv.lookup n l of
     Just (u, t) -> do
+      (t, c3) <- ungeneralise t
       let c1 = [ newDerivation (share t) ("Variable '" ++ n ++ "' used before let bang") s | not u ]
       b <- get inClosure
       let c2 = [ newDerivation (share t) ("Variable '" ++ n ++ "' captured") s | b ]
-      return (t, c1 ++ c2)
+      let c4 = map (\c -> newDerivation c ("Variable '" ++ n ++ "' expanded") s) c3
+      return (t, c1 ++ c2 ++ c4)
     Nothing     -> throwError (CheckError (NotInScope n s))
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
@@ -67,8 +71,21 @@ use s n = do
   let (e, l') = AEnv.use n l
   case e of
     Just (u, t) -> do
+      (t, c3) <- ungeneralise t
       let c1 = [ newDerivation (share t) ("Variable '" ++ n ++ "' used for a second time") s | u ]
       b <- get inClosure
       let c2 = [ newDerivation (share t) ("Variable '" ++ n ++ "' captured") s | b ]
-      return (t, c1 ++ c2)
+      let c4 = map (\c -> newDerivation c ("Variable '" ++ n ++ "' expanded") s) c3
+      return (t, c1 ++ c2 ++ c4)
     Nothing     -> throwError (CheckError (NotInScope n s))
+
+
+-- TODO: Allow quantified effects
+ungeneralise :: Type -> Compiler (Pure, [Constraint])
+ungeneralise (Mono (t :# _)) = return (t, [])
+ungeneralise (Forall cs as t) = do
+  bs <- sequence (replicate (length as) freshUniP)
+  let ft = (`lookup` zip as bs)
+  let fe = const Nothing
+  let subsP = subsPure ft fe
+  return (subsP t, map (\c -> case c of Class s t -> Class s (subsP t)) cs)

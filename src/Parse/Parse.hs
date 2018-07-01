@@ -41,7 +41,7 @@ instance Parseable (T Exp) where
   parser = exp
 
 instance Parseable Impure where
-  parser = ty
+  parser = ty -- TODO
 
 parseFree :: Parseable a => Compiler (Tag Source a)
 parseFree = save stage $ do
@@ -269,10 +269,11 @@ tyPure = liftT2O join tyPure' Nothing (reservedOp "->" #> (Just <$> ty)) <?> "ty
   where join :: Pure -> Maybe Impure -> Pure
         join p Nothing  = p
         join p (Just t) = TyFun p t
-        tyPure' = tyUnit <|> tyVar <|> tyPrim <|> tyRecord -- TODO
+        tyPure' = tyUnit <|> tyVar <|> tyPrim <|> tyRecord <|> tyParen -- TODO
+        tyParen = special '(' #> tyPure <# special ')'
 
 tyRecord :: Parser Pure
-tyRecord = special '(' #> (record <$> sepBy2 tyPure (special ',')) <# special ')'
+tyRecord = try $ special '(' #> (record <$> sepBy2 tyPure (special ',')) <# special ')'
   where record :: [Pure] -> Pure
         record ts = TyRecord $ Record.fromList (zip (repeat Nothing) ts)
 
@@ -291,3 +292,5 @@ tyPrim = TyPrim <$> do
     "Int"    -> return TyInt
     "String" -> return TyString
     _        -> Applicative.empty
+
+

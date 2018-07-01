@@ -1,17 +1,14 @@
 module Env
-  ( QTEnv
-  , TEnv
+  ( TEnv
   , VEnv
   ) where
 
 import           Common   (Name)
 import           Env.AEnv (AEnv)
 import           Env.Env  (Env)
-import           Type     (Pure, QPure)
+import           Type     (Type)
 import           Value
 
-type TEnv = AEnv Name Pure
-
-type QTEnv = Env Name QPure
+type TEnv = AEnv Name Type
 
 type VEnv = Env Name Value

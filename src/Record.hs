@@ -59,11 +59,11 @@ toCanonicalList :: Record a -> [(Maybe Name, a)]
 toCanonicalList (Record r) = toList (Record (Map.toList (Map.fromList r)))
 
 instance Show a => Show (Record a) where
-  show r = "(" ++ intercalate "," (map showEntry (toList r)) ++ ")" -- TODO
+  show r = "(" ++ intercalate ", " (map showEntry (toList r)) ++ ")" -- TODO
     where showEntry (Nothing, a) = show a
           showEntry (Just n,  a) = n ++ "=" ++ show a
 
 showKeys :: Record a -> String
-showKeys r = "(" ++ intercalate "," (map showKey (toList r)) ++ ")"
+showKeys r = "(" ++ intercalate ", " (map showKey (toList r)) ++ ")"
   where showKey (Nothing, _) = "_"
         showKey (Just n,  _) = n ++ "=_"

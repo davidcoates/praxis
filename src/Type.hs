@@ -7,13 +7,12 @@ module Type
   , Prim(..)
   , Impure(..)
   , Constraint(..)
-  , QPure(..)
+  , Type(..)
   , subsEffects
   , subsImpure
   , subsPure
   , subsConstraint
   , share
-  , mono
   , empty
   , unions
   , singleton
@@ -21,9 +20,11 @@ module Type
 
 import           Common
 import           Data.Maybe (fromMaybe)
-import           Data.Set   (Set)
+import           Data.Set   (Set, elems)
 import qualified Data.Set   as Set
 import           Record
+
+import           Data.List  (intercalate)
 
 -- TODO need more kinds? KindRecord?
 data Kind = KindEffects     --
@@ -90,7 +91,9 @@ data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types
                 deriving (Ord, Eq)
 
 -- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
-data QPure = Forall [Constraint] [String] Pure deriving (Ord, Eq)
+data Type = Mono Impure
+          | Forall [Constraint] [String] Pure
+  deriving (Ord, Eq)
 
 instance Show Kind where
   show KindEffects    = "E"
@@ -112,8 +115,8 @@ instance Show Prim where
 
 instance Show Constraint where
   show (EqualP a b) = show a  ++ " ~ " ++ show b
-  show (EqualE a b) = show a  ++ " ~ " ++ show b
-  show (Class c t)  = show c ++ " " ++ show t
+  show (EqualE a b) = showEffects a  ++ " ~ " ++ showEffects b
+  show (Class c t)  = c ++ " " ++ show t
 
 instance Show Pure where
   show (TyPrim p)    = show p
@@ -130,10 +133,14 @@ instance Show Pure where
 
   show (TyBang p)    = "bang(" ++ show p ++ ")"
 
-instance Show Impure where
-  show (p :# es) = show p ++ (if Set.null es then "" else " # " ++ show es)
+showEffects :: Effects -> String -- TODO consider newtyping Effects to avoid this
+showEffects es = intercalate ", " (map show (elems es))
 
-instance Show QPure where
+instance Show Impure where
+  show (p :# es) = show p ++ (if Set.null es then "" else " # " ++ showEffects es)
+
+instance Show Type where
+  show (Mono t) = show t
   show (Forall cs xs t) = "forall " ++ unwords xs ++ ". " ++ cs' ++ show t
     where cs' = if null cs then "" else "(" ++ unwords  (map show cs) ++ ") => "
 
@@ -170,6 +177,3 @@ subsConstraint ft fe = subsC
 
 share :: Pure -> Constraint
 share = Class "Share"
-
-mono :: Pure -> QPure
-mono = Forall [] []

@@ -38,7 +38,6 @@ module Compiler
   , desugaredAST
   , tEnv
   , vEnv
-  , qtEnv
   , typedAST
   , inClosure
 
@@ -46,8 +45,6 @@ module Compiler
   , freshUniP
   , freshUniE
   , freshVar
-
-  , ungeneralise
 
   , debugPrint
   , debugPutStrLn
@@ -57,7 +54,7 @@ module Compiler
 import           AST                  (Lit)
 import qualified Check.AST            as Check
 import           Common
-import           Env                  (QTEnv, TEnv, VEnv)
+import           Env                  (TEnv, VEnv)
 import           Error                (Error)
 import qualified Parse.Desugar.AST    as Desugar
 import qualified Parse.Parse.AST      as Parse
@@ -116,7 +113,6 @@ data CompilerState = CompilerState
   , _sugaredAST   :: Parse.AST           -- ^AST after parsing of tokens
   , _desugaredAST :: Desugar.AST         -- ^AST after desugaring
   , _typedAST     :: Check.AST           -- ^AST after type inference
-  , _qtEnv        :: QTEnv               -- ^Type environment of top-level functions
   , _tEnv         :: TEnv                -- ^Type environment of local functions
   , _kEnv         :: ()                  -- TODO (Kind environment)
   , _vEnv         :: VEnv                -- ^Value environment for interpreter
@@ -143,6 +139,7 @@ type Compiler a = ExceptT Error (StateT CompilerState IO) a
 
 defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _static = False }
+-- defaultFlags = Flags { _debug = True, _static = False }
 
 get :: Lens' CompilerState a -> Compiler a
 get = lift . gets . view
@@ -178,7 +175,6 @@ emptyState = CompilerState
   , _tokens       = unset "tokens"
   , _sugaredAST   = unset "sugaredAST"
   , _desugaredAST = unset "desugaredAST"
-  , _qtEnv        = unset "qtEnv"
   , _tEnv         = unset "tenv"
   , _kEnv         = unset "kenv"
   , _typedAST     = unset "typedAST"
@@ -276,13 +272,3 @@ freshVar = do
   (x:xs) <- get freshVars
   set freshVars xs
   return x
-
--- TODO: Allow quantified effects
-ungeneralise :: QPure -> Compiler ([Constraint], Pure)
-ungeneralise (Forall cs as t) = do
-  bs <- sequence (replicate (length as) freshUniP)
-  let ft = (`lookup` zip as bs)
-  let fe = const Nothing
-  let subsP = subsPure ft fe
-  return (map (\c -> case c of Class s t -> Class s (subsP t)) cs, subsP t)
-

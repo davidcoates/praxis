@@ -3,10 +3,10 @@ module Parse.Tokenise
   ) where
 
 import           AST                      (QString (..))
-import           Compiler                 hiding (try)
 import           Parse.Tokenise.Layout
 import           Parse.Tokenise.Token
 import           Parse.Tokenise.Tokeniser
+import           Praxis                   hiding (try)
 import           Source
 import           Tag
 
@@ -16,7 +16,7 @@ import           Data.Char
 import           Data.Foldable            (asum)
 import           Data.List                (intercalate)
 
-tokenise :: Compiler ()
+tokenise :: Praxis ()
 tokenise = save stage $ do
   set stage Tokenise
   cs <- get src

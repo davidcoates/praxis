@@ -13,11 +13,11 @@ module Parse.Desugar
   ) where
 
 import           Common
-import           Compiler
 import           Error
 import           Parse.Desugar.AST
 import           Parse.Parse.AST        (Op)
 import qualified Parse.Parse.AST        as Parse
+import           Praxis
 import           Record                 (pair)
 import           Source
 import           Tag
@@ -35,7 +35,7 @@ import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
 class Desugarable a b | b -> a where
-  desugarer :: a -> Compiler b
+  desugarer :: a -> Praxis b
 
 instance Desugarable (Parse.Annotated Parse.Program) (Annotated Program) where
   desugarer = program
@@ -46,12 +46,12 @@ instance Desugarable (Parse.Annotated Parse.Exp) (Annotated Exp) where
 instance Desugarable (Tag Source Impure) (Tag Source Impure) where
   desugarer = pure
 
-desugarFree :: Desugarable a b => a -> Compiler b
+desugarFree :: Desugarable a b => a -> Praxis b
 desugarFree a = save stage $ do
   set stage Desugar
   desugarer a
 
-desugar :: Compiler ()
+desugar :: Praxis ()
 desugar = save stage $ do
   set stage Desugar
   p <- get sugaredAST
@@ -59,12 +59,12 @@ desugar = save stage $ do
   set desugaredAST p'
   debugPrint p'
 
-program :: Parse.Annotated Parse.Program -> Compiler (Annotated Program)
+program :: Parse.Annotated Parse.Program -> Praxis (Annotated Program)
 program (a :< Parse.Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-stmts :: [Parse.Annotated Parse.Stmt] -> Compiler [Annotated Stmt]
+stmts :: [Parse.Annotated Parse.Stmt] -> Praxis [Annotated Stmt]
 stmts     [] = pure []
 stmts (s:ss) | a :< Parse.StmtExp e <- s = do
                 e' <- exp e
@@ -78,7 +78,7 @@ stmts (s:ss) | a :< Parse.StmtExp e <- s = do
                   where isStmtDecl (_ :< Parse.StmtDecl _) = True
                         isStmtDecl _                       = False
 
-exp :: Parse.Annotated Parse.Exp -> Compiler (Annotated Exp)
+exp :: Parse.Annotated Parse.Exp -> Praxis (Annotated Exp)
 exp e = ($ e) $ rec $ \a x -> case x of
 
   Parse.Apply x (a' :< Parse.VarBang s) ->
@@ -126,13 +126,13 @@ exp e = ($ e) $ rec $ \a x -> case x of
   Parse.VarBang s   -> throwSyntaxError (BangError a s)
 
 
-throwSyntaxError :: SyntaxError -> Compiler a
+throwSyntaxError :: SyntaxError -> Praxis a
 throwSyntaxError = throwError . SyntaxError
 
-throwDeclError :: DeclError -> Compiler a
+throwDeclError :: DeclError -> Praxis a
 throwDeclError = throwSyntaxError . DeclError
 
-decls :: [Parse.Annotated Parse.Decl] -> Compiler [Annotated Decl]
+decls :: [Parse.Annotated Parse.Decl] -> Praxis [Annotated Decl]
 decls []              = pure []
 decls ((a :< d) : ds) = case d of
 
@@ -155,7 +155,7 @@ decls ((a :< d) : ds) = case d of
 -- * Also, if we disallow multiple definitions for nullary why do we allow multiple bindings of the same name in any decls block? (or do block)
 -- TODO check for overlapping patterns?
 
-pat :: Parse.Annotated Parse.Pat -> Compiler (Annotated Pat)
+pat :: Parse.Annotated Parse.Pat -> Praxis (Annotated Pat)
 pat p = ($ p) $ rec $ \a x -> case x of
 
   Parse.PatRecord r -> do
@@ -169,11 +169,11 @@ pat p = ($ p) $ rec $ \a x -> case x of
 
 type Tok = DAG.Tok (Tag Source Op) (Annotated Exp)
 
-tok :: Parse.Annotated Parse.Tok -> Compiler Tok
+tok :: Parse.Annotated Parse.Tok -> Praxis Tok
 tok (a :< Parse.TOp op) = pure (DAG.TOp (a :< op))
 tok (a :< Parse.TExp e) = DAG.TExpr <$> exp e
 
-mixfix :: [Parse.Annotated Parse.Tok] -> Compiler (Annotated Exp)
+mixfix :: [Parse.Annotated Parse.Tok] -> Praxis (Annotated Exp)
 mixfix ts = do
   ts' <- mapM tok ts
   -- TODO do something with report?

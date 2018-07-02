@@ -5,21 +5,21 @@ module Inbuilts
 import           Control.Lens (set)
 
 import           AST          (Lit (..))
-import           Compiler     (CompilerState, emptyState, liftIO, runStatic,
-                               tEnv, vEnv)
 import           Env.TEnv     (TEnv)
 import qualified Env.TEnv     as TEnv (fromList)
 import           Env.VEnv     (VEnv)
 import qualified Env.VEnv     as VEnv (fromList)
 import           Error
 import           Parse        (parseFree)
+import           Praxis       (PraxisState, emptyState, liftIO, runStatic, tEnv,
+                               vEnv)
 import           Record
 import           Source       (Source)
 import           Tag
 import           Type
 import           Value
 
-initialState :: CompilerState
+initialState :: PraxisState
 initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ emptyState
 
 -- TODO

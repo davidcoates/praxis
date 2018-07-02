@@ -10,11 +10,11 @@ module Parse.Parse.Parser
   , (<|?>)
   ) where
 
-import           Compiler             (Compiler, throwError)
 import           Error
 import           Parse.Parse.AST
 import qualified Parse.Prim           as Prim
 import qualified Parse.Tokenise.Token as Token
+import           Praxis               (Praxis, throwError)
 import           Source               (Source (..))
 import           Tag
 
@@ -40,7 +40,7 @@ instance Alternative Parser where
 instance Monad Parser where
   Parser a >>= f = Parser (a >>= \x -> _runParser (f (value x)))
 
-runParser :: Parser a -> [Token] -> Compiler (Tag Source a)
+runParser :: Parser a -> [Token] -> Praxis (Tag Source a)
 runParser (Parser p) ts = makeError $ Prim.runParser (p <* Prim.eof) ts tag -- TODO eof here breaks error messages
   where makeError (Left (s, e)) = throwError $ SyntaxError (SweetError s e)
         makeError (Right x)     = pure x

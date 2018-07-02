@@ -1,9 +1,9 @@
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Compiler
-  ( Compiler
-  , CompilerState
+module Praxis
+  ( Praxis
+  , PraxisState
   , emptyState
   , throwError
   , internalError -- Prefer this over Prelude.error
@@ -21,13 +21,13 @@ module Compiler
   , runStatic -- TODO think of a better name for this
 
   , lift
-  , liftIO -- ^Lifts an IO computation to the Compiler monad
+  , liftIO -- ^Lifts an IO computation to the Praxis monad
 
   -- |Flag lenses
   , debug
   , static -- TODO don't export this
 
-  -- |Compiler lenses (TODO order these)
+  -- |Praxis lenses (TODO order these)
   , flags
   , stage
   , imports
@@ -101,7 +101,7 @@ type Token = Tokenise.Annotated Tokenise.Token
 data Flags = Flags { _debug :: Bool, _static :: Bool }
   deriving (Show)
 
-data CompilerState = CompilerState
+data PraxisState = PraxisState
   { _flags        :: Flags
   , _stage        :: Stage               -- ^Current stage of compilation
   , _freshUnis    :: [String]            -- ^Infinite list of distinct dummy names to use for unification types
@@ -127,7 +127,7 @@ data CompilerState = CompilerState
   , _kenv     :: Map.Map Name Kind         -- ^Kind environment
   , _cenv     :: ClassEnv.ClassEnv         -- ^Typeclass environment
   , _cast     :: Maybe Core.Module         -- ^Core AST
-  , _flags    :: Flags.Flags               -- ^Compiler flags
+  , _flags    :: Flags.Flags               -- ^Praxis flags
   , _venv     :: CoreEval.ValEnv Core.Expr -- ^Core interpreter environment
   , _denv     :: DataEnv.DataEnv           -- ^Entity dictionary
   , _clenv    :: ClassEnv.ClassHier        -- ^Typeclass hierarchy
@@ -135,36 +135,36 @@ data CompilerState = CompilerState
 
   } deriving (Show)
 
-type Compiler a = ExceptT Error (StateT CompilerState IO) a
+type Praxis a = ExceptT Error (StateT PraxisState IO) a
 
 defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _static = False }
 -- defaultFlags = Flags { _debug = True, _static = False }
 
-get :: Lens' CompilerState a -> Compiler a
+get :: Lens' PraxisState a -> Praxis a
 get = lift . gets . view
 
-getWith :: Lens' CompilerState a -> (a -> b) -> Compiler b
+getWith :: Lens' PraxisState a -> (a -> b) -> Praxis b
 getWith l f = do
   x <- get l
   return (f x)
 
-set :: Lens' CompilerState a -> a -> Compiler ()
+set :: Lens' PraxisState a -> a -> Praxis ()
 set l x = lift . modify $ Control.Lens.set l x
 
-over :: Lens' CompilerState a -> (a -> a) -> Compiler ()
+over :: Lens' PraxisState a -> (a -> a) -> Praxis ()
 over l f = do
   x <- get l
   set l (f x)
 
-throwError :: Error -> Compiler a
+throwError :: Error -> Praxis a
 throwError = Control.Monad.Except.throwError
 
--- filenameDisplay :: Compiler e String
+-- filenameDisplay :: Praxis e String
 -- filenameDisplay = fromMaybe "<interactive>" <$> getRaw filename
 
-emptyState :: CompilerState
-emptyState = CompilerState
+emptyState :: PraxisState
+emptyState = PraxisState
   { _flags        = defaultFlags
   , _stage        = unset "stage"
   , _freshUnis    = map ('~':) (fresh ['a'..'z'])
@@ -195,9 +195,9 @@ internalError :: String -> a
 internalError s = error ("<<<INTERNAL ERROR>>> " ++ s)
 
 makeLenses ''Flags
-makeLenses ''CompilerState
+makeLenses ''PraxisState
 
-save :: Lens' CompilerState a -> Compiler b -> Compiler b
+save :: Lens' PraxisState a -> Praxis b -> Praxis b
 save l c = do
   x <- get l
   r <- c
@@ -205,7 +205,7 @@ save l c = do
   return r
 
 -- TODO think of a better name for this
-try :: Compiler a -> (Error -> Compiler b) -> (a -> Compiler b) -> Compiler b
+try :: Praxis a -> (Error -> Praxis b) -> (a -> Praxis b) -> Praxis b
 try c f g = do
   s <- lift State.get
   (x, s') <- liftIO $ run c s
@@ -213,61 +213,61 @@ try c f g = do
     Left  e -> lift (put s)  >> f e
     Right x -> lift (put s') >> g x
 
-runStatic :: Compiler a -> a
+runStatic :: Praxis a -> a
 runStatic c = case fst $ unsafePerformIO (run c' emptyState) of
   Left e  -> internalError (show e)
   Right x -> x
   where c' = set (flags . static) True >> c
 
-assert :: Lens' CompilerState a -> (a -> Bool) -> String -> Compiler b -> Compiler b
+assert :: Lens' PraxisState a -> (a -> Bool) -> String -> Praxis b -> Praxis b
 assert l p s c = do
   x <- get l
   if p x then c else internalError s
 
-liftIO :: IO a -> Compiler a
+liftIO :: IO a -> Praxis a
 -- liftIO io = assert (flags . static) (== False) "TODO not static" (lift (lift io))
 liftIO io = lift (lift io)
 
-run :: Compiler a -> CompilerState -> IO (Either Error a, CompilerState)
+run :: Praxis a -> PraxisState -> IO (Either Error a, PraxisState)
 run = runStateT . runExceptT
 
-when :: Lens' CompilerState Bool -> Compiler a -> Compiler ()
+when :: Lens' PraxisState Bool -> Praxis a -> Praxis ()
 when l c = do
   b <- get l
   Control.Monad.when b (void c)
 
-unless :: Lens' CompilerState Bool -> Compiler a -> Compiler ()
+unless :: Lens' PraxisState Bool -> Praxis a -> Praxis ()
 unless l c = do
   b <- get l
   Control.Monad.unless b (void c)
 
 -- TODO this possibly shouldnt be here
-debugPrint :: Show a => a -> Compiler ()
+debugPrint :: Show a => a -> Praxis ()
 debugPrint = debugPutStrLn . show
 
-debugPutStrLn :: String -> Compiler ()
+debugPutStrLn :: String -> Praxis ()
 debugPutStrLn x = when (flags . debug) $ do -- unless (flags . static) $ do
     s <- get stage
     liftIO $ putStrLn ("Output from stage: " ++ show s)
     liftIO $ putStrLn x
 
 -- TODO: Stuff below this probably shouldn't be here...
-freshUniI :: Compiler Impure
+freshUniI :: Praxis Impure
 freshUniI = liftA2 (:#) freshUniP freshUniE
 
-freshUniP :: Compiler Pure
+freshUniP :: Praxis Pure
 freshUniP = do
   (x:xs) <- get freshUnis
   set freshUnis xs
   return (TyUni x)
 
-freshUniE :: Compiler Effects
+freshUniE :: Praxis Effects
 freshUniE = do
   (x:xs) <- get freshUnis
   set freshUnis xs
   return (singleton (EfUni x))
 
-freshVar :: Compiler Name
+freshVar :: Praxis Name
 freshVar = do
   (x:xs) <- get freshVars
   set freshVars xs

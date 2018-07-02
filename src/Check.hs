@@ -6,11 +6,11 @@ module Check
 
 import           Check.Generate (generate)
 import           Check.Solve    (solve)
-import           Compiler
+import           Praxis
 import           Tag
 import           Type           (subsImpure)
 
-check :: Compiler ()
+check :: Praxis ()
 check = save stage $ do
   set stage Check
   cs <- generate

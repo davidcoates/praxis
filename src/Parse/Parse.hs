@@ -14,7 +14,7 @@ import           Parse.Parse.AST      as Parse
 import           Parse.Parse.Parser
 import           Parse.Tokenise.Token as Token
 
-import           Compiler             hiding (try)
+import           Praxis               hiding (try)
 import qualified Record
 import           Source
 import           Tag
@@ -43,13 +43,13 @@ instance Parseable (T Exp) where
 instance Parseable Impure where
   parser = ty -- TODO
 
-parseFree :: Parseable a => Compiler (Tag Source a)
+parseFree :: Parseable a => Praxis (Tag Source a)
 parseFree = save stage $ do
   set stage Parse
   ts <- get tokens
   runParser parser ts
 
-parse :: Compiler ()
+parse :: Praxis ()
 parse = save stage $ do
   set stage Parse
   p <- parseFree

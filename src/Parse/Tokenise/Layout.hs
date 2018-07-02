@@ -2,8 +2,8 @@ module Parse.Tokenise.Layout
   ( layout
   ) where
 
-import           Compiler
 import           Parse.Tokenise.Token
+import           Praxis
 import           Source
 import           Tag
 
@@ -17,7 +17,7 @@ semi :: Annotated Token
 semi = Phantom :< Special ';'
 
 -- |Inserts phantom layout tokens based on indentation
-layout :: [Annotated Token] -> Compiler [Annotated Token]
+layout :: [Annotated Token] -> Praxis [Annotated Token]
 layout ts = do
   s <- get (flags . static) -- TODO make this more robust
   return $ l (-1) (not s) [] ts

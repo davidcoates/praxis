@@ -6,11 +6,11 @@ import           AST
 import           Check.AST
 import           Check.Derivation
 import           Common           (traverseM)
-import           Compiler
 import           Env.TEnv
 import           Error
 import           Inbuilts         hiding (ty)
 import qualified Parse.Parse.AST  as Parse
+import           Praxis
 import           Record
 import           Source
 import           Tag
@@ -22,7 +22,7 @@ import           Data.Monoid      (Sum (..))
 import           Prelude          hiding (exp, read)
 
 -- TODO data for constraint reasons?
-generate :: Compiler [Derivation]
+generate :: Praxis [Derivation]
 generate = save stage $ save inClosure $ do
   set stage Generate
   set inClosure False
@@ -46,14 +46,14 @@ ty ((Just t, _) :< _) = t
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
 -- The output environments are all contextJoined
-parallel :: [Compiler (a, [Derivation])] -> Compiler ([a], [Derivation])
+parallel :: [Praxis (a, [Derivation])] -> Praxis ([a], [Derivation])
 parallel []     = return ( [], [])
 parallel [x]    = (\(a, cs) -> ([a], cs)) <$> x
 parallel (x:xs) = do
   ((a, c1), (as, c2)) <- join x (parallel xs)
   return (a:as, c1 ++ c2)
 
-program :: Parse.Annotated Program -> Compiler (Annotated Program, [Derivation])
+program :: Parse.Annotated Program -> Praxis (Annotated Program, [Derivation])
 program (s :< p) = case p of
 
   Program ds -> do
@@ -61,7 +61,7 @@ program (s :< p) = case p of
     -- TODO remove from tEnv
     return ((Nothing, s) :< Program ds', cs)
 
-decl :: Parse.Annotated Decl -> Compiler (Annotated Decl, [Derivation])
+decl :: Parse.Annotated Decl -> Praxis (Annotated Decl, [Derivation])
 decl (s :< d) = case d of
 
   -- TODO tidy this up, TODO allow polymorpishm
@@ -95,7 +95,7 @@ decl (s :< d) = case d of
         where fold            [] te = te
               fold ((p :# _):ps) te = TyFun p (fold ps te) :# empty
 
-stmt :: Parse.Annotated Stmt -> Compiler (Annotated Stmt, ([Derivation], Sum Int))
+stmt :: Parse.Annotated Stmt -> Praxis (Annotated Stmt, ([Derivation], Sum Int))
 stmt (s :< x) = case x of
 
   -- TODO should decl have a type in it?
@@ -108,7 +108,7 @@ stmt (s :< x) = case x of
     return ((Just (ty e'), s) :< StmtExp e', (c1, Sum $ 0))
 
 
-exp :: Parse.Annotated Exp -> Compiler (Annotated Exp, [Derivation])
+exp :: Parse.Annotated Exp -> Praxis (Annotated Exp, [Derivation])
 exp (s :< e) = case e of
 
   Apply f x -> do
@@ -184,7 +184,7 @@ equalIs ((p :# e, s):ts) m = let (p' :# e', cs) = equalIs ts m
                                  c = newDerivation (EqualP p p') m s
                              in (p :# unions [e, e'], c:cs)
 
-binds :: ([Parse.Annotated Pat], Parse.Annotated Exp) -> Compiler (([Annotated Pat], Annotated Exp), [Derivation])
+binds :: ([Parse.Annotated Pat], Parse.Annotated Exp) -> Praxis (([Annotated Pat], Annotated Exp), [Derivation])
 binds ([], e) = do
   (e', c) <- exp e
   return (([], e'), c)
@@ -194,7 +194,7 @@ binds ((s :< p) : ps, e) = do
   elimN i
   return ((p':ps', e'), cs)
 
-bind :: (Parse.Annotated Pat, Parse.Annotated Exp) -> Compiler ((Annotated Pat, Annotated Exp), [Derivation])
+bind :: (Parse.Annotated Pat, Parse.Annotated Exp) -> Praxis ((Annotated Pat, Annotated Exp), [Derivation])
 bind (s :< p, e) = do
   (p', Sum i) <- pat (s :< p)
   (e', cs) <- exp e
@@ -202,7 +202,7 @@ bind (s :< p, e) = do
   return ((p', e'), cs)
 
 
-pat :: Parse.Annotated Pat -> Compiler (Annotated Pat, Sum Int)
+pat :: Parse.Annotated Pat -> Praxis (Annotated Pat, Sum Int)
 pat (s :< p) = case p of
 
   PatAt v p -> do

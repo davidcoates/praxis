@@ -9,30 +9,30 @@ module Env.VEnv
   )
 where
 
-import           Common   (Name)
-import           Compiler
-import           Env      (VEnv)
-import           Env.Env  (Env, fromList)
-import qualified Env.Env  as Env
+import           Common  (Name)
+import           Env     (VEnv)
+import           Env.Env (Env, fromList)
+import qualified Env.Env as Env
+import           Praxis
 import           Value
 
-import           Prelude  hiding (lookup)
+import           Prelude hiding (lookup)
 
 
-elim :: Compiler ()
+elim :: Praxis ()
 elim = do
   l <- get vEnv
   set vEnv (Env.elim l)
 
-elimN :: Int -> Compiler ()
+elimN :: Int -> Praxis ()
 elimN n = do
   l <- get vEnv
   set vEnv (Env.elimN n l)
 
-intro :: Name -> Value -> Compiler ()
+intro :: Name -> Value -> Praxis ()
 intro n v = over vEnv (Env.intro n v)
 
-lookup :: Name -> Compiler (Maybe Value)
+lookup :: Name -> Praxis (Maybe Value)
 lookup n = do
   l <- get vEnv
   return (Env.lookup n l)

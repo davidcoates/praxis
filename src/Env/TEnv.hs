@@ -11,10 +11,10 @@ module Env.TEnv
   )
 where
 
-import           Compiler
 import           Env              (TEnv)
 import           Env.AEnv         (AEnv, fromList)
 import qualified Env.AEnv         as AEnv
+import           Praxis
 
 import           Check.Derivation
 import           Common
@@ -25,20 +25,20 @@ import           Type
 import           Prelude          hiding (read)
 
 
-elim :: Compiler ()
+elim :: Praxis ()
 elim = do
   l <- get tEnv
   set tEnv (AEnv.elim l)
 
-elimN :: Int -> Compiler ()
+elimN :: Int -> Praxis ()
 elimN n = do
   l <- get tEnv
   set tEnv (AEnv.elimN n l)
 
-intro :: Name -> Type -> Compiler ()
+intro :: Name -> Type -> Praxis ()
 intro n p = over tEnv (AEnv.intro n p)
 
-join :: Compiler a -> Compiler b -> Compiler (a, b)
+join :: Praxis a -> Praxis b -> Praxis (a, b)
 join f1 f2 = do
   l <- get tEnv
   x <- f1
@@ -51,7 +51,7 @@ join f1 f2 = do
 
 -- TODO reduce duplicaiton here
 
-read :: Source -> Name -> Compiler (Pure, [Derivation])
+read :: Source -> Name -> Praxis (Pure, [Derivation])
 read s n = do
   l <- get tEnv
   case AEnv.lookup n l of
@@ -65,7 +65,7 @@ read s n = do
     Nothing     -> throwError (CheckError (NotInScope n s))
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
-use :: Source -> Name -> Compiler (Pure, [Derivation])
+use :: Source -> Name -> Praxis (Pure, [Derivation])
 use s n = do
   l <- get tEnv
   let (e, l') = AEnv.use n l
@@ -81,7 +81,7 @@ use s n = do
 
 
 -- TODO: Allow quantified effects
-ungeneralise :: Type -> Compiler (Pure, [Constraint])
+ungeneralise :: Type -> Praxis (Pure, [Constraint])
 ungeneralise (Mono (t :# _)) = return (t, [])
 ungeneralise (Forall cs as t) = do
   bs <- sequence (replicate (length as) freshUniP)

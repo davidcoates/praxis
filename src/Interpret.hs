@@ -4,18 +4,18 @@ module Interpret
   ) where
 
 import           Check
-import           Compiler
 import           Eval
 import           Parse
+import           Praxis
 
-interpret :: String -> Compiler ()
+interpret :: String -> Praxis ()
 interpret s = do
   set src s
   parse
   check
   eval
 
-interpretFile :: FilePath -> Compiler ()
+interpretFile :: FilePath -> Praxis ()
 interpretFile f = do
   set filename f
   s <- liftIO (readFile f)

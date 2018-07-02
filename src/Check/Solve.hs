@@ -7,17 +7,17 @@ module Check.Solve
 
 import           AST
 import           Check.Derivation
-import           Compiler
 import           Data.List        (nub)
 import           Data.Maybe       (fromJust)
 import qualified Data.Set         as Set
 import           Error
+import           Praxis
 import           Prelude          hiding (error)
 import           Record
 import           Text.Parsec.Pos  (newPos)
 import           Type
 
--- TODO: Make system part of Compiler state?
+-- TODO: Make system part of Praxis state?
 -- TODO: Batch all effect constraints (or treat them as check?)
 --    so progress -> effects -> check
 
@@ -69,7 +69,7 @@ instance Unis Pure where
   unis s (TyVar _)     = []
   unis s (TyPrim _)    = []
 
-solve :: [Derivation] -> Compiler [(String, Pure)]
+solve :: [Derivation] -> Praxis [(String, Pure)]
 solve xs = save stage $ do
   set stage Solve
   let s = System { vars = map (\t -> (t, TyUni t)) (nub (concatMap allUnis xs)), progress = filter isProgress xs, check = filter isCheck xs }
@@ -83,7 +83,7 @@ solve xs = save stage $ do
 
 -- |Checks all EqualP constraints are of the form uni ~ concrete
 -- TODO Check effects also
-verifyProgressComplete :: System -> Compiler ()
+verifyProgressComplete :: System -> Praxis ()
 verifyProgressComplete s = mapM_ ok (progress s)
   where ok d = case constraint d of
           EqualP (TyUni _) p -> if null (tyUnis p) then pure () else underdefined d -- TODO need a different error? (internal error? or underdefined?)
@@ -114,13 +114,13 @@ sub (n,t) s = s{ vars = vars', progress = progress', check = check' }
         progress' = map subsD (progress s)
         check'    = map subsD (check s)
 
-contradiction :: Derivation -> Compiler a
+contradiction :: Derivation -> Praxis a
 contradiction = throwError . CheckError . Contradiction
 
-underdefined :: Derivation -> Compiler a
+underdefined :: Derivation -> Praxis a
 underdefined = throwError . CheckError . Underdefined
 
-solveProgress :: System -> Compiler System
+solveProgress :: System -> Praxis System
 solveProgress s@System { progress = [] } = return s
 solveProgress s@System { progress = d:ds } = case constraint d of
 
@@ -154,13 +154,13 @@ solveProgress s@System { progress = d:ds } = case constraint d of
       where solveEqualE e1 e2 | e1 == empty && e2 == empty = return s{ progress = ds }
             solveEqualE e1 e2 = return s{ progress = ds } -- FIXME
 
-verifyCheck :: System -> Compiler ()
+verifyCheck :: System -> Praxis ()
 verifyCheck s@System { check = [] } = return ()
 verifyCheck s@System { check = d:ds } = case constraint d of
   Class x t -> do
     if x == "Share" || x == "Drop" then sd t else contradiction d
     verifyCheck s{ check = ds }
-      where sd :: Pure -> Compiler ()
+      where sd :: Pure -> Praxis ()
             sd (TyPrim _)  = return ()
             sd (TyUni _)   = underdefined d
             sd (TyFun _ _) = return ()

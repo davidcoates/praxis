@@ -2,7 +2,7 @@ module Compile
   ( compile
   ) where
 
-import           Compiler
+import           Praxis
 
-compile :: Compiler () -- TODO
+compile :: Praxis () -- TODO
 compile = undefined

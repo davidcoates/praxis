@@ -1,9 +1,9 @@
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Compiler
-  ( Compiler
-  , CompilerState
+module Praxis
+  ( Praxis
+  , PraxisState
   )
   where
 
@@ -12,7 +12,7 @@ import           Error                (Error)
 import           Control.Monad.Except (ExceptT)
 import           Control.Monad.State  (StateT)
 
-data CompilerState
+data PraxisState
 
-type Compiler a = ExceptT Error (StateT CompilerState IO) a
+type Praxis a = ExceptT Error (StateT PraxisState IO) a
 

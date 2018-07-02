@@ -1,13 +1,10 @@
 module Parse.Desugar.AST
   ( module AST
-  , AST
-  , Annotated
+  , Annotation
   ) where
 
 import           AST
 import           Source
 import           Tag
 
-type Annotated a = Tagged Source a
-
-type AST = Annotated Program
+type Annotation = Source

@@ -1,9 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Parse.Parse.AST
-  ( module AST
-  , AST
-  , Annotated
+  ( Annotation
+  , Annotated(..)
   , Decl(..)
   , Exp(..)
   , Op
@@ -13,16 +12,16 @@ module Parse.Parse.AST
   , Tok(..)
   ) where
 
-import           AST    (Lit (..), Name, Pat (..), QString)
+import           AST    (Lit (..), Pat (..), QString)
 import           Pretty
 import           Record
 import           Source
 import           Tag
 import           Type
 
-type Annotated a = Tagged Source a
+type Annotation = Source
 
-type AST = Annotated Program
+type Annotated a = Tagged Annotation a
 
 data Decl a = DeclFun Name [a (Pat a)] (a (Exp a))
             | DeclSig Name Impure

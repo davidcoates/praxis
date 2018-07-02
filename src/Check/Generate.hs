@@ -1,5 +1,7 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Check.Generate
-  ( generate
+  ( Generatable(..)
   ) where
 
 import           AST
@@ -19,19 +21,24 @@ import           Type
 import           Data.Foldable    (foldlM)
 import           Data.List        (transpose)
 import           Data.Monoid      (Sum (..))
-import           Prelude          hiding (exp, read)
+import           Prelude          hiding (exp, log, read)
 
--- TODO data for constraint reasons?
-generate :: Praxis [Derivation]
-generate = save stage $ save inClosure $ do
-  set stage Generate
-  set inClosure False
-  p <- get desugaredAST
-  (p', cs) <- program p
-  set typedAST p'
-  debugPrint p'
-  debugPrint cs
-  return cs
+class Show (Annotated a) => Generatable a where
+  generate' :: Parse.Annotated a -> Praxis (Annotated a, [Derivation])
+  generate  :: Parse.Annotated a -> Praxis (Annotated a, [Derivation])
+  generate p = save stage $ save inClosure $ do
+    set stage Generate
+    set inClosure False
+    (p', cs) <- generate' p
+    log Debug p'
+    log Debug cs
+    return (p', cs)
+
+instance Generatable Program where
+  generate' = program
+
+instance Generatable Exp where
+  generate' = exp
 
 -- TODO Consider moving these or renaming these or using lenses
 getPure :: Impure -> Pure

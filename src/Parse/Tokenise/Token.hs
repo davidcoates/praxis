@@ -1,9 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Parse.Tokenise.Token
-  ( Annotated
+  ( Annotated(..)
   , Token(..)
-  , Lit(..)
   ) where
 
 import           AST    (Lit (..), QString (..))
@@ -33,6 +32,3 @@ instance Show Token where
   show (Lit l)        = show l
   show (Special c)    = [c]
   show Whitespace     = ""
-
-instance Show (Annotated Token) where
-  show (a :< x) = show x ++ " @ " ++ show a

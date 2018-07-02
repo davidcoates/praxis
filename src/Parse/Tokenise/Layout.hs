@@ -17,10 +17,8 @@ semi :: Annotated Token
 semi = Phantom :< Special ';'
 
 -- |Inserts phantom layout tokens based on indentation
-layout :: [Annotated Token] -> Praxis [Annotated Token]
-layout ts = do
-  s <- get (flags . static) -- TODO make this more robust
-  return $ l (-1) (not s) [] ts
+layout :: Bool -> [Annotated Token] -> [Annotated Token]
+layout topLevel ts = l (-1) topLevel [] ts
   where l :: Int -> Bool -> [Int] -> [Annotated Token] -> [Annotated Token] -- This function works by magic
         l i b cs (t@(_:<Whitespace):ts) = t : l i b cs ts
         l i b cs [] = replicate (length cs) rbrace

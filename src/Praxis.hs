@@ -4,13 +4,13 @@
 module Praxis
   ( Praxis
   , PraxisState
+  , Stage(..)
   , emptyState
+
   , throwError
   , internalError -- Prefer this over Prelude.error
-  , Stage(..)
 
   , get
-  , getWith
   , set
   , over
 
@@ -18,27 +18,20 @@ module Praxis
   , try
 
   , run
-  , runStatic -- TODO think of a better name for this
+  , runStatic -- TODO Think of a better name for this
 
-  , lift
-  , liftIO -- ^Lifts an IO computation to the Praxis monad
+  -- |Lift an IO computation to the Praxis monad
+  , liftIO
 
   -- |Flag lenses
-  , debug
-  , static -- TODO don't export this
+  , level
 
-  -- |Praxis lenses (TODO order these)
+  -- |Praxis lenses
+  , filename
   , flags
   , stage
-  , imports
-  , filename
-  , src
-  , tokens
-  , sugaredAST
-  , desugaredAST
   , tEnv
   , vEnv
-  , typedAST
   , inClosure
 
   , freshUniI
@@ -46,8 +39,9 @@ module Praxis
   , freshUniE
   , freshVar
 
-  , debugPrint
-  , debugPutStrLn
+  , Level(..)
+  , log
+  , logStr
   )
   where
 
@@ -56,9 +50,6 @@ import qualified Check.AST            as Check
 import           Common
 import           Env                  (TEnv, VEnv)
 import           Error                (Error)
-import qualified Parse.Desugar.AST    as Desugar
-import qualified Parse.Parse.AST      as Parse
-import qualified Parse.Tokenise.Token as Tokenise
 import           Record               (Record)
 import           Source
 import           Type
@@ -66,8 +57,7 @@ import           Type
 import           Control.Applicative  (liftA2)
 import           Control.Lens         (Lens', makeLenses, view)
 import qualified Control.Lens         (over, set)
-import           Control.Monad        (void)
-import qualified Control.Monad        (unless, when)
+import           Control.Monad        (when)
 import           Control.Monad.Except (ExceptT, runExceptT)
 import qualified Control.Monad.Except (throwError)
 import           Control.Monad.State  (StateT, gets, lift, modify, put,
@@ -75,6 +65,7 @@ import           Control.Monad.State  (StateT, gets, lift, modify, put,
 import qualified Control.Monad.State  as State (get)
 import           Data.Maybe           (fromMaybe)
 import qualified Data.Set             as Set
+import           Prelude              hiding (log)
 import           System.IO.Unsafe     (unsafePerformIO)
 
 data Stage = Tokenise
@@ -84,7 +75,6 @@ data Stage = Tokenise
            | Generate
            | Solve
            | Evaluate
--- TODO CodeGenerate
 
 instance Show Stage where
   show Tokenise = "Tokeniser"
@@ -95,59 +85,36 @@ instance Show Stage where
   show Solve    = "Inference (Contraint Solver)"
   show Evaluate = "Evaluate"
 
+-- |Logging level
+data Level = Normal
+           | Debug
+           | Trace
+  deriving (Show, Eq, Ord)
 
-type Token = Tokenise.Annotated Tokenise.Token
-
-data Flags = Flags { _debug :: Bool, _static :: Bool }
-  deriving (Show)
+data Flags = Flags
+  { _level  :: Level               -- ^Logging level
+  , _static :: Bool                -- ^Set for internal pure computations evaluated at compile time
+  } deriving (Show)
 
 data PraxisState = PraxisState
-  { _flags        :: Flags
-  , _stage        :: Stage               -- ^Current stage of compilation
-  , _freshUnis    :: [String]            -- ^Infinite list of distinct dummy names to use for unification types
-  , _freshVars    :: [String]            -- ^Infinite list of distinct dummy names to use for phantom variables
-  , _imports      :: [FilePath]          -- ^Loaded modules
-  , _filename     :: FilePath            -- ^File path (for error messages)
-  , _src          :: String              -- ^Source to compile
-  , _tokens       :: [Token]             -- ^List of tokens produced by tokeniser
-  , _sugaredAST   :: Parse.AST           -- ^AST after parsing of tokens
-  , _desugaredAST :: Desugar.AST         -- ^AST after desugaring
-  , _typedAST     :: Check.AST           -- ^AST after type inference
-  , _tEnv         :: TEnv                -- ^Type environment of local functions
-  , _kEnv         :: ()                  -- TODO (Kind environment)
-  , _vEnv         :: VEnv                -- ^Value environment for interpreter
-
-  , _inClosure    :: Bool                -- ^Checker (Generator) internal
-  {-
-  , _fname    :: Maybe FilePath            -- ^File path
-  , _imports  :: [FilePath]                -- ^Loaded modules
-  , _src      :: Maybe L.Text              -- ^File source
-  , _ast      :: Maybe Syn.Module          -- ^Frontend AST
-  , _tenv     :: Env.Env                   -- ^Typing environment
-  , _kenv     :: Map.Map Name Kind         -- ^Kind environment
-  , _cenv     :: ClassEnv.ClassEnv         -- ^Typeclass environment
-  , _cast     :: Maybe Core.Module         -- ^Core AST
-  , _flags    :: Flags.Flags               -- ^Praxis flags
-  , _venv     :: CoreEval.ValEnv Core.Expr -- ^Core interpreter environment
-  , _denv     :: DataEnv.DataEnv           -- ^Entity dictionary
-  , _clenv    :: ClassEnv.ClassHier        -- ^Typeclass hierarchy
-  -}
-
+  { _filename  :: String              -- ^File path (for error messages)
+  , _flags     :: Flags               -- ^Flags
+  , _freshUnis :: [String]            -- ^Infinite list of distinct dummy names to use for unification types
+  , _freshVars :: [String]            -- ^Infinite list of distinct dummy names to use for phantom variables
+  , _stage     :: Stage               -- ^Current stage of compilation
+  , _tEnv      :: TEnv                -- ^Type environment
+  , _kEnv      :: ()                  -- TODO (Kind environment)
+  , _vEnv      :: VEnv                -- ^Value environment for interpreter
+  , _inClosure :: Bool                -- ^Checker (Generator) internal TODO this probably should be put somewhere else
   } deriving (Show)
 
 type Praxis a = ExceptT Error (StateT PraxisState IO) a
 
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = False, _static = False }
--- defaultFlags = Flags { _debug = True, _static = False }
+defaultFlags = Flags { _level = Normal, _static = False }
 
 get :: Lens' PraxisState a -> Praxis a
 get = lift . gets . view
-
-getWith :: Lens' PraxisState a -> (a -> b) -> Praxis b
-getWith l f = do
-  x <- get l
-  return (f x)
 
 set :: Lens' PraxisState a -> a -> Praxis ()
 set l x = lift . modify $ Control.Lens.set l x
@@ -160,36 +127,25 @@ over l f = do
 throwError :: Error -> Praxis a
 throwError = Control.Monad.Except.throwError
 
--- filenameDisplay :: Praxis e String
--- filenameDisplay = fromMaybe "<interactive>" <$> getRaw filename
-
 emptyState :: PraxisState
 emptyState = PraxisState
-  { _flags        = defaultFlags
-  , _stage        = unset "stage"
+  { _filename     = "<stdin>"
+  , _flags        = defaultFlags
   , _freshUnis    = map ('~':) (fresh ['a'..'z'])
   , _freshVars    = map ('_':) (fresh ['a'..'z'])
-  , _imports      = unset "imports"
-  , _filename     = "<stdin>"
-  , _src          = unset "src"
-  , _tokens       = unset "tokens"
-  , _sugaredAST   = unset "sugaredAST"
-  , _desugaredAST = unset "desugaredAST"
+  , _stage        = unset "stage"
   , _tEnv         = unset "tenv"
   , _kEnv         = unset "kenv"
-  , _typedAST     = unset "typedAST"
   , _vEnv         = unset "vEnv"
   , _inClosure    = unset "inClosure"
   }
   where unset s = internalError ("unset " ++ s)
-
 
 fresh :: String -> [String]
 fresh alpha = concatMap perm [1..]
   where perm :: Int -> [String]
         perm 1 = map (:[]) alpha
         perm n = do { x <- alpha; y <- perm (n-1); return (x:y) }
-
 
 internalError :: String -> a
 internalError s = error ("<<<INTERNAL ERROR>>> " ++ s)
@@ -225,31 +181,29 @@ assert l p s c = do
   if p x then c else internalError s
 
 liftIO :: IO a -> Praxis a
--- liftIO io = assert (flags . static) (== False) "TODO not static" (lift (lift io))
-liftIO io = lift (lift io)
+liftIO io = assert (flags . static) (== False) "liftIO NOT STATIC" (lift (lift io))
 
 run :: Praxis a -> PraxisState -> IO (Either Error a, PraxisState)
 run = runStateT . runExceptT
 
-when :: Lens' PraxisState Bool -> Praxis a -> Praxis ()
-when l c = do
-  b <- get l
-  Control.Monad.when b (void c)
+shouldLog :: Level -> Praxis Bool
+shouldLog l = do
+  l' <- get (flags . level)
+  s <- get (flags . static)
+  return (l' == Trace || (not s && l' >= l))
 
-unless :: Lens' PraxisState Bool -> Praxis a -> Praxis ()
-unless l c = do
-  b <- get l
-  Control.Monad.unless b (void c)
+log :: Show a => Level -> a -> Praxis ()
+log l p = logStr l (show p)
 
--- TODO this possibly shouldnt be here
-debugPrint :: Show a => a -> Praxis ()
-debugPrint = debugPutStrLn . show
-
-debugPutStrLn :: String -> Praxis ()
-debugPutStrLn x = when (flags . debug) $ do -- unless (flags . static) $ do
+logStr :: Level -> String -> Praxis ()
+logStr l x = do
+  b <- shouldLog l
+  when b $ do
     s <- get stage
-    liftIO $ putStrLn ("Output from stage: " ++ show s)
-    liftIO $ putStrLn x
+    -- We don't use liftIO here so we can show Trace logs
+    lift (lift (putStrLn ("Output from stage: " ++ show s)))
+    lift (lift (putStrLn x))
+
 
 -- TODO: Stuff below this probably shouldn't be here...
 freshUniI :: Praxis Impure

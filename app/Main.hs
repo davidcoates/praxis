@@ -1,10 +1,12 @@
 module Main where
 
-import qualified Env.VEnv             as VEnv (lookup)
+import           AST
+import           Check.AST            (Annotated)
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
 import           Pretty               (indent)
+import           Value
 
 import           Control.Lens.Reified (ReifiedLens (..), ReifiedLens')
 import           Control.Monad        (void, when)
@@ -24,13 +26,14 @@ main = hSetBuffering stdin LineBuffering >> do
   void $ run (parse args) initialState
 
 parse :: [String] -> Praxis ()
-parse []          = repl
-parse [f]         = file f
-parse ("-d":args) = set (flags . debug) True >> parse args
-parse _           = liftIO $ putStrLn "Too many arguments"
+parse []  = repl
+parse ("-l":x:xs) | x == "debug" = set (flags . level) Debug >> parse xs
+                  | x == "trace" = set (flags . level) Trace >> parse xs
+parse [f] = file f
+parse _   = liftIO $ putStrLn "Too many arguments"
 
 file :: String -> Praxis ()
-file f = pretty (interpretFile f) (return ()) repl
+file f = pretty (interpretFile f :: Praxis (Annotated Program, ())) (return ()) repl
 
 repl :: Praxis ()
 repl = forever $ do
@@ -41,21 +44,10 @@ repl = forever $ do
 
 eval :: String -> Praxis ()
 eval s = do
-  let s' = "repl___ = " ++ s -- TODO fix this so we can have declarations
-  interpret s'
-  Just v <- VEnv.lookup "repl___"
+  -- TODO fix this so we can have declarations
+  (_, v) <- interpret s :: Praxis (Annotated Exp, Value)
   liftIO $ print v
 
 meta :: String -> Praxis ()
 meta "?" = liftIO $ putStrLn "help is TODO"
-meta s | Just s <- stripPrefix "toggle " s = case parseFlag s of
-  Just (Lens l) -> do
-    b <- get l
-    set l (not b)
-    return ()
-  Nothing -> liftIO $ putStrLn ("unknown flag '" ++ s ++ "'")
 meta s = liftIO $ putStrLn ("unknown command ':" ++ s ++ "'\nuse :? for help.")
-
-parseFlag :: String -> Maybe (ReifiedLens' PraxisState Bool)
-parseFlag "debug" = Just $ Lens $ flags . debug
-parseFlag _       = Nothing

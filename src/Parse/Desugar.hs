@@ -1,14 +1,11 @@
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE KindSignatures       #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Parse.Desugar
-  ( desugar
-
-  , desugarFree
-  , Desugarable
-
+  ( Desugarable(..)
   , module Parse.Desugar.AST
   ) where
 
@@ -30,41 +27,40 @@ import           Data.List              (intersperse)
 import           Data.Map               (Map)
 import qualified Data.Map               as Map
 import           Data.Monoid            ((<>))
-import           Prelude                hiding (exp)
+import           Prelude                hiding (exp, log)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
-class Desugarable a b | b -> a where
-  desugarer :: a -> Praxis b
+type Annotated a = Tagged Source a
 
-instance Desugarable (Parse.Annotated Parse.Program) (Annotated Program) where
-  desugarer = program
+class Show (Annotated a) => Desugarable (a :: (* -> *) -> *) where
+  type Sweet a :: (* -> *) -> *
+  desugar' :: Annotated (Sweet a) -> Praxis (Annotated a)
+  desugar  :: Annotated (Sweet a) -> Praxis (Annotated a)
+  desugar x = save stage $ do
+    set stage Desugar
+    x' <- desugar' x
+    log Debug x'
+    return x'
 
-instance Desugarable (Parse.Annotated Parse.Exp) (Annotated Exp) where
-  desugarer = exp
+instance Desugarable Program where
+  type Sweet Program = Parse.Program
+  desugar' = program
 
-instance Desugarable (Tag Source Impure) (Tag Source Impure) where
-  desugarer = pure
+instance Desugarable Exp where
+  type Sweet Exp = Parse.Exp
+  desugar' = exp
 
-desugarFree :: Desugarable a b => a -> Praxis b
-desugarFree a = save stage $ do
-  set stage Desugar
-  desugarer a
+instance Desugarable (Lift Impure) where
+  type Sweet (Lift Impure) = Lift Impure
+  desugar' = pure
 
-desugar :: Praxis ()
-desugar = save stage $ do
-  set stage Desugar
-  p <- get sugaredAST
-  p' <- desugarFree p
-  set desugaredAST p'
-  debugPrint p'
-
-program :: Parse.Annotated Parse.Program -> Praxis (Annotated Program)
+program :: Annotated Parse.Program -> Praxis (Annotated Program)
 program (a :< Parse.Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-stmts :: [Parse.Annotated Parse.Stmt] -> Praxis [Annotated Stmt]
+stmts :: [Annotated Parse.Stmt] -> Praxis [Annotated Stmt]
 stmts     [] = pure []
 stmts (s:ss) | a :< Parse.StmtExp e <- s = do
                 e' <- exp e
@@ -78,7 +74,7 @@ stmts (s:ss) | a :< Parse.StmtExp e <- s = do
                   where isStmtDecl (_ :< Parse.StmtDecl _) = True
                         isStmtDecl _                       = False
 
-exp :: Parse.Annotated Parse.Exp -> Praxis (Annotated Exp)
+exp :: Annotated Parse.Exp -> Praxis (Annotated Exp)
 exp e = ($ e) $ rec $ \a x -> case x of
 
   Parse.Apply x (a' :< Parse.VarBang s) ->
@@ -132,7 +128,7 @@ throwSyntaxError = throwError . SyntaxError
 throwDeclError :: DeclError -> Praxis a
 throwDeclError = throwSyntaxError . DeclError
 
-decls :: [Parse.Annotated Parse.Decl] -> Praxis [Annotated Decl]
+decls :: [Annotated Parse.Decl] -> Praxis [Annotated Decl]
 decls []              = pure []
 decls ((a :< d) : ds) = case d of
 
@@ -155,7 +151,7 @@ decls ((a :< d) : ds) = case d of
 -- * Also, if we disallow multiple definitions for nullary why do we allow multiple bindings of the same name in any decls block? (or do block)
 -- TODO check for overlapping patterns?
 
-pat :: Parse.Annotated Parse.Pat -> Praxis (Annotated Pat)
+pat :: Annotated Parse.Pat -> Praxis (Annotated Pat)
 pat p = ($ p) $ rec $ \a x -> case x of
 
   Parse.PatRecord r -> do
@@ -169,11 +165,11 @@ pat p = ($ p) $ rec $ \a x -> case x of
 
 type Tok = DAG.Tok (Tag Source Op) (Annotated Exp)
 
-tok :: Parse.Annotated Parse.Tok -> Praxis Tok
+tok :: Annotated Parse.Tok -> Praxis Tok
 tok (a :< Parse.TOp op) = pure (DAG.TOp (a :< op))
 tok (a :< Parse.TExp e) = DAG.TExpr <$> exp e
 
-mixfix :: [Parse.Annotated Parse.Tok] -> Praxis (Annotated Exp)
+mixfix :: [Annotated Parse.Tok] -> Praxis (Annotated Exp)
 mixfix ts = do
   ts' <- mapM tok ts
   -- TODO do something with report?

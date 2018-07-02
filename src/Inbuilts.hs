@@ -10,7 +10,7 @@ import qualified Env.TEnv     as TEnv (fromList)
 import           Env.VEnv     (VEnv)
 import qualified Env.VEnv     as VEnv (fromList)
 import           Error
-import           Parse        (parseFree)
+import           Parse        (parse)
 import           Praxis       (PraxisState, emptyState, liftIO, runStatic, tEnv,
                                vEnv)
 import           Record
@@ -24,10 +24,10 @@ initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ emptyState
 
 -- TODO
 mono :: String -> Type
-mono s = let (_ :< t) = runStatic (parseFree s) :: Tag Source Impure in Mono t
+mono s = let (_ :< Lift t) = runStatic (parse s) in Mono t
 
 poly :: String -> Type
-poly s = let (_ :< t :# _) = runStatic (parseFree s) :: Tag Source Impure in Forall [] (g t) t
+poly s = let (_ :< Lift (t :# _)) = runStatic (parse s) in Forall [] (g t) t
   where g (TyPrim _)         = []
         g (TyRecord r)       = concatMap g r
         g (TyUni _)          = []

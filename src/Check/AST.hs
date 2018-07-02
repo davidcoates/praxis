@@ -1,6 +1,6 @@
 module Check.AST
-  ( AST
-  , Annotated
+  ( Annotation
+  , Annotated(..)
   , module AST
   ) where
 
@@ -9,6 +9,6 @@ import           Source
 import           Tag
 import           Type
 
-type Annotated a = Tagged (Maybe Impure, Source) a
+type Annotation = (Maybe Impure, Source)
 
-type AST = Annotated Program
+type Annotated a = Tagged Annotation a

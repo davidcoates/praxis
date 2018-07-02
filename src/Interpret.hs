@@ -1,25 +1,29 @@
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Interpret
-  ( interpret
-  , interpretFile
+  ( Interpretable(..)
   ) where
 
+import           AST
 import           Check
+import           Check.AST       (Annotated (..))
 import           Eval
 import           Parse
+import qualified Parse.Parse.AST as Parse (Annotated (..))
 import           Praxis
 
-interpret :: String -> Praxis ()
-interpret s = do
-  set src s
-  parse
-  check
-  eval
+class Interpretable a where
+  interpret :: String -> Praxis (Annotated a, Evaluation a)
+  interpretFile :: FilePath -> Praxis (Annotated a, Evaluation a)
+  interpretFile f = do
+    set filename f
+    s <- liftIO (readFile f)
+    interpret s
 
-interpretFile :: FilePath -> Praxis ()
-interpretFile f = do
-  set filename f
-  s <- liftIO (readFile f)
-  set src s
-  parse
-  check
-  eval
+instance (Parseable a, Checkable a, Evaluable a) => Interpretable a where
+  interpret s = do
+    x <- parse s
+    y <- check x
+    v <- eval y
+    return (y, v)

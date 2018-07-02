@@ -7,15 +7,16 @@ module Check.Solve
 
 import           AST
 import           Check.Derivation
+import           Error
+import           Praxis
+import           Record
+import           Type
+
 import           Data.List        (nub)
 import           Data.Maybe       (fromJust)
 import qualified Data.Set         as Set
-import           Error
-import           Praxis
-import           Prelude          hiding (error)
-import           Record
+import           Prelude          hiding (error, log)
 import           Text.Parsec.Pos  (newPos)
-import           Type
 
 -- TODO: Make system part of Praxis state?
 -- TODO: Batch all effect constraints (or treat them as check?)
@@ -76,7 +77,7 @@ solve xs = save stage $ do
   s <- solveProgress s
   verifyProgressComplete s
   verifyCheck s
-  debugPrint (vars s)
+  log Debug (vars s)
   return (vars s)
     where isProgress d = case constraint d of { EqualP _ _ -> True; EqualE _ _ -> True;  _ -> False }
           isCheck = not . isProgress

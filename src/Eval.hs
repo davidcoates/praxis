@@ -1,5 +1,8 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies     #-}
+
 module Eval
-  ( eval
+  ( Evaluable(..)
   ) where
 
 import           Check.AST
@@ -15,12 +18,21 @@ import           Data.List   (find)
 import           Data.Monoid (Sum (..))
 import           Prelude     hiding (exp)
 
-eval :: Praxis ()
-eval = save stage $ do
-  set stage Evaluate
-  p <- get typedAST
-  program p
+class Show (Annotated a) => Evaluable a where
+  type Evaluation a
+  eval' :: Annotated a -> Praxis (Evaluation a)
+  eval  :: Annotated a -> Praxis (Evaluation a)
+  eval e = save stage $ do
+    set stage Evaluate
+    eval' e
 
+instance Evaluable Program where
+  type Evaluation Program = ()
+  eval' = program
+
+instance Evaluable Exp where
+  type Evaluation Exp = Value
+  eval' = exp
 
 program :: Annotated Program -> Praxis ()
 program (_ :< Program ds) = mapM_ decl ds

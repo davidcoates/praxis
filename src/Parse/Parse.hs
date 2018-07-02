@@ -3,17 +3,15 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Parse.Parse
-  ( parse
-
-  , parseFree
-  , Parseable
-  -- , module Parse.Parse.AST
+  ( Parseable(..)
   ) where
 
+import           AST                  (Lit (..), QString (..))
+import           Parse.Parse.AST      (Annotated (..))
 import           Parse.Parse.AST      as Parse
 import           Parse.Parse.Parser
-import           Parse.Tokenise.Token as Token
-
+import           Parse.Tokenise.Token (Token (..))
+import qualified Parse.Tokenise.Token as Token
 import           Praxis               hiding (try)
 import qualified Record
 import           Source
@@ -25,36 +23,28 @@ import qualified Control.Applicative  as Applicative (empty)
 import           Control.Lens         (view)
 import           Data.Maybe           (fromJust, isJust)
 import qualified Data.Set             as Set (fromList)
-import           Prelude              hiding (exp)
-
-import           AST                  (QString (..))
-
-class Parseable a where
-  parser :: Parser a
+import           Prelude              hiding (exp, log)
 
 type T a = a (Tag Source)
 
-instance Parseable (T Program) where
+class Show (Annotated a) => Parseable a where
+  parser :: Parser (T a)
+  parse  :: [Token.Annotated Token] -> Praxis (Annotated a)
+  parse ts = save stage $ do
+    set stage Parse
+    x <- runParser parser ts
+    log Debug x
+    return x
+
+instance Parseable Program where
   parser = program
 
-instance Parseable (T Exp) where
+instance Parseable Exp where
   parser = exp
 
-instance Parseable Impure where
-  parser = ty -- TODO
+instance Parseable (Lift Impure) where
+  parser = Lift <$> ty
 
-parseFree :: Parseable a => Praxis (Tag Source a)
-parseFree = save stage $ do
-  set stage Parse
-  ts <- get tokens
-  runParser parser ts
-
-parse :: Praxis ()
-parse = save stage $ do
-  set stage Parse
-  p <- parseFree
-  set sugaredAST p
-  debugPrint p
 
 -- TODO move these to Parse/Parser?
 optional :: Parser a -> Parser ()
@@ -187,7 +177,7 @@ left f p = unroll <$> p
   where unroll [x]      = x
         unroll (x:y:ys) = unroll ((f x y):ys)
 
-leftT :: (Parse.Annotated a -> Parse.Annotated a -> T a) -> Parser [Parse.Annotated a] -> Parser (T a)
+leftT :: (Annotated a -> Annotated a -> T a) -> Parser [Annotated a] -> Parser (T a)
 leftT f p = value <$> left (\x y -> tag x :< f x y) p
 
 mixfixexp :: Parser (T Exp)

@@ -12,10 +12,9 @@ module Parse.Tokenise.Tokeniser
 import           Error                (Error (..))
 import qualified Parse.Prim           as Prim
 import           Parse.Tokenise.Token
+import           Praxis               (Praxis, throwError)
 import           Source
 import           Tag
-
-import           Praxis               (Praxis, throwError)
 
 import           Control.Applicative  (Alternative (..), Applicative (..))
 import           Data.List            (intercalate)

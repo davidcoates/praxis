@@ -149,12 +149,14 @@ block :: Parser a -> Parser [a]
 block p = liftT3 (\_ p ps -> p:ps) lbrace p block'
   where block' = (try rbrace *> pure []) <|> liftT2 (:) (semi #> p) block'
 
-
 program :: Parser (T Program)
 program = fmap Program (optional whitespace *> block (annotated topDecl) <* optional whitespace)
 
 topDecl :: Parser (T Decl)
-topDecl = funType <|> funDecl <|?> "topDecl"
+topDecl = decl <|?> "topDecl" -- TODO
+
+decl :: Parser (T Decl)
+decl = funType <|> funDecl <|?> "decl"
 
 funType :: Parser (T Decl)
 funType = liftT2 ($) (try prefix) ty <?> "funType"
@@ -188,8 +190,9 @@ mixfixexp = Mixfix <$> some (try top <|> texp)
 qop :: Parser Op
 qop = qvarsym -- TODO
 
+-- TODO should do be here?
 lexp :: Parser (T Exp)
-lexp = expRead <|> fexp <|?> "lexp"
+lexp = expRead <|> expDo <|> fexp <|?> "lexp"
 
 fexp :: Parser (T Exp)
 fexp = leftT Apply (some (annotated aexp))
@@ -197,6 +200,12 @@ fexp = leftT Apply (some (annotated aexp))
 aexp :: Parser (T Exp)
 aexp = expRecord <|> parens <|> expVar <|> expLit <|?> "aexp"
   where parens = liftT3 (\_ e _ -> e) (try (special '(')) exp (special ')')
+
+stmt :: Parser (T Stmt)
+stmt = try (StmtDecl <$> annotated decl) <|> (StmtExp <$> annotated exp)
+
+expDo :: Parser (T Exp)
+expDo = Do <$> (try (reservedId "do") #> block (annotated stmt))
 
 expVar :: Parser (T Exp)
 expVar = Var <$> try varid <?> "var" -- TODO should be qvarid
@@ -217,9 +226,6 @@ lit :: Parser Lit
 lit = try (token lit') <?> "literal"
   where lit' (Token.Lit x) = Just x
         lit' _             = Nothing
-
-decl :: Parser (T Decl)
-decl = liftT4 (\n ps _ e -> DeclFun n ps e) varid (some (annotated pat)) (reservedOp "=") (annotated exp) <?> "decl"  -- TODO
 
 pat :: Parser (T Pat)
 pat = patHole <|> patVar <|> patLit <|> patRecord <|?> "pat"

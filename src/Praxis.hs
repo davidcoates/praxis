@@ -25,6 +25,7 @@ module Praxis
 
   -- |Flag lenses
   , level
+  , interactive
 
   -- |Praxis lenses
   , filename
@@ -92,8 +93,9 @@ data Level = Normal
   deriving (Show, Eq, Ord)
 
 data Flags = Flags
-  { _level  :: Level               -- ^Logging level
-  , _static :: Bool                -- ^Set for internal pure computations evaluated at compile time
+  { _level       :: Level             -- ^Logging level
+  , _interactive :: Bool
+  , _static      :: Bool              -- ^Set for internal pure computations evaluated at compile time
   } deriving (Show)
 
 data PraxisState = PraxisState
@@ -111,7 +113,7 @@ data PraxisState = PraxisState
 type Praxis a = ExceptT Error (StateT PraxisState IO) a
 
 defaultFlags :: Flags
-defaultFlags = Flags { _level = Normal, _static = False }
+defaultFlags = Flags { _level = Normal, _interactive = False, _static = False }
 
 get :: Lens' PraxisState a -> Praxis a
 get = lift . gets . view

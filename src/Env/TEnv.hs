@@ -6,6 +6,7 @@ module Env.TEnv
   , elimN
   , intro
   , join
+  , lookup
   , read
   , use
   )
@@ -22,7 +23,8 @@ import           Error
 import           Source           (Source)
 import           Type
 
-import           Prelude          hiding (read)
+import           Prelude          hiding (lookup, read)
+import qualified Prelude          (lookup)
 
 
 elim :: Praxis ()
@@ -79,13 +81,19 @@ use s n = do
       return (t, c1 ++ c2 ++ c4)
     Nothing     -> throwError (CheckError (NotInScope n s))
 
+lookup :: Name -> Praxis (Maybe Type)
+lookup n = do
+  l <- get tEnv
+  case AEnv.lookup n l of
+    Just (_, t) -> return (Just t)
+    Nothing     -> return Nothing
 
 -- TODO: Allow quantified effects
 ungeneralise :: Type -> Praxis (Pure, [Constraint])
 ungeneralise (Mono (t :# _)) = return (t, [])
 ungeneralise (Forall cs as t) = do
   bs <- sequence (replicate (length as) freshUniP)
-  let ft = (`lookup` zip as bs)
+  let ft = (`Prelude.lookup` zip as bs)
   let fe = const Nothing
   let subsP = subsPure ft fe
   return (subsP t, map (\c -> case c of Class s t -> Class s (subsP t)) cs)

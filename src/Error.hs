@@ -32,8 +32,9 @@ data DeclError = MismatchedArity Name (Source, Int) (Source, Int)
                | LacksBinding Name Source
 
 data CheckError = Contradiction Derivation
-                | Underdefined Derivation
                 | NotInScope String Source
+                | Stuck
+                | Underdefined Derivation
 
 instance Show Error where
   show (LexicalError s e) = "Lexical error: " ++ show e ++ " at " ++ show s
@@ -66,5 +67,7 @@ instance Show DeclError where
 
 instance Show CheckError where
   show (Contradiction d) = showDerivation d
+  show (NotInScope n s)  = "Not in scope: " ++ n ++ " at " ++ show s
+  show Stuck             = "Infinite loop detected :("
   show (Underdefined d)  = "Failed to completely deduce the unification variable(s) present in: " ++ showDerivation d
-  show (NotInScope n s)    = "Not in scope: " ++ n ++ " at " ++ show s
+

@@ -1,17 +1,18 @@
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Type
   ( Name
   , Kind(..)
   , Effect(..)
-  , Effects
+  , Effects(..)
   , Pure(..)
   , Prim(..)
   , Impure(..)
   , Constraint(..)
   , Type(..)
-  , subsEffects
-  , subsImpure
-  , subsPure
-  , subsConstraint
+  , Term(..)
+  , Sub(..)
   , share
   , empty
   , unions
@@ -27,10 +28,10 @@ import           Record
 import           Data.List  (intercalate)
 
 -- TODO need more kinds? KindRecord?
-data Kind = KindEffects     --
-          | KindPure        --
+data Kind = KindConstraint  --
+          | KindEffects     --
           | KindImpure      -- Do we need this? This is basically (KindPure, KindEffects)
-          | KindConstraint  --
+          | KindPure        --
           | KindRecord (Record Kind)
 
 {-
@@ -52,54 +53,58 @@ data XKind = XKindBase Kind
   { EfUni α, EfLit "Read IO" } if α ~> { EfLit "WriteIO", EfLit "ReadHeap" } then the result is { EfLit "WriteIO", EfLit "ReadHeap", EfLit "Read IO" }
 -}
 data Effect = EfLit String           -- ^A concrete effect e.g., Eg `ReadIO`
-            | EfVar String           -- ^An effect variable (e.g., e in forall a b e. (a -> b # e) -> [a] -> [b] # e)
             | EfUni String           -- ^An effect unification variable
+            | EfVar String           -- ^An effect variable (e.g., e in forall a b e. (a -> b # e) -> [a] -> [b] # e)
             deriving (Ord, Eq)
 
-type Effects = Set Effect
+newtype Effects = Effects { getEffects :: Set Effect }
+  deriving (Ord, Eq)
+
+instance Show Effects where
+  show (Effects es) = "{" ++ intercalate ", " (map show (elems es)) ++ "}"
 
 empty :: Effects
-empty = Set.empty
+empty = Effects Set.empty
 
 unions :: [Effects] -> Effects
-unions = Set.unions
+unions = Effects . Set.unions . map getEffects
 
 singleton :: Effect -> Effects
-singleton = Set.singleton
+singleton = Effects . Set.singleton
 
 -- |A *top-level* pure type
-data Pure = TyPrim Prim              -- ^A primitive type -- TODO get rid of this eventually
+data Pure = TyBang Pure              -- ^A read-only reference
+          | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool] -- TODO not [Pure], but XPure?
+          | TyFun Pure Impure        -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
+          | TyPrim Prim              -- ^A primitive type -- TODO get rid of this eventually
           | TyRecord (Record Pure)   -- ^A record type
           | TyUni String             -- ^A (pure) type unification variable
-          | TyFun Pure Impure        -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
-          | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool] -- TODO not [Pure], but XPure?
           | TyVar String             -- ^A type variable (e.g., a in forall a. a -> a)
-          | TyBang Pure              -- ^A read-only reference
           deriving (Ord, Eq)
 
 -- Perhaps ultimately replace this with TyData "Bool" [], TyData "Int" []
-data Prim = TyBool | TyInt | TyChar | TyString
+data Prim = TyBool | TyChar | TyInt | TyString
           deriving (Ord, Eq)
 
 data Impure = Pure :# Effects
   deriving (Ord, Eq)
 
 data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types in Classes
-                | EqualP Pure Pure
                 | EqualE Effects Effects
+                | EqualP Pure Pure
                 -- TODO need EqualK at least internally?
                 deriving (Ord, Eq)
 
 -- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
 data Type = Mono Impure
-          | Forall [Constraint] [String] Pure
+          | Forall [Constraint] [Name] Pure
   deriving (Ord, Eq)
 
 instance Show Kind where
-  show KindEffects    = "E"
-  show KindPure       = "P"
-  show KindImpure     = "I"
   show KindConstraint = "C"
+  show KindEffects    = "E"
+  show KindImpure     = "I"
+  show KindPure       = "P"
   show (KindRecord r) = show r
 
 instance Show Effect where
@@ -109,35 +114,32 @@ instance Show Effect where
 
 instance Show Prim where
   show TyBool   = "Bool"
-  show TyInt    = "Int"
   show TyChar   = "Char"
+  show TyInt    = "Int"
   show TyString = "String"
 
 instance Show Constraint where
+  show (Class c t)  = c ++ " (" ++ show t ++ ")"
+  show (EqualE e f) = show e  ++ " ~ " ++ show f
   show (EqualP a b) = show a  ++ " ~ " ++ show b
-  show (EqualE a b) = showEffects a  ++ " ~ " ++ showEffects b
-  show (Class c t)  = c ++ " " ++ show t
 
 instance Show Pure where
-  show (TyPrim p)    = show p
-  show (TyRecord r)  = show r
-  show (TyUni s)     = s
+  show (TyBang p)    = "bang(" ++ show p ++ ")"
+  show (TyData s ts) = s ++ unwords (map (\t -> parens (p t) (show t)) ts)
+    where p t = case t of (TyFun _ _)  -> True -- TODO more robust pretty printing
+                          (TyData _ _) -> True
+                          _            -> False
   show (TyFun a b)   = parens p (show a) ++ " -> " ++ show b
     where p = case a of (TyFun _ _) -> True
                         _           -> False
-  show (TyData s ts) = s ++ unwords (map (\t -> parens (p t) (show t)) ts)
-    where p t = case t of (TyFun _ _)  -> True
-                          (TyData _ _) -> True
-                          _            -> False
+  show (TyPrim p)    = show p
+  show (TyRecord r)  = show r
+  show (TyUni s)     = s
   show (TyVar s)     = s
 
-  show (TyBang p)    = "bang(" ++ show p ++ ")"
-
-showEffects :: Effects -> String -- TODO consider newtyping Effects to avoid this
-showEffects es = intercalate ", " (map show (elems es))
 
 instance Show Impure where
-  show (p :# es) = show p ++ (if Set.null es then "" else " # " ++ showEffects es)
+  show (p :# es) = show p ++ (if es == empty then "" else " # " ++ show es)
 
 instance Show Type where
   show (Mono t) = show t
@@ -148,32 +150,63 @@ parens True  x = "(" ++ x ++ ")"
 parens False x = x
 
 
-subsEffects :: (String -> Maybe Effects) -> Effects -> Effects
-subsEffects f m = Set.foldl' Set.union Set.empty (Set.map g m)
-                  where g :: Effect -> Set Effect
-                        g e@(EfUni s) = fromMaybe (singleton e) (f s)
-                        g e           = singleton e
-
-subsImpure :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Impure -> Impure
-subsImpure ft fe (p :# es) = subsPure ft fe p :# subsEffects fe es
-
-subsPure :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Pure -> Pure
-subsPure ft fe = subsPure'
-  where subsPure' :: Pure -> Pure
-        subsPure' (TyRecord r)  = TyRecord (fmap subsPure' r)
-        subsPure' (TyPrim p)    = TyPrim p
-        subsPure' t@(TyUni s)   = fromMaybe t (ft s)
-        subsPure' (TyFun a b)   = TyFun (subsPure' a) (subsImpure ft fe b)
-        subsPure' (TyData s ts) = TyData s (map subsPure' ts)
-        subsPure' t@(TyVar s)   = fromMaybe t (ft s)
-
-subsConstraint :: (String -> Maybe Pure) -> (String -> Maybe Effects) -> Constraint -> Constraint
-subsConstraint ft fe = subsC
-  where subsC (Class s t)    = Class s (subsP t)
-        subsC (EqualP p1 p2) = EqualP (subsP p1) (subsP p2)
-        subsC (EqualE e1 e2) = EqualE (subsE e1) (subsE e2)
-        subsP = subsPure ft fe
-        subsE = subsEffects fe
-
 share :: Pure -> Constraint
 share = Class "Share"
+
+data Term = TermPure Pure
+          | TermEffects Effects
+  deriving (Ord, Eq)
+
+instance Show Term where
+  show (TermPure p)    = show p
+  show (TermEffects e) = show e
+
+class Sub a where
+  sub :: (Name -> Maybe Term) -> a -> a
+
+  subP :: (Name -> Maybe Pure) -> a -> a
+  subP f = sub (\n -> TermPure <$> f n)
+  subE :: (Name -> Maybe Effects) -> a -> a
+  subE f = sub (\n -> TermEffects <$> f n)
+
+instance Sub Pure where
+  sub f (TyBang    p) = sub f p
+  sub f (TyData i ps) = TyData i (map (sub f) ps)
+  sub f (TyFun p1 t2) = TyFun (sub f p1) (sub f t2)
+  sub f (TyPrim p)    = TyPrim p
+  sub f (TyRecord r)  = TyRecord (fmap (sub f) r)
+  sub f t             = case t of
+    TyUni n -> g (TyUni n) n
+    TyVar n -> g (TyVar n) n
+    where g t n | Just (TermPure p) <- f n = p
+                | Nothing           <- f n = t
+                | otherwise                = error "Bad term substitution"
+
+instance Sub Impure where
+  sub f (p :# e) = sub f p :# sub f e
+
+instance Sub Constraint where
+  sub f (Class c p)    = Class c (sub f p)
+  sub f (EqualE e1 e2) = EqualE (sub f e1) (sub f e2)
+  sub f (EqualP p1 p2) = EqualP (sub f p1) (sub f p2)
+
+instance Sub Type where
+  sub f (Mono t) = Mono (sub f t)
+  sub f t        = t
+
+instance Sub Effects where
+  sub f (Effects es) = Effects $ Set.foldl' Set.union Set.empty (Set.map h es)
+    where h (EfUni n) = g (EfUni n) n
+          h (EfVar n) = g (EfVar n) n
+          h e         = Set.singleton e
+          g :: Effect -> Name -> Set Effect
+          g e n | Just (TermEffects e) <- f n = getEffects e
+                | Nothing              <- f n = Set.singleton e
+                | otherwise                   = error "Bad term substitution"
+
+instance Sub Term where
+  sub f (TermPure p)    = TermPure $ sub f p
+  sub f (TermEffects e) = TermEffects $ sub f e
+
+instance Sub a => Sub [a] where
+  sub f = map (sub f)

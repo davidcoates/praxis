@@ -23,7 +23,7 @@ import           Error
 import           Source           (Source)
 import           Type
 
-import           Prelude          hiding (lookup, read)
+import           Prelude          hiding (log, lookup, read)
 import qualified Prelude          (lookup)
 
 
@@ -59,10 +59,10 @@ read s n = do
   case AEnv.lookup n l of
     Just (u, t) -> do
       (t, c3) <- ungeneralise t
-      let c1 = [ newDerivation (share t) ("Variable '" ++ n ++ "' used before let bang") s | not u ]
+      let c1 = [ newDerivation (share t) (UnsafeView n) s | not u ]
       b <- get inClosure
-      let c2 = [ newDerivation (share t) ("Variable '" ++ n ++ "' captured") s | b ]
-      let c4 = map (\c -> newDerivation c ("Variable '" ++ n ++ "' expanded") s) c3
+      let c2 = [ newDerivation (share t) (Captured n) s | b ]
+      let c4 = map (\c -> newDerivation c (Instance n) s) c3
       return (t, c1 ++ c2 ++ c4)
     Nothing     -> throwError (CheckError (NotInScope n s))
 
@@ -74,10 +74,10 @@ use s n = do
   case e of
     Just (u, t) -> do
       (t, c3) <- ungeneralise t
-      let c1 = [ newDerivation (share t) ("Variable '" ++ n ++ "' used for a second time") s | u ]
+      let c1 = [ newDerivation (share t) (Shared n) s | u ]
       b <- get inClosure
-      let c2 = [ newDerivation (share t) ("Variable '" ++ n ++ "' captured") s | b ]
-      let c4 = map (\c -> newDerivation c ("Variable '" ++ n ++ "' expanded") s) c3
+      let c2 = [ newDerivation (share t) (Captured n) s | b ]
+      let c4 = map (\c -> newDerivation c (Instance n) s) c3
       return (t, c1 ++ c2 ++ c4)
     Nothing     -> throwError (CheckError (NotInScope n s))
 
@@ -89,11 +89,11 @@ lookup n = do
     Nothing     -> return Nothing
 
 -- TODO: Allow quantified effects
+-- TODO add axioms
 ungeneralise :: Type -> Praxis (Pure, [Constraint])
 ungeneralise (Mono (t :# _)) = return (t, [])
 ungeneralise (Forall cs as t) = do
   bs <- sequence (replicate (length as) freshUniP)
-  let ft = (`Prelude.lookup` zip as bs)
-  let fe = const Nothing
-  let subsP = subsPure ft fe
-  return (subsP t, map (\c -> case c of Class s t -> Class s (subsP t)) cs)
+  let f :: Sub a => a -> a
+      f = subP (`Prelude.lookup` zip as bs)
+  return (f t, f cs)

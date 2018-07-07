@@ -7,163 +7,127 @@ module Check.Solve
 
 import           AST
 import           Check.Derivation
+import           Check.System
 import           Error
 import           Praxis
 import           Record
 import           Type
 
-import           Data.List        (nub)
-import           Data.Maybe       (fromJust)
-import qualified Data.Set         as Set
-import           Prelude          hiding (error, log)
-import           Text.Parsec.Pos  (newPos)
+import           Control.Applicative    (Const (..))
+import           Control.Arrow          (second)
+import           Control.Monad.Identity (Identity (..))
+import           Data.List              (nub, sort)
+import           Data.Maybe             (fromJust)
+import qualified Data.Set               as Set
+import           Prelude                hiding (log)
 
--- TODO: Make system part of Praxis state?
--- TODO: Batch all effect constraints (or treat them as check?)
---    so progress -> effects -> check
-
-data System = System
-  { vars     :: [(Name, Pure)]
-  , progress :: [Derivation]
-  , check    :: [Derivation]
-  }
-
-data UniType = UniTy | UniEf
 
 class Unis a where
-  unis :: UniType -> a -> [Name]
-
-  tyUnis :: a -> [Name]
-  tyUnis = unis UniTy
-  efUnis :: a -> [Name]
-  efUnis = unis UniEf
-  allUnis :: a -> [Name]
-  allUnis x = tyUnis x ++ efUnis x
+  unis :: a -> [Name]
 
 instance Unis Derivation where
-  unis s d = unis s (constraint d)
+  unis d = unis (constraint d)
 
 instance Unis Constraint where
-  unis s (EqualP p1 p2) = unis s p1 ++ unis s p2
-  unis s (EqualE e1 e2) = unis s e1 ++ unis s e2
-  unis s (Class _ t)    = unis s t
+  unis (EqualP p1 p2) = unis p1 ++ unis p2
+  unis (EqualE e1 e2) = unis e1 ++ unis e2
+  unis (Class _ t)    = unis t
 
 instance Unis Impure where
-  unis s (t :# e) = unis s t ++ unis s e
+  unis (t :# e) = unis t ++ unis e
 
 instance Unis Effect where
-  unis UniEf (EfUni n) = [n]
-  unis _     _         = []
+  unis (EfUni n) = [n]
+  unis _         = []
 
 instance Unis Effects where
-  unis s = concat . Set.elems . Set.map (unis s)
+  unis = concat . Set.elems . Set.map unis . getEffects
 
 instance Unis Pure where
-  unis s (TyFun t1 t2) = unis s t1 ++ unis s t2
-  unis s (TyData _ ts) = concatMap (unis s) ts
-  unis s (TyRecord r)  = concatMap (unis s) r
-  unis s (TyBang p)    = unis s p
+  unis (TyBang p)    = unis p
+  unis (TyData _ ts) = concatMap unis ts
+  unis (TyFun t1 t2) = unis t1 ++ unis t2
+  unis (TyPrim _)    = []
+  unis (TyRecord r)  = concatMap unis r
+  unis (TyUni n)     = [n]
+  unis (TyVar _)     = []
 
-  unis UniTy (TyUni n) = [n]
-  unis _     (TyUni _) = []
-
-  unis s (TyVar _)     = []
-  unis s (TyPrim _)    = []
-
-solve :: [Derivation] -> Praxis [(String, Pure)]
-solve xs = save stage $ do
+solve :: [Derivation] -> Praxis [(String, Term)]
+solve cs = save stage $ save system $ do
   set stage Solve
-  let s = System { vars = map (\t -> (t, TyUni t)) (nub (concatMap allUnis xs)), progress = filter isProgress xs, check = filter isCheck xs }
-  s <- solveProgress s
-  verifyProgressComplete s
-  verifyCheck s
-  log Debug (vars s)
-  return (vars s)
-    where isProgress d = case constraint d of { EqualP _ _ -> True; EqualE _ _ -> True;  _ -> False }
-          isCheck = not . isProgress
+  set system (initialSystem cs)
+  spin
+  sol <- get (system . solution)
+  logList Debug (sort sol)
+  return sol
 
--- |Checks all EqualP constraints are of the form uni ~ concrete
--- TODO Check effects also
-verifyProgressComplete :: System -> Praxis ()
-verifyProgressComplete s = mapM_ ok (progress s)
-  where ok d = case constraint d of
-          EqualP (TyUni _) p -> if null (tyUnis p) then pure () else underdefined d -- TODO need a different error? (internal error? or underdefined?)
-          EqualP _         _ -> underdefined d -- TODO this shouldn't happen? better error messsage?
-          _                  -> pure ()
+spin :: Praxis ()
+spin = do
+  set (system . changed) False
+  progress
+  thinking <- get (system . changed)
+  if thinking then
+    spin
+  else do
+    cs <- get (system . constraints)
+    case cs of [] -> return () -- Done
+               _  -> throwError (CheckError Stuck)
 
--- |occurs t1 t2 returns True iff t1 is contained within t2
-occurs :: Pure -> Pure -> Bool
-occurs t1 t2 = t1 == t2 || occurs' t2
-  where occurs' (TyPrim _)    = False
-        occurs' (TyUni _)     = False
-        occurs' (TyFun a b)   = occurs t1 a || occursT t1 b
-        occurs' (TyData _ ts) = any (occurs t1) ts
-        occurs' (TyVar _)     = False
-        occurs' (TyRecord r)  = or (fmap (occurs t1) r)
-        occurs' (TyBang p)    = occurs t1 p
-        occursT t1 (t2 :# es) = occurs t1 t2
+progress :: Praxis ()
+progress = do
+  cs <- (nub . sort) <$> get (system . constraints)
+  set (system . constraints) []
+  set (system . staging) cs
+  progress'
+
+progress' :: Praxis ()
+progress' = do
+  cs <- get (system . staging)
+  case cs of []     -> return () -- Done
+             (c:cs) -> set (system . staging) cs >> (single c >>= (\cs -> over (system . constraints) (++ cs))) >> progress'
+
+single :: Derivation -> Praxis [Derivation]
+single d = case constraint d of
+
+  EqualE e1 e2 -> solved -- TODO
+
+  EqualP p1 p2 | p1 == p2 -> tautology
+
+  EqualP (TyUni x)           p -> if x `elem` unis p then contradiction else x ↦ (TermPure p) >> solved
+  EqualP _           (TyUni _) -> swap
+
+  EqualP (TyFun p1 (p2 :# e2)) (TyFun p3 (p4 :# e4)) -> introduce [ EqualP p1 p3, EqualP p2 p4, EqualE e2 e4 ]
+
+  EqualP (TyRecord r1) (TyRecord r2) | sort (keys r1) == sort (keys r2) -> let values = map snd . Record.toCanonicalList
+                                                                           in  introduce (zipWith EqualP (values r1) (values r2))
+
+  EqualP _ _ -> contradiction
+
+  Class "Share" p -> case p of
+    TyPrim _   -> tautology
+    TyFun _ _  -> tautology
+    TyUni _    -> defer
+    TyRecord r -> introduce (map (Class "Share" . snd) (Record.toList r))
+    _          -> contradiction
+
+  Class _ p -> defer
+
+  where solved = set (system . changed) True >> pure []
+        tautology = solved
+        defer = pure [d]
+        introduce cs = set (system . changed) True >> pure (map (d `implies`) cs)
+        swap = case constraint d of EqualP p1 p2 -> single d{ constraint = EqualP p2 p1 }
+                                    EqualE e1 e2 -> single d{ constraint = EqualE e2 e1 }
+        contradiction = throwError . CheckError . Contradiction $ d
 
 
--- |Applies a substitution to the system.
--- Does NOT perform occurs check
-sub :: (Name, Pure) -> System -> System
-sub (n,t) s = s{ vars = vars', progress = progress', check = check' }
-  where ft x = lookup x [(n,t)]
-        fe x = lookup x [] -- TODO ?
-        vars' = map (\(n,t) -> (n, subsPure ft fe t)) (vars s)
-        subsD = \d -> d { constraint = subsConstraint ft fe (constraint d) }
-        progress' = map subsD (progress s)
-        check'    = map subsD (check s)
-
-contradiction :: Derivation -> Praxis a
-contradiction = throwError . CheckError . Contradiction
-
-underdefined :: Derivation -> Praxis a
-underdefined = throwError . CheckError . Underdefined
-
-solveProgress :: System -> Praxis System
-solveProgress s@System { progress = [] } = return s
-solveProgress s@System { progress = d:ds } = case constraint d of
-
-  EqualP t1 t2 -> do
-    s <- solveEqualP t1 t2
-    solveProgress s
-      where solveEqualP (TyUni s1) (TyUni s2) | s1 == s2 = return s{ progress = ds }
-            solveEqualP (TyUni s1) t2 = if occurs (TyUni s1) t2 then contradiction d else return $ sub (s1,t2) s{ progress = ds }
-            solveEqualP t1 t2@(TyUni _) = solveEqualP t2 t1
-
-            solveEqualP (TyFun t1 (t2 :# e2)) (TyFun t3 (t4 :# e4)) = return s{ progress = d `implies` EqualP t1 t3 : d `implies` EqualP t2 t4 : d `implies` EqualE e2 e4 : ds }
-            solveEqualP t1@(TyFun _ _) t2 = contra t1 t2
-            solveEqualP t1 t2@(TyFun _ _) = solveEqualP t2 t1
-
-            solveEqualP t1@(TyPrim l1) t2@(TyPrim l2) | l1 == l2  = return s{ progress = ds }
-                                                   | otherwise = contra t1 t2
-
-            solveEqualP t1@(TyRecord r1) t2@(TyRecord r2) = let
-              (r1', r2') = (toCanonicalList r1, toCanonicalList r2)
-              keysEq = all (uncurry (==)) (zip (map fst r1') (map fst r2'))
-              ds' = map (\(p1, p2) -> d `implies` EqualP p1 p2) $ zip (map snd r1') (map snd r2')
-                in if keysEq then return s{ progress = ds' ++ ds } else contra t1 t2
-
-            solveEqualP t1 t2 = contra t1 t2
-
-            contra t1 t2 = contradiction (d `implies` EqualP t1 t2)
-
-  EqualE e1 e2 -> do -- TODO
-    s <- solveEqualE e1 e2
-    solveProgress s
-      where solveEqualE e1 e2 | e1 == empty && e2 == empty = return s{ progress = ds }
-            solveEqualE e1 e2 = return s{ progress = ds } -- FIXME
-
-verifyCheck :: System -> Praxis ()
-verifyCheck s@System { check = [] } = return ()
-verifyCheck s@System { check = d:ds } = case constraint d of
-  Class x t -> do
-    if x == "Share" || x == "Drop" then sd t else contradiction d
-    verifyCheck s{ check = ds }
-      where sd :: Pure -> Praxis ()
-            sd (TyPrim _)  = return ()
-            sd (TyUni _)   = underdefined d
-            sd (TyFun _ _) = return ()
-            -- Rest is TODO
-
+(↦) :: Name -> Term -> Praxis ()
+n ↦ p = do
+  let f :: Sub a => a -> a
+      f = sub (\n' -> if n == n' then Just p else Nothing)
+  over (system . solution) ((n, p):)
+  over (system . solution) (map (second f))
+  over (system . constraints) (map f)
+  over (system . staging) (map f)
+  over (system . axioms) (map f)
+  over tEnv (fmap f)

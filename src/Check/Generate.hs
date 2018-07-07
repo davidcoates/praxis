@@ -16,10 +16,10 @@ import           Praxis
 import           Record
 import           Source
 import           Tag
-import           Type
+import           Type             hiding (getEffects)
 
 import           Data.Foldable    (foldlM)
-import           Data.List        (transpose)
+import           Data.List        (nub, sort, transpose)
 import           Data.Monoid      (Sum (..))
 import           Prelude          hiding (exp, log, read)
 
@@ -31,8 +31,9 @@ class Show (Annotated a) => Generatable a where
     set inClosure False
     (p', cs) <- generate' p
     log Debug p'
-    log Debug cs
-    return (p', cs)
+    let cs' = nub . sort $ cs
+    logList Debug cs'
+    return (p', cs')
 
 instance Generatable Program where
   generate' = program
@@ -83,7 +84,7 @@ decl (s :< d) = case d of
       (e', c1) <- exp e
       let t' = ty e'
       intro n (Mono dt)
-      let c2 = equalI dt t' "user-supplied signature TODO" s
+      let c2 = equalI dt t' (UserSignature (Just n)) s
       return ((Just dt, s) :< DeclFun n ut i [([], e')], c1 ++ c2)
     else do
       -- TODO clean this up
@@ -91,13 +92,13 @@ decl (s :< d) = case d of
       as' <- mapM binds as
       let c1 = concatMap snd as'
       let bs = map fst as'
-      let tss = map (\ps -> equalIs (map (\((Just t, s) :< _) -> (t,s)) ps) "TODO") . transpose . map fst $ bs
+      let tss = map (\ps -> equalIs (map (\((Just t, s) :< _) -> (t,s)) ps) Unknown) . transpose . map fst $ bs
       let ts = map fst tss
       let c2 = concatMap snd tss
       let es = map snd bs
-      let (te, c3) = equalIs (map (\((Just t, s) :< _) -> (t,s)) es) "TODO"
+      let (te, c3) = equalIs (map (\((Just t, s) :< _) -> (t,s)) es) Unknown
       let t' = fold ts te
-      let c4 = equalI dt t' "user supplied signature TODO" s
+      let c4 = equalI dt t' (UserSignature (Just n)) s
       return ((Just dt, s) :< DeclFun n ut i bs, c1 ++ c2 ++ c3 ++ c4)
         where fold            [] te = te
               fold ((p :# _):ps) te = TyFun p (fold ps te) :# empty
@@ -124,14 +125,14 @@ exp (s :< e) = case e of
     (x', c2) <- exp x
     let fp :# fe = ty f'
     let xp :# xe = ty x'
-    let c3 = [ newDerivation (EqualP fp (TyFun xp (yp :# ye))) "fun app" s ]
+    let c3 = [ newDerivation (EqualP fp (TyFun xp (yp :# ye))) Application s ]
     let e = unions [fe, xe, ye]
     return ((Just (yp :# e), s) :< Apply f' x', c1 ++ c2 ++ c3)
 
   Case e alts -> do
     (e', c1) <- exp e
     (alts', c2) <- parallel (map bind alts)
-    let (t, c3) = equalIs (map (\(_, (Just t, s) :< _) -> (t,s)) alts') "case alternatives must have the same type"
+    let (t, c3) = equalIs (map (\(_, (Just t, s) :< _) -> (t,s)) alts') CaseCongruence
     return ((Just t, s) :< Case e' alts', c1 ++ c2 ++ c3)
 
   Do ss -> do
@@ -147,7 +148,7 @@ exp (s :< e) = case e of
     let ap :# ae = ty a'
     let bp :# be = ty b'
     let cp :# ce = ty c'
-    let c4 = [ newDerivation (EqualP ap (TyPrim TyBool)) "condition of if expression must be Bool" s, newDerivation (EqualP bp cp) "branches of if expression must have the same type" s ]
+    let c4 = [ newDerivation (EqualP ap (TyPrim TyBool)) IfCondition s, newDerivation (EqualP bp cp) IfCongruence s ]
     let e = unions [ae, be, ce]
     return ((Just (bp :# e), s) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4)
 
@@ -177,7 +178,7 @@ exp (s :< e) = case e of
 
   Sig e t -> do
     (e', c1) <- exp e
-    let c2 = equalI t (ty e') "User-supplied signature" s
+    let c2 = equalI t (ty e') (UserSignature Nothing) s
     return (e', c1 ++ c2)
 
   Var n -> do
@@ -185,10 +186,10 @@ exp (s :< e) = case e of
     return ((Just (p :# empty), s) :< Var n, c1)
 
 
-equalIs :: [(Impure, Source)] -> String -> (Impure, [Derivation])
+equalIs :: [(Impure, Source)] -> Reason -> (Impure, [Derivation])
 equalIs [(t, _)]         _ = (t, [])
-equalIs ((p :# e, s):ts) m = let (p' :# e', cs) = equalIs ts m
-                                 c = newDerivation (EqualP p p') m s
+equalIs ((p :# e, s):ts) r = let (p' :# e', cs) = equalIs ts r
+                                 c = newDerivation (EqualP p p') r s
                              in (p :# unions [e, e'], c:cs)
 
 binds :: ([Parse.Annotated Pat], Parse.Annotated Exp) -> Praxis (([Annotated Pat], Annotated Exp), [Derivation])

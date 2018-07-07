@@ -12,8 +12,9 @@ import           Check.Solve     (solve)
 import qualified Parse.Parse.AST as Parse (Annotated)
 import           Praxis
 import           Tag
-import           Type            (subsImpure)
+import           Type            (sub)
 
+import           Control.Arrow   (first)
 import           Prelude         hiding (log)
 
 class Checkable a where
@@ -23,9 +24,7 @@ instance (Show (Annotated a), TagTraversable a, Generatable a) => Checkable a wh
   check p = save stage $ do
     set stage Check
     (p', cs) <- generate p
-    subs <- solve cs
-    let ft x = lookup x subs
-    let fe x = Nothing
-    let p'' = tagMap (\(t, s) -> (subsImpure ft fe <$> t, s)) p'
+    solution <- solve cs
+    let p'' = tagMap (first (sub (`lookup` solution) <$>)) p'
     log Debug p''
     return p''

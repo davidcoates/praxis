@@ -11,14 +11,18 @@ module Env.AEnv
   )
 where
 
-import           Env.Env   (Env (..))
-import qualified Env.Env   as Env
+import           Env.Env       (Env (..))
+import qualified Env.Env       as Env
 
-import           Data.List (intercalate)
-import           Prelude   hiding (lookup)
-import qualified Prelude   (lookup)
+import           Control.Arrow (second)
+import           Data.List     (intercalate)
+import           Prelude       hiding (lookup)
+import qualified Prelude       (lookup)
 
 newtype AEnv a b = AEnv (Env a (Bool, b))
+
+instance Functor (AEnv a) where
+  fmap f (AEnv l) = AEnv (fmap (second f) l)
 
 fromList :: [(a, b)] -> AEnv a b
 fromList = AEnv . Env.fromList . map (\(a, b) -> (a, (False, b)))

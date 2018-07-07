@@ -255,7 +255,7 @@ ty :: Parser Impure
 ty = liftT2O (:#) tyPure empty (reservedOp "#" #> effs)
 
 effs :: Parser Effects
-effs = Set.fromList <$> sepBy1 eff (special ',')
+effs = Effects . Set.fromList <$> sepBy1 eff (special ',')
 
 eff :: Parser Effect
 eff = EfLit <$> conid -- TODO vars, qualified effects?

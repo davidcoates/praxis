@@ -2,8 +2,6 @@ module Inbuilts
   ( initialState
   ) where
 
-import           Control.Lens (set)
-
 import           AST          (Lit (..))
 import           Env.TEnv     (TEnv)
 import qualified Env.TEnv     as TEnv (fromList)
@@ -19,6 +17,9 @@ import           Tag
 import           Type
 import           Value
 
+import           Control.Lens (set)
+import           Data.List    (nub, sort)
+
 initialState :: PraxisState
 initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ emptyState
 
@@ -27,7 +28,7 @@ mono :: String -> Type
 mono s = let (_ :< Lift t) = runStatic (parse s) in Mono t
 
 poly :: String -> Type
-poly s = let (_ :< Lift (t :# _)) = runStatic (parse s) in Forall [] (g t) t
+poly s = let (_ :< Lift (t :# _)) = runStatic (parse s) in Forall [] ((nub . sort) (g t)) t
   where g (TyPrim _)         = []
         g (TyRecord r)       = concatMap g r
         g (TyUni _)          = []

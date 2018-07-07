@@ -4,6 +4,7 @@
 module Praxis
   ( Praxis
   , PraxisState
+  , internalError
   )
   where
 
@@ -16,3 +17,4 @@ data PraxisState
 
 type Praxis a = ExceptT Error (StateT PraxisState IO) a
 
+internalError :: String -> a

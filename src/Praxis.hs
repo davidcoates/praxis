@@ -33,6 +33,7 @@ module Praxis
   , stage
   , tEnv
   , vEnv
+  , system
   , inClosure
 
   , freshUniI
@@ -43,11 +44,13 @@ module Praxis
   , Level(..)
   , log
   , logStr
+  , logList
   )
   where
 
 import           AST                  (Lit)
 import qualified Check.AST            as Check
+import qualified Check.System         as Check (System)
 import           Common
 import           Env                  (TEnv, VEnv)
 import           Error                (Error)
@@ -98,15 +101,24 @@ data Flags = Flags
   , _static      :: Bool              -- ^Set for internal pure computations evaluated at compile time
   } deriving (Show)
 
+data Fresh = Fresh
+  { _freshUniPs :: [String]
+  , _freshUniEs :: [String]
+  , _freshVars  :: [String]
+  }
+
+instance Show Fresh where
+  show _ = "<fresh>"
+
 data PraxisState = PraxisState
   { _filename  :: String              -- ^File path (for error messages)
   , _flags     :: Flags               -- ^Flags
-  , _freshUnis :: [String]            -- ^Infinite list of distinct dummy names to use for unification types
-  , _freshVars :: [String]            -- ^Infinite list of distinct dummy names to use for phantom variables
+  , _fresh     :: Fresh
   , _stage     :: Stage               -- ^Current stage of compilation
   , _tEnv      :: TEnv                -- ^Type environment
   , _kEnv      :: ()                  -- TODO (Kind environment)
   , _vEnv      :: VEnv                -- ^Value environment for interpreter
+  , _system    :: Check.System        -- ^ TODO rename? put inClosure in here?
   , _inClosure :: Bool                -- ^Checker (Generator) internal TODO this probably should be put somewhere else
   } deriving (Show)
 
@@ -129,30 +141,31 @@ over l f = do
 throwError :: Error -> Praxis a
 throwError = Control.Monad.Except.throwError
 
+defaultFresh = Fresh
+  { _freshUniPs   = map (('a':) . show) [0..]
+  , _freshUniEs   = map (('e':) . show) [0..]
+  , _freshVars    = map (('x':) . show) [0..]
+  }
+
 emptyState :: PraxisState
 emptyState = PraxisState
   { _filename     = "<stdin>"
   , _flags        = defaultFlags
-  , _freshUnis    = map ('~':) (fresh ['a'..'z'])
-  , _freshVars    = map ('_':) (fresh ['a'..'z'])
+  , _fresh        = defaultFresh
   , _stage        = unset "stage"
   , _tEnv         = unset "tenv"
   , _kEnv         = unset "kenv"
   , _vEnv         = unset "vEnv"
+  , _system       = unset "system"
   , _inClosure    = unset "inClosure"
   }
   where unset s = internalError ("unset " ++ s)
-
-fresh :: String -> [String]
-fresh alpha = concatMap perm [1..]
-  where perm :: Int -> [String]
-        perm 1 = map (:[]) alpha
-        perm n = do { x <- alpha; y <- perm (n-1); return (x:y) }
 
 internalError :: String -> a
 internalError s = error ("<<<INTERNAL ERROR>>> " ++ s)
 
 makeLenses ''Flags
+makeLenses ''Fresh
 makeLenses ''PraxisState
 
 save :: Lens' PraxisState a -> Praxis b -> Praxis b
@@ -206,6 +219,13 @@ logStr l x = do
     lift (lift (putStrLn ("Output from stage: " ++ show s)))
     lift (lift (putStrLn x))
 
+logList :: Show a => Level -> [a] -> Praxis ()
+logList l xs = do
+  b <- shouldLog l
+  when b $ do
+    s <- get stage
+    lift (lift (putStrLn ("Output from stage: " ++ show s)))
+    mapM_ (lift . lift . print) xs
 
 -- TODO: Stuff below this probably shouldn't be here...
 freshUniI :: Praxis Impure
@@ -213,18 +233,18 @@ freshUniI = liftA2 (:#) freshUniP freshUniE
 
 freshUniP :: Praxis Pure
 freshUniP = do
-  (x:xs) <- get freshUnis
-  set freshUnis xs
+  (x:xs) <- get (fresh . freshUniPs)
+  set (fresh . freshUniPs) xs
   return (TyUni x)
 
 freshUniE :: Praxis Effects
 freshUniE = do
-  (x:xs) <- get freshUnis
-  set freshUnis xs
+  (x:xs) <- get (fresh . freshUniEs)
+  set (fresh . freshUniEs) xs
   return (singleton (EfUni x))
 
 freshVar :: Praxis Name
 freshVar = do
-  (x:xs) <- get freshVars
-  set freshVars xs
+  (x:xs) <- get (fresh . freshVars)
+  set (fresh . freshVars) xs
   return x

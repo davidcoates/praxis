@@ -1,0 +1,15 @@
+- Checking poly signatures
+
+- Data
+
+- Classes, instances
+
+- XTypes
+
+- Lenses, 'in' constraints
+
+- Modules
+- module imports should be side effect free. So top level terms should be pure. They should also be shareable.
+- Polymorphic types shouldn't be affine?
+
+- Abstract types

@@ -1,6 +1,6 @@
 # Praxis
 
-A strict functional language with effect annotations and linear types.
+A strict functional language with effect annotations and affine types.
 
 
 #### Effect annotations
@@ -42,10 +42,10 @@ getLine :: () -> String # ReadIO
 
 ##### Multiple side effects
 
-Terms can have multiple side effects, which are written as a comma-separated list (although the order is unimportant).
+Terms can have multiple side effects, which are separated by '+'. The order is unimportant.
 ```
 getLine :: () -> String # ReadIO
 putString :: String -> () # WriteIO
 
-x :: () -> () # ReadIO, WriteIO
+x :: () -> () # ReadIO + WriteIO
 x = putString . getLine

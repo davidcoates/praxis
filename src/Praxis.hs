@@ -143,9 +143,9 @@ throwError :: Error -> Praxis a
 throwError = Control.Monad.Except.throwError
 
 defaultFresh = Fresh
-  { _freshUniPs   = map (('a':) . show) [0..]
-  , _freshUniEs   = map (('e':) . show) [0..]
-  , _freshVars    = map (('x':) . show) [0..]
+  { _freshUniPs   = map (("?a"++) . show) [0..]
+  , _freshUniEs   = map (("?e"++) . show) [0..]
+  , _freshVars    = map (("?x"++) . show) [0..]
   }
 
 emptyState :: PraxisState

@@ -92,8 +92,9 @@ lookup n = do
 -- TODO add axioms
 ungeneralise :: Type -> Praxis (Pure, [Constraint])
 ungeneralise (Mono (t :# _)) = return (t, [])
-ungeneralise (Forall cs as t) = do
+ungeneralise (Forall cs as es t) = do
   bs <- sequence (replicate (length as) freshUniP)
+  fs <- sequence (replicate (length es) freshUniE)
   let f :: Sub a => a -> a
-      f = subP (`Prelude.lookup` zip as bs)
+      f = subP (`Prelude.lookup` zip as bs) . subE (`Prelude.lookup` zip es fs)
   return (f t, f cs)

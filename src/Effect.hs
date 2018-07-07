@@ -17,8 +17,8 @@ import qualified Data.Set  as Set
   An effect unification variable can be replaced with a flat set of effects, e.g.,
   { EfUni α, EfLit "Read IO" } if α ~> { EfLit "WriteIO", EfLit "ReadHeap" } then the result is { EfLit "WriteIO", EfLit "ReadHeap", EfLit "Read IO" }
 -}
-data Effect = EfLit String           -- ^A concrete effect e.g., Eg `ReadIO`
-            | EfUni String           -- ^An effect unification variable
+data Effect = EfUni String           -- ^An effect unification variable
+            | EfLit String           -- ^A concrete effect e.g., Eg `ReadIO`
             | EfVar String           -- ^An effect variable (e.g., e in forall a b e. (a -> b # e) -> [a] -> [b] # e)
             deriving (Ord, Eq)
 

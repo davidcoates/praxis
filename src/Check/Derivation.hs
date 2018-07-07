@@ -4,7 +4,6 @@ module Check.Derivation
   , newDerivation
   , equalI
   , implies
-  , showDerivation
   ) where
 
 import           Prelude hiding (drop)
@@ -52,11 +51,8 @@ instance Ord Derivation where
 instance Sub Derivation where
   sub f d = d { constraint = sub f (constraint d), original = sub f (original d) }
 
-showDerivation :: Derivation -> String
-showDerivation c = show (constraint c) ++ " derived from " ++ show (original c) ++ ". Reason: " ++ show (reason c) ++ " @ " ++ show (source c)
-
 instance Show Derivation where
-  show c = show (constraint c)
+  show c = show (constraint c) ++ " derived from " ++ show (original c) ++ ". Reason: " ++ show (reason c) ++ " @ " ++ show (source c)
 
 newDerivation :: Constraint -> Reason -> Source -> Derivation
 newDerivation c r s = Derivation { constraint = c, original = c, reason = r, source = s }

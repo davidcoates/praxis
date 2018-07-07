@@ -7,7 +7,7 @@ module Error
   , ParseError(..)
   ) where
 
-import           Check.Derivation (Derivation, showDerivation)
+import           Check.Derivation (Derivation)
 import           Common
 import           Source           (Source)
 
@@ -66,8 +66,8 @@ instance Show DeclError where
   show (LacksBinding n s) = "The function '" ++ n ++ "' at " ++ show s ++ " lacks an accompanying binding"
 
 instance Show CheckError where
-  show (Contradiction d) = showDerivation d
+  show (Contradiction d) = show d
   show (NotInScope n s)  = "Not in scope: " ++ n ++ " at " ++ show s
   show Stuck             = "Infinite loop detected :("
-  show (Underdefined d)  = "Failed to completely deduce the unification variable(s) present in: " ++ showDerivation d
+  show (Underdefined d)  = "Failed to completely deduce the unification variable(s) present in: " ++ show d
 

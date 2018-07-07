@@ -3,14 +3,14 @@ fac : Int -> Int
 fac 0 = 1
 fac n = n * fac (n - 1)
 
-main1 : () -> () # StdIn, StdOut
+main1 : () -> () # StdIn + StdOut
 main1 () = putInt (fac (getInt ()))
 
 -- Equivalent to main1
-main2 : () -> () # StdIn, StdOut
+main2 : () -> () # StdIn + StdOut
 main2 = putInt . fac . getInt
 
-main3 : () -> () # StdIn, StdOut
+main3 : () -> () # StdIn + StdOut
 main3 () = do
   putStrLn "Enter a number:"
   x = getInt ()

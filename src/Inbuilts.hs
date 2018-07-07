@@ -16,6 +16,7 @@ import           Source       (Source)
 import           Tag
 import           Type
 import           Value
+import           Vars         (generalise)
 
 import           Control.Lens (set)
 import           Data.List    (nub, sort)
@@ -28,13 +29,7 @@ mono :: String -> Type
 mono s = let (_ :< Lift t) = runStatic (parse s) in Mono t
 
 poly :: String -> Type
-poly s = let (_ :< Lift (t :# _)) = runStatic (parse s) in Forall [] ((nub . sort) (g t)) t
-  where g (TyPrim _)         = []
-        g (TyRecord r)       = concatMap g r
-        g (TyUni _)          = []
-        g (TyFun a (b :# _)) = g a ++ g b
-        g (TyVar s)          = [s]
-        g (TyBang p)         = g p
+poly s = let (_ :< Lift (t :# _)) = runStatic (parse s) in generalise t
 
 prelude :: [(Name, Type, Value)]
 prelude =
@@ -44,7 +39,7 @@ prelude =
   , ("getInt",   mono "() -> Int # StdIn",     F (\(R _) -> liftIO ((L . Int) <$> readLn)))
   , ("putInt",   mono "Int -> () # StdOut",    F (\(L (Int x)) -> liftIO (print x >> pure (R unit))))
   , ("putStrLn", mono "String -> () # StdOut", F (\(L (String x)) -> liftIO (putStrLn x >> pure (R unit))))
-  , ("dot",      poly "(b -> c, a -> b) -> (a -> c)", F (\(R r) -> case unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
+  , ("dot",      poly "(b -> c # e1, a -> b # e2) -> (a -> c # e1 + e2)", F (\(R r) -> case unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
   ]
   where lift :: (Int -> Int -> Int) -> Value
         lift f = F (\(R r) -> case unpair r of (L (Int a), L (Int b)) -> pure (L (Int (f a b))))

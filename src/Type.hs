@@ -16,9 +16,9 @@ module Type
 
 import           Common
 import           Effect
+import           Record
 
 import           Data.Maybe (fromMaybe)
-import           Record
 
 -- TODO need more kinds? KindRecord?
 data Kind = KindConstraint  --
@@ -65,7 +65,7 @@ data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types
 
 -- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
 data Type = Mono Impure
-          | Forall [Constraint] [Name] Pure
+          | Forall [Constraint] [Name] [Name] Pure
   deriving (Ord, Eq)
 
 instance Show Kind where
@@ -105,7 +105,7 @@ instance Show Impure where
 
 instance Show Type where
   show (Mono t) = show t
-  show (Forall cs xs t) = "forall " ++ unwords xs ++ ". " ++ cs' ++ show t
+  show (Forall cs xs es t) = "forall " ++ unwords (xs ++ es) ++ ". " ++ cs' ++ show t
     where cs' = if null cs then "" else "(" ++ unwords  (map show cs) ++ ") => "
 
 parens True  x = "(" ++ x ++ ")"

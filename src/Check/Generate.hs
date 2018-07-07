@@ -139,9 +139,9 @@ exp (s :< e) = case e of
   Do ss -> do
     (ss', (cs, Sum i)) <- traverseM stmt ss
     let es = unions $ map (getEffects . ty) ss'
-    let t = ty (last ss')
+    let t :# _ = ty (last ss')
     elimN i
-    return ((Just t, s) :< Do ss', cs)
+    return ((Just (t :# es), s) :< Do ss', cs)
 
   If a b c -> do
     (a', c1) <- exp a

@@ -98,7 +98,7 @@ qconid = token qconid' <?> "qconid"
 
 conid :: Parser String
 conid = token conid' <?> "conid"
-  where conid' (Token.QConId n) | qualification n == [] = Just (name n)
+  where conid' (Token.QConId n) | null (qualification n) = Just (name n)
         conid' _                = Nothing
 
 qvarid :: Parser QString
@@ -108,7 +108,7 @@ qvarid = token qvarid' <?> "qvarid"
 
 varid :: Parser String
 varid = token varid' <?> "varid"
-  where varid' (Token.QVarId n) | qualification n == [] = Just (name n)
+  where varid' (Token.QVarId n) | null (qualification n) = Just (name n)
         varid' _                = Nothing
 
 qvarsym :: Parser QString
@@ -118,8 +118,13 @@ qvarsym = token qvarsym' <?> "qvarsym"
 
 varsym :: Parser String
 varsym = token varsym' <?> "varsym"
-  where varsym' (Token.QVarSym n) | qualification n == [] = Just (name n)
+  where varsym' (Token.QVarSym n) | null (qualification n) = Just (name n)
         varsym' _                 = Nothing
+
+plus :: Parser () -- TODO this is a bit of an awkward hack, since we don't want to reserve +
+plus = token plus' <?> "effect +"
+  where plus' (Token.QVarSym n) | null (qualification n) && name n == "+" = Just ()
+        plus' _                 = Nothing
 
 reservedId :: String -> Parser ()
 reservedId s = satisfy reservedId' *> pure () <?> "reserved id '" ++ s ++ "'"
@@ -177,7 +182,7 @@ exp = mixfixexp
 left :: (a -> a -> a) -> Parser [a] -> Parser a
 left f p = unroll <$> p
   where unroll [x]      = x
-        unroll (x:y:ys) = unroll ((f x y):ys)
+        unroll (x:y:ys) = unroll (f x y : ys)
 
 leftT :: (Annotated a -> Annotated a -> T a) -> Parser [Annotated a] -> Parser (T a)
 leftT f p = value <$> left (\x y -> tag x :< f x y) p
@@ -255,10 +260,12 @@ ty :: Parser Impure
 ty = liftT2O (:#) tyPure empty (reservedOp "#" #> effs)
 
 effs :: Parser Effects
-effs = Effect.fromList <$> sepBy1 eff (special ',')
+effs = Effect.fromList <$> sepBy1 eff plus
 
 eff :: Parser Effect
-eff = EfLit <$> conid -- TODO vars, qualified effects?
+eff = efLit <|> efVar <?> "effect"
+  where efLit = EfLit <$> try conid
+        efVar = EfVar <$> try varid
 
 tyPure :: Parser Pure
 tyPure = liftT2O join tyPure' Nothing (reservedOp "->" #> (Just <$> ty)) <?> "tyPure"

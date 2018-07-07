@@ -3,7 +3,6 @@
 
 module Type
   ( Name
-  , Kind(..)
   , Pure(..)
   , Prim(..)
   , Impure(..)
@@ -20,29 +19,9 @@ import           Record
 
 import           Data.Maybe (fromMaybe)
 
--- TODO need more kinds? KindRecord?
-data Kind = KindConstraint  --
-          | KindEffects     --
-          | KindImpure      -- Do we need this? This is basically (KindPure, KindEffects)
-          | KindPure        --
-          | KindRecord (Record Kind)
-
-{-
-data XType = XTyEffects Effects
-           | XTyPure Pure
-           | XTyImpure Type -- TODO do we need this? -- TODO Rename Type to Impure? type Type = Pure ?
-           | XTyConstraint Constraint
-           | XTyLambda Name IType -- TODO
-           | XTyRecord (Record IType)
-
-data XKind = XKindBase Kind
-           | XKindLambda Kind XKind -- TODO Kind Pure ?
-           | XKindRecord (Record XKind)
--}
-
 -- |A *top-level* pure type
 data Pure = TyBang Pure              -- ^A read-only reference
-          | TyData String [Pure]     -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool] -- TODO not [Pure], but XPure?
+          | TyData Name [Pure]       -- ^A fully-applied datatype e.g., TyData "Pair" [TyPrim Int, TyPrim Bool] TODO
           | TyFun Pure Impure        -- ^A function `a -> b # e` is represented as TyFun a (TyImpure b e)
           | TyPrim Prim              -- ^A primitive type -- TODO get rid of this eventually
           | TyRecord (Record Pure)   -- ^A record type
@@ -58,22 +37,15 @@ data Impure = Pure :# Effects
   deriving (Ord, Eq)
 
 data Constraint = Class Name Pure -- TODO: Allow effects and higher kinded types in Classes
-                | EqualE Effects Effects
-                | EqualP Pure Pure
-                -- TODO need EqualK at least internally?
+                | EqualE Effects Effects -- EfEqual ? EqualEf ?
+                | EqualP Pure Pure       -- TyEqual ? EqualTy ?
+                -- TODO | CVar Name
                 deriving (Ord, Eq)
 
 -- TODO: Allow quantified effects, e.g., map :: forall a b (e :: Effects). (a -> b # e) -> [a] -> [b] # e
 data Type = Mono Impure
           | Forall [Constraint] [Name] [Name] Pure
   deriving (Ord, Eq)
-
-instance Show Kind where
-  show KindConstraint = "C"
-  show KindEffects    = "E"
-  show KindImpure     = "I"
-  show KindPure       = "P"
-  show (KindRecord r) = show r
 
 instance Show Prim where
   show TyBool   = "Bool"

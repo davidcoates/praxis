@@ -20,39 +20,40 @@ import           Control.Arrow          (second)
 import           Control.Monad.Identity (Identity (..))
 import           Data.List              (nub, sort)
 import           Data.Maybe             (fromJust)
+import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
 
 class Unis a where
-  unis :: a -> [Name] -- TODO should probably be a set
+  unis :: a -> Set Name
 
 instance Unis Derivation where
   unis d = unis (constraint d)
 
 instance Unis Constraint where
-  unis (EqualP p1 p2) = unis p1 ++ unis p2
-  unis (EqualE e1 e2) = unis e1 ++ unis e2
+  unis (EqualP p1 p2) = unis p1 `union` unis p2
+  unis (EqualE e1 e2) = unis e1 `union` unis e2
   unis (Class _ t)    = unis t
 
 instance Unis Impure where
-  unis (t :# e) = unis t ++ unis e
+  unis (t :# e) = unis t `union` unis e
 
 instance Unis Effect where
-  unis (EfUni n) = [n]
-  unis _         = []
+  unis (EfUni n) = Set.singleton n
+  unis _         = Set.empty
 
 instance Unis Effects where
-  unis = concat . map unis . Effect.toList
+  unis = Set.unions . map unis . Effect.toList
 
 instance Unis Pure where
   unis (TyBang p)    = unis p
-  unis (TyData _ ts) = concatMap unis ts
-  unis (TyFun t1 t2) = unis t1 ++ unis t2
-  unis (TyPrim _)    = []
-  unis (TyRecord r)  = concatMap unis r
-  unis (TyUni n)     = [n]
-  unis (TyVar _)     = []
+  unis (TyData _ ts) = Set.unions $ map unis ts
+  unis (TyFun t1 t2) = unis t1 `union` unis t2
+  unis (TyPrim _)    = Set.empty
+  unis (TyRecord r)  = Set.unions $ map (unis . snd) (Record.toList r)
+  unis (TyUni n)     = Set.singleton n
+  unis (TyVar _)     = Set.empty
 
 solve :: [Derivation] -> Praxis [(String, Term)]
 solve cs = save stage $ save system $ do
@@ -95,7 +96,7 @@ single d = case constraint d of
 
   EqualP p1 p2 | p1 == p2 -> tautology
 
-  EqualP (TyUni x)           p -> if x `elem` unis p then contradiction else x ↦ (TermPure p) >> solved
+  EqualP (TyUni x)           p -> if x `Set.member` unis p then contradiction else x ↦ TermPure p >> solved
   EqualP _           (TyUni _) -> swap
 
   EqualP (TyFun p1 (p2 :# e2)) (TyFun p3 (p4 :# e4)) -> introduce [ EqualP p1 p3, EqualP p2 p4, EqualE e2 e4 ]

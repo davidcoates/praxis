@@ -77,6 +77,7 @@ single d = case constraint d of
                | []        <- Effect.toList e1 -> let empty (EfUni n) = n ↦ TermEffects Effect.empty
                                                       empty _         = contradiction
                                                   in foldr (\a b -> empty a >> b) solved (Effect.toList e2)
+               | null (unisE e1 ++ unisE e2)   -> contradiction
                | otherwise                     -> defer
 
   EqualP p1 p2 | p1 == p2 -> tautology

@@ -8,9 +8,11 @@ module Check.Solve
 import           AST
 import           Check.Derivation
 import           Check.System
+import           Effect
 import           Error
 import           Praxis
 import           Record
+import           Sub
 import           Type
 
 import           Control.Applicative    (Const (..))
@@ -23,7 +25,7 @@ import           Prelude                hiding (log)
 
 
 class Unis a where
-  unis :: a -> [Name]
+  unis :: a -> [Name] -- TODO should probably be a set
 
 instance Unis Derivation where
   unis d = unis (constraint d)
@@ -41,7 +43,7 @@ instance Unis Effect where
   unis _         = []
 
 instance Unis Effects where
-  unis = concat . Set.elems . Set.map unis . getEffects
+  unis = concat . map unis . Effect.toList
 
 instance Unis Pure where
   unis (TyBang p)    = unis p

@@ -9,6 +9,7 @@ module Check.Derivation
 
 import           Prelude hiding (drop)
 import           Source  (Source)
+import           Sub
 import           Type
 
 data Reason = Application

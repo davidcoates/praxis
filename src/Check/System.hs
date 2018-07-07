@@ -15,7 +15,8 @@ module Check.System
 
 import           Check.Derivation (Derivation)
 import           Common           (Name)
-import           Type             (Constraint, Term)
+import           Sub              (Term)
+import           Type             (Constraint)
 
 import           Control.Lens     (makeLenses)
 

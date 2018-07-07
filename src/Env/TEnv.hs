@@ -12,15 +12,15 @@ module Env.TEnv
   )
 where
 
+import           Check.Derivation
+import           Common
 import           Env              (TEnv)
 import           Env.AEnv         (AEnv, fromList)
 import qualified Env.AEnv         as AEnv
-import           Praxis
-
-import           Check.Derivation
-import           Common
 import           Error
+import           Praxis
 import           Source           (Source)
+import           Sub
 import           Type
 
 import           Prelude          hiding (log, lookup, read)

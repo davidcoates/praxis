@@ -52,6 +52,7 @@ import           AST                  (Lit)
 import qualified Check.AST            as Check
 import qualified Check.System         as Check (System)
 import           Common
+import           Effect               (singleton)
 import           Env                  (TEnv, VEnv)
 import           Error                (Error)
 import           Record               (Record)

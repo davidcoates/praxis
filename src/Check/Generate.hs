@@ -8,6 +8,7 @@ import           AST
 import           Check.AST
 import           Check.Derivation
 import           Common           (traverseM)
+import           Effect           (empty, unions)
 import           Env.TEnv
 import           Error
 import           Inbuilts         hiding (ty)

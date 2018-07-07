@@ -7,6 +7,7 @@ module Parse.Parse
   ) where
 
 import           AST                  (Lit (..), QString (..))
+import           Effect               (empty, fromList)
 import           Parse.Parse.AST      (Annotated (..))
 import           Parse.Parse.AST      as Parse
 import           Parse.Parse.Parser
@@ -22,7 +23,6 @@ import           Control.Applicative  (liftA2, liftA3, (<**>), (<|>))
 import qualified Control.Applicative  as Applicative (empty)
 import           Control.Lens         (view)
 import           Data.Maybe           (fromJust, isJust)
-import qualified Data.Set             as Set (fromList)
 import           Prelude              hiding (exp, log)
 
 type T a = a (Tag Source)
@@ -255,7 +255,7 @@ ty :: Parser Impure
 ty = liftT2O (:#) tyPure empty (reservedOp "#" #> effs)
 
 effs :: Parser Effects
-effs = Effects . Set.fromList <$> sepBy1 eff (special ',')
+effs = Effect.fromList <$> sepBy1 eff (special ',')
 
 eff :: Parser Effect
 eff = EfLit <$> conid -- TODO vars, qualified effects?

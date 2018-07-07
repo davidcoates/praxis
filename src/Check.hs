@@ -11,8 +11,8 @@ import           Check.Generate
 import           Check.Solve     (solve)
 import qualified Parse.Parse.AST as Parse (Annotated)
 import           Praxis
+import           Sub
 import           Tag
-import           Type            (sub)
 
 import           Control.Arrow   (first)
 import           Prelude         hiding (log)

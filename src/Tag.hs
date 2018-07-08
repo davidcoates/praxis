@@ -23,6 +23,9 @@ infixr 6 :<
 instance Eq b => Eq (Tag a b) where
   (_ :< a) == (_ :< b) = a == b
 
+instance Ord b => Ord (Tag a b) where
+  (_ :< a) `compare` (_ :< b) = a `compare` b
+
 instance Bifunctor Tag where
   bimap f g (a :< x) = f a :< g x
 
@@ -53,7 +56,6 @@ instance (Show a, Show b) => Show (Tag a (Lift b c)) where
   show (a :< b) = show a ++ " :< " ++ show b
 
 class TagTraversable c where
-
   tagTraverse :: Applicative f => (a -> f b) -> Tagged a c -> f (Tagged b c)
   tagTraverse f (a :< x) = liftA2 (:<) (f a) (tagTraverse' f x)
   tagTraverse' :: Applicative f => (a -> f b) -> c (Tag a) -> f (c (Tag b))

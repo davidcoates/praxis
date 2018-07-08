@@ -1,29 +1,37 @@
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module Interpret
   ( Interpretable(..)
   ) where
 
 import           AST
-import           Check
-import           Check.AST       (Annotated (..))
+import           Check  (Annotated, check)
 import           Eval
-import           Parse
-import qualified Parse.Parse.AST as Parse (Annotated (..))
+import           Parse  (parse)
+import qualified Parse  (Annotated)
 import           Praxis
+import           Value  (Value)
 
-class Interpretable a where
-  interpret :: String -> Praxis (Annotated a, Evaluation a)
-  interpretFile :: FilePath -> Praxis (Annotated a, Evaluation a)
+class Evaluable a b => Interpretable a b where
+  interpret :: String -> Praxis (a, b)
+  interpretFile :: FilePath -> Praxis (a, b)
   interpretFile f = do
     set filename f
     s <- liftIO (readFile f)
     interpret s
 
-instance (Parseable a, Checkable a, Evaluable a) => Interpretable a where
+instance Interpretable (Annotated Program) () where
   interpret s = do
-    x <- parse s
-    y <- check x
+    x <- parse s :: Praxis (Parse.Annotated Program)
+    y <- check x :: Praxis (Annotated Program)
+    v <- eval y
+    return (y, v)
+
+instance Interpretable (Annotated Exp) Value where
+  interpret s = do
+    x <- parse s :: Praxis (Parse.Annotated Exp)
+    y <- check x :: Praxis (Annotated Exp)
     v <- eval y
     return (y, v)

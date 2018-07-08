@@ -9,6 +9,7 @@ import           Interpret
 import           Praxis
 import           Pretty               (indent)
 import           Record
+import           Tag
 import           Type
 import           Value
 
@@ -48,7 +49,9 @@ runMain :: Praxis ()
 runMain = do
   t <- TEnv.lookup "main"
   case t of Nothing -> msg "Missing main function"
-            Just (Mono (TyFun (TyRecord r) (TyRecord r' :# _) :# _)) | r == Record.unit && r' == Record.unit ->
+            Just (_ :< Mono (TyApply (_ :< TyCon "->") (_ :< TyPack a))) | [(Nothing, _ :< r), (Nothing, _ :< r'), _] <- Record.toList a
+                                                                         , r  == TyRecord Record.unit
+                                                                         , r' == TyRecord Record.unit ->
               do { Just (F f) <- VEnv.lookup "main"; f (R Record.unit); return () }
             _ -> msg "Ill-typed main function"
 

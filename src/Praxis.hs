@@ -32,6 +32,7 @@ module Praxis
   , flags
   , stage
   , tEnv
+  , kEnv
   , vEnv
   , system
   , inClosure
@@ -39,6 +40,7 @@ module Praxis
   , freshUniI
   , freshUniP
   , freshUniE
+  , freshUniK
   , freshVar
 
   , Level(..)
@@ -52,11 +54,11 @@ import           AST                  (Lit)
 import qualified Check.AST            as Check
 import qualified Check.System         as Check (System)
 import           Common
-import           Effect               (singleton)
-import           Env                  (TEnv, VEnv)
+import           Env                  (KEnv, TEnv, VEnv)
 import           Error                (Error)
 import           Record               (Record)
 import           Source
+import           Tag                  (Tag (..))
 import           Type
 
 import           Control.Applicative  (liftA2)
@@ -105,6 +107,7 @@ data Flags = Flags
 data Fresh = Fresh
   { _freshUniPs :: [String]
   , _freshUniEs :: [String]
+  , _freshUniKs :: [String]
   , _freshVars  :: [String]
   }
 
@@ -117,7 +120,7 @@ data PraxisState = PraxisState
   , _fresh     :: Fresh
   , _stage     :: Stage               -- ^Current stage of compilation
   , _tEnv      :: TEnv                -- ^Type environment
-  , _kEnv      :: ()                  -- TODO (Kind environment)
+  , _kEnv      :: KEnv                -- ^Kind environment
   , _vEnv      :: VEnv                -- ^Value environment for interpreter
   , _system    :: Check.System        -- ^ TODO rename? put inClosure in here?
   , _inClosure :: Bool                -- ^Checker (Generator) internal TODO this probably should be put somewhere else
@@ -126,7 +129,9 @@ data PraxisState = PraxisState
 type Praxis a = ExceptT Error (StateT PraxisState IO) a
 
 defaultFlags :: Flags
-defaultFlags = Flags { _level = Normal, _interactive = False, _static = False }
+-- defaultFlags = Flags { _level = Normal, _interactive = False, _static = False }
+-- TODO for some reason level resets to Normal during static, fix this
+defaultFlags = Flags { _level = Trace, _interactive = False, _static = False }
 
 get :: Lens' PraxisState a -> Praxis a
 get = lift . gets . view
@@ -145,6 +150,7 @@ throwError = Control.Monad.Except.throwError
 defaultFresh = Fresh
   { _freshUniPs   = map (("?a"++) . show) [0..]
   , _freshUniEs   = map (("?e"++) . show) [0..]
+  , _freshUniKs   = map (("?k"++) . show) [0..]
   , _freshVars    = map (("?x"++) . show) [0..]
   }
 
@@ -228,21 +234,26 @@ logList l xs = do
     lift (lift (putStrLn ("Output from stage: " ++ show s)))
     mapM_ (lift . lift . print) xs
 
--- TODO: Stuff below this probably shouldn't be here...
-freshUniI :: Praxis Impure
-freshUniI = liftA2 (:#) freshUniP freshUniE
+freshUniI :: Praxis (Kinded Impure)
+freshUniI = (KindType :<) <$> liftA2 (:#) freshUniP freshUniE
 
-freshUniP :: Praxis Pure
+freshUniP :: Praxis (Kinded Type)
 freshUniP = do
   (x:xs) <- get (fresh . freshUniPs)
   set (fresh . freshUniPs) xs
-  return (TyUni x)
+  return (KindType :< TyUni x)
 
-freshUniE :: Praxis Effects
+freshUniE :: Praxis (Kinded Type)
 freshUniE = do
   (x:xs) <- get (fresh . freshUniEs)
   set (fresh . freshUniEs) xs
-  return (singleton (EfUni x))
+  return (KindEffect :< TyEffects [KindEffect :< TyUni x])
+
+freshUniK :: Praxis Kind
+freshUniK = do
+  (k:ks) <- get (fresh . freshUniKs)
+  set (fresh . freshUniKs) ks
+  return (KindUni k)
 
 freshVar :: Praxis Name
 freshVar = do

@@ -1,36 +1,48 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Parse
   ( Parseable(..)
+  , Annotated(..)
   ) where
 
 import           AST
-import           Parse.Desugar  (Desugarable (..))
-import qualified Parse.Parse    as Sweet (Parseable (..))
-import           Parse.Tokenise (tokenise)
+import           Parse.Desugar   (Desugarable (..))
+import qualified Parse.Parse     as Sweet (Parseable (..))
+import qualified Parse.Parse.AST as Sweet (Exp, Program)
+import           Parse.Tokenise  (tokenise)
 import           Praxis
-import           Source         (Source)
+import           Source          (Source)
 import           Tag
-import           Type           (Impure)
+import           Type            (Kind, Kinded, Type)
 
 type Annotated a = Tagged Source a
 
 class Parseable a where
-  parse  :: String -> Praxis (Annotated a)
+  parse  :: String -> Praxis a
 
-parse' :: (Sweet.Parseable (Sweet a), Desugarable a) => Bool -> String -> Praxis (Annotated a)
-parse' b s = do
-  ts <- tokenise b s
-  p <- Sweet.parse ts
-  desugar p
+instance Parseable (Annotated Program) where
+  parse s = do
+    ts <- tokenise True s
+    p <- Sweet.parse ts :: Praxis (Annotated Sweet.Program)
+    desugar p
 
-instance Parseable Program where
-  parse = parse' True
+instance Parseable (Annotated Exp) where
+  parse s = do
+    ts <- tokenise False s
+    p <- Sweet.parse ts :: Praxis (Annotated Sweet.Exp)
+    desugar p
 
-instance Parseable Exp where
-  parse = parse' False
+instance Parseable (Annotated Type) where
+  parse s = do
+    ts <- tokenise False s
+    p <- Sweet.parse ts :: Praxis (Annotated Type)
+    desugar p
 
-instance Parseable (Lift Impure) where
-  parse = parse' False
+instance Parseable Kind where
+  parse s = do
+    ts <- tokenise False s
+    p <- Sweet.parse ts :: Praxis Kind
+    desugar p

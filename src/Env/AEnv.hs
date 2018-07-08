@@ -45,6 +45,6 @@ use x (AEnv l) = let (e, l') = Env.adjust (\(_, b) -> (True, b)) x l in (snd <$>
 lookup :: Eq a => a -> AEnv a b -> Maybe (Bool, b)
 lookup x (AEnv l) = Env.lookup x l
 
-join :: (Eq a, Eq b) => AEnv a b -> AEnv a b -> AEnv a b
+join :: AEnv a b -> AEnv a b -> AEnv a b
 join (AEnv (Env l1)) (AEnv (Env l2)) = (AEnv . Env) $ join' l1 l2 where
-  join' ((x,(xu,xt)):xs) ((y,(yu,yt)):ys) | x == y && xt == yt = (x,(xu || yu,xt)) : join' xs ys
+  join' ((x,(xu,xt)):xs) ((y,(yu,yt)):ys) = (x, (xu || yu, xt)) : join' xs ys

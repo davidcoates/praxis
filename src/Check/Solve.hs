@@ -6,15 +6,13 @@ module Check.Solve
   ) where
 
 import           AST
-import           Check.Derivation
+import           Check.Constraint
 import           Check.System
-import           Effect
 import           Error
 import           Praxis
 import           Record
-import           Sub
+import           Tag
 import           Type
-import           Vars
 
 import           Control.Applicative    (Const (..))
 import           Control.Arrow          (second)
@@ -25,22 +23,13 @@ import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
-instance Vars Derivation where
-  vars d = vars (constraint d)
-
-instance Vars Constraint where
-  vars (EqualP p1 p2) = vars p1 `mappend` vars p2
-  vars (EqualE e1 e2) = vars e1 `mappend` vars e2
-  vars (Class _ t)    = vars t
-
-
-solve :: [Derivation] -> Praxis [(String, Term)]
+solve :: [Derivation] -> Praxis [(Name, Kinded Type)]
 solve cs = save stage $ save system $ do
   set stage Solve
   set system (initialSystem cs)
   spin
   sol <- get (system . solution)
-  logList Debug (sort sol)
+  logList Debug sol
   return sol
 
 spin :: Praxis ()
@@ -71,52 +60,79 @@ progress' = do
 single :: Derivation -> Praxis [Derivation]
 single d = case constraint d of
 
-  EqualE e1 e2 | e1 == e2                      -> tautology
-               | e1 >  e2                      -> swap -- We save handling symmetric cases below by careful definition of Ord for Effect/Effects
-               | [EfUni n] <- Effect.toList e1 -> if n `elem` unisE e2 then defer else n ↦ TermEffects e2
-               | []        <- Effect.toList e1 -> let empty (EfUni n) = n ↦ TermEffects Effect.empty
-                                                      empty _         = contradiction
-                                                  in foldr (\a b -> empty a >> b) solved (Effect.toList e2)
-               | null (unisE e1 ++ unisE e2)   -> contradiction
-               | otherwise                     -> defer
+  Class (k1 :< TyApply (k2 :< TyCon "Share") (a :< p)) -> case p of -- TODO Need instance solver!
+    TyApply (_ :< TyCon "->") _ -> tautology
+    TyUni _                     -> defer
+    TyCon n | n `elem` ["Int", "Char", "Bool"] -> tautology
+    TyRecord r                  -> introduce (map ((\t -> Class (k1 :< TyApply (k2 :< TyCon "Share") t)). snd) (Record.toList r))
+    _                           -> contradiction
 
-  EqualP p1 p2 | p1 == p2 -> tautology
+  EqKind k1 k2 | k1 == k2  -> tautology
 
-  EqualP (TyUni x)           p -> if x `elem` unisP p then contradiction else x ↦ TermPure p
-  EqualP _           (TyUni _) -> swap
+  EqKind (KindUni x) k -> if x `elem` kindUnis k then contradiction else kindSolve x k
+  EqKind _ (KindUni _) -> swap
 
-  EqualP (TyFun p1 (p2 :# e2)) (TyFun p3 (p4 :# e4)) -> introduce [ EqualP p1 p3, EqualP p2 p4, EqualE e2 e4 ]
+  EqKind (KindRecord r1) (KindRecord r2) | sort (keys r1) == sort (keys r2) ->
+    let values = map snd . Record.toCanonicalList in introduce (zipWith EqKind (values r1) (values r2)) -- TODO create zipRecord or some such
 
-  EqualP (TyRecord r1) (TyRecord r2) | sort (keys r1) == sort (keys r2) -> let values = map snd . Record.toCanonicalList
-                                                                           in  introduce (zipWith EqualP (values r1) (values r2))
+  EqKind (KindFun t1 t2) (KindFun t3 t4) -> introduce [ EqKind t1 t3, EqKind t2 t4 ]
 
-  EqualP _ _ -> contradiction
+  EqKind _ _ -> contradiction
 
-  Class "Share" p -> case p of
-    TyPrim _   -> tautology
-    TyFun _ _  -> tautology
-    TyUni _    -> defer
-    TyRecord r -> introduce (map (Class "Share" . snd) (Record.toList r))
-    _          -> contradiction
+  -- TODO do we need to do kind checking all through here?
+  EqType t1 t2 | t1 == t2 -> tautology
 
-  Class _ p -> defer
+  EqType (_ :< TyUni x) t -> if x `elem` tyUnis t then contradiction else tySolve x t
+  EqType _ (_ :< TyUni _) -> swap
+
+  EqType (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ EqType t1 t2 ]
+
+  EqType (_ :< TyPack r1) (_ :< TyPack r2) | sort (keys r1) == sort (keys r2) ->
+    let values = map snd . Record.toCanonicalList in introduce (zipWith EqType (values r1) (values r2)) -- TODO create zipRecord or some such
+
+  EqType (_ :< TyRecord r1) (_ :< TyRecord r2) | sort (keys r1) == sort (keys r2) ->
+    let values = map snd . Record.toCanonicalList in introduce (zipWith EqType (values r1) (values r2)) -- TODO create zipRecord or some such
+
+  EqType (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ EqType t1 t2 ]
+
+  EqType t1@(_ :< TyEffects e1) t2@(_ :< TyEffects e2) -- Consider if we have unis, but they aren't of kind effect?
+    | e1 > e2 -> swap
+    | [_ :< TyUni n] <- e1 -> if n `elem` tyUnis t1 then defer else tySolve n t2
+    | []             <- e1 -> let empty (_ :< TyUni n) = tySolve n (KindEffect :< TyEffects [])
+                                  empty _              = contradiction
+                               in foldr (\a b -> empty a >> b) solved e2
+    | null (tyUnis t1 ++ tyUnis t2) -> contradiction
+    | otherwise                     -> defer
+  _ -> contradiction
 
   where solved = set (system . changed) True >> pure []
         tautology = solved
         defer = pure [d]
-        introduce cs = set (system . changed) True >> pure (map (d `implies`) cs)
-        swap = case constraint d of EqualP p1 p2 -> single d{ constraint = EqualP p2 p1 }
-                                    EqualE e1 e2 -> single d{ constraint = EqualE e2 e1 }
         contradiction = throwError . CheckError . Contradiction $ d
-        (↦) :: Name -> Term -> Praxis [Derivation]
-        n ↦ p = do
-          let f :: Sub a => a -> a
-              f = sub (\n' -> if n == n' then Just p else Nothing)
+        introduce cs = set (system . changed) True >> pure (map (d `implies`) cs)
+        swap = case constraint d of EqType t1 t2 -> single d{ constraint = EqType t2 t1 }
+                                    EqKind k1 k2 -> single d{ constraint = EqKind k2 k1 }
+        tySolve :: Name -> Kinded Type -> Praxis [Derivation]
+        tySolve n p = do
+          let f :: TypeTraversable a => a -> a
+              f = tySub (\n' -> if n == n' then Just p else Nothing)
           over (system . solution) ((n, p):)
           over (system . solution) (map (second f))
           over (system . constraints) (map f)
           over (system . staging) (map f)
           over (system . axioms) (map f)
           over tEnv (fmap f)
+          set (system . changed) True
+          return []
+        kindSolve :: Name -> Kind -> Praxis [Derivation]
+        kindSolve n p = do
+          let f :: KindTraversable a => a -> a
+              f = kindSub (\n' -> if n == n' then Just p else Nothing)
+          over (system . solution) (map (second f))
+          over (system . constraints) (map f)
+          over (system . staging) (map f)
+          over (system . axioms) (map f)
+          over tEnv (fmap f)
+          over kEnv (fmap f)
           set (system . changed) True
           return []

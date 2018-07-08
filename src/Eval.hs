@@ -1,5 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies     #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Eval
   ( Evaluable(..)
@@ -18,20 +19,17 @@ import           Data.List   (find)
 import           Data.Monoid (Sum (..))
 import           Prelude     hiding (exp)
 
-class Show (Annotated a) => Evaluable a where
-  type Evaluation a
-  eval' :: Annotated a -> Praxis (Evaluation a)
-  eval  :: Annotated a -> Praxis (Evaluation a)
+class Evaluable a b | a -> b where
+  eval' :: a -> Praxis b
+  eval  :: a -> Praxis b
   eval e = save stage $ do
     set stage Evaluate
     eval' e
 
-instance Evaluable Program where
-  type Evaluation Program = ()
+instance Evaluable (Annotated Program) () where
   eval' = program
 
-instance Evaluable Exp where
-  type Evaluation Exp = Value
+instance Evaluable (Annotated Exp) Value where
   eval' = exp
 
 program :: Annotated Program -> Praxis ()

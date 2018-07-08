@@ -6,8 +6,11 @@ module Record
   , keys
   , pair
   , unpair
+  , triple
+  , untriple
   , unit
   , showKeys
+  , showGuts
   ) where
 
 import           Common
@@ -46,6 +49,13 @@ pair x y = fromList [(Nothing, x), (Nothing, y)]
 
 unpair :: Record a -> (a, a)
 unpair (Record [(Implicit 0, x), (Implicit 1, y)]) = (x, y)
+
+triple :: a -> a -> a -> Record a
+triple x y z = fromList [(Nothing, x), (Nothing, y), (Nothing, z)]
+
+untriple :: Record a -> (a, a, a)
+untriple (Record [(Implicit 0, x), (Implicit 1, y), (Implicit 2, z)]) = (x, y, z)
+
 -- TODO do a nice lookup function
 
 -- TODO what to do on duplicate names? What if names contain the implicit descriptors _1 _2 etc?
@@ -68,10 +78,13 @@ keys (Record r) = map fst r
 toCanonicalList :: Record a -> [(Maybe Name, a)]
 toCanonicalList (Record r) = toList (Record (Map.toList (Map.fromList r)))
 
+showGuts :: (a -> String) -> Record a -> String
+showGuts f r = intercalate ", " (map showEntry (toList r))
+  where showEntry (Nothing, a) = f a
+        showEntry (Just n,  a) = n ++ "=" ++ f a
+
 instance Show a => Show (Record a) where
-  show r = "(" ++ intercalate ", " (map showEntry (toList r)) ++ ")" -- TODO
-    where showEntry (Nothing, a) = show a
-          showEntry (Just n,  a) = n ++ "=" ++ show a
+  show r = "(" ++ showGuts show r ++ ")"
 
 showKeys :: Record a -> String
 showKeys r = "(" ++ intercalate ", " (map showKey (toList r)) ++ ")"

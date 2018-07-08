@@ -1,8 +1,6 @@
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE KindSignatures       #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Parse.Desugar
   ( Desugarable(..)
@@ -18,7 +16,7 @@ import           Praxis
 import           Record                 (pair)
 import           Source
 import           Tag
-import           Type                   (Impure)
+import           Type                   (Kind, Type)
 
 import           Control.Applicative    (liftA2, liftA3)
 import           Control.Arrow          (left)
@@ -33,26 +31,25 @@ import qualified Text.Earley.Mixfix.DAG as DAG
 
 type Annotated a = Tagged Source a
 
-class Show (Annotated a) => Desugarable (a :: (* -> *) -> *) where
-  type Sweet a :: (* -> *) -> *
-  desugar' :: Annotated (Sweet a) -> Praxis (Annotated a)
-  desugar  :: Annotated (Sweet a) -> Praxis (Annotated a)
+class Show b => Desugarable a b | a -> b where
+  desugar' :: a -> Praxis b
+  desugar  :: a -> Praxis b
   desugar x = save stage $ do
     set stage Desugar
     x' <- desugar' x
     log Debug x'
     return x'
 
-instance Desugarable Program where
-  type Sweet Program = Parse.Program
+instance Desugarable (Annotated Parse.Program) (Annotated Program) where
   desugar' = program
 
-instance Desugarable Exp where
-  type Sweet Exp = Parse.Exp
+instance Desugarable (Annotated Parse.Exp) (Annotated Exp) where
   desugar' = exp
 
-instance Desugarable (Lift Impure) where
-  type Sweet (Lift Impure) = Lift Impure
+instance Desugarable (Annotated Type) (Annotated Type) where
+  desugar' = pure
+
+instance Desugarable Kind Kind where
   desugar' = pure
 
 program :: Annotated Parse.Program -> Praxis (Annotated Program)
@@ -130,7 +127,7 @@ throwDeclError = throwSyntaxError . DeclError
 
 decls :: [Annotated Parse.Decl] -> Praxis [Annotated Decl]
 decls []              = pure []
-decls ((a :< d) : ds) = case d of
+decls (a :< d : ds) = case d of
 
   Parse.DeclSig n t -> do
     ds <- decls ds

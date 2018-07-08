@@ -7,7 +7,7 @@ module Error
   , ParseError(..)
   ) where
 
-import           Check.Derivation (Derivation)
+import           Check.Constraint (Derivation)
 import           Common
 import           Source           (Source)
 

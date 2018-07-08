@@ -7,13 +7,13 @@ module Parse.Parse
   ) where
 
 import           AST                  (Lit (..), QString (..))
-import           Effect               (empty, fromList)
 import           Parse.Parse.AST      (Annotated (..))
 import           Parse.Parse.AST      as Parse
 import           Parse.Parse.Parser
 import           Parse.Tokenise.Token (Token (..))
 import qualified Parse.Tokenise.Token as Token
 import           Praxis               hiding (try)
+import           Record               (Record)
 import qualified Record
 import           Source
 import           Tag
@@ -27,31 +27,36 @@ import           Prelude              hiding (exp, log)
 
 type T a = a (Tag Source)
 
-class Show (Annotated a) => Parseable a where
-  parser :: Parser (T a)
-  parse  :: [Token.Annotated Token] -> Praxis (Annotated a)
+class Parseable a where
+  parse  :: [Token.Annotated Token] -> Praxis a
+
+parse' :: Show (Annotated a) => Parser (T a) -> [Token.Annotated Token] -> Praxis (Annotated a)
+parse' parser ts = save stage $ do
+  set stage Parse
+  x <- runParser parser ts
+  log Debug x
+  return x
+
+instance Parseable (Annotated Program) where
+  parse = parse' program
+
+instance Parseable (Annotated Exp) where
+  parse = parse' exp
+
+instance Parseable (Annotated Type) where
+  parse = parse' ty
+
+instance Parseable Kind where
   parse ts = save stage $ do
     set stage Parse
-    x <- runParser parser ts
+    _ :< x <- runParser kind ts
     log Debug x
     return x
-
-instance Parseable Program where
-  parser = program
-
-instance Parseable Exp where
-  parser = exp
-
-instance Parseable (Lift Impure) where
-  parser = Lift <$> ty
 
 
 -- TODO move these to Parse/Parser?
 optional :: Parser a -> Parser ()
 optional p = p *> pure () <|> pure ()
-
-optionMaybe :: Parser a -> Parser (Maybe a)
-optionMaybe p = (Just <$> p) <|> pure Nothing
 
 liftT2 :: (a -> b -> c) -> Parser a -> Parser b -> Parser c
 liftT2 f a b = liftA2 f a (optional whitespace *> b)
@@ -62,13 +67,8 @@ liftT3 f a b c = liftT2 f a b <*> (optional whitespace *> c)
 liftT4 :: (a -> b -> c -> d -> e) -> Parser a -> Parser b -> Parser c -> Parser d -> Parser e
 liftT4 f a b c d = liftT3 f a b c <*> (optional whitespace *> d)
 
-liftT2O :: (a -> b -> c) -> Parser a -> b -> Parser b -> Parser c
-liftT2O f pa b pb = liftA2 f pa (try (optional whitespace *> pb) <|> pure b)
-
-liftT2M :: (a -> b -> a) -> Parser a -> Parser b -> Parser a
-liftT2M f pa pb = liftT2O f' pa Nothing (Just <$> pb)
-  where f' a (Just b) = f a b
-        f' a Nothing  = a
+liftT2O :: (a -> Maybe b -> c) -> Parser a -> Parser s -> Parser b -> Parser c
+liftT2O f pa ps pc = liftA2 f pa ((Just <$> (try (optional whitespace *> ps) #> pc)) <|> pure Nothing)
 
 (#>) :: Parser a -> Parser b -> Parser b
 (#>) = liftT2 (\_ b -> b)
@@ -92,7 +92,7 @@ sepBy2 :: Parser a -> Parser b -> Parser [a]
 sepBy2 p sep = liftT2 (:) p (sep #> sepBy1 p sep)
 
 qconid :: Parser QString
-qconid = token qconid' <?> "qconid"
+qconid = token qconid' <?> "qconid|"
   where qconid' (Token.QConId n) = Just n
         qconid' _                = Nothing
 
@@ -164,8 +164,8 @@ decl :: Parser (T Decl)
 decl = funType <|> funDecl <|?> "decl"
 
 funType :: Parser (T Decl)
-funType = liftT2 ($) (try prefix) ty <?> "funType"
-  where prefix = liftT2 (\v _ -> DeclSig v) varid (reservedOp ":")
+funType = liftT2 DeclSig (try prefix) (annotated impure) <|?> "funType"
+  where prefix = varid <# reservedOp ":"
 
 funDecl :: Parser (T Decl)
 funDecl = liftT2 ($) (try prefix) (annotated exp) <?> "funDecl"
@@ -256,44 +256,42 @@ expRead :: Parser (T Exp)
 expRead = liftT4 (\_ x _ e -> Parse.Read x e) (try prefix) varid (reservedId "in") (annotated exp) <?> "read expression"
   where prefix = reservedId "read"
 
-ty :: Parser Impure
-ty = liftT2O (:#) tyPure empty (reservedOp "#" #> effs)
+impure :: Parser (T Impure)
+impure = liftT2O f (annotated ty) (reservedOp "#") (annotated effs) <|?> "ty"
+  where f p Nothing   = p :# (Phantom :< TyEffects [])
+        f p (Just es) = p :# es
 
-effs :: Parser Effects
-effs = Effect.fromList <$> sepBy1 eff plus
+effs :: Parser (T Type)
+effs = TyEffects <$> sepBy1 (annotated eff) plus
 
-eff :: Parser Effect
+eff :: Parser (T Type)
 eff = efLit <|> efVar <?> "effect"
-  where efLit = EfLit <$> try conid
-        efVar = EfVar <$> try varid
+  where efLit = TyCon <$> try conid
+        efVar = TyUni <$> try varid
 
-tyPure :: Parser Pure
-tyPure = liftT2O join tyPure' Nothing (reservedOp "->" #> (Just <$> ty)) <?> "tyPure"
-  where join :: Pure -> Maybe Impure -> Pure
-        join p Nothing  = p
-        join p (Just t) = TyFun p t
-        tyPure' = tyUnit <|> tyVar <|> tyPrim <|> tyRecord <|> tyParen -- TODO
-        tyParen = special '(' #> tyPure <# special ')'
+ty :: Parser (T Type)
+ty = liftT2O f (annotated ty') (reservedOp "->") impure
+  where f p Nothing          = value p
+        f p (Just (p' :# e)) = TyApply (Phantom :< TyCon "->") (Phantom :< TyPack (Record.triple p p' e)) -- TODO sources
+        ty' = tyUnit <|> tyVar <|> tyCon <|> tyRecord <|> tyParen
+        tyParen = special '(' #> ty <# special ')'
 
-tyRecord :: Parser Pure
-tyRecord = try $ special '(' #> (record <$> sepBy2 tyPure (special ',')) <# special ')'
-  where record :: [Pure] -> Pure
-        record ts = TyRecord $ Record.fromList (zip (repeat Nothing) ts)
+tyRecord :: Parser (T Type)
+tyRecord = TyRecord <$> record (annotated ty)
 
-tyUnit :: Parser Pure
+tyUnit :: Parser (T Type)
 tyUnit = unit *> return (TyRecord Record.unit)
 
-tyVar :: Parser Pure
+tyVar :: Parser (T Type)
 tyVar = TyVar <$> try varid
 
-tyPrim :: Parser Pure
-tyPrim = TyPrim <$> do
-  s <- try conid
-  case s of
-    "Bool"   -> return TyBool
-    "Char"   -> return TyChar
-    "Int"    -> return TyInt
-    "String" -> return TyString
-    _        -> Applicative.empty
+tyCon :: Parser (T Type)
+tyCon = TyCon <$> try conid
 
+kind :: Parser Kind
+kind = undefined -- FIXME
+
+record :: Parser (Annotated a) -> Parser (Record (Annotated a))
+record p = try (special '(' #> guts <# special ')')
+  where guts = (Record.fromList . zip (repeat Nothing)) <$> sepBy2 p (special ',') -- FIXME (add optional fields)
 

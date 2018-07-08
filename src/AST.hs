@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE KindSignatures    #-}
 
 module AST
   ( Decl(..)
@@ -10,8 +9,6 @@ module AST
   , Program(..)
   , QString(..)
   , Stmt(..)
-
-  , litTy
   ) where
 
 import           Control.Applicative (liftA2, liftA3)
@@ -24,8 +21,7 @@ import           Record
 import           Tag
 import           Type
 
--- TODO allow poly types
-data Decl a = DeclFun Name (Maybe Impure) Int [([a (Pat a)], a (Exp a))]
+data Decl a = DeclFun Name (Maybe (a (Impure a))) Int [([a (Pat a)], a (Exp a))]
 
 {- TODO
             | DeclData Name (Maybe (a (DataKind a))) [a (DataAlt a)]
@@ -46,7 +42,7 @@ data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Lit Lit
            | Read Name (a (Exp a))
            | Record (Record (a (Exp a)))
-           | Sig (a (Exp a)) Impure -- TODO Type
+           | Sig (a (Exp a)) (a (Impure a))
            | Var Name
 
 -- |AST for Literals
@@ -56,11 +52,11 @@ data Lit = Bool Bool
          | String String
   deriving (Eq)
 
-data Pat (a :: * -> *) = PatAt Name (a (Pat a))
-                       | PatHole
-                       | PatLit Lit
-                       | PatRecord (Record (a (Pat a)))
-                       | PatVar Name
+data Pat a = PatAt Name (a (Pat a))
+           | PatHole
+           | PatLit Lit
+           | PatRecord (Record (a (Pat a)))
+           | PatVar Name
 
 data Program a = Program [a (Decl a)]
 
@@ -74,15 +70,8 @@ instance Show QString where
   show s = (if prefix == "" then "" else prefix ++ ".") ++ name s
     where prefix = intercalate "." (qualification s)
 
-litTy :: Lit -> Pure
-litTy = TyPrim . litTy'
-  where litTy' (Bool _)   = TyBool
-        litTy' (Char _)   = TyChar
-        litTy' (Int _)    = TyInt
-        litTy' (String _) = TyString
-
 instance TagTraversable Decl where
-  tagTraverse' f (DeclFun n t i ds) = DeclFun n t i <$> sequenceA (map (\(ps, e) -> liftA2 (,) (sequenceA (map (tagTraverse f) ps)) (tagTraverse f e)) ds)
+  tagTraverse' f (DeclFun n t i ds) = liftA2 (\t ds -> DeclFun n t i ds) (sequenceA (tagTraverse f <$> t)) (sequenceA (map (\(ps, e) -> liftA2 (,) (sequenceA (map (tagTraverse f) ps)) (tagTraverse f e)) ds))
 
 instance TagTraversable Exp where
   tagTraverse' f (Apply a b)   = liftA2 Apply (tagTraverse f a) (tagTraverse f b)
@@ -93,7 +82,7 @@ instance TagTraversable Exp where
   tagTraverse' f (Lit l)       = pure $ Lit l
   tagTraverse' f (Record r)    = Record <$> sequenceA (fmap (tagTraverse f) r)
   tagTraverse' f (Read n e)    = Read n <$> tagTraverse f e
-  tagTraverse' f (Sig e t)     = (`Sig` t) <$> tagTraverse f e
+  tagTraverse' f (Sig e t)     = liftA2 Sig (tagTraverse f e) (tagTraverse f t)
   tagTraverse' f (Var v)       = pure $ Var v
 
 instance TagTraversable Pat where

@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Check.Generate
   ( Generatable(..)
@@ -6,27 +8,28 @@ module Check.Generate
 
 import           AST
 import           Check.AST
-import           Check.Derivation
-import           Common           (traverseM)
-import           Effect           (empty, unions)
+import           Check.Constraint
+import           Common              (traverseM)
+import qualified Env.KEnv            as KEnv
 import           Env.TEnv
 import           Error
-import           Inbuilts         hiding (ty)
-import qualified Parse.Parse.AST  as Parse
+import           Inbuilts            hiding (ty)
+import qualified Parse.Parse.AST     as Parse
 import           Praxis
 import           Record
 import           Source
 import           Tag
-import           Type             hiding (getEffects)
+import           Type                hiding (getEffects)
 
-import           Data.Foldable    (foldlM)
-import           Data.List        (nub, sort, transpose)
-import           Data.Monoid      (Sum (..))
-import           Prelude          hiding (exp, log, read)
+import           Control.Applicative (liftA2)
+import           Data.Foldable       (foldlM)
+import           Data.List           (nub, sort, transpose)
+import           Data.Monoid         (Sum (..))
+import           Prelude             hiding (exp, log, read)
 
-class Show (Annotated a) => Generatable a where
-  generate' :: Parse.Annotated a -> Praxis (Annotated a, [Derivation])
-  generate  :: Parse.Annotated a -> Praxis (Annotated a, [Derivation])
+class Show b => Generatable a b | a -> b where
+  generate' :: a -> Praxis (b, [Derivation])
+  generate  :: a -> Praxis (b, [Derivation])
   generate p = save stage $ save inClosure $ do
     set stage Generate
     set inClosure False
@@ -36,21 +39,23 @@ class Show (Annotated a) => Generatable a where
     logList Debug cs'
     return (p', cs')
 
-instance Generatable Program where
+instance Generatable (Parse.Annotated Program) (Annotated Program) where
   generate' = program
 
-instance Generatable Exp where
+instance Generatable (Parse.Annotated Exp) (Annotated Exp) where
   generate' = exp
 
--- TODO Consider moving these or renaming these or using lenses
-getPure :: Impure -> Pure
-getPure (p :# _) = p
+instance Generatable (Parse.Annotated Type) (Kinded Type) where
+  generate' = typ
 
-getEffects :: Impure -> Effects
-getEffects (_ :# e) = e
-
-ty :: Annotated a -> Impure
+ty :: Annotated a -> Kinded Impure
 ty ((Just t, _) :< _) = t
+
+getPure (_ :< p :# e) = p
+getEffects (_ :< p :# e) = e
+
+split :: Kinded Impure -> (Kinded Type, Kinded Type)
+split t = (getPure t, getEffects t)
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -70,39 +75,93 @@ program (s :< p) = case p of
     -- TODO remove from tEnv
     return ((Nothing, s) :< Program ds', cs)
 
+impure :: Parse.Annotated Impure -> Praxis (Kinded Impure, [Derivation])
+impure (s :< t :# e) = do
+  (t', c1) <- typ t
+  (e', c2) <- typ e
+  let c3 = [ newDerivation (EqKind (tag t') KindType) (Custom "impure: TODO") s
+           , newDerivation (EqKind (tag e') KindEffect) (Custom "impure: TODO") s
+           ]
+  return (KindType :< t' :# e', c1 ++ c2 ++ c3)
+
+equalI :: Kinded Impure -> Kinded Impure -> Reason -> Source -> [Derivation]
+equalI (_ :< t1 :# e1) (_ :< t2 :# e2) r s = [ newDerivation (EqType t1 t2) r s, newDerivation (EqType e1 e2) r s ]
+
+typ :: Parse.Annotated Type -> Praxis (Kinded Type, [Derivation])
+typ (s :< t) = case t of
+
+  TyApply f a -> do
+    kb <- freshUniK
+    (f', c1) <- typ f
+    (a', c2) <- typ a
+    let kf = tag f'
+        ka = tag a'
+        c3 = [ newDerivation (EqKind kf (KindFun ka kb)) AppType s ]
+    return (kb :< TyApply f' a', c1 ++ c2 ++ c3) -- TODO think about the order of constraints
+
+  TyEffects es -> do
+    (es', c1) <- traverseM typ es
+    let c2 = map (\(k :< _) -> newDerivation (EqKind k KindEffect) (Custom "typ: TyEffects TODO") s) es'
+    -- TODO Need to flatten effects, or only during unification?
+    return (KindEffect :< TyEffects es', c1 ++ c2)
+
+  TyCon n -> do
+    Just k <- KEnv.lookup n
+    return (k :< TyCon n, [])
+
+  TyPack r -> do -- This one is easy
+    (r', c1) <- traverseM typ r
+    return (KindRecord (fmap tag r') :< TyPack r', c1)
+
+  TyRecord r -> do -- TODO Need to check they're all pure ?
+    (r', c1) <- traverseM typ r
+    let c2 = map (\(k :< _) -> newDerivation (EqKind k KindType) (Custom "typ: TyRecord TODO") s) (map snd (Record.toList r'))
+    return (KindType :< TyRecord r', c1 ++ c2)
+
+  _ -> error ("typ: " ++ show (s :< t))
+
+
+-- TODO move this somewhere
+fun :: Kinded Type -> Kinded Impure -> Kinded Type
+fun ap bt = let kp = KindRecord (Record.triple KindType KindType KindEffect)
+                (bp, be) = split bt
+             in KindType :< TyApply (KindFun kp KindType :< TyCon "->") (kp :< TyPack (Record.triple ap bp be))
+
 decl :: Parse.Annotated Decl -> Praxis (Annotated Decl, [Derivation])
 decl (s :< d) = case d of
 
   -- TODO tidy this up, TODO allow polymorpishm
   DeclFun n ut i as -> do
 
-    dt <- case ut of Nothing -> freshUniI
-                     Just t  -> return t
+    (dt, dc) <- case ut of Nothing -> (\t -> (t, [])) <$> freshUniI
+                           Just t  -> impure t
 
     if i == 0 then do
       -- Special case, the binding is not a function (and is non-recursive)
       let [([], e)] = as
       (e', c1) <- exp e
       let t' = ty e'
-      intro n (Mono dt)
+      intro n (mono (getPure dt))
       let c2 = equalI dt t' (UserSignature (Just n)) s
-      return ((Just dt, s) :< DeclFun n ut i [([], e')], c1 ++ c2)
+      return ((Just dt, s) :< DeclFun n Nothing i [([], e')], c1 ++ c2 ++ dc)
     else do
       -- TODO clean this up
-      intro n (Mono dt)
+      intro n (mono (getPure dt))
       as' <- mapM binds as
       let c1 = concatMap snd as'
       let bs = map fst as'
-      let tss = map (\ps -> equalIs (map (\((Just t, s) :< _) -> (t,s)) ps) Unknown) . transpose . map fst $ bs
-      let ts = map fst tss
+      let tss = map (\ps -> equalPs (map (\((Just t, s) :< _) -> (getPure t, s)) ps) Unknown) . transpose . map fst $ bs
+      let ps = map fst tss
       let c2 = concatMap snd tss
       let es = map snd bs
       let (te, c3) = equalIs (map (\((Just t, s) :< _) -> (t,s)) es) Unknown
-      let t' = fold ts te
+      let t' = fold ps te
       let c4 = equalI dt t' (UserSignature (Just n)) s
-      return ((Just dt, s) :< DeclFun n ut i bs, c1 ++ c2 ++ c3 ++ c4)
-        where fold            [] te = te
-              fold ((p :# _):ps) te = TyFun p (fold ps te) :# empty
+      return ((Just dt, s) :< DeclFun n Nothing i bs, c1 ++ c2 ++ c3 ++ c4 ++ dc)
+        where fold :: [Kinded Type] -> Kinded Impure -> Kinded Impure
+              fold     [] te = te
+              fold (p:ps) te = let ts' = fold ps te
+                                in fun p ts' # effs []
 
 stmt :: Parse.Annotated Stmt -> Praxis (Annotated Stmt, ([Derivation], Sum Int))
 stmt (s :< x) = case x of
@@ -110,25 +169,40 @@ stmt (s :< x) = case x of
   -- TODO should decl have a type in it?
   StmtDecl d -> do
     (d', c1) <- decl d
-    return ((Just (ty d'), s) :< StmtDecl d', (c1, Sum $ 1))
+    return ((Just (ty d'), s) :< StmtDecl d', (c1, Sum 1))
 
   StmtExp e -> do
     (e', c1) <- exp e
-    return ((Just (ty e'), s) :< StmtExp e', (c1, Sum $ 0))
+    return ((Just (ty e'), s) :< StmtExp e', (c1, Sum 0))
 
+kind :: Kinded Type -> Kind
+kind = tag
+
+effs :: [Kinded Type] -> Kinded Type
+effs [] = KindEffect :< TyEffects []
+effs (e : es) = let
+  es = case e of { _ :< TyEffects es -> es ; _ -> [e] }
+  _ :< TyEffects es' = effs es
+  in KindEffect :< TyEffects (es ++ es')
+
+
+(#) :: Kinded Type -> Kinded Type -> Kinded Impure
+t # e = KindType :< t :# e
+-- TODO need to check t ~ KindType and e ~ KindEffect before calling this? Or is that already done?
 
 exp :: Parse.Annotated Exp -> Praxis (Annotated Exp, [Derivation])
 exp (s :< e) = case e of
 
   Apply f x -> do
-    yp :# ye  <- freshUniI
+    yt <- freshUniI
+    let (yp, ye) = split yt
     (f', c1) <- exp f
     (x', c2) <- exp x
-    let fp :# fe = ty f'
-    let xp :# xe = ty x'
-    let c3 = [ newDerivation (EqualP fp (TyFun xp (yp :# ye))) Application s ]
-    let e = unions [fe, xe, ye]
-    return ((Just (yp :# e), s) :< Apply f' x', c1 ++ c2 ++ c3)
+    let (fp, fe) = split $ ty f'
+    let (xp, xe) = split $ ty x'
+    let c3 = [ newDerivation (EqType fp (fun xp yt)) AppFun s ]
+    let e = effs [fe, xe, ye]
+    return ((Just (yp # e), s) :< Apply f' x', c1 ++ c2 ++ c3)
 
   Case e alts -> do
     (e', c1) <- exp e
@@ -138,60 +212,71 @@ exp (s :< e) = case e of
 
   Do ss -> do
     (ss', (cs, Sum i)) <- traverseM stmt ss
-    let es = unions $ map (getEffects . ty) ss'
-    let t :# _ = ty (last ss')
+    let es = effs $ map (getEffects . ty) ss'
+    let t = getPure $ ty (last ss')
     elimN i
-    return ((Just (t :# es), s) :< Do ss', cs)
+    return ((Just (t # es), s) :< Do ss', cs)
 
   If a b c -> do
     (a', c1) <- exp a
     ((b', c2), (c', c3)) <- join (exp b) (exp c)
-    let ap :# ae = ty a'
-    let bp :# be = ty b'
-    let cp :# ce = ty c'
-    let c4 = [ newDerivation (EqualP ap (TyPrim TyBool)) IfCondition s, newDerivation (EqualP bp cp) IfCongruence s ]
-    let e = unions [ae, be, ce]
-    return ((Just (bp :# e), s) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4)
+    let (ap, ae) = split $ ty a'
+    let (bp, be) = split $ ty b'
+    let (cp, ce) = split $ ty c'
+    let c4 = [ newDerivation (EqType ap (KindType :< TyCon "Bool")) IfCondition s, newDerivation (EqType bp cp) IfCongruence s ]
+    let e = effs [ae, be, ce]
+    return ((Just (bp # e), s) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4)
 
   Lambda p e -> do
     (p', Sum i) <- pat p
-    let t :# _ = ty p'
     (e', cs) <- save inClosure $ set inClosure True >> exp e
-    let tp :# te = ty e'
     elimN i
-    return ((Just (TyFun t (tp :# te) :# empty), s) :< Lambda p' e', cs)
+    let t = fun (getPure $ ty p') (ty e')
+    return ((Just (t # effs []), s) :< Lambda p' e', cs)
 
   Lit x -> do
-    let p = litTy x -- TODO polymorphic literals
-    return ((Just (p :# empty), s) :< Lit x, [])
+    let p = case x of { Int _ -> TyCon "Int" ; Bool _ -> TyCon "Bool" ; String _ -> TyCon "String" ; Char _ -> TyCon "Char" }
+    -- TODO poly literals
+    return ((Just ((KindType :< p) # effs []), s) :< Lit x, [])
 
   Read n a -> do
     (p, c1) <- read s n
-    intro n (Mono (TyBang p :# empty))
+    intro n (mono p)
     (a', c2) <- exp a
     return (a', c1 ++ c2)
 
   Record r -> do
     (r', c1) <- traverseM exp r
-    let e = unions (map (getEffects . ty . snd) (Record.toList r'))
-    let p = TyRecord (fmap (getPure . ty) r')
-    return ((Just (p :# e), s) :< Record r', c1)
+    let e = effs (map (getEffects . ty . snd) (Record.toList r'))
+    let p = KindType :< TyRecord (fmap (\t -> getPure (ty t)) r')
+    return ((Just (p # e), s) :< Record r', c1)
 
   Sig e t -> do
     (e', c1) <- exp e
+    (t, c3) <- impure t
     let c2 = equalI t (ty e') (UserSignature Nothing) s
-    return (e', c1 ++ c2)
+    return (e', c1 ++ c2 ++ c3)
 
   Var n -> do
     (p, c1) <- use s n
-    return ((Just (p :# empty), s) :< Var n, c1)
+    return ((Just (p # effs []), s) :< Var n, c1)
 
 
-equalIs :: [(Impure, Source)] -> Reason -> (Impure, [Derivation])
-equalIs [(t, _)]         _ = (t, [])
-equalIs ((p :# e, s):ts) r = let (p' :# e', cs) = equalIs ts r
-                                 c = newDerivation (EqualP p p') r s
-                             in (p :# unions [e, e'], c:cs)
+equalIs :: [(Kinded Impure, Source)] -> Reason -> (Kinded Impure, [Derivation])
+equalIs [(t, _)]    _ = (t, [])
+equalIs ((t, s):ts) r = let (t', c1) = equalIs ts r
+                            (p,   e) = split t
+                            (p', e') = split t'
+                            c2 = [ newDerivation (EqType p p') r s ]
+                         in (p # effs [e, e'], c1 ++ c2)
+
+-- TODO remove duplication here
+equalPs :: [(Kinded Type, Source)] -> Reason -> (Kinded Type, [Derivation])
+equalPs [(p, _)]    _ = (p, [])
+equalPs ((p, s):ps) r = let (p', cs) = equalPs ps r
+                            c = newDerivation (EqType p p') r s
+                             in (p, c:cs)
+
 
 binds :: ([Parse.Annotated Pat], Parse.Annotated Exp) -> Praxis (([Annotated Pat], Annotated Exp), [Derivation])
 binds ([], e) = do
@@ -210,34 +295,34 @@ bind (s :< p, e) = do
   elimN i
   return ((p', e'), cs)
 
-
+-- Always returns empty effects
 pat :: Parse.Annotated Pat -> Praxis (Annotated Pat, Sum Int)
 pat (s :< p) = case p of
 
   PatAt v p -> do
     (p', Sum i) <- pat p
-    t <- freshUniP
-    intro v (Mono (t :# empty))
-    return ((Just (t :# empty), s) :< PatAt v p', Sum $ i + 1)
+    let t = getPure $ ty p'
+    intro v (mono t)
+    return ((Just (t # effs []), s) :< PatAt v p', Sum $ i + 1)
 
   PatHole -> do
     t <- freshUniP
-    return ((Just (t :# empty), s) :< PatHole, Sum 0)
+    return ((Just (t # effs []), s) :< PatHole, Sum 0)
 
-  PatLit l -> return ((Just (TyPrim (tyLit l) :# empty), s) :< PatLit l,  Sum 0)
-    where tyLit (Bool _)   = TyBool
-          tyLit (Char _)   = TyChar
-          tyLit (Int _)    = TyInt
-          tyLit (String _) = TyString
+  PatLit l -> return ((Just ((KindType :< TyCon (lit l)) # effs []), s) :< PatLit l, Sum 0)
+    where lit (Bool _)   = "Bool"
+          lit (Char _)   = "Char"
+          lit (Int _)    = "Int"
+          lit (String _) = "String"
 
   PatRecord r -> do
     (r', i) <- traverseM pat r
-    let p = TyRecord (fmap (getPure . ty) r')
-    return ((Just (p :# empty), s) :< PatRecord r', i)
+    let t = KindType :< TyRecord (fmap (getPure . ty) r')
+    return ((Just (t # effs []), s) :< PatRecord r', i)
     -- TODO check no duplicate variables? Perhaps not here - in decl instead?
 
   PatVar v -> do
     t <- freshUniP
-    intro v (Mono (t :# empty))
-    return ((Just (t :# empty), s) :< PatVar v, Sum 1)
+    intro v (mono t)
+    return ((Just (t # effs []), s) :< PatVar v, Sum 1)
 

@@ -13,10 +13,9 @@ module Check.System
   , staging
   ) where
 
-import           Check.Derivation (Derivation)
+import           Check.Constraint (Constraint, Derivation)
 import           Common           (Name)
-import           Sub              (Term)
-import           Type             (Constraint)
+import           Type             (Kinded, Type)
 
 import           Control.Lens     (makeLenses)
 
@@ -30,7 +29,7 @@ initialSystem cs = System
   }
 
 data System = System
-  { _solution    :: [(Name, Term)]
+  { _solution    :: [(Name, Kinded Type)]
   , _constraints :: [Derivation]
   , _staging     :: [Derivation]
   , _axioms      :: [Constraint]

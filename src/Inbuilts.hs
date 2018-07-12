@@ -32,9 +32,7 @@ mono :: String -> Kinded QType
 mono s = let (k :< t) = runStatic m in k :< Mono t
   where m = save kEnv $ (set kEnv initialKEnv >> (parse s :: Praxis (Annotated Type)) >>= check :: Praxis (Kinded Type))
 
-poly = undefined
-
--- FIXME get parsing working for types ... needs generating, which makes it recursive. MIGHT be OK just for types/kinds.
+poly = undefined -- FIXME
 
 prelude :: [(Name, Kinded QType, Value)]
 prelude =

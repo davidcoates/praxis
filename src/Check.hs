@@ -31,8 +31,8 @@ class Checkable a b | a -> b where
 checkWithSub :: (Show (Annotated b), TagTraversable b, Generatable a (Annotated b)) => a -> Praxis (Annotated b)
 checkWithSub p = do
   (p', cs) <- generate p
-  solution <- solve cs
-  let p'' = tagMap (first (tySub (`lookup` solution) <$>)) p'
+  (tySol, kindSol) <- solve cs
+  let p'' = tagMap (first ((kindSub (`lookup` kindSol) . tySub (`lookup` tySol)) <$>)) p'
   log Debug p''
   return p''
 

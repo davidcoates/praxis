@@ -23,14 +23,16 @@ import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
-solve :: [Derivation] -> Praxis [(Name, Kinded Type)]
+solve :: [Derivation] -> Praxis ([(Name, Kinded Type)], [(Name, Kind)])
 solve cs = save stage $ save system $ do
   set stage Solve
   set system (initialSystem cs)
   spin
-  sol <- get (system . solution)
-  logList Debug sol
-  return sol
+  tySol <- get (system . tySol)
+  kindSol <- get (system . kindSol)
+  logList Debug tySol
+  logList Debug kindSol
+  return (tySol, kindSol)
 
 spin :: Praxis ()
 spin = do
@@ -53,6 +55,7 @@ progress = do
 
 progress' :: Praxis ()
 progress' = do
+  cs <- get (system . staging)
   cs <- get (system . staging)
   case cs of []     -> return () -- Done
              (c:cs) -> set (system . staging) cs >> (single c >>= (\cs -> over (system . constraints) (++ cs))) >> progress'
@@ -116,8 +119,8 @@ single d = case constraint d of
         tySolve n p = do
           let f :: TypeTraversable a => a -> a
               f = tySub (\n' -> if n == n' then Just p else Nothing)
-          over (system . solution) ((n, p):)
-          over (system . solution) (map (second f))
+          over (system . tySol) ((n, p):)
+          over (system . tySol) (map (second f))
           over (system . constraints) (map f)
           over (system . staging) (map f)
           over (system . axioms) (map f)
@@ -128,7 +131,9 @@ single d = case constraint d of
         kindSolve n p = do
           let f :: KindTraversable a => a -> a
               f = kindSub (\n' -> if n == n' then Just p else Nothing)
-          over (system . solution) (map (second f))
+          over (system . kindSol) ((n, p):)
+          over (system . kindSol) (map (second f))
+          over (system . tySol) (map (second f))
           over (system . constraints) (map f)
           over (system . staging) (map f)
           over (system . axioms) (map f)

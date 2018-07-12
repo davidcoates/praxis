@@ -9,19 +9,21 @@ module Check.System
   , axioms
   , changed
   , constraints
-  , solution
+  , tySol
+  , kindSol
   , staging
   ) where
 
 import           Check.Constraint (Constraint, Derivation)
 import           Common           (Name)
-import           Type             (Kinded, Type)
+import           Type             (Kind, Kinded, Type)
 
 import           Control.Lens     (makeLenses)
 
 initialSystem :: [Derivation] -> System
 initialSystem cs = System
-  { _solution    = []
+  { _tySol       = []
+  , _kindSol     = []
   , _constraints = cs
   , _axioms      = []
   , _changed     = False
@@ -29,7 +31,8 @@ initialSystem cs = System
   }
 
 data System = System
-  { _solution    :: [(Name, Kinded Type)]
+  { _tySol       :: [(Name, Kinded Type)]
+  , _kindSol     :: [(Name, Kind)]
   , _constraints :: [Derivation]
   , _staging     :: [Derivation]
   , _axioms      :: [Constraint]

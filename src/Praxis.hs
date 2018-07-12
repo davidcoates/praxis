@@ -129,9 +129,7 @@ data PraxisState = PraxisState
 type Praxis a = ExceptT Error (StateT PraxisState IO) a
 
 defaultFlags :: Flags
--- defaultFlags = Flags { _level = Normal, _interactive = False, _static = False }
--- TODO for some reason level resets to Normal during static, fix this
-defaultFlags = Flags { _level = Trace, _interactive = False, _static = False }
+defaultFlags = Flags { _level = Normal, _interactive = False, _static = False }
 
 get :: Lens' PraxisState a -> Praxis a
 get = lift . gets . view

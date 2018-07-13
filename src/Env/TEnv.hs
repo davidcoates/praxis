@@ -13,6 +13,7 @@ module Env.TEnv
 where
 
 import           Check.Constraint
+import           Check.System
 import           Common
 import           Env              (TEnv)
 import           Env.AEnv         (AEnv, fromList)
@@ -23,6 +24,7 @@ import           Source           (Source)
 import           Tag
 import           Type
 
+import           Control.Monad    (replicateM)
 import           Prelude          hiding (log, lookup, read)
 import qualified Prelude          (lookup)
 
@@ -88,4 +90,12 @@ lookup n = do
 
 ungeneralise :: Kinded QType -> Praxis (Kinded Type)
 ungeneralise (k :< Mono t) = return (k :< t)
-ungeneralise t             = error ("ungeneralise: " ++ show t)
+ungeneralise x@(KindType :< Forall cs vs (KindType :< t)) = do
+  sub <- zipWith (\(n, k) (_ :< t) -> (n, k :< t)) vs <$> replicateM (length vs) freshUniP
+  let f :: TypeTraversable a => a -> a
+      f = tySub (`Prelude.lookup` sub)
+  let cs' = [] -- FIXME TODO derivations derived from cs
+  let t' = f (KindType :< t)
+  log Debug t'
+  over (system . axioms) (++ cs')
+  return t'

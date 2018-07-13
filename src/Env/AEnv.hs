@@ -1,3 +1,7 @@
+{-# LANGUAGE DeriveFoldable     #-}
+{-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Env.AEnv
   ( AEnv
   , fromList
@@ -20,6 +24,9 @@ import           Prelude       hiding (lookup)
 import qualified Prelude       (lookup)
 
 newtype AEnv a b = AEnv (Env a (Bool, b))
+
+deriving instance Foldable (AEnv a)
+deriving instance Traversable (AEnv a)
 
 instance Functor (AEnv a) where
   fmap f (AEnv l) = AEnv (fmap (second f) l)

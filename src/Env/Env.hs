@@ -1,3 +1,7 @@
+{-# LANGUAGE DeriveFoldable     #-}
+{-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Env.Env
   ( Env(..)
   , fromList
@@ -17,6 +21,9 @@ import qualified Prelude       (lookup)
 
 -- TODO Cosider putting source in Env
 newtype Env a b = Env [(a, b)]
+
+deriving instance Foldable (Env a)
+deriving instance Traversable (Env a)
 
 instance Functor (Env a) where
   fmap f (Env l) = Env (fmap (second f) l)

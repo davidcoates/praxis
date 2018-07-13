@@ -32,7 +32,11 @@ mono :: String -> Kinded QType
 mono s = let (k :< t) = runStatic m in k :< Mono t
   where m = save kEnv $ (set kEnv initialKEnv >> (parse s :: Praxis (Annotated Type)) >>= check :: Praxis (Kinded Type))
 
-poly = undefined -- FIXME
+trivial :: Kinded Type
+trivial = KindConstraint :< TyRecord Record.unit -- TODO Constraint type?
+
+poly :: [(Name, Kind)] -> String -> Kinded QType
+poly ks s = let (KindType :< Mono t) = mono s in KindType :< Forall trivial ks (KindType :< t)
 
 prelude :: [(Name, Kinded QType, Value)]
 prelude =
@@ -43,11 +47,11 @@ prelude =
   , ("putInt",   mono "Int -> () # StdOut",    F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
   , ("putStrLn", mono "String -> () # StdOut", F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
   , ("dot",      poly
-      [("a",  KindType)
-      ,("b",  KindType)
-      ,("c",  KindType)
-      ,("e1", KindEffect)
-      ,("e2", KindEffect)] "(b -> c # e1, a -> b # e2) -> a -> c # e1 + e2",
+      [ ("a", KindType)
+      , ("b", KindType)
+      , ("c", KindType)
+      , ("e1", KindEffect)
+      , ("e2", KindEffect)] "(b -> c # e1, a -> b # e2) -> a -> c # e1 + e2", -- TODO shouldn't need kinds here in forall
                                                F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
   ]
   where

@@ -25,6 +25,7 @@ import           Control.Applicative (liftA2)
 import           Data.Foldable       (foldlM)
 import           Data.List           (nub, sort, transpose)
 import           Data.Monoid         (Sum (..))
+import qualified Data.Set            as Set
 import           Prelude             hiding (exp, log, read)
 
 class Show b => Generatable a b | a -> b where
@@ -100,10 +101,10 @@ typ (s :< t) = case t of
     return (kb :< TyApply f' a', c1 ++ c2 ++ c3) -- TODO think about the order of constraints
 
   TyEffects es -> do
-    (es', c1) <- traverseM typ es
+    (es', c1) <- traverseM typ (Set.toList es)
     let c2 = map (\(k :< _) -> newDerivation (EqKind k KindEffect) (Custom "typ: TyEffects TODO") s) es'
     -- TODO Need to flatten effects, or only during unification?
-    return (KindEffect :< TyEffects es', c1 ++ c2)
+    return (KindEffect :< TyEffects (Set.fromList es'), c1 ++ c2)
 
   TyCon n -> do
     Just k <- KEnv.lookup n
@@ -117,6 +118,15 @@ typ (s :< t) = case t of
     (r', c1) <- traverseM typ r
     let c2 = map (\(k :< _) -> newDerivation (EqKind k KindType) (Custom "typ: TyRecord TODO") s) (map snd (Record.toList r'))
     return (KindType :< TyRecord r', c1 ++ c2)
+
+  TyVar v -> do
+    e <- KEnv.lookup v
+    case e of
+      Just k -> return (k :< TyVar v, [])
+      Nothing -> do
+        k <- freshUniK
+        KEnv.intro v k
+        return (k :< TyVar v, [])
 
   _ -> error ("typ: " ++ show (s :< t))
 
@@ -179,11 +189,11 @@ kind :: Kinded Type -> Kind
 kind = tag
 
 effs :: [Kinded Type] -> Kinded Type
-effs [] = KindEffect :< TyEffects []
+effs [] = KindEffect :< TyEffects Set.empty
 effs (e : es) = let
-  es = case e of { _ :< TyEffects es -> es ; _ -> [e] }
+  e' = case e of { _ :< TyEffects es -> es ; _ -> Set.singleton e }
   _ :< TyEffects es' = effs es
-  in KindEffect :< TyEffects (es ++ es')
+  in KindEffect :< TyEffects (Set.union e' es')
 
 
 (#) :: Kinded Type -> Kinded Type -> Kinded Impure

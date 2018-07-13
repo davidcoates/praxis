@@ -45,5 +45,7 @@ instance Checkable (Parse.Annotated Exp) (Annotated Exp) where
 instance Checkable (Parse.Annotated Type) (Kinded Type) where
   check' p = do
     (p', cs) <- generate p
-    log Debug p'
-    return p'
+    (tySol, kindSol) <- solve cs
+    let p'' = kindSub (`lookup` kindSol) . tySub (`lookup` tySol) $ p'
+    log Debug p''
+    return p''

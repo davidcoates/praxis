@@ -13,6 +13,7 @@ module Praxis
   , get
   , set
   , over
+  , extract
 
   , save
   , try
@@ -62,7 +63,7 @@ import           Tag                  (Tag (..))
 import           Type
 
 import           Control.Applicative  (liftA2)
-import           Control.Lens         (Lens', makeLenses, view)
+import           Control.Lens         (Lens', makeLenses, traverseOf, view)
 import qualified Control.Lens         (over, set)
 import           Control.Monad        (when)
 import           Control.Monad.Except (ExceptT, runExceptT)
@@ -141,6 +142,13 @@ over :: Lens' PraxisState a -> (a -> a) -> Praxis ()
 over l f = do
   x <- get l
   set l (f x)
+
+extract :: Lens' PraxisState a -> (a -> (b, a)) -> Praxis b
+extract l f = do
+  x <- get l
+  let (c, x') = f x
+  set l x'
+  return c
 
 throwError :: Error -> Praxis a
 throwError = Control.Monad.Except.throwError
@@ -245,7 +253,7 @@ freshUniE :: Praxis (Kinded Type)
 freshUniE = do
   (x:xs) <- get (fresh . freshUniEs)
   set (fresh . freshUniEs) xs
-  return (KindEffect :< TyEffects [KindEffect :< TyUni x])
+  return (KindEffect :< TyEffects (Set.singleton (KindEffect :< TyUni x)))
 
 freshUniK :: Praxis Kind
 freshUniK = do

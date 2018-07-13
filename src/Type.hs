@@ -24,12 +24,14 @@ import           Data.Functor.Identity
 import           Data.List             (intercalate)
 import           Data.Maybe            (fromMaybe)
 import           Data.Monoid           ((<>))
+import           Data.Set              (Set)
+import qualified Data.Set              as Set
 
 data Type a = TyUni Name -- Compares less than all other types
             | TyApply (a (Type a)) (a (Type a))   -- ^Type-level application : (a -> #b) -> #a -> #b
             | TyBang (a (Type a))
             | TyCon Name                          -- ^Includes (->) : [T, T , E] -> T
-            | TyEffects [a (Type a)]              -- TODO Set? Required Ord which I don't want to do
+            | TyEffects (Set (a (Type a)))
             -- TODO perhaps call TyEffects TyFlat, use for constraints also
             | TyLambda (a (TyPat a)) (a (Type a)) -- ^A type-level lambda : ?1 -> ?2
             | TyPack   (Record (a (Type a)))      -- ^A type pack with a record kind
@@ -70,7 +72,7 @@ instance Show a => Show (Tagged a Type) where
       TyApply a b   -> show' a ++ " " ++ show' b
       TyBang t      -> "!" ++ show' t
       TyCon n       -> n
-      TyEffects es  -> "{" ++ intercalate ", " (map show' es) ++ "}"
+      TyEffects es  -> "{" ++ intercalate ", " (map show' (Set.toList es)) ++ "}"
       TyLambda a b  -> "\\" ++ show a ++ " -> " ++ show' b
       TyPack r      -> "[" ++ Record.showGuts show' r ++ "]"
       TyRecord r    -> "(" ++ Record.showGuts show' r ++ ")"
@@ -101,7 +103,7 @@ instance TagTraversable Type where
   tagTraverse' f (TyApply a b)  = liftA2 TyApply (tagTraverse f a) (tagTraverse f b)
   tagTraverse' f (TyBang t)     = TyBang <$> tagTraverse f t
   tagTraverse' f (TyCon n)      = pure $ TyCon n
-  tagTraverse' f (TyEffects es) = TyEffects <$> sequenceA (map (tagTraverse f) es)
+  tagTraverse' f (TyEffects es) = TyEffects . Set.fromList <$> sequenceA (map (tagTraverse f) (Set.toList es))
   tagTraverse' f (TyLambda a b) = liftA2 TyLambda (tagTraverse f a) (tagTraverse f b)
   tagTraverse' f (TyPack r)     = TyPack <$> sequenceA (fmap (tagTraverse f) r)
   tagTraverse' f (TyRecord r)   = TyRecord <$> sequenceA (fmap (tagTraverse f) r)
@@ -119,6 +121,7 @@ instance TagTraversable TyPat where
   tagTraverse' f (TyPatVar n)  = pure $ TyPatVar n
   tagTraverse' f (TyPatPack r) = TyPatPack <$> sequenceA (fmap (tagTraverse f) r)
 
+
 class TypeTraversable a where
   typeTraverse :: Applicative f => (Kinded Type -> f (Kinded Type)) -> a -> f a
   tySub :: (Name -> Maybe (Kinded Type)) -> a -> a
@@ -126,7 +129,7 @@ class TypeTraversable a where
       where
         f' (k :< t) = case t of
           TyUni n -> fromMaybe (k :< t) (f n)
-          _       -> k :< t
+          TyVar n -> fromMaybe (k :< t) (f n)
   tyUnis :: a -> [Name]
   tyUnis = getConst . typeTraverse (Const . f)
     where
@@ -134,21 +137,26 @@ class TypeTraversable a where
         TyUni n -> [n]
         _       -> []
 
--- TODO Vars also?
+instance (TypeTraversable a) => TypeTraversable [a] where
+  typeTraverse f = sequenceA . fmap (typeTraverse f)
+
+instance (TypeTraversable a) => TypeTraversable (Record a) where
+  typeTraverse f = sequenceA . fmap (typeTraverse f)
+
 instance TypeTraversable (Kinded Type) where
   typeTraverse f t@(_ :< TyUni _) = f t
+  typeTraverse f t@(_ :< TyVar _) = f t
   typeTraverse f (k :< t) = (k :<) <$> case t of
     (TyApply a b)  -> liftA2 TyApply (typeTraverse f a) (typeTraverse f b)
     (TyBang t)     -> TyBang <$> typeTraverse f t
     (TyCon n)      -> pure $ TyCon n
-    (TyEffects es) -> (TyEffects . concatMap flatten) <$> sequenceA (map (typeTraverse f) es)
+    (TyEffects es) -> (TyEffects . Set.fromList . concatMap flatten) <$> typeTraverse f (Set.toList es)
       where flatten :: Kinded Type -> [Kinded Type]
-            flatten (_ :< TyEffects es) = es
+            flatten (_ :< TyEffects es) = concatMap flatten es
             flatten t                   = [t]
     (TyLambda a b) -> liftA2 TyLambda (typeTraverse f a) (typeTraverse f b) -- TODO Shadowing?
-    (TyPack r)     -> TyPack <$> sequenceA (fmap (typeTraverse f) r)
-    (TyRecord r)   -> TyRecord <$> sequenceA (fmap (typeTraverse f) r)
-    (TyVar v)      -> pure $ TyVar v
+    (TyPack r)     -> TyPack <$> typeTraverse f r
+    (TyRecord r)   -> TyRecord <$> typeTraverse f r
 
 instance TypeTraversable (Kinded TyPat) where
   typeTraverse f = pure
@@ -158,7 +166,7 @@ instance TypeTraversable (Kinded Impure) where
 
 instance TypeTraversable (Kinded QType) where
   typeTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> typeTraverse f (k :< t)
-  typeTraverse f _ = undefined -- FIXME
+  typeTraverse f (k :< Forall cs vs t) = liftA2 (\cs t -> k :< Forall cs vs t) (typeTraverse f cs) (typeTraverse f t)
 
 class KindTraversable a where
   kindTraverse :: Applicative f => (Kind -> f Kind) -> a -> f a
@@ -171,6 +179,12 @@ class KindTraversable a where
       where f' (KindUni n) = fromMaybe (KindUni n) (f n)
             f' k           = k
 
+instance (KindTraversable a) => KindTraversable [a] where
+  kindTraverse f = sequenceA . fmap (kindTraverse f)
+
+instance (KindTraversable a) => KindTraversable (Record a) where
+  kindTraverse f = sequenceA . fmap (kindTraverse f)
+
 instance KindTraversable (Kinded Type) where
   kindTraverse = tagTraverse
 
@@ -179,9 +193,10 @@ instance KindTraversable (Kinded Impure) where
 
 instance KindTraversable (Kinded QType) where
   kindTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> kindTraverse f (k :< t)
-  kindTraverse f _ = undefined -- FIXME
+  kindTraverse f (k :< Forall cs vs t) = liftA2 (:<) (kindTraverse f k) $ liftA2 (\cs t -> Forall cs vs t) (kindTraverse f cs) (kindTraverse f t)
 
 instance KindTraversable Kind where
-  kindTraverse f k@(KindUni _)  = f k
-  kindTraverse f (KindRecord r) = KindRecord <$> sequenceA (fmap (kindTraverse f) r)
-  kindTraverse f k              = pure k
+  kindTraverse f k@(KindUni _)   = f k
+  kindTraverse f (KindFun k1 k2) = liftA2 KindFun (kindTraverse f k1) (kindTraverse f k2)
+  kindTraverse f (KindRecord r)  = KindRecord <$> kindTraverse f r
+  kindTraverse f k               = pure k

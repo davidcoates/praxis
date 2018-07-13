@@ -23,6 +23,7 @@ import           Control.Applicative  (liftA2, liftA3, (<**>), (<|>))
 import qualified Control.Applicative  as Applicative (empty)
 import           Control.Lens         (view)
 import           Data.Maybe           (fromJust, isJust)
+import qualified Data.Set             as Set
 import           Prelude              hiding (exp, log)
 
 type T a = a (Tag Source)
@@ -258,16 +259,16 @@ expRead = liftT4 (\_ x _ e -> Parse.Read x e) (try prefix) varid (reservedId "in
 
 impure :: Parser (T Impure)
 impure = liftT2O f (annotated ty) (reservedOp "#") (annotated effs) <|?> "ty"
-  where f p Nothing   = p :# (Phantom :< TyEffects [])
+  where f p Nothing   = p :# (Phantom :< TyEffects Set.empty)
         f p (Just es) = p :# es
 
 effs :: Parser (T Type)
-effs = TyEffects <$> sepBy1 (annotated eff) plus
+effs = TyEffects . Set.fromList <$> sepBy1 (annotated eff) plus
 
 eff :: Parser (T Type)
 eff = efLit <|> efVar <?> "effect"
   where efLit = TyCon <$> try conid
-        efVar = TyUni <$> try varid
+        efVar = TyVar <$> try varid
 
 ty :: Parser (T Type)
 ty = liftT2O f (annotated ty') (reservedOp "->") impure

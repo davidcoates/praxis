@@ -11,13 +11,13 @@ module Check.Constraint
   , implies
   ) where
 
-import           Prelude             hiding (drop)
 import           Source              (Source)
 import           Tag                 (Tag (..))
 import           Type
 
 import           Control.Applicative (liftA2)
 import           Data.Maybe          (fromMaybe)
+import           Prelude             hiding (drop)
 
 data Constraint = Class (Kinded Type)
                 | EqType (Kinded Type) (Kinded Type)
@@ -26,8 +26,8 @@ data Constraint = Class (Kinded Type)
 
 instance Show Constraint where
   show (Class t)      = show t
-  show (EqType t1 t2) = show t1 ++ " ~ "  ++ show t2 -- TODO have a way of showing types without annotations ?
-  show (EqKind k1 k2) = show k1 ++ " ~ "  ++ show k2 -- TODO need this?
+  show (EqType t1 t2) = show t1 ++ " ~ " ++ show t2
+  show (EqKind k1 k2) = show k1 ++ " ~ " ++ show k2 -- TODO need this?
 
 data Reason = AppFun
             | AppType
@@ -88,12 +88,12 @@ instance TypeTraversable Constraint where
 
 instance KindTraversable Constraint where
   kindTraverse f c = case c of
+    Class t      -> Class <$> kindTraverse f t
     EqType t1 t2 -> liftA2 EqType (kindTraverse f t1) (kindTraverse f t2)
     EqKind k1 k2 -> liftA2 EqKind (kindTraverse f k1) (kindTraverse f k2)
-    _            -> pure c
 
 instance TypeTraversable Derivation where
-  typeTraverse f c = (\x -> c{ constraint = x}) <$> typeTraverse f (constraint c)
+  typeTraverse f c = liftA2 (\x y -> c{ constraint = x, original = y }) (typeTraverse f (constraint c)) (typeTraverse f (original c))
 
 instance KindTraversable Derivation where
-  kindTraverse f c = (\x -> c{ constraint = x}) <$> kindTraverse f (constraint c)
+  kindTraverse f c = liftA2 (\x y -> c{ constraint = x, original = y }) (kindTraverse f (constraint c)) (kindTraverse f (original c))

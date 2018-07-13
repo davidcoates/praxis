@@ -11,14 +11,15 @@ import           Check.System
 import           Error
 import           Praxis
 import           Record
+import           Source
 import           Tag
 import           Type
 
-import           Control.Applicative    (Const (..))
+import           Control.Applicative    (Const (..), liftA2)
 import           Control.Arrow          (second)
 import           Control.Monad.Identity (Identity (..))
 import           Data.List              (nub, sort)
-import           Data.Maybe             (fromJust)
+import           Data.Maybe             (fromMaybe)
 import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
@@ -30,8 +31,6 @@ solve cs = save stage $ save system $ do
   spin
   tySol <- get (system . tySol)
   kindSol <- get (system . kindSol)
-  logList Debug tySol
-  logList Debug kindSol
   return (tySol, kindSol)
 
 spin :: Praxis ()
@@ -100,12 +99,13 @@ single d = case constraint d of
 
   EqType t1@(_ :< TyEffects e1) t2@(_ :< TyEffects e2) -- Consider if we have unis, but they aren't of kind effect?
     | e1 > e2 -> swap
-    | [_ :< TyUni n] <- e1 -> if n `elem` tyUnis t1 then defer else tySolve n t2
-    | []             <- e1 -> let empty (_ :< TyUni n) = tySolve n (KindEffect :< TyEffects [])
-                                  empty _              = contradiction
-                               in foldr (\a b -> empty a >> b) solved e2
+    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` tyUnis t2 then defer else tySolve n t2
+    | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = tySolve n (KindEffect :< TyEffects Set.empty)
+                                             empty _              = contradiction
+                                         in foldr (\a b -> empty a >> b) solved e2
     | null (tyUnis t1 ++ tyUnis t2) -> contradiction
     | otherwise                     -> defer
+
   _ -> contradiction
 
   where solved = set (system . changed) True >> pure []
@@ -117,16 +117,19 @@ single d = case constraint d of
                                     EqKind k1 k2 -> single d{ constraint = EqKind k2 k1 }
         tySolve :: Name -> Kinded Type -> Praxis [Derivation]
         tySolve n p = do
-          let f :: TypeTraversable a => a -> a
-              f = tySub (\n' -> if n == n' then Just p else Nothing)
+          let f :: TypeTraversable a => a -> Special Derivation a
+              f = tyGenSub (\n' -> if n == n' then Just p else Nothing)
+              lift f = runSpecial . sequenceA . map f
           over (system . tySol) ((n, p):)
-          over (system . tySol) (map (second f))
-          over (system . constraints) (map f)
-          over (system . staging) (map f)
-          over (system . axioms) (map f)
-          over tEnv (fmap f)
+          cs <- sequence
+            [ extract (system . tySol) (lift (\(n, t) -> (\t -> (n, t)) <$> f t))
+            , extract (system . constraints) (lift f)
+            , extract (system . staging) (lift f)
+            , extract (system . axioms) (lift f)
+            , extract tEnv (runSpecial . sequenceA . fmap f)
+            ]
           set (system . changed) True
-          return []
+          return (concat cs)
         kindSolve :: Name -> Kind -> Praxis [Derivation]
         kindSolve n p = do
           let f :: KindTraversable a => a -> a
@@ -141,3 +144,23 @@ single d = case constraint d of
           over kEnv (fmap f)
           set (system . changed) True
           return []
+
+ -- typeTraverse :: Applicative f => (Kinded Type -> f (Kinded Type)) -> a -> f a
+
+newtype Special a b = Special { runSpecial :: ([a], b) }
+
+instance Functor (Special a) where
+  fmap f (Special (cs, x)) = Special (cs, f x)
+
+instance Applicative (Special a) where
+  pure x = Special ([], x)
+  liftA2 f (Special (c1, x)) (Special (c2, y)) = Special (c1 ++ c2, f x y)
+
+tyGenSub :: TypeTraversable a => (Name -> Maybe (Kinded Type)) -> a -> Special Derivation a
+tyGenSub f = typeTraverse (Special . f')
+    where
+      f' (k :< t) = case t of
+        TyUni n -> case f n of
+          Just (k' :< t')  -> ([ newDerivation (EqKind k k') (Custom "TODO tyGenSub") Phantom ], k' :< t') -- TODO
+          Nothing          -> return (k :< t)
+        _       -> return (k :< t)

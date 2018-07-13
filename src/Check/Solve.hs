@@ -129,6 +129,7 @@ single d = case constraint d of
             , extract tEnv (runSpecial . sequenceA . fmap f)
             ]
           set (system . changed) True
+          reuse n
           return (concat cs)
         kindSolve :: Name -> Kind -> Praxis [Derivation]
         kindSolve n p = do
@@ -143,6 +144,7 @@ single d = case constraint d of
           over tEnv (fmap f)
           over kEnv (fmap f)
           set (system . changed) True
+          reuse n
           return []
 
  -- typeTraverse :: Applicative f => (Kinded Type -> f (Kinded Type)) -> a -> f a

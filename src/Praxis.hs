@@ -43,6 +43,7 @@ module Praxis
   , freshUniE
   , freshUniK
   , freshVar
+  , reuse
 
   , Level(..)
   , log
@@ -266,3 +267,9 @@ freshVar = do
   (x:xs) <- get (fresh . freshVars)
   set (fresh . freshVars) xs
   return x
+
+reuse :: Name -> Praxis ()
+reuse n@('?':c:_) = over (fresh . f c) (n:)
+  where f 'a' = freshUniPs
+        f 'e' = freshUniEs
+        f 'k' = freshUniKs

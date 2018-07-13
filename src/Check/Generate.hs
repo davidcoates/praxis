@@ -107,8 +107,9 @@ typ (s :< t) = case t of
     return (KindEffect :< TyEffects (Set.fromList es'), c1 ++ c2)
 
   TyCon n -> do
-    Just k <- KEnv.lookup n
-    return (k :< TyCon n, [])
+    e <- KEnv.lookup n
+    case e of Nothing -> throwError (CheckError (NotInScope n s))
+              Just k  -> return (k :< TyCon n, [])
 
   TyPack r -> do -- This one is easy
     (r', c1) <- traverseM typ r

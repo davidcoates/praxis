@@ -19,7 +19,7 @@ import           Common
 import           Record
 import           Tag
 
-import           Control.Applicative   (Const (..), liftA2)
+import           Control.Applicative   (Const (..))
 import           Data.Functor.Identity
 import           Data.List             (intercalate)
 import           Data.Maybe            (fromMaybe)
@@ -100,26 +100,26 @@ instance Show Kind where
   show (KindUni n)    = n
 
 instance TagTraversable Type where
-  tagTraverse' f (TyApply a b)  = liftA2 TyApply (tagTraverse f a) (tagTraverse f b)
+  tagTraverse' f (TyApply a b)  = TyApply <$> tagTraverse f a <*> tagTraverse f b
   tagTraverse' f (TyBang t)     = TyBang <$> tagTraverse f t
   tagTraverse' f (TyCon n)      = pure $ TyCon n
-  tagTraverse' f (TyEffects es) = TyEffects . Set.fromList <$> sequenceA (map (tagTraverse f) (Set.toList es))
-  tagTraverse' f (TyLambda a b) = liftA2 TyLambda (tagTraverse f a) (tagTraverse f b)
-  tagTraverse' f (TyPack r)     = TyPack <$> sequenceA (fmap (tagTraverse f) r)
-  tagTraverse' f (TyRecord r)   = TyRecord <$> sequenceA (fmap (tagTraverse f) r)
+  tagTraverse' f (TyEffects es) = TyEffects . Set.fromList <$> traverse (tagTraverse f) (Set.toList es)
+  tagTraverse' f (TyLambda a b) = TyLambda <$> tagTraverse f a <*> tagTraverse f b
+  tagTraverse' f (TyPack r)     = TyPack <$> traverse (tagTraverse f) r
+  tagTraverse' f (TyRecord r)   = TyRecord <$> traverse (tagTraverse f) r
   tagTraverse' f (TyUni n)      = pure $ TyUni n
   tagTraverse' f (TyVar v)      = pure $ TyVar v
 
 instance TagTraversable Impure where
-  tagTraverse' f (t :# e) = liftA2 (:#) (tagTraverse f t) (tagTraverse f e)
+  tagTraverse' f (t :# e) = (:#) <$> tagTraverse f t <*> tagTraverse f e
 
 instance TagTraversable QType where
   tagTraverse' f (Mono t)        = Mono <$> tagTraverse' f t
-  tagTraverse' f (Forall c vs t) = liftA2 (\c t -> Forall c vs t) (tagTraverse f c) (tagTraverse f t)
+  tagTraverse' f (Forall c vs t) = (\c t -> Forall c vs t) <$> tagTraverse f c <*> tagTraverse f t
 
 instance TagTraversable TyPat where
   tagTraverse' f (TyPatVar n)  = pure $ TyPatVar n
-  tagTraverse' f (TyPatPack r) = TyPatPack <$> sequenceA (fmap (tagTraverse f) r)
+  tagTraverse' f (TyPatPack r) = TyPatPack <$> traverse (tagTraverse f) r
 
 
 class TypeTraversable a where
@@ -153,14 +153,14 @@ instance TypeTraversable (Kinded Type) where
   typeTraverse f t@(_ :< TyUni _) = f t
   typeTraverse f t@(_ :< TyVar _) = f t
   typeTraverse f (k :< t) = (k :<) <$> case t of
-    (TyApply a b)  -> liftA2 TyApply (typeTraverse f a) (typeTraverse f b)
+    (TyApply a b)  -> TyApply <$> typeTraverse f a <*> typeTraverse f b
     (TyBang t)     -> TyBang <$> typeTraverse f t
     (TyCon n)      -> pure $ TyCon n
     (TyEffects es) -> (TyEffects . Set.fromList . concatMap flatten) <$> typeTraverse f (Set.toList es)
       where flatten :: Kinded Type -> [Kinded Type]
             flatten (_ :< TyEffects es) = concatMap flatten es
             flatten t                   = [t]
-    (TyLambda a b) -> liftA2 TyLambda (typeTraverse f a) (typeTraverse f b) -- TODO Shadowing?
+    (TyLambda a b) -> TyLambda <$> typeTraverse f a <*> typeTraverse f b -- TODO Shadowing?
     (TyPack r)     -> TyPack <$> typeTraverse f r
     (TyRecord r)   -> TyRecord <$> typeTraverse f r
 
@@ -168,11 +168,11 @@ instance TypeTraversable (Kinded TyPat) where
   typeTraverse f = pure
 
 instance TypeTraversable (Kinded Impure) where
-  typeTraverse f (k :< t :# e) = (k :<) <$> liftA2 (:#) (typeTraverse f t) (typeTraverse f e)
+  typeTraverse f (k :< t :# e) = (k :<) <$> ((:#) <$> typeTraverse f t <*> typeTraverse f e)
 
 instance TypeTraversable (Kinded QType) where
   typeTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> typeTraverse f (k :< t)
-  typeTraverse f (k :< Forall cs vs t) = liftA2 (\cs t -> k :< Forall cs vs t) (typeTraverse f cs) (typeTraverse f t)
+  typeTraverse f (k :< Forall cs vs t) = (\cs t -> k :< Forall cs vs t) <$> typeTraverse f cs <*> typeTraverse f t
 
 class KindTraversable a where
   kindTraverse :: Applicative f => (Kind -> f Kind) -> a -> f a
@@ -199,10 +199,10 @@ instance KindTraversable (Kinded Impure) where
 
 instance KindTraversable (Kinded QType) where
   kindTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> kindTraverse f (k :< t)
-  kindTraverse f (k :< Forall cs vs t) = liftA2 (:<) (kindTraverse f k) $ liftA2 (\cs t -> Forall cs vs t) (kindTraverse f cs) (kindTraverse f t)
+  kindTraverse f (k :< Forall cs vs t) = (:<) <$> kindTraverse f k <*> ((\cs t -> Forall cs vs t) <$> kindTraverse f cs <*> kindTraverse f t)
 
 instance KindTraversable Kind where
   kindTraverse f k@(KindUni _)   = f k
-  kindTraverse f (KindFun k1 k2) = liftA2 KindFun (kindTraverse f k1) (kindTraverse f k2)
+  kindTraverse f (KindFun k1 k2) = KindFun <$> kindTraverse f k1 <*> kindTraverse f k2
   kindTraverse f (KindRecord r)  = KindRecord <$> kindTraverse f r
   kindTraverse f k               = pure k

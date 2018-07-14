@@ -63,5 +63,3 @@ class TagTraversable c where
   tagMap :: (a -> b) -> Tagged a c -> Tagged b c
   tagMap f = runIdentity . tagTraverse (Identity . f)
 
-  tagFoldMap :: Monoid m => (a -> m) -> Tagged a c -> m
-  tagFoldMap f = getConst . tagTraverse (Const . f)

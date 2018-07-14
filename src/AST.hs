@@ -11,11 +11,10 @@ module AST
   , Stmt(..)
   ) where
 
-import           Control.Applicative (liftA2, liftA3)
-import           Data.List           (intercalate)
-import           Data.Map            (Map)
-import qualified Data.Map            as Map
-import           Data.Traversable    (sequenceA)
+import           Data.List        (intercalate)
+import           Data.Map         (Map)
+import qualified Data.Map         as Map
+import           Data.Traversable (sequenceA)
 import           Pretty
 import           Record
 import           Tag
@@ -71,25 +70,25 @@ instance Show QString where
     where prefix = intercalate "." (qualification s)
 
 instance TagTraversable Decl where
-  tagTraverse' f (DeclFun n t i ds) = liftA2 (\t ds -> DeclFun n t i ds) (sequenceA (tagTraverse f <$> t)) (sequenceA (map (\(ps, e) -> liftA2 (,) (sequenceA (map (tagTraverse f) ps)) (tagTraverse f e)) ds))
+  tagTraverse' f (DeclFun n t i ds) = (\t ds -> DeclFun n t i ds) <$> sequenceA (tagTraverse f <$> t) <*> traverse (\(ps, e) -> (,) <$> traverse (tagTraverse f) ps <*> tagTraverse f e) ds
 
 instance TagTraversable Exp where
-  tagTraverse' f (Apply a b)   = liftA2 Apply (tagTraverse f a) (tagTraverse f b)
-  tagTraverse' f (Case e alts) = liftA2 Case (tagTraverse f e) (sequenceA (map (\(a,b) -> liftA2 (,) (tagTraverse f a) (tagTraverse f b)) alts))
-  tagTraverse' f (Do ss)       = Do <$> sequenceA (map (tagTraverse f) ss)
-  tagTraverse' f (If a b c)    = liftA3 If (tagTraverse f a) (tagTraverse f b) (tagTraverse f c)
-  tagTraverse' f (Lambda p e)  = liftA2 Lambda (tagTraverse f p) (tagTraverse f e)
+  tagTraverse' f (Apply a b)   = Apply <$> tagTraverse f a <*> tagTraverse f b
+  tagTraverse' f (Case e alts) = Case <$> tagTraverse f e <*> traverse (\(a,b) -> (,) <$> tagTraverse f a <*> tagTraverse f b) alts
+  tagTraverse' f (Do ss)       = Do <$> traverse (tagTraverse f) ss
+  tagTraverse' f (If a b c)    = If <$> tagTraverse f a <*> tagTraverse f b <*> tagTraverse f c
+  tagTraverse' f (Lambda p e)  = Lambda <$> tagTraverse f p <*> tagTraverse f e
   tagTraverse' f (Lit l)       = pure $ Lit l
-  tagTraverse' f (Record r)    = Record <$> sequenceA (fmap (tagTraverse f) r)
+  tagTraverse' f (Record r)    = Record <$> traverse (tagTraverse f) r
   tagTraverse' f (Read n e)    = Read n <$> tagTraverse f e
-  tagTraverse' f (Sig e t)     = liftA2 Sig (tagTraverse f e) (tagTraverse f t)
+  tagTraverse' f (Sig e t)     = Sig <$> tagTraverse f e <*> tagTraverse f t
   tagTraverse' f (Var v)       = pure $ Var v
 
 instance TagTraversable Pat where
   tagTraverse' f (PatAt v p)   = PatAt v <$> tagTraverse f p
   tagTraverse' f PatHole       = pure PatHole
   tagTraverse' f (PatLit l)    = pure $ PatLit l
-  tagTraverse' f (PatRecord r) = PatRecord <$> sequenceA (fmap (tagTraverse f) r)
+  tagTraverse' f (PatRecord r) = PatRecord <$> traverse (tagTraverse f) r
   tagTraverse' f (PatVar v)    = pure $ PatVar v
 
 instance TagTraversable Program where

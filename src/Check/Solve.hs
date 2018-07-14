@@ -103,6 +103,20 @@ single d = case constraint d of
     | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = tySolve n (KindEffect :< TyEffects Set.empty)
                                              empty _              = contradiction
                                          in foldr (\a b -> empty a >> b) solved e2
+    | Just ((n1, l1), (n2, l2)) <- liftA2 (,) (snake e1) (snake e2) ->
+        if n1 == n2 then do
+          a <- freshUniE
+          tySolve n1 (KindEffect :< TyEffects (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2]))
+        else
+          tySolve n1 (KindEffect :< TyEffects (Set.union (Set.difference l2 l1) (Set.singleton (KindEffect :< TyUni n2)))) -- TODO adding KindEffects, is this a problem?
+    | Just (n1, l1) <- snake e1 ->
+        if literals e2 then
+          if Set.isSubsetOf l1 e2 then
+            tySolve n1 (KindEffect :< TyEffects (Set.difference e2 l1)) -- TODO for all these differences, need to flatten?
+          else
+            contradiction
+        else
+          defer
     | null (tyUnis t1 ++ tyUnis t2) -> contradiction
     | otherwise                     -> defer
 
@@ -115,6 +129,15 @@ single d = case constraint d of
         introduce cs = set (system . changed) True >> pure (map (d `implies`) cs)
         swap = case constraint d of EqType t1 t2 -> single d{ constraint = EqType t2 t1 }
                                     EqKind k1 k2 -> single d{ constraint = EqKind k2 k1 }
+
+        snake :: Set (Kinded Type) -> Maybe (Name, Set (Kinded Type))
+        snake es = case Set.toList es of
+          ((_ :< TyUni n):es) -> if null (tyUnis es) then Just (n, Set.fromList es) else Nothing
+          _                   -> Nothing
+
+        literals :: Set (Kinded Type) -> Bool
+        literals es = null (tyUnis (Set.toList es))
+
         tySolve :: Name -> Kinded Type -> Praxis [Derivation]
         tySolve n p = do
           let f :: TypeTraversable a => a -> Special Derivation a

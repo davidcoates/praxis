@@ -130,6 +130,12 @@ class TypeTraversable a where
         f' (k :< t) = case t of
           TyUni n -> fromMaybe (k :< t) (f n)
           TyVar n -> fromMaybe (k :< t) (f n)
+  tySubWithKind :: ((Kind, Name) -> Maybe (Kinded Type)) -> a -> a
+  tySubWithKind f = runIdentity . typeTraverse (Identity . f')
+      where
+        f' (k :< t) = case t of
+          TyUni n -> fromMaybe (k :< t) (f (k, n))
+          _       -> (k :< t)
   tyUnis :: a -> [Name]
   tyUnis = getConst . typeTraverse (Const . f)
     where

@@ -268,8 +268,12 @@ freshVar = do
   set (fresh . freshVars) xs
   return x
 
+-- This will fuck things up if the name is still used somewhere
 reuse :: Name -> Praxis ()
+reuse _ = pure ()
+{-
 reuse n@('?':c:_) = over (fresh . f c) (n:)
   where f 'a' = freshUniPs
         f 'e' = freshUniEs
         f 'k' = freshUniKs
+-}

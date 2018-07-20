@@ -35,7 +35,7 @@ fromList :: [(a, b)] -> AEnv a b
 fromList = AEnv . Env.fromList . map (\(a, b) -> (a, (False, b)))
 
 instance (Show a, Show b) => Show (AEnv a b) where
-  show (AEnv (Env l)) = "[" ++ intercalate ", " (map (\(a,(u,b)) -> show a ++ (if u then " :o " else " :* ") ++ show b) l) ++ " ]"
+  show (AEnv (Env l)) = "[" ++ intercalate ", " (map (\(a,(u,b)) -> show a ++ (if u then " :* " else " :o ") ++ show b) l) ++ " ]"
 
 elim :: AEnv a b -> AEnv a b
 elim (AEnv l) = AEnv $ Env.elim l
@@ -46,8 +46,8 @@ elimN n (AEnv l) = AEnv $ Env.elimN n l
 intro :: a -> b -> AEnv a b -> AEnv a b
 intro a b (AEnv l) = AEnv (Env.intro a (False, b) l)
 
-use :: Eq a => a -> AEnv a b -> (Maybe (Bool, b), AEnv a b)
-use x (AEnv l) = let (e, l') = Env.adjust (\(_, b) -> (True, b)) x l in (snd <$> e, AEnv l')
+use :: Eq a => a -> AEnv a b -> AEnv a b
+use x (AEnv l) = AEnv $ Env.adjust (\(_, b) -> (True, b)) x l
 
 lookup :: Eq a => a -> AEnv a b -> Maybe (Bool, b)
 lookup x (AEnv l) = Env.lookup x l

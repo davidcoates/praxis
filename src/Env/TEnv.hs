@@ -71,11 +71,11 @@ read s n = do
 use :: Source -> Name -> Praxis (Kinded Type, [Derivation])
 use s n = do
   l <- get tEnv
-  let (e, l') = AEnv.use n l
-  case e of
+  case AEnv.lookup n l of
     Just (u, t) -> do
+      set tEnv (AEnv.use n l)
       t <- ungeneralise t
-      let c1 = [ newDerivation (share t) (Shared n) s | u ]
+      let c1 = [ newDerivation (share t) (Shared n)   s | u ]
       b <- get inClosure
       let c2 = [ newDerivation (share t) (Captured n) s | b ]
       return (t, c1 ++ c2)

@@ -112,7 +112,9 @@ single d = case constraint d of
     | Just (n1, l1) <- snake e1 ->
         if literals e2 then
           if Set.isSubsetOf l1 e2 then
-            tySolve n1 (KindEffect :< TyEffects (Set.difference e2 l1)) -- TODO for all these differences, need to flatten?
+            defer
+            -- FIXME This isn't correct! We could add any subset of l1 to n1
+            -- tySolve n1 (KindEffect :< TyEffects (Set.difference e2 l1)) -- TODO for all these differences, need to flatten?
           else
             contradiction
         else

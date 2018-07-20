@@ -35,10 +35,10 @@ instance (Show a, Show b) => Show (Env a b) where
   show (Env l) = "[" ++ intercalate ", " (map (\(a,b) -> show a ++ " : " ++ show b) l) ++ " ]"
 
 -- |adjust the value associated with a given key, returns the modified entry if successful
-adjust :: Eq a => (b -> b) -> a -> Env a b -> (Maybe (a, b), Env a b)
-adjust f a (Env [])         = (Nothing, Env [])
-adjust f a (Env ((k,v):xs)) | a == k    = let v' = f v in (Just (k, v'), Env ((k, f v):xs))
-                            | otherwise = let (y, Env ys) = adjust f a (Env xs) in (y, Env ((k,v):ys))
+adjust :: Eq a => (b -> b) -> a -> Env a b -> Env a b
+adjust f a (Env [])         = Env []
+adjust f a (Env ((k,v):xs)) | a == k    = let v' = f v in Env ((k, f v):xs)
+                            | otherwise = let Env ys = adjust f a (Env xs) in Env ((k,v):ys)
 
 elim :: Env a b -> Env a b
 elim (Env l) = Env (tail l)

@@ -1,32 +1,30 @@
 name:                praxis
 version:             0.1.0.0
-github:              githubuser/praxis
-license:             BSD3
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2017 Author name here
+github:              davidcoates/praxis
+license:             GPL-3
+author:              David Coates
+maintainer:          davidcoates95@gmail.com
+copyright:           2018 David Coates
 
 extra-source-files:
 - README.md
 
 # Metadata used when publishing your package
-synopsis:            Short description of your package
+synopsis:            Praxis interactive interpreter
 # category:            Web
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on Github at <https://github.com/githubuser/praxis#readme>
+description:         Please see the README on Github at <https://github.com/davidcoates/praxis#readme>
 
 dependencies:
 - base >= 4.7 && < 5
-- parsec >= 3.1.11 && < 4
 - containers >= 0.5 && < 0.6
 - pretty-tree >= 0.1
 - Earley >= 0.12.0.1
 - mtl >= 2.2.1
 - lens >= 4.15.4 && <5
-- array >= 0.5.2.0 && <0.6
 - digits >= 0.3
 - earley-mixfix-extra >= 0.1
 library:

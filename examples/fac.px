@@ -1,20 +1,15 @@
-
 fac : Int -> Int
 fac = cases
   0 -> 1
   n -> n * fac (n - 1)
 
-main1 : () -> () # StdIn + StdOut
-main1 () = putInt (fac (getInt ()))
-
--- Equivalent to main1
-main2 : () -> () # StdIn + StdOut
-main2 = putInt . fac . getInt
-
-main3 : () -> () # StdIn + StdOut
-main3 () = do
+main : () -> () # StdIn + StdOut
+main () = do
   putStrLn "Enter a number:"
   x = getInt ()
   putInt (fac x)
 
-main = main3
+-- Without prompts
+main' : () -> () # StdIn + StdOut
+main' = putInt . fac . getInt
+

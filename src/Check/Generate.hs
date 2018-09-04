@@ -143,6 +143,7 @@ decl (s :< d) = case d of
 
   -- TODO allow polymorpishm
   -- TODO safe recursion check
+  -- TODO check no duplicate variables
   DeclVar n ut e -> do
 
     (dt, c1) <- case ut of Nothing -> (\t -> (t, [])) <$> freshUniI
@@ -158,7 +159,7 @@ decl (s :< d) = case d of
 stmt :: Parse.Annotated Stmt -> Praxis (Annotated Stmt, ([Derivation], Sum Int))
 stmt (s :< x) = case x of
 
-  -- TODO should decl have a type in it?
+  -- TODO should stms really be annotated with a type?
   StmtDecl d -> do
     (d', c1) <- decl d
     return ((Just (ty d'), s) :< StmtDecl d', (c1, Sum 1))
@@ -263,7 +264,7 @@ equalIs ((t, s):ts) r = let (t', c1) = equalIs ts r
                             c2 = [ newDerivation (EqType p p') r s ]
                          in (p # effs [e, e'], c1 ++ c2)
 
--- TODO remove duplication here
+
 equalPs :: [(Kinded Type, Source)] -> Reason -> (Kinded Type, [Derivation])
 equalPs [(p, _)]    _ = (p, [])
 equalPs ((p, s):ps) r = let (p', cs) = equalPs ps r
@@ -312,7 +313,6 @@ pat (s :< p) = case p of
     (r', i) <- traverseM pat r
     let t = KindType :< TyRecord (fmap (getPure . ty) r')
     return ((Just (t # effs []), s) :< PatRecord r', i)
-    -- TODO check no duplicate variables? Perhaps not here - in decl instead?
 
   PatVar v -> do
     t <- freshUniP

@@ -13,3 +13,22 @@
 - Polymorphic types shouldn't be affine?
 
 - Abstract types
+
+For the sake of simplicity, may want to avoid view operators.
+
+This means we need to disginstuish between value and view patterns.
+
+f = cases
+  !Cons (x, xs) -> ...
+  !Nil -> ...
+
+But then we have duplication...
+Perhaps default to value?
+
+or separate construct
+
+f = !cases
+  Cons (x, xs) -> ...
+  Nil -> ...
+
+

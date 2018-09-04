@@ -20,7 +20,7 @@ import           Record
 import           Tag
 import           Type
 
-data Decl a = DeclFun Name (Maybe (a (Impure a))) Int [([a (Pat a)], a (Exp a))]
+data Decl a = DeclVar Name (Maybe (a (Impure a))) (a (Exp a))
 
 {- TODO
             | DeclData Name (Maybe (a (DataKind a))) [a (DataAlt a)]
@@ -70,7 +70,7 @@ instance Show QString where
     where prefix = intercalate "." (qualification s)
 
 instance TagTraversable Decl where
-  tagTraverse' f (DeclFun n t i ds) = (\t ds -> DeclFun n t i ds) <$> sequenceA (tagTraverse f <$> t) <*> traverse (\(ps, e) -> (,) <$> traverse (tagTraverse f) ps <*> tagTraverse f e) ds
+  tagTraverse' f (DeclVar n t e) = (DeclVar n) <$> sequenceA (tagTraverse f <$> t) <*> tagTraverse f e
 
 instance TagTraversable Exp where
   tagTraverse' f (Apply a b)   = Apply <$> tagTraverse f a <*> tagTraverse f b
@@ -100,7 +100,7 @@ instance TagTraversable Stmt where
 
 instance Show a => TreeString (Tagged a Decl) where
   treeString = treeRec $ \x -> case x of
-    DeclFun n t i ds -> Node ("[decl " ++ n ++ t' ++ "]") (map (\(ps, e) -> Node "[_* = _]" (map treeString ps ++ [treeString e])) ds)
+    DeclVar n t e -> Node ("[decl " ++ n ++ t' ++ " = _]") [treeString e]
       where t' = case t of Just t' -> " : " ++ show t'
                            Nothing -> ""
 

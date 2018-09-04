@@ -141,38 +141,19 @@ fun ap bt = let kp = KindRecord (Record.triple KindType KindType KindEffect)
 decl :: Parse.Annotated Decl -> Praxis (Annotated Decl, [Derivation])
 decl (s :< d) = case d of
 
-  -- TODO tidy this up, TODO allow polymorpishm
-  DeclFun n ut i as -> do
+  -- TODO allow polymorpishm
+  -- TODO safe recursion check
+  DeclVar n ut e -> do
 
-    (dt, dc) <- case ut of Nothing -> (\t -> (t, [])) <$> freshUniI
+    (dt, c1) <- case ut of Nothing -> (\t -> (t, [])) <$> freshUniI
                            Just t  -> impure t
 
-    if i == 0 then do
-      -- Special case, the binding is not a function (and is non-recursive)
-      let [([], e)] = as
-      (e', c1) <- exp e
-      let t' = ty e'
-      intro n (mono (getPure dt))
-      let c2 = equalI dt t' (UserSignature (Just n)) s
-      return ((Just dt, s) :< DeclFun n Nothing i [([], e')], c1 ++ c2 ++ dc)
-    else do
-      -- TODO clean this up
-      intro n (mono (getPure dt))
-      as' <- mapM binds as
-      let c1 = concatMap snd as'
-      let bs = map fst as'
-      let tss = map (\ps -> equalPs (map (\((Just t, s) :< _) -> (getPure t, s)) ps) Unknown) . transpose . map fst $ bs
-      let ps = map fst tss
-      let c2 = concatMap snd tss
-      let es = map snd bs
-      let (te, c3) = equalIs (map (\((Just t, s) :< _) -> (t,s)) es) Unknown
-      let t' = fold ps te
-      let c4 = equalI dt t' (UserSignature (Just n)) s
-      return ((Just dt, s) :< DeclFun n Nothing i bs, c1 ++ c2 ++ c3 ++ c4 ++ dc)
-        where fold :: [Kinded Type] -> Kinded Impure -> Kinded Impure
-              fold     [] te = te
-              fold (p:ps) te = let ts' = fold ps te
-                                in fun p ts' # effs []
+    intro n (mono (getPure dt))
+    (e', c2) <- exp e
+    let c3 = equalI dt (ty e') (UserSignature (Just n)) s
+    return ((Just dt, s) :< DeclVar n Nothing e', c1 ++ c2 ++ c3)
+    -- TODO why don't we return the type in DeclVar?
+
 
 stmt :: Parse.Annotated Stmt -> Praxis (Annotated Stmt, ([Derivation], Sum Int))
 stmt (s :< x) = case x of
@@ -185,6 +166,7 @@ stmt (s :< x) = case x of
   StmtExp e -> do
     (e', c1) <- exp e
     return ((Just (ty e'), s) :< StmtExp e', (c1, Sum 0))
+
 
 kind :: Kinded Type -> Kind
 kind = tag

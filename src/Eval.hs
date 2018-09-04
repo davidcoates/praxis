@@ -38,22 +38,9 @@ program (_ :< Program ds) = mapM_ decl ds
 decl :: Annotated Decl -> Praxis ()
 decl (a :< e) = case e of
 
-  DeclFun n t i as ->
-    if i == 0 then do
-      let [(_, e)] = as
-      e' <- exp e
-      intro n e'
-    else do
-      -- Desugar to lambda and a case
-      -- TODO this won't work if the first pattern contains "n" as a var
-      (v:vs) <- sequence $ replicate i freshVar
-      let e = F $ \v' -> do { i <- forceBind v' (undefined :< PatVar v); intro n e; v <- exp e'; elim; elimN i; return v }
-          e' = fold vs c
-          c = undefined :< Apply (undefined :< Cases (map (\(ps, e) -> (undefined :< PatRecord (Record.fromList (map (\p -> (Nothing, p)) ps)), e)) as)) r
-          r  = undefined :< Record (Record.fromList (map (\v -> (Nothing, undefined :< Var v)) (v:vs)))
-          fold (v:vs) e = undefined :< Lambda (undefined :< PatVar v) (fold vs e)
-          fold     [] e = e
-      intro n e
+  DeclVar n t e -> do
+    e' <- exp e
+    intro n e'
 
 stmt :: Annotated Stmt -> Praxis (Sum Int)
 stmt (_ :< s) = case s of

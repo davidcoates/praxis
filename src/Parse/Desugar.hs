@@ -132,23 +132,21 @@ decls (a :< d : ds) = case d of
 
   Parse.DeclSig n t -> do
     ds <- decls ds
-    case ds of (a' :< DeclFun m Nothing i as) : ds | m == n -> return $ ((a <> a') :< DeclFun n (Just t) i as) : ds
-               _                                            -> throwDeclError (LacksBinding n a)
+    case ds of (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
+               _                                         -> throwDeclError (LacksBinding n a)
 
   Parse.DeclFun n ps e -> do
     ps <- mapM pat ps
     e  <- exp e
-
+    let d = a :< DeclVar n Nothing (lambda ps e)
+        lambda     [] e = e
+        lambda (p:ps) e = a :< Lambda p (lambda ps e)
     ds <- decls ds
-    case ds of []                                              -> return $ [a :< DeclFun n Nothing (length ps) [(ps, e)]] -- TODO reduce duplication here
-               (a' :< DeclFun m t i as) : ds' | m /= n         -> return $ (a :< DeclFun n Nothing (length ps) [(ps, e)]) : ds
-                                              | i /= length ps -> throwDeclError (MismatchedArity n (a, length ps) (a', i))
-                                              | i == 0         -> error "TODO multiple definitions for nullary" -- TODO perhaps treat this as a different binding?*
-                                              | otherwise      -> return $ ((a <> a') :< DeclFun m t i ((ps, e) : as)) : ds'
+    case ds of []                                       -> return $ [d]
+               (a' :< DeclVar m t as) : ds' | m == n    -> error "TODO multiple definitions"
+                                            | otherwise -> return $ d:ds
 
--- * Also, if we disallow multiple definitions for nullary why do we allow multiple bindings of the same name in any decls block? (or do block)
 -- TODO check for overlapping patterns?
-
 pat :: Annotated Parse.Pat -> Praxis (Annotated Pat)
 pat p = ($ p) $ rec $ \a x -> case x of
 

@@ -49,7 +49,7 @@ decl (a :< e) = case e of
       (v:vs) <- sequence $ replicate i freshVar
       let e = F $ \v' -> do { i <- forceBind v' (undefined :< PatVar v); intro n e; v <- exp e'; elim; elimN i; return v }
           e' = fold vs c
-          c = undefined :< Case r (map (\(ps, e) -> (undefined :< PatRecord (Record.fromList (map (\p -> (Nothing, p)) ps)), e)) as)
+          c = undefined :< Apply (undefined :< Cases (map (\(ps, e) -> (undefined :< PatRecord (Record.fromList (map (\p -> (Nothing, p)) ps)), e)) as)) r
           r  = undefined :< Record (Record.fromList (map (\v -> (Nothing, undefined :< Var v)) (v:vs)))
           fold (v:vs) e = undefined :< Lambda (undefined :< PatVar v) (fold vs e)
           fold     [] e = e
@@ -71,9 +71,7 @@ exp (_ :< e) = case e of
     x' <- exp x
     f' x'
 
-  Case e ps -> do
-    e' <- exp e
-    cases e' ps
+  Cases ps -> return $ F $ \v -> cases v ps
 
   Do ss -> do
     Sum i <- asum (map stmt (init ss))

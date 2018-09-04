@@ -28,6 +28,7 @@ data Decl a = DeclFun Name [a (Pat a)] (a (Exp a))
 
 data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Case (a (Exp a)) [(a (Pat a), a (Exp a))]
+           | Cases [(a (Pat a), a (Exp a))]
            | Do [a (Stmt a)]
            | If (a (Exp a)) (a (Exp a)) (a (Exp a))
            | Lit Lit
@@ -57,6 +58,7 @@ instance TreeString (Annotated Exp) where
   treeString = treeRec $ \x -> case x of
     Apply e1 e2 -> Node "[$]"                  [treeString e1, treeString e2]
     Case e alts -> Node "[case]"               (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
+    Cases alts -> Node "[cases]"               (map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
     Do ss       -> Node "[do]"                 (map treeString ss)
     If x y z    -> Node "[if]"                 [treeString x, treeString y, treeString z]
     Lit l       -> Node (show l)               []

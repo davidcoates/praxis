@@ -215,11 +215,11 @@ exp (s :< e) = case e of
     let e = effs [fe, xe, ye]
     return ((Just (yp # e), s) :< Apply f' x', c1 ++ c2 ++ c3)
 
-  Case e alts -> do
-    (e', c1) <- exp e
-    (alts', c2) <- parallel (map bind alts)
+  Cases alts -> do
+    (alts', c1) <- parallel (map bind alts)
+    let (p, c2) = equalPs (map (\((Just t, s) :< _, _) -> (getPure t,s)) alts') CaseCongruence
     let (t, c3) = equalIs (map (\(_, (Just t, s) :< _) -> (t,s)) alts') CaseCongruence
-    return ((Just t, s) :< Case e' alts', c1 ++ c2 ++ c3)
+    return ((Just (fun p t # effs []), s) :< Cases alts', c1 ++ c2)
 
   Do ss -> do
     (ss', (cs, Sum i)) <- traverseM stmt ss

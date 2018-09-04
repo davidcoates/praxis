@@ -31,6 +31,6 @@ layout topLevel ts = l (-1) topLevel [] ts
                                | otherwise = t : l i' b' cs ts
           where i' = line . end $ a
                 j  = column . start $ a
-                b' = case x of ReservedId x -> x `elem` ["do", "of", "where"]
+                b' = case x of ReservedId x -> x `elem` ["do", "of", "where", "cases"]
                                _            -> False
 

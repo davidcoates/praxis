@@ -82,10 +82,11 @@ exp e = ($ e) $ rec $ \a x -> case x of
     y' <- exp y
     return (a :< Apply x' y')
 
-  Parse.Case e alts  -> do
-    e' <- exp e
+  Parse.Case e alts  -> exp (a :< Parse.Apply (a :< Parse.Case e alts) e)
+
+  Parse.Cases alts -> do
     alts' <- sequence $ map alt alts
-    return (a :< Case e' alts')
+    return (a :< Cases alts')
       where alt (p, e) = liftA2 (,) (pat p) (exp e)
 
   Parse.Do ss       -> do

@@ -58,7 +58,7 @@ atom = (whitespace *> pure Whitespace) <|> lexeme
 -- // END OF NON-BACKTRACKING PARSER COMBINATORS
 
 
-reservedids = ["read", "in", "if", "then", "else", "using", "data", "case", "of", "where", "do"]
+reservedids = ["read", "in", "if", "then", "else", "using", "data", "cases", "case", "of", "where", "do"]
 reservedops = [":", "=>", "=", "\\", "->", "#", "@", "|"]
 
 lexeme :: Tokeniser Token

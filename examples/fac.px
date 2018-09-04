@@ -1,7 +1,8 @@
 
 fac : Int -> Int
-fac 0 = 1
-fac n = n * fac (n - 1)
+fac = cases
+  0 -> 1
+  n -> n * fac (n - 1)
 
 main1 : () -> () # StdIn + StdOut
 main1 () = putInt (fac (getInt ()))

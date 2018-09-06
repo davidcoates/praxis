@@ -31,8 +31,7 @@ data Type a = TyUni Name -- Compares less than all other types
             | TyApply (a (Type a)) (a (Type a))   -- ^Type-level application : (a -> #b) -> #a -> #b
             | TyBang (a (Type a))
             | TyCon Name                          -- ^Includes (->) : [T, T , E] -> T
-            | TyEffects (Set (a (Type a)))
-            -- TODO perhaps call TyEffects TyFlat, use for constraints also
+            | TyEffects (Set (a (Type a)))        -- TODO perhaps call TyEffects TyFlat, use for constraints also
             | TyLambda (a (TyPat a)) (a (Type a)) -- ^A type-level lambda : ?1 -> ?2
             | TyPack   (Record (a (Type a)))      -- ^A type pack with a record kind
             | TyRecord (Record (a (Type a)))      -- ^A type record : T

@@ -16,8 +16,8 @@ import           Check.Constraint
 import           Check.System
 import           Common
 import           Env              (TEnv)
-import           Env.AEnv         (AEnv, fromList)
-import qualified Env.AEnv         as AEnv
+import           Env.LEnv         (LEnv, fromList)
+import qualified Env.LEnv         as LEnv
 import           Error
 import           Praxis
 import           Source           (Source)
@@ -32,15 +32,15 @@ import qualified Prelude          (lookup)
 elim :: Praxis ()
 elim = do
   l <- get tEnv
-  set tEnv (AEnv.elim l)
+  set tEnv (LEnv.elim l)
 
 elimN :: Int -> Praxis ()
 elimN n = do
   l <- get tEnv
-  set tEnv (AEnv.elimN n l)
+  set tEnv (LEnv.elimN n l)
 
 intro :: Name -> Kinded QType -> Praxis ()
-intro n p = over tEnv (AEnv.intro n p)
+intro n p = over tEnv (LEnv.intro n p)
 
 join :: Praxis a -> Praxis b -> Praxis (a, b)
 join f1 f2 = do
@@ -50,7 +50,7 @@ join f1 f2 = do
   set tEnv l
   y <- f2
   l2 <- get tEnv
-  set tEnv (AEnv.join l1 l2)
+  set tEnv (LEnv.join l1 l2)
   return (x, y)
 
 -- TODO reduce duplicaiton here
@@ -58,12 +58,11 @@ join f1 f2 = do
 read :: Source -> Name -> Praxis (Kinded Type, [Derivation])
 read s n = do
   l <- get tEnv
-  case AEnv.lookup n l of
-    Just (u, t) -> do
+  case LEnv.lookup n l of
+    Just (c, u, t) -> do
       t <- ungeneralise t
       let c1 = [ newDerivation (share t) (UnsafeView n) s | not u ]
-      b <- get inClosure
-      let c2 = [ newDerivation (share t) (Captured n) s | b ]
+      let c2 = [ newDerivation (share t) (Captured n) s   | c ]
       return (t, c1 ++ c2)
     Nothing     -> throwError (CheckError (NotInScope n s))
 
@@ -71,22 +70,21 @@ read s n = do
 use :: Source -> Name -> Praxis (Kinded Type, [Derivation])
 use s n = do
   l <- get tEnv
-  case AEnv.lookup n l of
-    Just (u, t) -> do
-      set tEnv (AEnv.use n l)
+  case LEnv.lookup n l of
+    Just (c, u, t) -> do
+      set tEnv (LEnv.use n l)
       t <- ungeneralise t
       let c1 = [ newDerivation (share t) (Shared n)   s | u ]
-      b <- get inClosure
-      let c2 = [ newDerivation (share t) (Captured n) s | b ]
+      let c2 = [ newDerivation (share t) (Captured n) s | c ]
       return (t, c1 ++ c2)
     Nothing     -> throwError (CheckError (NotInScope n s))
 
 lookup :: Name -> Praxis (Maybe (Kinded QType))
 lookup n = do
   l <- get tEnv
-  case AEnv.lookup n l of
-    Just (_, t) -> return (Just t)
-    Nothing     -> return Nothing
+  case LEnv.lookup n l of
+    Just (_, _, t) -> return (Just t)
+    Nothing        -> return Nothing
 
 ungeneralise :: Kinded QType -> Praxis (Kinded Type)
 ungeneralise (k :< Mono t) = return (k :< t)

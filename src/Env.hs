@@ -5,13 +5,13 @@ module Env
   ) where
 
 import           Common   (Name)
-import           Env.AEnv (AEnv)
 import           Env.Env  (Env)
+import           Env.LEnv (LEnv)
 import           Type     (Kind, Kinded, QType)
 import           Value    (Value)
 
 type VEnv = Env Name Value
 
-type TEnv = AEnv Name (Kinded QType)
+type TEnv = LEnv Name (Kinded QType)
 
 type KEnv = Env Name Kind

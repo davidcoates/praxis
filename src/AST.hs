@@ -21,17 +21,9 @@ import           Tag
 import           Type
 
 data Decl a = DeclVar Name (Maybe (a (Impure a))) (a (Exp a))
+            | DeclData Name (Maybe (a (TyPat a))) [a (DataAlt a)]
 
-{- TODO
-            | DeclData Name (Maybe (a (DataKind a))) [a (DataAlt a)]
-
-data DataKind a = DataKindVar Name
-                | DataKindRecord (Record (a (DataKind a)))
-                | DataKindSignature (a (DataKind a)) Kind
-
-
-data DataAlt a =
--}
+data DataAlt a = DataAlt Name (a (Type a))
 
 data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Cases [(a (Pat a), a (Exp a))]

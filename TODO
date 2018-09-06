@@ -32,3 +32,21 @@ f = !cases
   Nil -> ...
 
 
+Restricted type lambdas, e.g.,
+instance Functor (\a -> Either [a, b]) where ...
+
+Perhaps we should instead use the more restrictive syntax, 
+instance Functor (Either [_, b])
+
+This would be too restrictive, e.g., if we have
+
+class Functor (f : * -> *, c : * -> C) where
+  map : c b => (a -> b # e) -> f a -> f b # e
+
+instance Functor (\a -> Either [a, b], Trivial)
+
+instance Functor (Set, Ord)
+
+Closure guards
+
+

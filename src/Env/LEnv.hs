@@ -12,6 +12,8 @@ module Env.LEnv
   , join
   , lookup
   , use
+  , push
+  , pop
   )
 where
 
@@ -61,3 +63,9 @@ lookup x (LEnv l ls) = f (l:ls) False
 
 join :: LEnv a b -> LEnv a b -> LEnv a b
 join (LEnv l1 l1s) (LEnv l2 l2s) = LEnv (AEnv.join l1 l2) (zipWith AEnv.join l1s l2s)
+
+push :: LEnv a b -> LEnv a b
+push (LEnv l ls) = LEnv (AEnv.fromList []) (l:ls)
+
+pop :: LEnv a b -> LEnv a b
+pop (LEnv _ (l:ls)) = LEnv l ls

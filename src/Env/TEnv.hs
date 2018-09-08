@@ -9,6 +9,7 @@ module Env.TEnv
   , lookup
   , read
   , use
+  , closure
   )
 where
 
@@ -30,14 +31,10 @@ import qualified Prelude          (lookup)
 
 
 elim :: Praxis ()
-elim = do
-  l <- get tEnv
-  set tEnv (LEnv.elim l)
+elim = over tEnv LEnv.elim
 
 elimN :: Int -> Praxis ()
-elimN n = do
-  l <- get tEnv
-  set tEnv (LEnv.elimN n l)
+elimN n = over tEnv (LEnv.elimN n)
 
 intro :: Name -> Kinded QType -> Praxis ()
 intro n p = over tEnv (LEnv.intro n p)
@@ -53,8 +50,14 @@ join f1 f2 = do
   set tEnv (LEnv.join l1 l2)
   return (x, y)
 
--- TODO reduce duplicaiton here
+closure :: Praxis a -> Praxis a
+closure x = do
+  over tEnv LEnv.push
+  r <- x
+  over tEnv LEnv.pop
+  return r
 
+-- TODO reduce duplicaiton here
 read :: Source -> Name -> Praxis (Kinded Type, [Derivation])
 read s n = do
   l <- get tEnv

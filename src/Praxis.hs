@@ -36,7 +36,6 @@ module Praxis
   , kEnv
   , vEnv
   , system
-  , inClosure
 
   , freshUniT
   , freshUniE
@@ -116,15 +115,14 @@ instance Show Fresh where
   show _ = "<fresh>"
 
 data PraxisState = PraxisState
-  { _filename  :: String              -- ^File path (for error messages)
-  , _flags     :: Flags               -- ^Flags
-  , _fresh     :: Fresh
-  , _stage     :: Stage               -- ^Current stage of compilation
-  , _tEnv      :: TEnv                -- ^Type environment
-  , _kEnv      :: KEnv                -- ^Kind environment
-  , _vEnv      :: VEnv                -- ^Value environment for interpreter
-  , _system    :: Check.System        -- ^ TODO rename? put inClosure in here?
-  , _inClosure :: Bool                -- ^Checker (Generator) internal TODO this probably should be put somewhere else
+  { _filename :: String              -- ^File path (for error messages)
+  , _flags    :: Flags               -- ^Flags
+  , _fresh    :: Fresh
+  , _stage    :: Stage               -- ^Current stage of compilation
+  , _tEnv     :: TEnv                -- ^Type environment
+  , _kEnv     :: KEnv                -- ^Kind environment
+  , _vEnv     :: VEnv                -- ^Value environment for interpreter
+  , _system   :: Check.System        -- ^ TODO rename?
   } deriving (Show)
 
 type Praxis a = ExceptT Error (StateT PraxisState IO) a
@@ -170,7 +168,6 @@ emptyState = PraxisState
   , _kEnv         = unset "kenv"
   , _vEnv         = unset "vEnv"
   , _system       = unset "system"
-  , _inClosure    = unset "inClosure"
   }
   where unset s = internalError ("unset " ++ s)
 

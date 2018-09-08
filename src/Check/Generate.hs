@@ -31,9 +31,8 @@ import           Prelude             hiding (exp, log, read)
 class Show b => Generatable a b | a -> b where
   generate' :: a -> Praxis (b, [Derivation])
   generate  :: a -> Praxis (b, [Derivation])
-  generate p = save stage $ save inClosure $ do
+  generate p = save stage $ do
     set stage Generate
-    set inClosure False
     (p', cs) <- generate' p
     log Debug p'
     let cs' = nub . sort $ cs
@@ -182,8 +181,7 @@ decl (s :< d) = case d of
 
     (e', c2) <- exp e
     let (et, ee) = tyef e'
-    -- let c3 = equalT dt et (UserSignature (Just n)) s
-    let c3 = [] -- FIXME
+    let c3 = equalT dt et (UserSignature (Just n)) s
     let c4 = equalT de ee (UserSignature (Just n)) s
     return ((Nothing, Just ee, s) :< DeclVar n Nothing e', c1 ++ c2 ++ c3 ++ c4)
 
@@ -248,9 +246,9 @@ exp (s :< e) = (\((t, e) :< x, cs) -> ((Just t, Just e, s) :< x, cs)) <$> case e
     let e = effs [ae, be, ce]
     return ((bt, e) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4)
 
-  Lambda p e -> do
+  Lambda p e -> closure $ do
     (p', Sum i) <- pat p
-    (e', cs) <- save inClosure $ set inClosure True >> exp e -- FIXME
+    (e', cs) <- exp e
     elimN i
     let pt       = ty p'
     let (et, ee) = tyef e'
@@ -298,17 +296,6 @@ equalIs ts r = (t, e, cs)
   where (t, cs) = equalTs (map (\(t, _, s) -> (t, s)) ts) r
         e = effs $ map (\(_, e, _) -> e) ts
 
-
-binds :: ([Parse.Annotated Pat], Parse.Annotated Exp) -> Praxis (([Annotated Pat], Annotated Exp), [Derivation])
-binds ([], e) = do
-  (e', c) <- exp e
-  return (([], e'), c)
-binds ((s :< p) : ps, e) = do
-  (p', Sum i) <- pat (s :< p)
-  ((ps', e'), cs) <- save inClosure $ set inClosure True >> binds (ps, e)
-  elimN i
-  return ((p':ps', e'), cs)
-
 bind :: (Parse.Annotated Pat, Parse.Annotated Exp) -> Praxis ((Annotated Pat, Annotated Exp), [Derivation])
 bind (s :< p, e) = do
   (p', Sum i) <- pat (s :< p)
@@ -316,7 +303,6 @@ bind (s :< p, e) = do
   elimN i
   return ((p', e'), cs)
 
--- Always returns empty effects
 pat :: Parse.Annotated Pat -> Praxis (Annotated Pat, Sum Int)
 pat (s :< p) = (\(t :< x, i) -> ((Just t, Nothing, s) :< x, i)) <$> case p of
 

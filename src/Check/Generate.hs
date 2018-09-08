@@ -223,7 +223,7 @@ exp (s :< e) = (\((t, e) :< x, cs) -> ((Just t, Just e, s) :< x, cs)) <$> case e
     let e = effs [fe, xe, ye]
     return ((yt, e) :< Apply f' x', c1 ++ c2 ++ c3)
 
-  Cases alts -> do
+  Cases alts -> closure $ do
     (alts', c1) <- parallel (map bind alts)
     let (t1, c2) = equalTs (map (\((Just t, _, s) :< _, _) -> (t, s)) alts') CaseCongruence
     let (t2, e, c3) = equalIs (map (\(_, (Just t, Just e, s) :< _) -> (t, e, s)) alts') CaseCongruence

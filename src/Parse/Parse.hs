@@ -83,6 +83,9 @@ liftT2O f pa ps pc = liftA2 f pa ((Just <$> (try (optional whitespace *> ps) #> 
 many :: Parser p -> Parser [p]
 many p = liftT2 (:) (try p) (many p) <|> pure []
 
+many1 :: Parser p -> Parser [p]
+many1 p = liftT2 (:) p (many p)
+
 some :: Parser p -> Parser [p]
 some p = liftT2 (:) p (many p)
 
@@ -93,7 +96,7 @@ sepBy2 :: Parser a -> Parser b -> Parser [a]
 sepBy2 p sep = liftT2 (:) p (sep #> sepBy1 p sep)
 
 qconid :: Parser QString
-qconid = token qconid' <?> "qconid|"
+qconid = token qconid' <?> "qconid"
   where qconid' (Token.QConId n) = Just n
         qconid' _                = Nothing
 
@@ -122,10 +125,17 @@ varsym = token varsym' <?> "varsym"
   where varsym' (Token.QVarSym n) | null (qualification n) = Just (name n)
         varsym' _                 = Nothing
 
-plus :: Parser () -- TODO this is a bit of an awkward hack, since we don't want to reserve +
-plus = token plus' <?> "effect +"
-  where plus' (Token.QVarSym n) | null (qualification n) && name n == "+" = Just ()
-        plus' _                 = Nothing
+-- For some operators we don't want to reserve like effect + and forall .
+userOp :: String -> Parser ()
+userOp s = token userOp' *> pure () <?> "op '" ++ s ++ "'"
+  where userOp' (Token.QVarSym n) | null (qualification n) && name n == s = Just ()
+        userOp' _ = Nothing
+
+plus :: Parser ()
+plus = userOp "+"
+
+dot :: Parser ()
+dot = userOp "."
 
 reservedId :: String -> Parser ()
 reservedId s = satisfy reservedId' *> pure () <?> "reserved id '" ++ s ++ "'"
@@ -136,6 +146,7 @@ reservedOp :: String -> Parser ()
 reservedOp s = satisfy reservedOp' *> pure () <?> "reserved op '" ++ s ++ "'"
   where reservedOp' (Token.ReservedOp s') | s == s' = True
         reservedOp' _                     = False
+
 
 special :: Char -> Parser ()
 special c = satisfy special' *> pure () <?> "special '" ++ [c] ++ "'"
@@ -165,7 +176,7 @@ decl :: Parser (T Decl)
 decl = funType <|> funDecl <|?> "decl"
 
 funType :: Parser (T Decl)
-funType = liftT2 DeclSig (try prefix) (annotated impure) <|?> "funType"
+funType = liftT2 DeclSig (try prefix) (annotated sig) <|?> "funType"
   where prefix = varid <# reservedOp ":"
 
 funDecl :: Parser (T Decl)
@@ -261,9 +272,19 @@ expRead :: Parser (T Exp)
 expRead = liftT4 (\_ x _ e -> Parse.Read x e) (try prefix) varid (reservedId "in") (annotated exp) <?> "read expression"
   where prefix = reservedId "read"
 
-impure :: Parser (T Impure)
-impure = liftT2O f (annotated ty) (reservedOp "#") (annotated effs) <|?> "ty"
-  where f p Nothing   = p :# (Phantom :< TyEffects Set.empty)
+makeImpure :: Annotated a -> T (Impure a)
+makeImpure t = t :# (Phantom :< TyEffects Set.empty)
+
+sig :: Parser (T (Impure QType))
+sig = (makeImpure <$> annotated qty) <|> ((\((a :< p) :# e) -> (a :< Mono p) :# e) <$> impure)
+  where qty :: Parser (T QType)
+        qty = try (reservedId "forall") #> liftT3 Forall (many1 var <# dot) constraints (annotated ty)
+        constraints = pure $ Phantom :< TyCon "Trivial" -- TODO constraints
+        var = liftT2 (,) varid (pure KindType) -- TODO allow kinds
+
+impure :: Parser (T (Impure Type))
+impure = liftT2O f (annotated ty) (reservedOp "#") (annotated effs) <|?> "impure"
+  where f p Nothing   = makeImpure p
         f p (Just es) = p :# es
 
 effs :: Parser (T Type)

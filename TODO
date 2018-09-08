@@ -47,6 +47,10 @@ instance Functor (\a -> Either [a, b], Trivial)
 
 instance Functor (Set, Ord)
 
-Closure guards
 
+Explicit forall for poly types? Otherwise it refers to tyvar in scope?
+Need to add a map somewhere from TyVar to TyUni. Could fit entirely in KEnv, perhaps.
 
+Rename KindRecord -> KindPack ?
+
+Kind of QType doesn't really make sense?

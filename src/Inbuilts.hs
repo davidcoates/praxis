@@ -33,10 +33,10 @@ mono s = let (k :< t) = runStatic m in k :< Mono t
   where m = save kEnv $ (set kEnv initialKEnv >> (parse s :: Praxis (Annotated Type)) >>= check :: Praxis (Kinded Type))
 
 trivial :: Kinded Type
-trivial = KindConstraint :< TyRecord Record.unit -- TODO Constraint type?
+trivial = KindConstraint :< TyRecord Record.unit -- TODO constraint type? Or TyEffects -> TyFlat
 
 poly :: [(Name, Kind)] -> String -> Kinded QType
-poly ks s = let (KindType :< Mono t) = mono s in KindType :< Forall trivial ks (KindType :< t)
+poly ks s = let (KindType :< Mono t) = mono s in KindType :< Forall ks trivial (KindType :< t)
 
 prelude :: [(Name, Kinded QType, Value)]
 prelude =

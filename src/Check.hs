@@ -35,7 +35,8 @@ checkWithSub :: (Show (Annotated b), TagTraversable b, Generatable a (Annotated 
 checkWithSub p = do
   (p', cs) <- generate p
   sol <- solve cs
-  let p'' = tagMap (first (fullSol sol <$>)) p'
+  let f g (t, e, s) = (g <$> t, g <$> e, s)
+      p'' = tagMap (f (fullSol sol)) p'
   log Debug p''
   return p''
 

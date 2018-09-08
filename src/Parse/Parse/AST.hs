@@ -24,7 +24,7 @@ type Annotation = Source
 type Annotated a = Tagged Annotation a
 
 data Decl a = DeclFun Name [a (Pat a)] (a (Exp a))
-            | DeclSig Name (a (Impure a))
+            | DeclSig Name (a (Impure QType a))
 
 data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Case (a (Exp a)) [(a (Pat a), a (Exp a))]
@@ -35,7 +35,7 @@ data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Mixfix [a (Tok a)]
            | Read Name (a (Exp a))
            | Record (Record (a (Exp a)))
-           | Sig (a (Exp a)) (a (Impure a))
+           | Sig (a (Exp a)) (a (Impure Type a))
            | Var Name
            | VarBang Name
 

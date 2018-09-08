@@ -38,8 +38,7 @@ module Praxis
   , system
   , inClosure
 
-  , freshUniI
-  , freshUniP
+  , freshUniT
   , freshUniE
   , freshUniK
   , freshVar
@@ -107,7 +106,7 @@ data Flags = Flags
   } deriving (Show)
 
 data Fresh = Fresh
-  { _freshUniPs :: [String]
+  { _freshUniTs :: [String]
   , _freshUniEs :: [String]
   , _freshUniKs :: [String]
   , _freshVars  :: [String]
@@ -155,7 +154,7 @@ throwError :: Error -> Praxis a
 throwError = Control.Monad.Except.throwError
 
 defaultFresh = Fresh
-  { _freshUniPs   = map (("?a"++) . show) [0..]
+  { _freshUniTs   = map (("?a"++) . show) [0..]
   , _freshUniEs   = map (("?e"++) . show) [0..]
   , _freshUniKs   = map (("?k"++) . show) [0..]
   , _freshVars    = map (("?x"++) . show) [0..]
@@ -241,13 +240,10 @@ logList l xs = do
     lift (lift (putStrLn ("Output from stage: " ++ show s)))
     mapM_ (lift . lift . print) xs
 
-freshUniI :: Praxis (Kinded Impure)
-freshUniI = (KindType :<) <$> liftA2 (:#) freshUniP freshUniE
-
-freshUniP :: Praxis (Kinded Type)
-freshUniP = do
-  (x:xs) <- get (fresh . freshUniPs)
-  set (fresh . freshUniPs) xs
+freshUniT :: Praxis (Kinded Type)
+freshUniT = do
+  (x:xs) <- get (fresh . freshUniTs)
+  set (fresh . freshUniTs) xs
   return (KindType :< TyUni x)
 
 freshUniE :: Praxis (Kinded Type)
@@ -273,7 +269,7 @@ reuse :: Name -> Praxis ()
 reuse _ = pure ()
 {-
 reuse n@('?':c:_) = over (fresh . f c) (n:)
-  where f 'a' = freshUniPs
+  where f 'a' = freshUniTs
         f 'e' = freshUniEs
         f 'k' = freshUniKs
 -}

@@ -86,10 +86,22 @@ lookup n = do
     Just (_, _, t) -> return (Just t)
     Nothing        -> return Nothing
 
+{-
+TODO, want to allow things like:
+f : forall a. a -> a
+f x = x : a -- This a refers to the a introduced by f
+
+Which means we need some map from TyVars to TyUnis
+So that in-scope TyVars can get subbed.
+
+Alternative is to transform the source which would mess up error messages
+
+OR don't allow this, and don't allow explicit forall.
+-}
 ungeneralise :: Kinded QType -> Praxis (Kinded Type)
 ungeneralise (k :< Mono t) = return (k :< t)
-ungeneralise x@(KindType :< Forall cs vs (KindType :< t)) = do
-  sub <- zipWith (\(n, k) (_ :< t) -> (n, k :< t)) vs <$> replicateM (length vs) freshUniP
+ungeneralise x@(KindType :< Forall vs cs (KindType :< t)) = do
+  sub <- zipWith (\(n, k) (_ :< t) -> (n, k :< t)) vs <$> replicateM (length vs) freshUniT
   let f :: TypeTraversable a => a -> a
       f = tySub (`Prelude.lookup` sub)
   let cs' = [] -- FIXME TODO derivations derived from cs

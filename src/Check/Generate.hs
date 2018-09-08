@@ -49,14 +49,14 @@ instance Generatable (Parse.Annotated Exp) (Annotated Exp) where
 instance Generatable (Parse.Annotated Type) (Kinded Type) where
   generate' = typ
 
-ty :: Annotated a -> Kinded Impure
-ty ((Just t, _) :< _) = t
+tyef :: Annotated a -> (Kinded Type, Kinded Type)
+tyef ((Just t, Just e, _) :< _) = (t, e)
 
-getPure (_ :< p :# e) = p
-getEffects (_ :< p :# e) = e
+ty :: Annotated a -> Kinded Type
+ty ((Just t, _, _) :< _) = t
 
-split :: Kinded Impure -> (Kinded Type, Kinded Type)
-split t = (getPure t, getEffects t)
+ef :: Annotated a -> Kinded Type
+ef ((_, Just e, _) :< _) = e
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -74,19 +74,45 @@ program (s :< p) = case p of
   Program ds -> do
     (ds', cs) <- traverseM decl ds
     -- TODO remove from tEnv
-    return ((Nothing, s) :< Program ds', cs)
+    -- TODO check there aren't side effects
+    return ((Nothing, Nothing, s) :< Program ds', cs)
 
-impure :: Parse.Annotated Impure -> Praxis (Kinded Impure, [Derivation])
-impure (s :< t :# e) = do
+typAs :: Parse.Annotated Type -> Kind -> Praxis (Kinded Type, [Derivation])
+typAs t@(s :< _) k = do
   (t', c1) <- typ t
-  (e', c2) <- typ e
-  let c3 = [ newDerivation (EqKind (tag t') KindType) (Custom "impure: TODO") s
-           , newDerivation (EqKind (tag e') KindEffect) (Custom "impure: TODO") s
-           ]
-  return (KindType :< t' :# e', c1 ++ c2 ++ c3)
+  let c2 = [newDerivation (EqKind (tag t') k) (Custom "typAs: TODO") s]
+  return (t', c1 ++ c2)
 
-equalI :: Kinded Impure -> Kinded Impure -> Reason -> Source -> [Derivation]
-equalI (_ :< t1 :# e1) (_ :< t2 :# e2) r s = [ newDerivation (EqType t1 t2) r s, newDerivation (EqType e1 e2) r s ]
+qtypAs :: Parse.Annotated QType -> Kind -> Praxis (Kinded QType, [Derivation])
+qtypAs q@(s :< _) k = do
+  (q', c1) <- qtyp q
+  return (q', c1 ++ f q')
+    where r = Custom "qtypeAs: TODO"
+          f q' = case q' of
+            (k' :< Forall _ _ t) -> [ newDerivation (EqKind k' k) r s, newDerivation (EqKind (tag t) k) r s ]
+            _ -> []
+
+qimpure :: Parse.Annotated (Impure QType) -> Praxis (Kinded QType, Kinded Type, [Derivation])
+qimpure (_ :< t :# e) = do
+  (t', c1) <- qtypAs t KindType
+  (e', c2) <- typAs e KindEffect
+  return (t', e', c1 ++ c2)
+
+impure :: Parse.Annotated (Impure Type) -> Praxis (Kinded Type, Kinded Type, [Derivation])
+impure (_ :< t :# e) = do
+  (t', c1) <- typAs t KindType
+  (e', c2) <- typAs e KindEffect
+  return (t', e', c1 ++ c2)
+
+qtyp :: Parse.Annotated QType -> Praxis (Kinded QType, [Derivation])
+qtyp (s :< t) = case t of
+
+  Mono t -> do
+    (k :< t, c) <- typ (s :< t)
+    return (k :< Mono t, c)
+
+  Forall _ _ _ -> undefined -- FIXME
+
 
 typ :: Parse.Annotated Type -> Praxis (Kinded Type, [Derivation])
 typ (s :< t) = case t of
@@ -133,10 +159,9 @@ typ (s :< t) = case t of
 
 
 -- TODO move this somewhere
-fun :: Kinded Type -> Kinded Impure -> Kinded Type
-fun ap bt = let kp = KindRecord (Record.triple KindType KindType KindEffect)
-                (bp, be) = split bt
-             in KindType :< TyApply (KindFun kp KindType :< TyCon "->") (kp :< TyPack (Record.triple ap bp be))
+fun :: Kinded Type -> Kinded Type -> Kinded Type -> Kinded Type
+fun at bt be = let kt = KindRecord (Record.triple KindType KindType KindEffect)
+                in KindType :< TyApply (KindFun kt KindType :< TyCon "->") (kt :< TyPack (Record.triple at bt be))
 
 decl :: Parse.Annotated Decl -> Praxis (Annotated Decl, [Derivation])
 decl (s :< d) = case d of
@@ -146,27 +171,34 @@ decl (s :< d) = case d of
   -- TODO check no duplicate variables
   DeclVar n ut e -> do
 
-    (dt, c1) <- case ut of Nothing -> (\t -> (t, [])) <$> freshUniI
-                           Just t  -> impure t
+    (dq, de, c1) <- case ut of Nothing -> liftA2 (\(k:<t) e -> (k :< Mono t, e, [])) freshUniT freshUniE
+                               Just s  -> qimpure s
 
-    intro n (mono (getPure dt))
+    intro n dq
+
+    -- TODO allow checking of polymorphic functions
+    let (k :< Mono t) = dq
+    let dt = k :< t
+
     (e', c2) <- exp e
-    let c3 = equalI dt (ty e') (UserSignature (Just n)) s
-    return ((Just dt, s) :< DeclVar n Nothing e', c1 ++ c2 ++ c3)
-    -- TODO why don't we return the type in DeclVar?
+    let (et, ee) = tyef e'
+    -- let c3 = equalT dt et (UserSignature (Just n)) s
+    let c3 = [] -- FIXME
+    let c4 = equalT de ee (UserSignature (Just n)) s
+    return ((Nothing, Just ee, s) :< DeclVar n Nothing e', c1 ++ c2 ++ c3 ++ c4)
 
 
 stmt :: Parse.Annotated Stmt -> Praxis (Annotated Stmt, ([Derivation], Sum Int))
 stmt (s :< x) = case x of
 
-  -- TODO should stms really be annotated with a type?
   StmtDecl d -> do
     (d', c1) <- decl d
-    return ((Just (ty d'), s) :< StmtDecl d', (c1, Sum 1))
+    return ((Nothing, Just (ef d'), s) :< StmtDecl d', (c1, Sum 1))
 
   StmtExp e -> do
     (e', c1) <- exp e
-    return ((Just (ty e'), s) :< StmtExp e', (c1, Sum 0))
+    let (et, ee) = tyef e'
+    return ((Just et, Just ee, s) :< StmtExp e', (c1, Sum 0))
 
 
 kind :: Kinded Type -> Kind
@@ -179,97 +211,92 @@ effs (e : es) = let
   _ :< TyEffects es' = effs es
   in KindEffect :< TyEffects (Set.union e' es')
 
-
-(#) :: Kinded Type -> Kinded Type -> Kinded Impure
-t # e = KindType :< t :# e
--- TODO need to check t ~ KindType and e ~ KindEffect before calling this? Or is that already done?
-
 exp :: Parse.Annotated Exp -> Praxis (Annotated Exp, [Derivation])
-exp (s :< e) = case e of
+exp (s :< e) = (\((t, e) :< x, cs) -> ((Just t, Just e, s) :< x, cs)) <$> case e of
 
   Apply f x -> do
-    yt <- freshUniI
-    let (yp, ye) = split yt
+    yt <- freshUniT
+    ye <- freshUniE
     (f', c1) <- exp f
     (x', c2) <- exp x
-    let (fp, fe) = split $ ty f'
-    let (xp, xe) = split $ ty x'
-    let c3 = [ newDerivation (EqType fp (fun xp yt)) AppFun s ]
+    let (ft, fe) = tyef f'
+    let (xt, xe) = tyef x'
+    let c3 = [ newDerivation (EqType ft (fun xt yt ye)) AppFun s ]
     let e = effs [fe, xe, ye]
-    return ((Just (yp # e), s) :< Apply f' x', c1 ++ c2 ++ c3)
+    return ((yt, e) :< Apply f' x', c1 ++ c2 ++ c3)
 
   Cases alts -> do
     (alts', c1) <- parallel (map bind alts)
-    let (p, c2) = equalPs (map (\((Just t, s) :< _, _) -> (getPure t,s)) alts') CaseCongruence
-    let (t, c3) = equalIs (map (\(_, (Just t, s) :< _) -> (t,s)) alts') CaseCongruence
-    return ((Just (fun p t # effs []), s) :< Cases alts', c1 ++ c2)
+    let (t1, c2) = equalTs (map (\((Just t, _, s) :< _, _) -> (t, s)) alts') CaseCongruence
+    let (t2, e, c3) = equalIs (map (\(_, (Just t, Just e, s) :< _) -> (t, e, s)) alts') CaseCongruence
+    return ((fun t1 t2 e, effs []) :< Cases alts', c1 ++ c2)
 
   Do ss -> do
     (ss', (cs, Sum i)) <- traverseM stmt ss
-    let es = effs $ map (getEffects . ty) ss'
-    let t = getPure $ ty (last ss')
+    let (Just t, _, _) = tag (last ss')
+    let e = effs $ concatMap (\s -> case tag s of { (_, Just e, _) -> [e]; _ -> [] }) ss'
     elimN i
-    return ((Just (t # es), s) :< Do ss', cs)
+    return ((t, e) :< Do ss', cs)
 
   If a b c -> do
     (a', c1) <- exp a
     ((b', c2), (c', c3)) <- join (exp b) (exp c)
-    let (ap, ae) = split $ ty a'
-    let (bp, be) = split $ ty b'
-    let (cp, ce) = split $ ty c'
-    let c4 = [ newDerivation (EqType ap (KindType :< TyCon "Bool")) IfCondition s, newDerivation (EqType bp cp) IfCongruence s ]
+    let (at, ae) = tyef a'
+    let (bt, be) = tyef b'
+    let (ct, ce) = tyef c'
+    let c4 = [ newDerivation (EqType at (KindType :< TyCon "Bool")) IfCondition s, newDerivation (EqType bt ct) IfCongruence s ]
     let e = effs [ae, be, ce]
-    return ((Just (bp # e), s) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4)
+    return ((bt, e) :< If a' b' c', c1 ++ c2 ++ c3 ++ c4)
 
   Lambda p e -> do
     (p', Sum i) <- pat p
-    (e', cs) <- save inClosure $ set inClosure True >> exp e
+    (e', cs) <- save inClosure $ set inClosure True >> exp e -- FIXME
     elimN i
-    let t = fun (getPure $ ty p') (ty e')
-    return ((Just (t # effs []), s) :< Lambda p' e', cs)
+    let pt       = ty p'
+    let (et, ee) = tyef e'
+    return ((fun pt et ee, effs []) :< Lambda p' e', cs)
 
   Lit x -> do
-    let p = case x of { Int _ -> TyCon "Int" ; Bool _ -> TyCon "Bool" ; String _ -> TyCon "String" ; Char _ -> TyCon "Char" }
+    let t = case x of { Int _ -> TyCon "Int" ; Bool _ -> TyCon "Bool" ; String _ -> TyCon "String" ; Char _ -> TyCon "Char" }
     -- TODO poly literals
-    return ((Just ((KindType :< p) # effs []), s) :< Lit x, [])
+    return ((KindType :< t, effs []) :< Lit x, [])
 
   Read n a -> do
-    (p, c1) <- read s n
-    intro n (mono p)
+    (t, c1) <- read s n
+    intro n (mono t)
     (a', c2) <- exp a
-    return (a', c1 ++ c2)
+    elim
+    return (tyef a' :< value a', c1 ++ c2)
 
   Record r -> do
     (r', c1) <- traverseM exp r
-    let e = effs (map (getEffects . ty . snd) (Record.toList r'))
-    let p = KindType :< TyRecord (fmap (\t -> getPure (ty t)) r')
-    return ((Just (p # e), s) :< Record r', c1)
+    let e = effs (map (ef . snd) (Record.toList r'))
+    let t = KindType :< TyRecord (fmap ty r')
+    return ((t, e) :< Record r', c1)
 
+{-
   Sig e t -> do
     (e', c1) <- exp e
     (t, c3) <- impure t
     let c2 = equalI t (ty e') (UserSignature Nothing) s
     return (e', c1 ++ c2 ++ c3)
+-}
 
   Var n -> do
-    (p, c1) <- use s n
-    return ((Just (p # effs []), s) :< Var n, c1)
+    (t, c1) <- use s n
+    return ((t, effs []) :< Var n, c1)
 
 
-equalIs :: [(Kinded Impure, Source)] -> Reason -> (Kinded Impure, [Derivation])
-equalIs [(t, _)]    _ = (t, [])
-equalIs ((t, s):ts) r = let (t', c1) = equalIs ts r
-                            (p,   e) = split t
-                            (p', e') = split t'
-                            c2 = [ newDerivation (EqType p p') r s ]
-                         in (p # effs [e, e'], c1 ++ c2)
+equalT :: Kinded Type -> Kinded Type -> Reason -> Source -> [Derivation]
+equalT t1 t2 r s = [newDerivation (EqType t1 t2) r s]
 
+equalTs :: [(Kinded Type, Source)] -> Reason -> (Kinded Type, [Derivation])
+equalTs ((t, _):ts) r = (t, concat [equalT t t' r s | (t', s) <- ts])
 
-equalPs :: [(Kinded Type, Source)] -> Reason -> (Kinded Type, [Derivation])
-equalPs [(p, _)]    _ = (p, [])
-equalPs ((p, s):ps) r = let (p', cs) = equalPs ps r
-                            c = newDerivation (EqType p p') r s
-                             in (p, c:cs)
+equalIs :: [(Kinded Type, Kinded Type, Source)] -> Reason -> (Kinded Type, Kinded Type, [Derivation])
+equalIs ts r = (t, e, cs)
+  where (t, cs) = equalTs (map (\(t, _, s) -> (t, s)) ts) r
+        e = effs $ map (\(_, e, _) -> e) ts
 
 
 binds :: ([Parse.Annotated Pat], Parse.Annotated Exp) -> Praxis (([Annotated Pat], Annotated Exp), [Derivation])
@@ -291,19 +318,19 @@ bind (s :< p, e) = do
 
 -- Always returns empty effects
 pat :: Parse.Annotated Pat -> Praxis (Annotated Pat, Sum Int)
-pat (s :< p) = case p of
+pat (s :< p) = (\(t :< x, i) -> ((Just t, Nothing, s) :< x, i)) <$> case p of
 
   PatAt v p -> do
     (p', Sum i) <- pat p
-    let t = getPure $ ty p'
+    let t = ty p'
     intro v (mono t)
-    return ((Just (t # effs []), s) :< PatAt v p', Sum $ i + 1)
+    return (t :< PatAt v p', Sum $ i + 1)
 
   PatHole -> do
-    t <- freshUniP
-    return ((Just (t # effs []), s) :< PatHole, Sum 0)
+    t <- freshUniT
+    return (t :< PatHole, Sum 0)
 
-  PatLit l -> return ((Just ((KindType :< TyCon (lit l)) # effs []), s) :< PatLit l, Sum 0)
+  PatLit l -> return ((KindType :< TyCon (lit l)) :< PatLit l, Sum 0)
     where lit (Bool _)   = "Bool"
           lit (Char _)   = "Char"
           lit (Int _)    = "Int"
@@ -311,11 +338,11 @@ pat (s :< p) = case p of
 
   PatRecord r -> do
     (r', i) <- traverseM pat r
-    let t = KindType :< TyRecord (fmap (getPure . ty) r')
-    return ((Just (t # effs []), s) :< PatRecord r', i)
+    let t = KindType :< TyRecord (fmap ty r')
+    return (t :< PatRecord r', i)
 
   PatVar v -> do
-    t <- freshUniP
+    t <- freshUniT
     intro v (mono t)
-    return ((Just (t # effs []), s) :< PatVar v, Sum 1)
+    return (t :< PatVar v, Sum 1)
 

@@ -20,7 +20,7 @@ import           Record
 import           Tag
 import           Type
 
-data Decl a = DeclVar Name (Maybe (a (Impure a))) (a (Exp a))
+data Decl a = DeclVar Name (Maybe (a (Impure QType a))) (a (Exp a))
             | DeclData Name (Maybe (a (TyPat a))) [a (DataAlt a)]
 
 data DataAlt a = DataAlt Name (a (Type a))
@@ -33,7 +33,7 @@ data Exp a = Apply (a (Exp a)) (a (Exp a))
            | Lit Lit
            | Read Name (a (Exp a))
            | Record (Record (a (Exp a)))
-           | Sig (a (Exp a)) (a (Impure a))
+           | Sig (a (Exp a)) (a (Impure Type a))
            | Var Name
 
 -- |AST for Literals

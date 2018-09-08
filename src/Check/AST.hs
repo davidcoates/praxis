@@ -10,9 +10,8 @@ module Check.AST
 import           AST
 import           Source (Source)
 import           Tag    (Tagged)
-import           Type   (Impure, Kinded)
+import           Type   (Impure, Kinded, Type)
 
--- TODO Impure shouldn't really have a kind
-type Annotation = (Maybe (Kinded Impure), Source)
+type Annotation = (Maybe (Kinded Type), Maybe (Kinded Type), Source)
 
 type Annotated a = Tagged Annotation a

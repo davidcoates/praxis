@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
@@ -37,7 +38,7 @@ data Type a = TyUni Name -- Compares less than all other types
             | TyRecord (Record (a (Type a)))      -- ^A type record : T
             | TyVar Name                          -- ^A type variable
 
-data Impure a = (a (Type a)) :# (a (Type a)) -- ^Used for signatures
+data Impure b a = (a (b a)) :# (a (Type a))
 
 type Kinded a = Tagged Kind a
 
@@ -47,7 +48,7 @@ deriving instance Ord (TyPat (Tag a))
 deriving instance Ord (Type (Tag a))
 
 data QType a = Mono (Type a)
-             | Forall (a (Type a)) [(Name, Kind)] (a (Type a))
+             | Forall [(Name, Kind)] (a (Type a)) (a (Type a)) -- ^First type is constraint
 
 mono :: Tagged a Type -> Tagged a QType
 mono (a :< t) = a :< Mono t
@@ -78,12 +79,12 @@ instance Show a => Show (Tagged a Type) where
       TyUni n       -> n
       TyVar v       -> v
 
-instance Show a => Show (Tagged a Impure) where
+instance (Show a, Show (Tagged a b)) => Show (Tagged a (Impure b)) where
   show (a :< t :# es) = show t ++ " # " ++ show es -- TODO hide annotation from t
 
 instance Show a => Show (Tagged a QType) where
   show (a :< Mono t) = show (a :< t)
-  show (a :< Forall c vs (_ :< t)) = "forall " ++ unwords (map fst vs) ++  ". " ++ (show c ++ " => ") ++ show (a :< t) -- TODO this isn't quite right
+  show (a :< Forall vs c (_ :< t)) = "forall " ++ unwords (map fst vs) ++  ". " ++ (show c ++ " => ") ++ show (a :< t) -- TODO this isn't quite right
 
 instance Show a => Show (Tagged a TyPat) where
   show (_ :< TyPatVar n)  = n
@@ -109,12 +110,12 @@ instance TagTraversable Type where
   tagTraverse' f (TyUni n)      = pure $ TyUni n
   tagTraverse' f (TyVar v)      = pure $ TyVar v
 
-instance TagTraversable Impure where
+instance TagTraversable b => TagTraversable (Impure b) where
   tagTraverse' f (t :# e) = (:#) <$> tagTraverse f t <*> tagTraverse f e
 
 instance TagTraversable QType where
   tagTraverse' f (Mono t)        = Mono <$> tagTraverse' f t
-  tagTraverse' f (Forall c vs t) = (\c t -> Forall c vs t) <$> tagTraverse f c <*> tagTraverse f t
+  tagTraverse' f (Forall vs c t) = (\c t -> Forall vs c t) <$> tagTraverse f c <*> tagTraverse f t
 
 instance TagTraversable TyPat where
   tagTraverse' f (TyPatVar n)  = pure $ TyPatVar n
@@ -141,6 +142,15 @@ class TypeTraversable a where
       f (k :< t) = case t of
         TyUni n -> [n]
         _       -> []
+  tyVars :: a -> [Name]
+  tyVars = getConst . typeTraverse (Const . f)
+    where
+      f (k :< t) = case t of
+        TyVar n -> [n]
+        _       -> []
+
+instance (TypeTraversable a, TypeTraversable b) => TypeTraversable (a, b) where
+  typeTraverse f (a, b) = (,) <$> typeTraverse f a <*> typeTraverse f b
 
 instance (TypeTraversable a) => TypeTraversable [a] where
   typeTraverse f = sequenceA . fmap (typeTraverse f)
@@ -166,12 +176,12 @@ instance TypeTraversable (Kinded Type) where
 instance TypeTraversable (Kinded TyPat) where
   typeTraverse f = pure
 
-instance TypeTraversable (Kinded Impure) where
+instance TypeTraversable (Kinded b) => TypeTraversable (Kinded (Impure b)) where
   typeTraverse f (k :< t :# e) = (k :<) <$> ((:#) <$> typeTraverse f t <*> typeTraverse f e)
 
 instance TypeTraversable (Kinded QType) where
   typeTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> typeTraverse f (k :< t)
-  typeTraverse f (k :< Forall cs vs t) = (\cs t -> k :< Forall cs vs t) <$> typeTraverse f cs <*> typeTraverse f t
+  typeTraverse f (k :< Forall vs cs t) = (\cs t -> k :< Forall vs cs t) <$> typeTraverse f cs <*> typeTraverse f t
 
 class KindTraversable a where
   kindTraverse :: Applicative f => (Kind -> f Kind) -> a -> f a
@@ -184,6 +194,9 @@ class KindTraversable a where
       where f' (KindUni n) = fromMaybe (KindUni n) (f n)
             f' k           = k
 
+instance (KindTraversable a, KindTraversable b) => KindTraversable (a, b) where
+  kindTraverse f (a, b) = (,) <$> kindTraverse f a <*> kindTraverse f b
+
 instance (KindTraversable a) => KindTraversable [a] where
   kindTraverse f = sequenceA . fmap (kindTraverse f)
 
@@ -193,12 +206,12 @@ instance (KindTraversable a) => KindTraversable (Record a) where
 instance KindTraversable (Kinded Type) where
   kindTraverse = tagTraverse
 
-instance KindTraversable (Kinded Impure) where
+instance TagTraversable b => KindTraversable (Kinded (Impure b)) where
   kindTraverse = tagTraverse
 
 instance KindTraversable (Kinded QType) where
   kindTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> kindTraverse f (k :< t)
-  kindTraverse f (k :< Forall cs vs t) = (:<) <$> kindTraverse f k <*> ((\cs t -> Forall cs vs t) <$> kindTraverse f cs <*> kindTraverse f t)
+  kindTraverse f (k :< Forall vs cs t) = (:<) <$> kindTraverse f k <*> ((\cs t -> Forall vs cs t) <$> kindTraverse f cs <*> kindTraverse f t)
 
 instance KindTraversable Kind where
   kindTraverse f k@(KindUni _)   = f k

@@ -209,7 +209,7 @@ qop = qvarsym -- TODO
 
 -- TODO should do be here?
 lexp :: Parser (T Exp)
-lexp = expRead <|> expDo <|> expCases <|> fexp <|?> "lexp"
+lexp = expRead <|> expDo <|> expCase <|> expCases <|> fexp <|?> "lexp"
 
 fexp :: Parser (T Exp)
 fexp = leftT Apply (some (annotated aexp))
@@ -221,9 +221,13 @@ aexp = expRecord <|> parens <|> expVar <|> expLit <|?> "aexp"
 stmt :: Parser (T Stmt)
 stmt = try (StmtDecl <$> annotated decl) <|> (StmtExp <$> annotated exp)
 
+alt = liftT2 (,) (annotated pat) (reservedOp "->" #> annotated exp)
+
+expCase :: Parser (T Exp)
+expCase = Case <$> (try (reservedId "case") #> annotated exp) <*> (reservedId "of" #> block alt)
+
 expCases :: Parser (T Exp)
 expCases = Cases <$> (try (reservedId "cases") #> block alt)
-  where alt = liftT2 (,) (annotated pat) (reservedOp "->" #> annotated exp)
 
 expDo :: Parser (T Exp)
 expDo = Do <$> (try (reservedId "do") #> block (annotated stmt))

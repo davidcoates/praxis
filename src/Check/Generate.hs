@@ -223,11 +223,20 @@ exp (s :< e) = (\((t, e) :< x, cs) -> ((Just t, Just e, s) :< x, cs)) <$> case e
     let e = effs [fe, xe, ye]
     return ((yt, e) :< Apply f' x', c1 ++ c2 ++ c3)
 
+  Case x alts -> do
+    (x', c1) <- exp x
+    let (xt, e1) = tyef x'
+    (alts', c2) <- parallel (map bind alts)
+    let (t1, c3) = equalTs (map (\((Just t, _, s) :< _, _) -> (t, s)) alts') CaseCongruence
+    let (t2, e2, c4) = equalIs (map (\(_, (Just t, Just e, s) :< _) -> (t, e, s)) alts') CaseCongruence
+    let c5 = [ newDerivation (EqType xt t1) CaseCongruence s ] -- TODO probably should pick a better name for this
+    return ((xt, effs [e1, e2]) :< Case x' alts', c1 ++ c2 ++ c3 ++ c4 ++ c5)
+
   Cases alts -> closure $ do
     (alts', c1) <- parallel (map bind alts)
     let (t1, c2) = equalTs (map (\((Just t, _, s) :< _, _) -> (t, s)) alts') CaseCongruence
     let (t2, e, c3) = equalIs (map (\(_, (Just t, Just e, s) :< _) -> (t, e, s)) alts') CaseCongruence
-    return ((fun t1 t2 e, effs []) :< Cases alts', c1 ++ c2)
+    return ((fun t1 t2 e, effs []) :< Cases alts', c1 ++ c2 ++ c3)
 
   Do ss -> do
     (ss', (cs, Sum i)) <- traverseM stmt ss

@@ -26,6 +26,7 @@ data Decl a = DeclVar Name (Maybe (a (Impure QType a))) (a (Exp a))
 data DataAlt a = DataAlt Name (a (Type a))
 
 data Exp a = Apply (a (Exp a)) (a (Exp a))
+           | Case (a (Exp a)) [(a (Pat a), a (Exp a))]
            | Cases [(a (Pat a), a (Exp a))]
            | Do [a (Stmt a)]
            | If (a (Exp a)) (a (Exp a)) (a (Exp a))
@@ -66,6 +67,7 @@ instance TagTraversable Decl where
 
 instance TagTraversable Exp where
   tagTraverse' f (Apply a b)   = Apply <$> tagTraverse f a <*> tagTraverse f b
+  tagTraverse' f (Case e alts) = Case <$> tagTraverse f e <*> traverse (\(a,b) -> (,) <$> tagTraverse f a <*> tagTraverse f b) alts
   tagTraverse' f (Cases alts)  = Cases <$> traverse (\(a,b) -> (,) <$> tagTraverse f a <*> tagTraverse f b) alts
   tagTraverse' f (Do ss)       = Do <$> traverse (tagTraverse f) ss
   tagTraverse' f (If a b c)    = If <$> tagTraverse f a <*> tagTraverse f b <*> tagTraverse f c
@@ -99,7 +101,8 @@ instance Show a => TreeString (Tagged a Decl) where
 instance Show a => TreeString (Tagged a Exp) where
   treeString = treeRec $ \x -> case x of
     Apply f x     -> Node "[$]"                      [treeString f, treeString x]
-    Cases alts    -> Node "[cases]"                   (map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
+    Case e alts   -> Node "[case _ of]"              (treeString e : map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
+    Cases alts    -> Node "[cases]"                  (map (\(p, e) -> Node "[alt]" [treeString p, treeString e]) alts)
     Do ss         -> Node "[do]"                     (map treeString ss)
     If x y z      -> Node "[if]"                     [treeString x, treeString y, treeString z]
     Lambda p e    -> Node "[\\ _ -> _]"              [treeString p, treeString e]

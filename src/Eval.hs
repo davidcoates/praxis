@@ -58,6 +58,10 @@ exp (_ :< e) = case e of
     x' <- exp x
     f' x'
 
+  Case e ps -> do
+    v <- exp e
+    cases v ps
+
   Cases ps -> return $ F $ \v -> cases v ps
 
   Do ss -> do

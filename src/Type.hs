@@ -100,15 +100,16 @@ instance Show Kind where
   show (KindUni n)    = n
 
 instance TagTraversable Type where
-  tagTraverse' f (TyApply a b)  = TyApply <$> tagTraverse f a <*> tagTraverse f b
-  tagTraverse' f (TyBang t)     = TyBang <$> tagTraverse f t
-  tagTraverse' f (TyCon n)      = pure $ TyCon n
-  tagTraverse' f (TyEffects es) = TyEffects . Set.fromList <$> traverse (tagTraverse f) (Set.toList es)
-  tagTraverse' f (TyLambda a b) = TyLambda <$> tagTraverse f a <*> tagTraverse f b
-  tagTraverse' f (TyPack r)     = TyPack <$> traverse (tagTraverse f) r
-  tagTraverse' f (TyRecord r)   = TyRecord <$> traverse (tagTraverse f) r
-  tagTraverse' f (TyUni n)      = pure $ TyUni n
-  tagTraverse' f (TyVar v)      = pure $ TyVar v
+  tagTraverse' f t = case t of
+    TyApply a b  -> TyApply <$> tagTraverse f a <*> tagTraverse f b
+    TyBang t     -> TyBang <$> tagTraverse f t
+    TyCon n      -> pure $ TyCon n
+    TyEffects es -> TyEffects . Set.fromList <$> traverse (tagTraverse f) (Set.toList es)
+    TyLambda a b -> TyLambda <$> tagTraverse f a <*> tagTraverse f b
+    TyPack r     -> TyPack <$> traverse (tagTraverse f) r
+    TyRecord r   -> TyRecord <$> traverse (tagTraverse f) r
+    TyUni n      -> pure $ TyUni n
+    TyVar v      -> pure $ TyVar v
 
 instance TagTraversable b => TagTraversable (Impure b) where
   tagTraverse' f (t :# e) = (:#) <$> tagTraverse f t <*> tagTraverse f e
@@ -210,11 +211,13 @@ instance TagTraversable b => KindTraversable (Kinded (Impure b)) where
   kindTraverse = tagTraverse
 
 instance KindTraversable (Kinded QType) where
-  kindTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> kindTraverse f (k :< t)
-  kindTraverse f (k :< Forall vs cs t) = (:<) <$> kindTraverse f k <*> ((\cs t -> Forall vs cs t) <$> kindTraverse f cs <*> kindTraverse f t)
+  kindTraverse f k = case k of
+    (k :< Mono t)         -> (\(k :< t) -> k :< Mono t) <$> kindTraverse f (k :< t)
+    (k :< Forall vs cs t) -> (:<) <$> kindTraverse f k <*> ((\cs t -> Forall vs cs t) <$> kindTraverse f cs <*> kindTraverse f t)
 
 instance KindTraversable Kind where
-  kindTraverse f k@(KindUni _)   = f k
-  kindTraverse f (KindFun k1 k2) = KindFun <$> kindTraverse f k1 <*> kindTraverse f k2
-  kindTraverse f (KindRecord r)  = KindRecord <$> kindTraverse f r
-  kindTraverse f k               = pure k
+  kindTraverse f k = case k of
+    KindUni _     -> f k
+    KindFun k1 k2 -> KindFun <$> kindTraverse f k1 <*> kindTraverse f k2
+    KindRecord r  -> KindRecord <$> kindTraverse f r
+    _             -> pure k

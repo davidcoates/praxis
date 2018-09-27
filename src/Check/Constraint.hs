@@ -42,19 +42,20 @@ data Reason = AppFun
             | UserSignature (Maybe Name)
 
 instance Show Reason where
-  show AppFun            = "Function application"
-  show AppType           = "Type application"
-  show (Captured n)      = "Variable '" ++ n ++ "' captured"
-  show CaseCongruence    = "Alternatives of <case> expression must have the same type"
-  show (Custom s)        = s
-  show IfCondition       = "Type of <if> condition must be Bool"
-  show IfCongruence      = "Branches of <if> expression must have the same type"
-  show (Instance n)      = "Monomorphic usage of '" ++ n ++ "'"
-  show (Shared n)        = "Variable '" ++ n ++ "' used more than once"
-  show Unknown           = "<Unknown>"
-  show (UserSignature n) | Just f <- n = "User-supplied signature '" ++ f ++ "'"
-                         | otherwise   = "User-supplied signature"
-  show (UnsafeView n)    = "Variable '" ++ n ++ "' used before being viewed"
+  show r = case r of
+    AppFun          -> "Function application"
+    AppType         -> "Type application"
+    Captured n      -> "Variable '" ++ n ++ "' captured"
+    CaseCongruence  -> "Alternatives of <case> expression must have the same type"
+    Custom s        -> s
+    IfCondition     -> "Type of <if> condition must be Bool"
+    IfCongruence    -> "Branches of <if> expression must have the same type"
+    Instance n      -> "Monomorphic usage of '" ++ n ++ "'"
+    Shared n        -> "Variable '" ++ n ++ "' used more than once"
+    Unknown         -> "<Unknown>"
+    UserSignature n | Just f <- n -> "User-supplied signature '" ++ f ++ "'"
+                    | otherwise   -> "User-supplied signature"
+    UnsafeView n    -> "Variable '" ++ n ++ "' used before being viewed"
 
 
 -- |A Derivation represents a constraint with a history of why the constraint must be true.

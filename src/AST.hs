@@ -66,24 +66,26 @@ instance TagTraversable Decl where
   tagTraverse' f (DeclVar n t e) = (DeclVar n) <$> sequenceA (tagTraverse f <$> t) <*> tagTraverse f e
 
 instance TagTraversable Exp where
-  tagTraverse' f (Apply a b)   = Apply <$> tagTraverse f a <*> tagTraverse f b
-  tagTraverse' f (Case e alts) = Case <$> tagTraverse f e <*> traverse (\(a,b) -> (,) <$> tagTraverse f a <*> tagTraverse f b) alts
-  tagTraverse' f (Cases alts)  = Cases <$> traverse (\(a,b) -> (,) <$> tagTraverse f a <*> tagTraverse f b) alts
-  tagTraverse' f (Do ss)       = Do <$> traverse (tagTraverse f) ss
-  tagTraverse' f (If a b c)    = If <$> tagTraverse f a <*> tagTraverse f b <*> tagTraverse f c
-  tagTraverse' f (Lambda p e)  = Lambda <$> tagTraverse f p <*> tagTraverse f e
-  tagTraverse' f (Lit l)       = pure $ Lit l
-  tagTraverse' f (Record r)    = Record <$> traverse (tagTraverse f) r
-  tagTraverse' f (Read n e)    = Read n <$> tagTraverse f e
-  tagTraverse' f (Sig e t)     = Sig <$> tagTraverse f e <*> tagTraverse f t
-  tagTraverse' f (Var v)       = pure $ Var v
+  tagTraverse' f x = case x of
+    Apply a b   -> Apply <$> tagTraverse f a <*> tagTraverse f b
+    Case e alts -> Case <$> tagTraverse f e <*> traverse (\(a,b) -> (,) <$> tagTraverse f a <*> tagTraverse f b) alts
+    Cases alts  -> Cases <$> traverse (\(a,b) -> (,) <$> tagTraverse f a <*> tagTraverse f b) alts
+    Do ss       -> Do <$> traverse (tagTraverse f) ss
+    If a b c    -> If <$> tagTraverse f a <*> tagTraverse f b <*> tagTraverse f c
+    Lambda p e  -> Lambda <$> tagTraverse f p <*> tagTraverse f e
+    Lit l       -> pure $ Lit l
+    Record r    -> Record <$> traverse (tagTraverse f) r
+    Read n e    -> Read n <$> tagTraverse f e
+    Sig e t     -> Sig <$> tagTraverse f e <*> tagTraverse f t
+    Var v       -> pure $ Var v
 
 instance TagTraversable Pat where
-  tagTraverse' f (PatAt v p)   = PatAt v <$> tagTraverse f p
-  tagTraverse' f PatHole       = pure PatHole
-  tagTraverse' f (PatLit l)    = pure $ PatLit l
-  tagTraverse' f (PatRecord r) = PatRecord <$> traverse (tagTraverse f) r
-  tagTraverse' f (PatVar v)    = pure $ PatVar v
+  tagTraverse' f x = case x of
+    PatAt v p   -> PatAt v <$> tagTraverse f p
+    PatHole     -> pure PatHole
+    PatLit l    -> pure $ PatLit l
+    PatRecord r -> PatRecord <$> traverse (tagTraverse f) r
+    PatVar v    -> pure $ PatVar v
 
 instance TagTraversable Program where
   tagTraverse' f (Program ds) = Program <$> sequenceA (map (tagTraverse f) ds)

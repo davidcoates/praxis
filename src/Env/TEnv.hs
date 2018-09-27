@@ -58,28 +58,28 @@ closure x = do
   return r
 
 -- TODO reduce duplicaiton here
-read :: Source -> Name -> Praxis (Kinded Type, [Derivation])
+read :: Source -> Name -> Praxis (Kinded Type)
 read s n = do
   l <- get tEnv
   case LEnv.lookup n l of
     Just (c, u, t) -> do
       t <- ungeneralise t
-      let c1 = [ newDerivation (share t) (UnsafeView n) s | not u ]
-      let c2 = [ newDerivation (share t) (Captured n) s   | c ]
-      return (t, c1 ++ c2)
+      requireAll [ newDerivation (share t) (UnsafeView n) s | not u ]
+      requireAll [ newDerivation (share t) (Captured n) s   | c ]
+      return t
     Nothing     -> throwError (CheckError (NotInScope n s))
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
-use :: Source -> Name -> Praxis (Kinded Type, [Derivation])
+use :: Source -> Name -> Praxis (Kinded Type)
 use s n = do
   l <- get tEnv
   case LEnv.lookup n l of
     Just (c, u, t) -> do
       set tEnv (LEnv.use n l)
       t <- ungeneralise t
-      let c1 = [ newDerivation (share t) (Shared n)   s | u ]
-      let c2 = [ newDerivation (share t) (Captured n) s | c ]
-      return (t, c1 ++ c2)
+      requireAll [ newDerivation (share t) (Shared n)   s | u ]
+      requireAll [ newDerivation (share t) (Captured n) s | c ]
+      return t
     Nothing     -> throwError (CheckError (NotInScope n s))
 
 lookup :: Name -> Praxis (Maybe (Kinded QType))
@@ -112,3 +112,5 @@ ungeneralise x@(KindType :< Forall vs cs (KindType :< t)) = do
   log Debug t'
   over (system . axioms) (++ cs')
   return t'
+
+

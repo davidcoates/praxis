@@ -47,11 +47,16 @@ module Praxis
   , log
   , logStr
   , logList
+
+  , require
+  , requireAll
   )
   where
 
 import           AST                  (Lit)
 import qualified Check.AST            as Check
+import           Check.Constraint     (Derivation)
+import           Check.System         (constraints)
 import qualified Check.System         as Check (System)
 import           Common
 import           Env                  (KEnv, TEnv, VEnv)
@@ -270,3 +275,10 @@ reuse n@('?':c:_) = over (fresh . f c) (n:)
         f 'e' = freshUniEs
         f 'k' = freshUniKs
 -}
+
+-- TODO these possibly shouldn't be here
+require :: Derivation -> Praxis ()
+require c = over (system . constraints) (c:)
+
+requireAll :: [Derivation] -> Praxis ()
+requireAll = mapM_ require

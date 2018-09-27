@@ -24,10 +24,9 @@ import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
-solve :: [Derivation] -> Praxis ([(Name, Kinded Type)], [(Name, Kind)])
-solve cs = save stage $ save system $ do
+solve :: Praxis ([(Name, Kinded Type)], [(Name, Kind)])
+solve = save stage $ save system $ do
   set stage Solve
-  set system (initialSystem cs)
   spin
   tySol <- get (system . tySol)
   kindSol <- get (system . kindSol)

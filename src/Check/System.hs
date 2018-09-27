@@ -20,11 +20,11 @@ import           Type             (Kind, Kinded, Type)
 
 import           Control.Lens     (makeLenses)
 
-initialSystem :: [Derivation] -> System
-initialSystem cs = System
+initialSystem :: System
+initialSystem = System
   { _tySol       = []
   , _kindSol     = []
-  , _constraints = cs
+  , _constraints = []
   , _axioms      = []
   , _changed     = False
   , _staging     = []

@@ -11,6 +11,7 @@ module Check
 import           Check.AST
 import           Check.Generate
 import           Check.Solve     (solve)
+import           Check.System
 import qualified Parse.Parse.AST as Parse (Annotated)
 import           Praxis
 import           Record
@@ -27,14 +28,15 @@ class Checkable a b | a -> b where
   check :: a -> Praxis b
   check p = save stage $ do
     set stage Check
+    set system initialSystem
     p' <- check' p
     return p'
   check' :: a -> Praxis b
 
 checkWithSub :: (Show (Annotated b), TagTraversable b, Generatable a (Annotated b)) => a -> Praxis (Annotated b)
 checkWithSub p = do
-  (p', cs) <- generate p
-  sol <- solve cs
+  p' <- generate p
+  sol <- solve
   let f g (t, e, s) = (g <$> t, g <$> e, s)
       p'' = tagMap (f (fullSol sol)) p'
   log Debug p''
@@ -58,8 +60,8 @@ instance Checkable (Parse.Annotated Exp) (Annotated Exp) where
 
 instance Checkable (Parse.Annotated Type) (Kinded Type) where
   check' p = do
-    (p', cs) <- generate p
-    sol <- solve cs
+    p' <- generate p
+    sol <- solve
     let p'' = fullSol sol p'
     log Debug p''
     return p''

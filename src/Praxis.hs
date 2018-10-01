@@ -38,6 +38,7 @@ module Praxis
   , system
 
   , freshUniT
+  , freshUniQ
   , freshUniE
   , freshUniK
   , freshVar
@@ -110,6 +111,7 @@ data Flags = Flags
 
 data Fresh = Fresh
   { _freshUniTs :: [String]
+  , _freshUniQs :: [String]
   , _freshUniEs :: [String]
   , _freshUniKs :: [String]
   , _freshVars  :: [String]
@@ -145,18 +147,18 @@ over l f = do
   x <- get l
   set l (f x)
 
-modify :: Lens' PraxisState a -> (a -> (b, a)) -> Praxis b
+modify :: Lens' PraxisState a -> (a -> Praxis a) -> Praxis ()
 modify l f = do
   x <- get l
-  let (c, x') = f x
+  x' <- f x
   set l x'
-  return c
 
 throwError :: Error -> Praxis a
 throwError = Control.Monad.Except.throwError
 
 defaultFresh = Fresh
-  { _freshUniTs   = map (("?a"++) . show) [0..]
+  { _freshUniTs   = map (("?t"++) . show) [0..]
+  , _freshUniQs   = map (("?Q"++) . show) [0..]
   , _freshUniEs   = map (("?e"++) . show) [0..]
   , _freshUniKs   = map (("?k"++) . show) [0..]
   , _freshVars    = map (("?x"++) . show) [0..]
@@ -246,6 +248,12 @@ freshUniT = do
   (x:xs) <- get (fresh . freshUniTs)
   set (fresh . freshUniTs) xs
   return (KindType :< TyUni x)
+
+freshUniQ :: Praxis (Kinded QType)
+freshUniQ = do
+  (x:xs) <- get (fresh . freshUniQs)
+  set (fresh . freshUniQs) xs
+  return (KindType :< QTyUni x)
 
 freshUniE :: Praxis (Kinded Type)
 freshUniE = do

@@ -69,7 +69,7 @@ instance Show DeclError where
 
 instance Show CheckError where
   show e = case e of
-    Contradiction d -> show d
+    Contradiction d -> "Contradiction: " ++ show d
     NotInScope n s  -> "Not in scope: " ++ n ++ " at " ++ show s
     Stuck           -> "Infinite loop detected :("
     Underdefined d  -> "Failed to completely deduce the unification variable(s) present in: " ++ show d

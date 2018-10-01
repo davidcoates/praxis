@@ -165,24 +165,24 @@ fun at bt be = let kt = KindRecord (Record.triple KindType KindType KindEffect)
 decl :: Parse.Annotated Decl -> Praxis (Annotated Decl)
 decl (s :< d) = case d of
 
-  -- TODO allow polymorpishm
   -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n ut e -> do
 
-    (dq, de) <- case ut of Nothing -> liftA2 (\(k :< t) e -> (k :< Mono t, e)) freshUniT freshUniE
+    -- TODO if polymorphic, de shoud be empty. How can we guarantee this?
+    (dq, de) <- case ut of Nothing -> liftA2 (,) freshUniQ freshUniE
                            Just s  -> qimpure s
 
+    -- TODO if user supplied a monomorphic type, we could just insert it here
     intro n dq
 
-    -- TODO allow checking of polymorphic functions
-    let (k :< Mono t) = dq
-    let dt = k :< t
+    dt <- freshUniT
 
     e' <- exp e
     let (et, ee) = tyef e'
-    equalT dt et (UserSignature (Just n)) s
+    equalT dt et (UserSignature (Just n)) s -- TODO UserSignature isn't a great name for this ut is Nothing
     equalT de ee (UserSignature (Just n)) s
+    require $ newDerivation (dq `Generalises` dt) (Generalisation n)  s
 
     return ((Nothing, Just ee, s) :< DeclVar n Nothing e')
 

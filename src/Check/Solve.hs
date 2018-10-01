@@ -16,9 +16,9 @@ import           Record
 import           Source
 import           Tag
 import           Type
+import Env.TEnv (ungeneralise)
 
 import           Control.Applicative    (Const (..), liftA2)
-import           Control.Arrow          (second)
 import           Control.Monad.Identity (Identity (..))
 import           Data.List              (nub, sort)
 import           Data.Maybe             (fromMaybe)
@@ -29,39 +29,78 @@ import           Prelude                hiding (log)
 solve :: Praxis ([(Name, Kinded Type)], [(Name, Kind)])
 solve = save stage $ save system $ do
   set stage Solve
-  spin
+  solve'
   tySol <- get (system . tySol)
   kindSol <- get (system . kindSol)
   return (tySol, kindSol)
 
-spin :: Praxis ()
-spin = do
-  set (system . changed) False
-  progress
-  thinking <- get (system . changed)
-  if thinking then
-    spin
-  else do
-    cs <- get (system . constraints)
-    case cs of [] -> return () -- Done
-               _  -> logList Normal cs >> throwError (CheckError Stuck)
+data State = Cold
+           | Warm
+           | Done
 
-progress :: Praxis ()
-progress = do
+solve' :: Praxis State
+solve' = spin progress `chain` spin generalise `chain` stuck
+    where chain :: Praxis State -> Praxis State -> Praxis State
+          chain p1 p2 = p1 >>= \s -> case s of
+            Cold -> p2
+            Warm -> solve'
+            Done -> return Done
+          stuck = do
+            cs <- get (system . constraints)
+            logList Normal cs
+            throwError (CheckError Stuck)
+
+spin :: (Derivation -> Praxis Bool) -> Praxis State
+spin solve = do
   cs <- (nub . sort) <$> get (system . constraints)
-  set (system . constraints) []
-  set (system . staging) cs
-  progress'
+  case cs of
+    [] -> return Done
+    _  -> do
+      set (system . constraints) []
+      set (system . staging) cs
+      warm <- loop
+      return $ if warm then Warm else Cold
+  where
+    loop = do
+      cs <- get (system . staging)
+      case cs of
+        []     -> return False
+        (c:cs) -> set (system . staging) cs >> liftA2 (||) (solve c) loop
 
-progress' :: Praxis ()
-progress' = do
-  cs <- get (system . staging)
-  cs <- get (system . staging)
-  case cs of []     -> return () -- Done
-             (c:cs) -> set (system . staging) cs >> (single c >>= (\cs -> over (system . constraints) (++ cs))) >> progress'
+generalise :: Derivation -> Praxis Bool
+generalise d = do
+  ds <- liftA2 (++) (get (system . constraints)) (get (system . staging))
+  case constraint d of
+    Generalises (_ :< QTyUni n) t -> generalise' ds n t
+    Generalises _               _ -> error "unreachable?"
+    _                             -> defer
+  where
+    defer = require d >> return False
+    generalise' :: [Derivation] -> Name -> Kinded Type -> Praxis Bool
+    generalise' ds n t = case classes (extract unis t) ds of
+      Nothing -> defer
+      Just ts -> qTySolve n (generaliseType ts t)
 
-single :: Derivation -> Praxis [Derivation]
-single d = case constraint d of
+generaliseType :: [Kinded Type] -> Kinded Type -> Kinded QType
+generaliseType ts (a :< t) = case us of
+  [] -> a :< Mono t
+  _  -> undefined -- TODO For each uni in t, find an annotated kind. Use this to build up [(Name, Kind)]
+  where us = extract unis (a :< t) 
+        vs = map (:[]) ['a'..]
+        f u = (`lookup` zip us vs)
+
+-- TODO use sets here?
+classes :: [Name] -> [Derivation] -> Maybe [Kinded Type]
+classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case constraint d of
+  Class t         -> let ns' = extract unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
+  EqKind k1 k2    -> if any (`elem` (extract unis k1 ++ extract unis k2)) ns then Nothing else Just []
+  EqType t1 t2    -> if any (`elem` (extract unis t1 ++ extract unis t2)) ns then Nothing else Just []
+  Generalises q t -> Just [] -- TODO not sure about these
+  Specialises t q -> Just []
+
+
+progress :: Derivation -> Praxis Bool
+progress d = case constraint d of
 
   Class (k1 :< TyApply (k2 :< TyCon "Share") (a :< p)) -> case p of -- TODO Need instance solver!
     TyApply (_ :< TyCon "->") _ -> tautology
@@ -123,15 +162,23 @@ single d = case constraint d of
     | null (extract unis t1 ++ extract unis t2) -> contradiction
     | otherwise                     -> defer
 
+  Specialises _ (_ :< QTyUni _) -> defer
+
+  Specialises t q -> do
+    t' <- ungeneralise Phantom q
+    introduce [ EqType t t' ]
+
+  Generalises _ _ -> defer
+
   _ -> contradiction
 
-  where solved = set (system . changed) True >> pure []
+  where solved = return True
         tautology = solved
-        defer = pure [d]
+        defer = require d >> return False
         contradiction = throwError . CheckError . Contradiction $ d
-        introduce cs = set (system . changed) True >> pure (map (d `implies`) cs)
-        swap = case constraint d of EqType t1 t2 -> single d{ constraint = EqType t2 t1 }
-                                    EqKind k1 k2 -> single d{ constraint = EqKind k2 k1 }
+        introduce cs = requireAll (map (d `implies`) cs) >> return True
+        swap = case constraint d of EqType t1 t2 -> progress d{ constraint = EqType t2 t1 }
+                                    EqKind k1 k2 -> progress d{ constraint = EqKind k2 k1 }
 
         snake :: Set (Kinded Type) -> Maybe (Name, Set (Kinded Type))
         snake es = case Set.toList es of
@@ -141,54 +188,44 @@ single d = case constraint d of
         literals :: Set (Kinded Type) -> Bool
         literals es = null (concatMap (extract unis) (Set.toList es))
 
-        tySolve :: Name -> Kinded Type -> Praxis [Derivation]
-        tySolve n p = do
-          let f :: TypeTraversable a => a -> Special Derivation a
-              f = tyGenSub (\n' -> if n == n' then Just p else Nothing)
-              lift f = runSpecial . sequenceA . map f
-          over (system . tySol) ((n, p):)
-          cs <- sequence
-            [ modify (system . tySol) (lift (\(n, t) -> (\t -> (n, t)) <$> f t))
-            , modify (system . constraints) (lift f)
-            , modify (system . staging) (lift f)
-            , modify (system . axioms) (lift f)
-            , modify tEnv (runSpecial . traverse f)
-            ]
-          set (system . changed) True
-          reuse n
-          return (concat cs)
-        kindSolve :: Name -> Kind -> Praxis [Derivation]
-        kindSolve n p = do
-          let f :: KindTraversable a => a -> a
-              f = subs (\n' -> if n == n' then Just p else Nothing)
-          over (system . kindSol) ((n, p):)
-          over (system . kindSol) (map (second f))
-          over (system . tySol) (map (second f))
-          over (system . constraints) (map f)
-          over (system . staging) (map f)
-          over (system . axioms) (map f)
-          over tEnv (fmap f)
-          over kEnv (fmap f)
-          set (system . changed) True
-          reuse n
-          return []
+qTySolve :: Name -> Kinded QType -> Praxis Bool
+qTySolve n q = do
+  let f :: Kinded QType -> Praxis (Kinded QType)
+      f = pure . subs (\n' -> if n == n' then Just q else Nothing)
+  over (system . qTySol) ((n, q):)
+  modify system (pseudoTraverse f)
+  modify tEnv (traverse f)
+  reuse n
+  return True
 
- -- typeTraverse :: Applicative f => (Kinded Type -> f (Kinded Type)) -> a -> f a
+tySolve :: Name -> Kinded Type -> Praxis Bool
+tySolve n p = do
+  let f :: Kinded Type -> Praxis (Kinded Type)
+      f = tyGenSub (\n' -> if n == n' then Just p else Nothing)
+  over (system . tySol) ((n, p):)
+  modify system (pseudoTraverse f)
+  modify tEnv (traverse (pseudoTraverse f))
+  reuse n
+  return True
 
-newtype Special a b = Special { runSpecial :: ([a], b) }
+kindSolve :: Name -> Kind -> Praxis Bool
+kindSolve n p = do
+  let f :: Kind -> Praxis Kind
+      f = pure . subs (\n' -> if n == n' then Just p else Nothing)
+  over (system . kindSol) ((n, p):)
+  modify system (pseudoTraverse f)
+  modify tEnv (traverse (pseudoTraverse f))
+  modify kEnv (traverse f)
+  reuse n
+  return True
 
-instance Functor (Special a) where
-  fmap f (Special (cs, x)) = Special (cs, f x)
-
-instance Applicative (Special a) where
-  pure x = Special ([], x)
-  liftA2 f (Special (c1, x)) (Special (c2, y)) = Special (c1 ++ c2, f x y)
-
-tyGenSub :: TypeTraversable a => (Name -> Maybe (Kinded Type)) -> a -> Special Derivation a
-tyGenSub f = pseudoTraverse (Special . f')
+tyGenSub :: TypeTraversable a => (Name -> Maybe (Kinded Type)) -> a -> Praxis a
+tyGenSub f = pseudoTraverse f'
     where
       f' (k :< t) = case t of
         TyUni n -> case f n of
-          Just (k' :< t')  -> ([ newDerivation (EqKind k k') (Custom "TODO tyGenSub") Phantom ], k' :< t') -- TODO
+          Just (k' :< t')  -> do
+            require $ newDerivation (EqKind k k') (Custom "TODO tyGenSub") Phantom -- TODO
+            return (k' :< t')
           Nothing          -> return (k :< t)
         _       -> return (k :< t)

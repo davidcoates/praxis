@@ -56,3 +56,5 @@ Rename KindRecord -> KindPack ?
 Kind of QType doesn't really make sense?
 
 Desugaring case of to cases introduces an unnecessary closure. NOT good. Should probably have both or desugar cases to case of instead.
+
+Should QType's really be kinded? Seems unnecessary.

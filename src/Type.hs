@@ -45,11 +45,14 @@ type Kinded a = Tagged Kind a
 
 deriving instance Eq (TyPat (Tag a))
 deriving instance Eq (Type (Tag a))
+deriving instance Eq (QType (Tag a))
 deriving instance Ord (TyPat (Tag a))
 deriving instance Ord (Type (Tag a))
+deriving instance Ord (QType (Tag a))
 
 data QType a = Mono (Type a)
              | Forall [(Name, Kind)] (a (Type a)) (a (Type a)) -- ^First type is constraint
+             | QTyUni Name
 
 mono :: Tagged a Type -> Tagged a QType
 mono (a :< t) = a :< Mono t
@@ -86,6 +89,7 @@ instance (Show a, Show (Tagged a b)) => Show (Tagged a (Impure b)) where
 instance Show a => Show (Tagged a QType) where
   show (a :< Mono t) = show (a :< t)
   show (a :< Forall vs c (_ :< t)) = "forall " ++ unwords (map fst vs) ++  ". " ++ (show c ++ " => ") ++ show (a :< t) -- TODO this isn't quite right
+  show (a :< QTyUni n) = n
 
 instance Show a => Show (Tagged a TyPat) where
   show (_ :< TyPatVar n)  = n
@@ -118,6 +122,7 @@ instance TagTraversable b => TagTraversable (Impure b) where
 instance TagTraversable QType where
   tagTraverse' f (Mono t)        = Mono <$> tagTraverse' f t
   tagTraverse' f (Forall vs c t) = (\c t -> Forall vs c t) <$> tagTraverse f c <*> tagTraverse f t
+  tagTraverse' f (QTyUni n)      = pure (QTyUni n)
 
 instance TagTraversable TyPat where
   tagTraverse' f (TyPatVar n)  = pure $ TyPatVar n
@@ -138,6 +143,11 @@ instance Polymorphic (Kinded Type) where
     TyVar n -> [n]
     _       -> []
 
+instance Polymorphic (Kinded QType) where
+  unis t@(_ :< QTyUni n) = [n]
+  unis _                 = []
+  vars _ = []
+
 instance Polymorphic Kind where
   unis (KindUni n) = [n]
   unis _           = []
@@ -155,6 +165,11 @@ instance Substitutable (Kind, Name) (Kinded Type) where
     TyVar n -> fromMaybe t (f (k, n))
     _       -> t
 
+instance Substitutable Name (Kinded QType) where
+  sub f t@(_ :< t') = case t' of
+    QTyUni n -> fromMaybe t (f n)
+    _        -> t
+
 instance Substitutable Name Kind where
   sub f k = case k of
     KindUni n -> fromMaybe k (f n)
@@ -164,16 +179,16 @@ instance PseudoTraversable (Kinded Type) (Kinded Type) (Kinded Type) (Kinded Typ
   pseudoTraverse f t@(_ :< TyUni _) = f t
   pseudoTraverse f t@(_ :< TyVar _) = f t
   pseudoTraverse f (k :< t) = (k :<) <$> case t of
-    (TyApply a b)  -> TyApply <$> pseudoTraverse f a <*> pseudoTraverse f b
-    (TyBang t)     -> TyBang <$> pseudoTraverse f t
-    (TyCon n)      -> pure $ TyCon n
-    (TyEffects es) -> (TyEffects . Set.fromList . concatMap flatten) <$> traverse (pseudoTraverse f) (Set.toList es)
+    TyApply a b  -> TyApply <$> pseudoTraverse f a <*> pseudoTraverse f b
+    TyBang t     -> TyBang <$> pseudoTraverse f t
+    TyCon n      -> pure $ TyCon n
+    TyEffects es -> (TyEffects . Set.fromList . concatMap flatten) <$> traverse (pseudoTraverse f) (Set.toList es)
       where flatten :: Kinded Type -> [Kinded Type]
             flatten (_ :< TyEffects es) = concatMap flatten es
             flatten t                   = [t]
-    (TyLambda a b) -> TyLambda <$> pseudoTraverse f a <*> pseudoTraverse f b -- TODO Shadowing?
-    (TyPack r)     -> TyPack <$> traverse (pseudoTraverse f) r
-    (TyRecord r)   -> TyRecord <$> traverse (pseudoTraverse f) r
+    TyLambda a b -> TyLambda <$> pseudoTraverse f a <*> pseudoTraverse f b -- TODO Shadowing?
+    TyPack r     -> TyPack <$> traverse (pseudoTraverse f) r
+    TyRecord r   -> TyRecord <$> traverse (pseudoTraverse f) r
 
 instance PseudoTraversable (Kinded Type) (Kinded Type) (Kinded TyPat) (Kinded TyPat) where
   pseudoTraverse f = pure
@@ -181,6 +196,11 @@ instance PseudoTraversable (Kinded Type) (Kinded Type) (Kinded TyPat) (Kinded Ty
 instance PseudoTraversable (Kinded Type) (Kinded Type) (Kinded QType) (Kinded QType) where
   pseudoTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> pseudoTraverse f (k :< t)
   pseudoTraverse f (k :< Forall vs cs t) = (\cs t -> k :< Forall vs cs t) <$> pseudoTraverse f cs <*> pseudoTraverse f t
+  pseudoTraverse f t@(_ :< QTyUni _) = pure t
+
+instance PseudoTraversable (Kinded QType) (Kinded QType) (Kinded QType) (Kinded QType) where
+  pseudoTraverse f t@(_ :< QTyUni _) = f t
+  pseudoTraverse f t                 = pure t
 
 type KindTraversable a = SemiTraversable Kind a
 
@@ -198,3 +218,4 @@ instance PseudoTraversable Kind Kind (Kinded QType) (Kinded QType) where
   pseudoTraverse f k = case k of
     (k :< Mono t)         -> (\(k :< t) -> k :< Mono t) <$> pseudoTraverse f (k :< t)
     (k :< Forall vs cs t) -> (:<) <$> pseudoTraverse f k <*> ((\cs t -> Forall vs cs t) <$> pseudoTraverse f cs <*> pseudoTraverse f t)
+    (k :< QTyUni n)       -> (:<) <$> pseudoTraverse f k <*> pure (QTyUni n)

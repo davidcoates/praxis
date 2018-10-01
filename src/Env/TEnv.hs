@@ -10,6 +10,8 @@ module Env.TEnv
   , read
   , use
   , closure
+
+  , ungeneralise
   )
 where
 
@@ -63,7 +65,7 @@ read s n = do
   l <- get tEnv
   case LEnv.lookup n l of
     Just (c, u, t) -> do
-      t <- ungeneralise t
+      t <- ungeneralise s t
       requireAll [ newDerivation (share t) (UnsafeView n) s | not u ]
       requireAll [ newDerivation (share t) (Captured n) s   | c ]
       return t
@@ -76,7 +78,7 @@ use s n = do
   case LEnv.lookup n l of
     Just (c, u, t) -> do
       set tEnv (LEnv.use n l)
-      t <- ungeneralise t
+      t <- ungeneralise s t
       requireAll [ newDerivation (share t) (Shared n)   s | u ]
       requireAll [ newDerivation (share t) (Captured n) s | c ]
       return t
@@ -101,9 +103,10 @@ Alternative is to transform the source which would mess up error messages
 
 OR don't allow this, and don't allow explicit forall.
 -}
-ungeneralise :: Kinded QType -> Praxis (Kinded Type)
-ungeneralise (k :< Mono t) = return (k :< t)
-ungeneralise x@(KindType :< Forall vs cs (KindType :< t)) = do
+-- TODO move this somewhere else
+ungeneralise :: Source -> Kinded QType -> Praxis (Kinded Type)
+ungeneralise _ (k :< Mono t) = return (k :< t)
+ungeneralise _ x@(KindType :< Forall vs cs (KindType :< t)) = do
   sub <- zipWith (\(n, k) (_ :< t) -> (n, k :< t)) vs <$> replicateM (length vs) freshUniT
   let f = subs (`Prelude.lookup` sub)
       cs' = [] -- FIXME TODO derivations derived from cs
@@ -111,5 +114,8 @@ ungeneralise x@(KindType :< Forall vs cs (KindType :< t)) = do
   log Debug t'
   over (system . axioms) (++ cs')
   return t'
-
-
+ungeneralise s (k :< QTyUni n) = do
+  q <- freshUniQ
+  t <- freshUniT
+  require $ newDerivation (t `Specialises` q) Specialisation s
+  return t

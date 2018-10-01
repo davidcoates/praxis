@@ -11,6 +11,7 @@ module Check.Constraint
   , implies
   ) where
 
+import           Common
 import           Source     (Source)
 import           Tag        (Tag (..))
 import           Type
@@ -80,20 +81,20 @@ share t = Class $ KindConstraint :< TyApply (KindFun KindType KindConstraint :< 
 implies :: Derivation -> Constraint -> Derivation
 implies c c' = c { constraint = c' }
 
-instance TypeTraversable Constraint where
-  typeTraverse f c = case c of
-    Class t      -> Class <$> typeTraverse f t
-    EqType t1 t2 -> EqType <$> typeTraverse f t1 <*> typeTraverse f t2
+instance PseudoTraversable (Kinded Type) (Kinded Type) Constraint Constraint where
+  pseudoTraverse f c = case c of
+    Class t      -> Class <$> pseudoTraverse f t
+    EqType t1 t2 -> EqType <$> pseudoTraverse f t1 <*> pseudoTraverse f t2
     _            -> pure c
 
-instance KindTraversable Constraint where
-  kindTraverse f c = case c of
-    Class t      -> Class <$> kindTraverse f t
-    EqType t1 t2 -> EqType <$> kindTraverse f t1 <*> kindTraverse f t2
-    EqKind k1 k2 -> EqKind <$> kindTraverse f k1 <*> kindTraverse f k2
+instance PseudoTraversable Kind Kind Constraint Constraint where
+  pseudoTraverse f c = case c of
+    Class t      -> Class <$> pseudoTraverse f t
+    EqType t1 t2 -> EqType <$> pseudoTraverse f t1 <*> pseudoTraverse f t2
+    EqKind k1 k2 -> EqKind <$> pseudoTraverse f k1 <*> pseudoTraverse f k2
 
-instance TypeTraversable Derivation where
-  typeTraverse f c = (\x y -> c{ constraint = x, original = y }) <$> typeTraverse f (constraint c) <*> typeTraverse f (original c)
+instance PseudoTraversable (Kinded Type) (Kinded Type) Derivation Derivation where
+  pseudoTraverse f c = (\x y -> c{ constraint = x, original = y }) <$> pseudoTraverse f (constraint c) <*> pseudoTraverse f (original c)
 
-instance KindTraversable Derivation where
-  kindTraverse f c = (\x y -> c{ constraint = x, original = y }) <$> kindTraverse f (constraint c) <*> kindTraverse f (original c)
+instance PseudoTraversable Kind Kind Derivation Derivation where
+  pseudoTraverse f c = (\x y -> c{ constraint = x, original = y }) <$> pseudoTraverse f (constraint c) <*> pseudoTraverse f (original c)

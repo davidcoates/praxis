@@ -105,10 +105,9 @@ ungeneralise :: Kinded QType -> Praxis (Kinded Type)
 ungeneralise (k :< Mono t) = return (k :< t)
 ungeneralise x@(KindType :< Forall vs cs (KindType :< t)) = do
   sub <- zipWith (\(n, k) (_ :< t) -> (n, k :< t)) vs <$> replicateM (length vs) freshUniT
-  let f :: TypeTraversable a => a -> a
-      f = tySub (`Prelude.lookup` sub)
-  let cs' = [] -- FIXME TODO derivations derived from cs
-  let t' = f (KindType :< t)
+  let f = subs (`Prelude.lookup` sub)
+      cs' = [] -- FIXME TODO derivations derived from cs
+      t' = f (KindType :< t)
   log Debug t'
   over (system . axioms) (++ cs')
   return t'

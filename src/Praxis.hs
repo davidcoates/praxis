@@ -13,7 +13,7 @@ module Praxis
   , get
   , set
   , over
-  , extract
+  , modify
 
   , save
   , try
@@ -72,9 +72,8 @@ import qualified Control.Lens         (over, set)
 import           Control.Monad        (when)
 import           Control.Monad.Except (ExceptT, runExceptT)
 import qualified Control.Monad.Except (throwError)
-import           Control.Monad.State  (StateT, gets, lift, modify, put,
-                                       runStateT)
-import qualified Control.Monad.State  as State (get)
+import           Control.Monad.State  (StateT, gets, lift, put, runStateT)
+import qualified Control.Monad.State  as State (get, modify)
 import           Data.Maybe           (fromMaybe)
 import qualified Data.Set             as Set
 import           Prelude              hiding (log)
@@ -139,15 +138,15 @@ get :: Lens' PraxisState a -> Praxis a
 get = lift . gets . view
 
 set :: Lens' PraxisState a -> a -> Praxis ()
-set l x = lift . modify $ Control.Lens.set l x
+set l x = lift . State.modify $ Control.Lens.set l x
 
 over :: Lens' PraxisState a -> (a -> a) -> Praxis ()
 over l f = do
   x <- get l
   set l (f x)
 
-extract :: Lens' PraxisState a -> (a -> (b, a)) -> Praxis b
-extract l f = do
+modify :: Lens' PraxisState a -> (a -> (b, a)) -> Praxis b
+modify l f = do
   x <- get l
   let (c, x') = f x
   set l x'

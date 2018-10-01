@@ -1,6 +1,8 @@
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE StandaloneDeriving    #-}
 
 module Type
   ( Name
@@ -12,21 +14,20 @@ module Type
   , TyPat(..)
   , Kind(..)
 
-  , TypeTraversable(..)
-  , KindTraversable(..)
+  , TypeTraversable
+  , KindTraversable
+  , Polymorphic(..)
   ) where
 
 import           Common
 import           Record
 import           Tag
 
-import           Control.Applicative   (Const (..))
-import           Data.Functor.Identity
-import           Data.List             (intercalate)
-import           Data.Maybe            (fromMaybe)
-import           Data.Monoid           ((<>))
-import           Data.Set              (Set)
-import qualified Data.Set              as Set
+import           Data.List   (intercalate)
+import           Data.Maybe  (fromMaybe)
+import           Data.Monoid ((<>))
+import           Data.Set    (Set)
+import qualified Data.Set    as Set
 
 data Type a = TyUni Name -- Compares less than all other types
             | TyApply (a (Type a)) (a (Type a))   -- ^Type-level application : (a -> #b) -> #a -> #b
@@ -123,101 +124,77 @@ instance TagTraversable TyPat where
   tagTraverse' f (TyPatPack r) = TyPatPack <$> traverse (tagTraverse f) r
 
 
-class TypeTraversable a where
-  typeTraverse :: Applicative f => (Kinded Type -> f (Kinded Type)) -> a -> f a
-  tySub :: (Name -> Maybe (Kinded Type)) -> a -> a
-  tySub f = runIdentity . typeTraverse (Identity . f')
-      where
-        f' (k :< t) = case t of
-          TyUni n -> fromMaybe (k :< t) (f n)
-          TyVar n -> fromMaybe (k :< t) (f n)
-  tySubWithKind :: ((Kind, Name) -> Maybe (Kinded Type)) -> a -> a
-  tySubWithKind f = runIdentity . typeTraverse (Identity . f')
-      where
-        f' (k :< t) = case t of
-          TyUni n -> fromMaybe (k :< t) (f (k, n))
-          _       -> (k :< t)
-  tyUnis :: a -> [Name]
-  tyUnis = getConst . typeTraverse (Const . f)
-    where
-      f (k :< t) = case t of
-        TyUni n -> [n]
-        _       -> []
-  tyVars :: a -> [Name]
-  tyVars = getConst . typeTraverse (Const . f)
-    where
-      f (k :< t) = case t of
-        TyVar n -> [n]
-        _       -> []
+class Polymorphic a where
+  unis :: a -> [Name]
+  vars :: a -> [Name]
 
-instance (TypeTraversable a, TypeTraversable b) => TypeTraversable (a, b) where
-  typeTraverse f (a, b) = (,) <$> typeTraverse f a <*> typeTraverse f b
+type TypeTraversable a = SemiTraversable (Kinded Type) a
 
-instance (TypeTraversable a) => TypeTraversable [a] where
-  typeTraverse f = sequenceA . fmap (typeTraverse f)
+instance Polymorphic (Kinded Type) where
+  unis t@(_ :< t') = case t' of
+    TyUni n -> [n]
+    _       -> []
+  vars t@(_ :< t') = case t' of
+    TyVar n -> [n]
+    _       -> []
 
-instance (TypeTraversable a) => TypeTraversable (Record a) where
-  typeTraverse f = sequenceA . fmap (typeTraverse f)
+instance Polymorphic Kind where
+  unis (KindUni n) = [n]
+  unis _           = []
+  vars k = []
 
-instance TypeTraversable (Kinded Type) where
-  typeTraverse f t@(_ :< TyUni _) = f t
-  typeTraverse f t@(_ :< TyVar _) = f t
-  typeTraverse f (k :< t) = (k :<) <$> case t of
-    (TyApply a b)  -> TyApply <$> typeTraverse f a <*> typeTraverse f b
-    (TyBang t)     -> TyBang <$> typeTraverse f t
+instance Substitutable Name (Kinded Type) where
+  sub f t@(_ :< t') = case t' of
+    TyUni n -> fromMaybe t (f n)
+    TyVar n -> fromMaybe t (f n)
+    _       -> t
+
+instance Substitutable (Kind, Name) (Kinded Type) where
+  sub f t@(k :< t') = case t' of
+    TyUni n -> fromMaybe t (f (k, n))
+    TyVar n -> fromMaybe t (f (k, n))
+    _       -> t
+
+instance Substitutable Name Kind where
+  sub f k = case k of
+    KindUni n -> fromMaybe k (f n)
+    _         -> k
+
+instance PseudoTraversable (Kinded Type) (Kinded Type) (Kinded Type) (Kinded Type) where
+  pseudoTraverse f t@(_ :< TyUni _) = f t
+  pseudoTraverse f t@(_ :< TyVar _) = f t
+  pseudoTraverse f (k :< t) = (k :<) <$> case t of
+    (TyApply a b)  -> TyApply <$> pseudoTraverse f a <*> pseudoTraverse f b
+    (TyBang t)     -> TyBang <$> pseudoTraverse f t
     (TyCon n)      -> pure $ TyCon n
-    (TyEffects es) -> (TyEffects . Set.fromList . concatMap flatten) <$> typeTraverse f (Set.toList es)
+    (TyEffects es) -> (TyEffects . Set.fromList . concatMap flatten) <$> traverse (pseudoTraverse f) (Set.toList es)
       where flatten :: Kinded Type -> [Kinded Type]
             flatten (_ :< TyEffects es) = concatMap flatten es
             flatten t                   = [t]
-    (TyLambda a b) -> TyLambda <$> typeTraverse f a <*> typeTraverse f b -- TODO Shadowing?
-    (TyPack r)     -> TyPack <$> typeTraverse f r
-    (TyRecord r)   -> TyRecord <$> typeTraverse f r
+    (TyLambda a b) -> TyLambda <$> pseudoTraverse f a <*> pseudoTraverse f b -- TODO Shadowing?
+    (TyPack r)     -> TyPack <$> traverse (pseudoTraverse f) r
+    (TyRecord r)   -> TyRecord <$> traverse (pseudoTraverse f) r
 
-instance TypeTraversable (Kinded TyPat) where
-  typeTraverse f = pure
+instance PseudoTraversable (Kinded Type) (Kinded Type) (Kinded TyPat) (Kinded TyPat) where
+  pseudoTraverse f = pure
 
-instance TypeTraversable (Kinded b) => TypeTraversable (Kinded (Impure b)) where
-  typeTraverse f (k :< t :# e) = (k :<) <$> ((:#) <$> typeTraverse f t <*> typeTraverse f e)
+instance PseudoTraversable (Kinded Type) (Kinded Type) (Kinded QType) (Kinded QType) where
+  pseudoTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> pseudoTraverse f (k :< t)
+  pseudoTraverse f (k :< Forall vs cs t) = (\cs t -> k :< Forall vs cs t) <$> pseudoTraverse f cs <*> pseudoTraverse f t
 
-instance TypeTraversable (Kinded QType) where
-  typeTraverse f (k :< Mono t) = (\(k :< t) -> k :< Mono t) <$> typeTraverse f (k :< t)
-  typeTraverse f (k :< Forall vs cs t) = (\cs t -> k :< Forall vs cs t) <$> typeTraverse f cs <*> typeTraverse f t
+type KindTraversable a = SemiTraversable Kind a
 
-class KindTraversable a where
-  kindTraverse :: Applicative f => (Kind -> f Kind) -> a -> f a
-  kindUnis :: a -> [Name]
-  kindUnis = getConst . kindTraverse (Const . f)
-    where f (KindUni n) = [n]
-          f _           = []
-  kindSub :: (Name -> Maybe Kind) -> a -> a
-  kindSub f = runIdentity . kindTraverse (Identity . f')
-      where f' (KindUni n) = fromMaybe (KindUni n) (f n)
-            f' k           = k
-
-instance (KindTraversable a, KindTraversable b) => KindTraversable (a, b) where
-  kindTraverse f (a, b) = (,) <$> kindTraverse f a <*> kindTraverse f b
-
-instance (KindTraversable a) => KindTraversable [a] where
-  kindTraverse f = sequenceA . fmap (kindTraverse f)
-
-instance (KindTraversable a) => KindTraversable (Record a) where
-  kindTraverse f = sequenceA . fmap (kindTraverse f)
-
-instance KindTraversable (Kinded Type) where
-  kindTraverse = tagTraverse
-
-instance TagTraversable b => KindTraversable (Kinded (Impure b)) where
-  kindTraverse = tagTraverse
-
-instance KindTraversable (Kinded QType) where
-  kindTraverse f k = case k of
-    (k :< Mono t)         -> (\(k :< t) -> k :< Mono t) <$> kindTraverse f (k :< t)
-    (k :< Forall vs cs t) -> (:<) <$> kindTraverse f k <*> ((\cs t -> Forall vs cs t) <$> kindTraverse f cs <*> kindTraverse f t)
-
-instance KindTraversable Kind where
-  kindTraverse f k = case k of
+instance PseudoTraversable Kind Kind Kind Kind where
+  pseudoTraverse f k = case k of
     KindUni _     -> f k
-    KindFun k1 k2 -> KindFun <$> kindTraverse f k1 <*> kindTraverse f k2
-    KindRecord r  -> KindRecord <$> kindTraverse f r
+    KindFun k1 k2 -> KindFun <$> pseudoTraverse f k1 <*> pseudoTraverse f k2
+    KindRecord r  -> KindRecord <$> traverse (pseudoTraverse f) r
     _             -> pure k
+
+instance PseudoTraversable Kind Kind (Kinded Type) (Kinded Type) where
+  pseudoTraverse = tagTraverse
+
+instance PseudoTraversable Kind Kind (Kinded QType) (Kinded QType) where
+  pseudoTraverse f k = case k of
+    (k :< Mono t)         -> (\(k :< t) -> k :< Mono t) <$> pseudoTraverse f (k :< t)
+    (k :< Forall vs cs t) -> (:<) <$> pseudoTraverse f k <*> ((\cs t -> Forall vs cs t) <$> pseudoTraverse f cs <*> pseudoTraverse f t)

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -8,6 +9,7 @@ module Check.Solve
 import           AST
 import           Check.Constraint
 import           Check.System
+import           Common
 import           Error
 import           Praxis
 import           Record
@@ -70,7 +72,7 @@ single d = case constraint d of
 
   EqKind k1 k2 | k1 == k2  -> tautology
 
-  EqKind (KindUni x) k -> if x `elem` kindUnis k then contradiction else kindSolve x k
+  EqKind (KindUni x) k -> if x `elem` extract unis k then contradiction else kindSolve x k
   EqKind _ (KindUni _) -> swap
 
   EqKind (KindRecord r1) (KindRecord r2) | sort (keys r1) == sort (keys r2) ->
@@ -83,7 +85,7 @@ single d = case constraint d of
   -- TODO do we need to do kind checking all through here?
   EqType t1 t2 | t1 == t2 -> tautology
 
-  EqType (_ :< TyUni x) t -> if x `elem` tyUnis t then contradiction else tySolve x t
+  EqType (_ :< TyUni x) t -> if x `elem` extract unis t then contradiction else tySolve x t
   EqType _ (_ :< TyUni _) -> swap
 
   EqType (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ EqType t1 t2 ]
@@ -98,7 +100,7 @@ single d = case constraint d of
 
   EqType t1@(_ :< TyEffects e1) t2@(_ :< TyEffects e2) -- Consider if we have unis, but they aren't of kind effect?
     | e1 > e2 -> swap
-    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` tyUnis t2 then defer else tySolve n t2
+    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` extract unis t2 then defer else tySolve n t2
     | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = tySolve n (KindEffect :< TyEffects Set.empty)
                                              empty _              = contradiction
                                          in foldr (\a b -> empty a >> b) solved e2
@@ -118,7 +120,7 @@ single d = case constraint d of
             contradiction
         else
           defer
-    | null (tyUnis t1 ++ tyUnis t2) -> contradiction
+    | null (extract unis t1 ++ extract unis t2) -> contradiction
     | otherwise                     -> defer
 
   _ -> contradiction
@@ -133,11 +135,11 @@ single d = case constraint d of
 
         snake :: Set (Kinded Type) -> Maybe (Name, Set (Kinded Type))
         snake es = case Set.toList es of
-          ((_ :< TyUni n):es) -> if null (tyUnis es) then Just (n, Set.fromList es) else Nothing
+          ((_ :< TyUni n):es) -> if null (concatMap (extract unis) es) then Just (n, Set.fromList es) else Nothing
           _                   -> Nothing
 
         literals :: Set (Kinded Type) -> Bool
-        literals es = null (tyUnis (Set.toList es))
+        literals es = null (concatMap (extract unis) (Set.toList es))
 
         tySolve :: Name -> Kinded Type -> Praxis [Derivation]
         tySolve n p = do
@@ -146,11 +148,11 @@ single d = case constraint d of
               lift f = runSpecial . sequenceA . map f
           over (system . tySol) ((n, p):)
           cs <- sequence
-            [ extract (system . tySol) (lift (\(n, t) -> (\t -> (n, t)) <$> f t))
-            , extract (system . constraints) (lift f)
-            , extract (system . staging) (lift f)
-            , extract (system . axioms) (lift f)
-            , extract tEnv (runSpecial . sequenceA . fmap f)
+            [ modify (system . tySol) (lift (\(n, t) -> (\t -> (n, t)) <$> f t))
+            , modify (system . constraints) (lift f)
+            , modify (system . staging) (lift f)
+            , modify (system . axioms) (lift f)
+            , modify tEnv (runSpecial . traverse f)
             ]
           set (system . changed) True
           reuse n
@@ -158,7 +160,7 @@ single d = case constraint d of
         kindSolve :: Name -> Kind -> Praxis [Derivation]
         kindSolve n p = do
           let f :: KindTraversable a => a -> a
-              f = kindSub (\n' -> if n == n' then Just p else Nothing)
+              f = subs (\n' -> if n == n' then Just p else Nothing)
           over (system . kindSol) ((n, p):)
           over (system . kindSol) (map (second f))
           over (system . tySol) (map (second f))
@@ -183,7 +185,7 @@ instance Applicative (Special a) where
   liftA2 f (Special (c1, x)) (Special (c2, y)) = Special (c1 ++ c2, f x y)
 
 tyGenSub :: TypeTraversable a => (Name -> Maybe (Kinded Type)) -> a -> Special Derivation a
-tyGenSub f = typeTraverse (Special . f')
+tyGenSub f = pseudoTraverse (Special . f')
     where
       f' (k :< t) = case t of
         TyUni n -> case f n of

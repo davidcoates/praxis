@@ -12,12 +12,12 @@ import           Check.AST
 import           Check.Generate
 import           Check.Solve     (solve)
 import           Check.System
+import           Common
 import qualified Parse.Parse.AST as Parse (Annotated)
 import           Praxis
 import           Record
 import           Tag
-import           Type            (Kind (..), KindTraversable (..), Kinded,
-                                  Type (..), TypeTraversable (..))
+import           Type
 
 import           Control.Arrow   (first)
 import           Data.Maybe      (fromMaybe)
@@ -43,14 +43,17 @@ checkWithSub p = do
   return p''
 
 fullSol :: (KindTraversable a, TypeTraversable a) => ([(Name, Kinded Type)], [(Name, Kind)]) -> a -> a
-fullSol (tySol, kindSol) = tySubWithKind f . tySub (`lookup` tySol) . kindSub (`lookup` kindSol)
-  where f (k, n) = (k :<) <$> case k of
+fullSol (tySol, kindSol) = subs f . subs (`lookup` tySol) . subs (`lookup` kindSol)
+  where f :: (Kind, Name) -> Maybe (Kinded Type) -- Trivial defaulting
+        f (k, n) = if head n /= '?' then Nothing else (k :<) <$> case k of -- TODO fix the /= '?' hack
           KindEffect -> Just $ TyEffects Set.empty
           KindType   -> Just $ TyRecord Record.unit
           _          -> Nothing
 
+{- TODO actually use this
 checkNoUnis :: (KindTraversable a, TypeTraversable a) => a -> Praxis ()
-checkNoUnis p = if null (kindUnis p ++ tyUnis p) then pure () else error "checkNoUnis TODO a proper error"
+checkNoUnis p = if null (extract (unis :: Kind -> [Name]) p ++ extract (unis :: Kinded Type -> [Name]) p) then pure () else error "checkNoUnis TODO a proper error"
+-}
 
 instance Checkable (Parse.Annotated Program) (Annotated Program) where
   check' = checkWithSub

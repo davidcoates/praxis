@@ -15,8 +15,9 @@ instance Show Pos where
   show p = show (line p) ++ ":" ++ show (column p)
 
 instance Show Source where
-  show Phantom = "?"
-  show s       = show (start s)
+  show Phantom = "<?>"
+  show s       = spelling s
+--  show s       = show (start s)
 --  show s       = show (start s) ++ " to " ++ show (end s) ++ " aka {" ++ spelling s ++ "}"
 
 instance Monoid Source where

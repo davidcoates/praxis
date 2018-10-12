@@ -7,31 +7,42 @@ module Interpret
   ) where
 
 import           AST
-import           Check  (Annotated, check)
+import           Check          (check)
+import           Check.Annotate
+import           Common
 import           Eval
-import           Parse  (parse)
-import qualified Parse  (Annotated)
+import           Parse          (parse)
+import           Parse.Annotate
 import           Praxis
-import           Value  (Value)
+import           Value          (Value)
 
 class Evaluable a b => Interpretable a b where
-  interpret :: String -> Praxis (a, b)
-  interpretFile :: FilePath -> Praxis (a, b)
+  interpret :: String -> Praxis (Kinded a, b)
+  interpretFile :: FilePath -> Praxis (Kinded a, b)
   interpretFile f = do
-    set filename f
+    filename .= f
     s <- liftIO (readFile f)
     interpret s
 
-instance Interpretable (Annotated Program) () where
+instance Interpretable Program () where
+  interpret _ = undefined
+
+instance Interpretable Exp Value where
+  interpret _ = undefined
+
+{-
+instance Interpretable Program () where
   interpret s = do
-    x <- parse s :: Praxis (Parse.Annotated Program)
-    y <- check x :: Praxis (Annotated Program)
+    x <- parse s :: Praxis (Parsed Program)
+    y <- check x :: Praxis (Kinded Program)
     v <- eval y
     return (y, v)
 
-instance Interpretable (Annotated Exp) Value where
+instance Interpretable Exp Value where
   interpret s = do
-    x <- parse s :: Praxis (Parse.Annotated Exp)
-    y <- check x :: Praxis (Annotated Exp)
+    x <- parse s :: Praxis (Parsed Exp)
+    y <- check x :: Praxis (Kinded Exp)
     v <- eval y
     return (y, v)
+
+-}

@@ -2,21 +2,22 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Check.Solve
+module Check.Type.Solve
   ( solve
   ) where
 
 import           AST
-import           Check.Constraint
-import           Check.System
+import           Check.Type.Annotate
+import           Check.Type.Constraint
+import           Check.Type.System
 import           Common
+import           Env.TEnv               (ungeneralise)
 import           Error
 import           Praxis
 import           Record
 import           Source
 import           Tag
 import           Type
-import Env.TEnv (ungeneralise)
 
 import           Control.Applicative    (Const (..), liftA2)
 import           Control.Monad.Identity (Identity (..))
@@ -26,9 +27,11 @@ import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
-solve :: Praxis ([(Name, Kinded Type)], [(Name, Kind)])
+solve :: Praxis ([(Name, Typed Type)], [(Name, Typed QType)])
+solve = undefined
+{-
 solve = save stage $ save system $ do
-  set stage Solve
+  put stage Solve
   solve'
   tySol <- get (system . tySol)
   kindSol <- get (system . kindSol)
@@ -56,8 +59,8 @@ spin solve = do
   case cs of
     [] -> return Done
     _  -> do
-      set (system . constraints) []
-      set (system . staging) cs
+      put (system . constraints) []
+      put (system . staging) cs
       warm <- loop
       return $ if warm then Warm else Cold
   where
@@ -65,7 +68,7 @@ spin solve = do
       cs <- get (system . staging)
       case cs of
         []     -> return False
-        (c:cs) -> set (system . staging) cs >> liftA2 (||) (solve c) loop
+        (c:cs) -> put (system . staging) cs >> liftA2 (||) (solve c) loop
 
 generalise :: Derivation -> Praxis Bool
 generalise d = do
@@ -85,7 +88,7 @@ generaliseType :: [Kinded Type] -> Kinded Type -> Kinded QType
 generaliseType ts (a :< t) = case us of
   [] -> a :< Mono t
   _  -> undefined -- TODO For each uni in t, find an annotated kind. Use this to build up [(Name, Kind)]
-  where us = extract unis (a :< t) 
+  where us = extract unis (a :< t)
         vs = map (:[]) ['a'..]
         f u = (`lookup` zip us vs)
 
@@ -229,3 +232,4 @@ tyGenSub f = pseudoTraverse f'
             return (k' :< t')
           Nothing          -> return (k :< t)
         _       -> return (k :< t)
+-}

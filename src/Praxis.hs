@@ -10,11 +10,6 @@ module Praxis
   , throwError
   , internalError -- Prefer this over Prelude.error
 
-  , get
-  , set
-  , over
-  , modify
-
   , save
   , try
 
@@ -39,7 +34,6 @@ module Praxis
 
   , freshUniT
   , freshUniQ
-  , freshUniE
   , freshUniK
   , freshVar
   , reuse
@@ -49,53 +43,36 @@ module Praxis
   , logStr
   , logList
 
+ {-
   , require
   , requireAll
+ -}
   )
   where
 
 import           AST                  (Lit)
-import qualified Check.AST            as Check
-import           Check.Constraint     (Derivation)
-import           Check.System         (constraints)
 import qualified Check.System         as Check (System)
+import           Check.Type.Annotate  (Typed)
 import           Common
 import           Env                  (KEnv, TEnv, VEnv)
 import           Error                (Error)
 import           Record               (Record)
 import           Source
+import           Stage
 import           Tag                  (Tag (..))
 import           Type
 
 import           Control.Applicative  (liftA2)
-import           Control.Lens         (Lens', makeLenses, traverseOf, view)
-import qualified Control.Lens         (over, set)
+import           Control.Lens         (Lens', makeLenses, traverseOf)
 import           Control.Monad        (when)
 import           Control.Monad.Except (ExceptT, runExceptT)
 import qualified Control.Monad.Except (throwError)
-import           Control.Monad.State  (StateT, gets, lift, put, runStateT)
-import qualified Control.Monad.State  as State (get, modify)
+import           Control.Monad.State  (StateT, gets, lift, runStateT)
+import qualified Control.Monad.State  as State (get, modify, put)
 import           Data.Maybe           (fromMaybe)
 import qualified Data.Set             as Set
 import           Prelude              hiding (log)
 import           System.IO.Unsafe     (unsafePerformIO)
-
-data Stage = Tokenise
-           | Parse
-           | Desugar
-           | Check
-           | Generate
-           | Solve
-           | Evaluate
-
-instance Show Stage where
-  show Tokenise = "Tokeniser"
-  show Parse    = "Parser"
-  show Desugar  = "Desugarer"
-  show Check    = "Inference"
-  show Generate = "Inference (Constraint Generator)"
-  show Solve    = "Inference (Contraint Solver)"
-  show Evaluate = "Evaluate"
 
 -- |Logging level
 data Level = Normal
@@ -129,29 +106,16 @@ data PraxisState = PraxisState
   , _kEnv     :: KEnv                -- ^Kind environment
   , _vEnv     :: VEnv                -- ^Value environment for interpreter
   , _system   :: Check.System        -- ^ TODO rename?
-  } deriving (Show)
+  }
 
-type Praxis a = ExceptT Error (StateT PraxisState IO) a
+instance Show PraxisState where
+  show s = "<praxis state>"
+
+type Praxis = ExceptT Error (StateT PraxisState IO)
 
 defaultFlags :: Flags
 defaultFlags = Flags { _level = Normal, _interactive = False, _static = False }
 
-get :: Lens' PraxisState a -> Praxis a
-get = lift . gets . view
-
-set :: Lens' PraxisState a -> a -> Praxis ()
-set l x = lift . State.modify $ Control.Lens.set l x
-
-over :: Lens' PraxisState a -> (a -> a) -> Praxis ()
-over l f = do
-  x <- get l
-  set l (f x)
-
-modify :: Lens' PraxisState a -> (a -> Praxis a) -> Praxis ()
-modify l f = do
-  x <- get l
-  x' <- f x
-  set l x'
 
 throwError :: Error -> Praxis a
 throwError = Control.Monad.Except.throwError
@@ -186,9 +150,9 @@ makeLenses ''PraxisState
 
 save :: Lens' PraxisState a -> Praxis b -> Praxis b
 save l c = do
-  x <- get l
+  x <- use l
   r <- c
-  set l x
+  l .= x
   return r
 
 -- TODO think of a better name for this
@@ -197,18 +161,18 @@ try c f g = do
   s <- lift State.get
   (x, s') <- liftIO $ run c s
   case x of
-    Left  e -> lift (put s)  >> f e
-    Right x -> lift (put s') >> g x
+    Left  e -> lift (State.put s)  >> f e
+    Right x -> lift (State.put s') >> g x
 
 runStatic :: Praxis a -> a
 runStatic c = case fst $ unsafePerformIO (run c' emptyState) of
   Left e  -> internalError (show e)
   Right x -> x
-  where c' = set (flags . static) True >> c
+  where c' = (flags . static .= True) >> c
 
 assert :: Lens' PraxisState a -> (a -> Bool) -> String -> Praxis b -> Praxis b
 assert l p s c = do
-  x <- get l
+  x <- use l
   if p x then c else internalError s
 
 liftIO :: IO a -> Praxis a
@@ -219,8 +183,8 @@ run = runStateT . runExceptT
 
 shouldLog :: Level -> Praxis Bool
 shouldLog l = do
-  l' <- get (flags . level)
-  s <- get (flags . static)
+  l' <- use (flags . level)
+  s <- use (flags . static)
   return (l' == Trace || (not s && l' >= l))
 
 log :: Show a => Level -> a -> Praxis ()
@@ -230,7 +194,7 @@ logStr :: Level -> String -> Praxis ()
 logStr l x = do
   b <- shouldLog l
   when b $ do
-    s <- get stage
+    s <- use stage
     -- We don't use liftIO here so we can show Trace logs
     lift (lift (putStrLn ("Output from stage: " ++ show s)))
     lift (lift (putStrLn x))
@@ -239,38 +203,32 @@ logList :: Show a => Level -> [a] -> Praxis ()
 logList l xs = do
   b <- shouldLog l
   when b $ do
-    s <- get stage
+    s <- use stage
     lift (lift (putStrLn ("Output from stage: " ++ show s)))
     mapM_ (lift . lift . print) xs
 
-freshUniT :: Praxis (Kinded Type)
+freshUniT :: Praxis (Typed Type)
 freshUniT = do
-  (x:xs) <- get (fresh . freshUniTs)
-  set (fresh . freshUniTs) xs
-  return (KindType :< TyUni x)
+  (x:xs) <- use (fresh . freshUniTs)
+  fresh . freshUniTs .= xs
+  return ((Phantom, ()) :< TyUni x)
 
-freshUniQ :: Praxis (Kinded QType)
+freshUniQ :: Praxis (Typed QType)
 freshUniQ = do
-  (x:xs) <- get (fresh . freshUniQs)
-  set (fresh . freshUniQs) xs
-  return (KindType :< QTyUni x)
-
-freshUniE :: Praxis (Kinded Type)
-freshUniE = do
-  (x:xs) <- get (fresh . freshUniEs)
-  set (fresh . freshUniEs) xs
-  return (KindEffect :< TyEffects (Set.singleton (KindEffect :< TyUni x)))
+  (x:xs) <- use (fresh . freshUniQs)
+  fresh . freshUniQs .= xs
+  return ((Phantom, ()) :< QTyUni x)
 
 freshUniK :: Praxis Kind
 freshUniK = do
-  (k:ks) <- get (fresh . freshUniKs)
-  set (fresh . freshUniKs) ks
+  (k:ks) <- use (fresh . freshUniKs)
+  fresh . freshUniKs .= ks
   return (KindUni k)
 
 freshVar :: Praxis Name
 freshVar = do
-  (x:xs) <- get (fresh . freshVars)
-  set (fresh . freshVars) xs
+  (x:xs) <- use (fresh . freshVars)
+  fresh . freshVars .= xs
   return x
 
 -- This will fuck things up if the name is still used somewhere
@@ -283,9 +241,3 @@ reuse n@('?':c:_) = over (fresh . f c) (n:)
         f 'k' = freshUniKs
 -}
 
--- TODO these possibly shouldn't be here
-require :: Derivation -> Praxis ()
-require c = over (system . constraints) (c:)
-
-requireAll :: [Derivation] -> Praxis ()
-requireAll = mapM_ require

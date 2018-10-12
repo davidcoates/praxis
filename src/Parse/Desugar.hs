@@ -4,12 +4,12 @@
 
 module Parse.Desugar
   ( Desugarable(..)
-  , module Parse.Desugar.AST
   ) where
 
+import           AST
 import           Common
 import           Error
-import           Parse.Desugar.AST
+import           Parse.Annotate
 import           Parse.Parse.AST        (Op)
 import qualified Parse.Parse.AST        as Parse
 import           Praxis
@@ -18,7 +18,7 @@ import           Source
 import           Tag
 import           Type                   (Kind, Type)
 
-import           Control.Applicative    (liftA2, liftA3)
+import           Control.Applicative    (Const, liftA2, liftA3)
 import           Control.Arrow          (left)
 import           Control.Monad          (unless)
 import           Data.List              (intersperse)
@@ -29,35 +29,34 @@ import           Prelude                hiding (exp, log)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
-type Annotated a = Tagged Source a
-
-class Show b => Desugarable a b | a -> b where
-  desugar' :: a -> Praxis b
-  desugar  :: a -> Praxis b
+-- Show (Parsed b) =>
+class Desugarable a b | a -> b where
+  desugar' :: (Parsed a) -> Praxis (Parsed b)
+  desugar  :: (Parsed a) -> Praxis (Parsed b)
   desugar x = save stage $ do
-    set stage Desugar
+    stage .= Desugar
     x' <- desugar' x
-    log Debug x'
+    -- log Debug x'
     return x'
 
-instance Desugarable (Annotated Parse.Program) (Annotated Program) where
+instance Desugarable Parse.Program Program where
   desugar' = program
 
-instance Desugarable (Annotated Parse.Exp) (Annotated Exp) where
+instance Desugarable Parse.Exp Exp where
   desugar' = exp
 
-instance Desugarable (Annotated Type) (Annotated Type) where
+instance Desugarable Type Type where
   desugar' = pure
 
-instance Desugarable Kind Kind where
+instance Desugarable (Const Kind) (Const Kind) where
   desugar' = pure
 
-program :: Annotated Parse.Program -> Praxis (Annotated Program)
+program :: Parsed Parse.Program -> Praxis (Parsed Program)
 program (a :< Parse.Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-stmts :: [Annotated Parse.Stmt] -> Praxis [Annotated Stmt]
+stmts :: [Parsed Parse.Stmt] -> Praxis [Parsed Stmt]
 stmts     [] = pure []
 stmts (s:ss) | a :< Parse.StmtExp e <- s = do
                 e' <- exp e
@@ -71,8 +70,8 @@ stmts (s:ss) | a :< Parse.StmtExp e <- s = do
                   where isStmtDecl (_ :< Parse.StmtDecl _) = True
                         isStmtDecl _                       = False
 
-exp :: Annotated Parse.Exp -> Praxis (Annotated Exp)
-exp e = ($ e) $ rec $ \a x -> case x of
+exp :: Parsed Parse.Exp -> Praxis (Parsed Exp)
+exp (a :< x) = case x of
 
   Parse.Apply x (a' :< Parse.VarBang s) ->
     exp (a :< Parse.Apply x (a' :< Parse.Var s))
@@ -122,28 +121,26 @@ exp e = ($ e) $ rec $ \a x -> case x of
 
   Parse.Var s       -> pure (a :< Var s)
 
-  Parse.VarBang s   -> throwSyntaxError (BangError a s)
+  Parse.VarBang s   -> throwSyntaxError (BangError (fst a) s)
 
 
 throwSyntaxError :: SyntaxError -> Praxis a
 throwSyntaxError = throwError . SyntaxError
 
-throwDeclError :: DeclError -> Praxis a
-throwDeclError = throwSyntaxError . DeclError
-
-decls :: [Annotated Parse.Decl] -> Praxis [Annotated Decl]
+decls :: [Parsed Parse.Decl] -> Praxis [Parsed Decl]
 decls []              = pure []
 decls (a :< d : ds) = case d of
 
   Parse.DeclSig n t -> do
     ds <- decls ds
     case ds of (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
-               _                                         -> throwDeclError (LacksBinding n a)
+               _                                       -> throwSyntaxError (LacksBinding n (fst a))
 
   Parse.DeclFun n ps e -> do
     ps <- mapM pat ps
     e  <- exp e
     let d = a :< DeclVar n Nothing (lambda ps e)
+        lambda :: [Parsed Pat] -> Parsed Exp -> Parsed Exp
         lambda     [] e = e
         lambda (p:ps) e = a :< Lambda p (lambda ps e)
     ds <- decls ds
@@ -152,8 +149,8 @@ decls (a :< d : ds) = case d of
                                             | otherwise -> return $ d:ds
 
 -- TODO check for overlapping patterns?
-pat :: Annotated Parse.Pat -> Praxis (Annotated Pat)
-pat p = ($ p) $ rec $ \a x -> case x of
+pat :: Parsed Parse.Pat -> Praxis (Parsed Pat)
+pat (a :< x) = case x of
 
   Parse.PatRecord r -> do
     r' <- traverse pat r
@@ -164,13 +161,13 @@ pat p = ($ p) $ rec $ \a x -> case x of
   Parse.PatLit l    -> pure (a :< PatLit l)
 
 
-type Tok = DAG.Tok (Tag Source Op) (Annotated Exp)
+type Tok = DAG.Tok (Tag (Source, ()) Op) (Parsed Exp)
 
-tok :: Annotated Parse.Tok -> Praxis Tok
+tok :: Parsed Parse.Tok -> Praxis Tok
 tok (a :< Parse.TOp op) = pure (DAG.TOp (a :< op))
 tok (a :< Parse.TExp e) = DAG.TExpr <$> exp e
 
-mixfix :: [Annotated Parse.Tok] -> Praxis (Annotated Exp)
+mixfix :: [Parsed Parse.Tok] -> Praxis (Parsed Exp)
 mixfix ts = do
   ts' <- mapM tok ts
   -- TODO do something with report?
@@ -178,7 +175,10 @@ mixfix ts = do
   case parses of [e] -> return e
                  _   -> error "TODO resolve error make a proper error for this (ambiguous mixfix parse)"
 
-type OpTable = DAG.DAG Int [DAG.Op (Tag Source Op) (Annotated Exp)]
+type OpTable = DAG.DAG Int [DAG.Op (Tag (Source, ()) Op) (Parsed Exp)]
+
+raw :: a -> Tag (Source, ()) a
+raw x = (Phantom, ()) :< x
 
 -- TODO build this dynamically from bindings
 opTable :: OpTable
@@ -193,8 +193,8 @@ opTable = DAG.DAG
       7 -> [ mul ]
       9 -> [ dot ]
   }
-  where build a s n = DAG.Op { DAG.fixity = DAG.Infix a, DAG.parts = [Phantom :< QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
-        build' n e1 e2 = Phantom :< Apply (Phantom :< Var n) (Phantom :< Record (pair e1 e2)) -- TODO annotations?
+  where build a s n = DAG.Op { DAG.fixity = DAG.Infix a, DAG.parts = [raw $ QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
+        build' n e1 e2 = raw $ Apply (raw $ Var n) (raw $ Record (pair e1 e2)) :: Parsed Exp -- TODO annotations?
         add = build DAG.LeftAssoc "+" "add"
         sub = build DAG.LeftAssoc "-" "sub"
         mul = build DAG.LeftAssoc "*" "mul"

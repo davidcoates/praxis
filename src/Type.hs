@@ -1,27 +1,18 @@
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Type
-  ( Name
-  , Type(..)
-  , Impure(..)
-  , Kinded(..)
-  , mono
+  ( Kind(..)
+  , Name
   , QType(..)
   , TyPat(..)
-  , Kind(..)
+  , Type(..)
 
-  , TypeTraversable
-  , KindTraversable
-  , Polymorphic(..)
+--  , Polymorphic(..)
   ) where
 
+import           Annotate
 import           Common
 import           Record
-import           Tag
 
 import           Data.List   (intercalate)
 import           Data.Maybe  (fromMaybe)
@@ -29,38 +20,7 @@ import           Data.Monoid ((<>))
 import           Data.Set    (Set)
 import qualified Data.Set    as Set
 
-data Type a = TyUni Name -- Compares less than all other types
-            | TyApply (a (Type a)) (a (Type a))   -- ^Type-level application : (a -> #b) -> #a -> #b
-            | TyBang (a (Type a))
-            | TyCon Name                          -- ^Includes (->) : [T, T , E] -> T
-            | TyEffects (Set (a (Type a)))        -- TODO perhaps call TyEffects TyFlat, use for constraints also
-            | TyLambda (a (TyPat a)) (a (Type a)) -- ^A type-level lambda : ?1 -> ?2
-            | TyPack   (Record (a (Type a)))      -- ^A type pack with a record kind
-            | TyRecord (Record (a (Type a)))      -- ^A type record : T
-            | TyVar Name                          -- ^A type variable
-
-data Impure b a = (a (b a)) :# (a (Type a))
-
-type Kinded a = Tagged Kind a
-
-deriving instance Eq (TyPat (Tag a))
-deriving instance Eq (Type (Tag a))
-deriving instance Eq (QType (Tag a))
-deriving instance Ord (TyPat (Tag a))
-deriving instance Ord (Type (Tag a))
-deriving instance Ord (QType (Tag a))
-
-data QType a = Mono (Type a)
-             | Forall [(Name, Kind)] (a (Type a)) (a (Type a)) -- ^First type is constraint
-             | QTyUni Name
-
-mono :: Tagged a Type -> Tagged a QType
-mono (a :< t) = a :< Mono t
-
-data TyPat a = TyPatVar Name
-             | TyPatPack (Record (a (TyPat a)))
-
-data Kind = KindUni Name -- Compares less than all other kinds
+data Kind = KindUni Name
           | KindConstraint
           | KindEffect
           | KindFun Kind Kind
@@ -68,30 +28,56 @@ data Kind = KindUni Name -- Compares less than all other kinds
           | KindType
   deriving (Ord, Eq)
 
--- TODO precedence and so on
-instance Show a => Show (Tagged a Type) where
-  show (a :< t) = show' (a :< t) ++ " @ " ++ show a where
-    show' (_ :< t) = case t of
-      TyApply (_ :< TyCon "->") (_ :< TyPack r) | [a, b] <- map snd $ Record.toList r -> "(" ++ show' a ++ " -> " ++ show' b ++ ")"
-      TyApply a b   -> show' a ++ " " ++ show' b
-      TyBang t      -> "!" ++ show' t
-      TyCon n       -> n
-      TyEffects es  -> "{" ++ intercalate ", " (map show' (Set.toList es)) ++ "}"
-      TyLambda a b  -> "\\" ++ show a ++ " -> " ++ show' b
-      TyPack r      -> "[" ++ Record.showGuts show' r ++ "]"
-      TyRecord r    -> "(" ++ Record.showGuts show' r ++ ")"
-      TyUni n       -> n
-      TyVar v       -> v
+data QType a = Mono (Annotated a Type)
+             | Forall [(Name, Kind)] (Annotated a Type) (Annotated a Type) -- ^First type is constraint
+             | QTyUni Name
 
-instance (Show a, Show (Tagged a b)) => Show (Tagged a (Impure b)) where
+data Type a = TyUni Name                                      -- Compares less than all other types
+            | TyApply (Annotated a Type) (Annotated a Type)   -- ^Type-level application : (a -> #b) -> #a -> #b
+            | TyBang (Annotated a Type)
+            | TyCon Name                                      -- ^Includes (->) : [T, T , E] -> T
+            | TyFlat (Set (Annotated a Type))                 -- Used for effects and constraints
+            | TyLambda (Annotated a TyPat) (Annotated a Type) -- ^A type-level lambda : ?1 -> ?2
+            | TyPack   (Record (Annotated a Type))            -- ^A type pack with a record kind
+            | TyRecord (Record (Annotated a Type))            -- ^A type record : T
+            | TyVar Name                                      -- ^A type variable
+
+data TyPat a = TyPatVar Name
+             | TyPatPack (Record (Annotated a TyPat))
+
+deriving instance Eq (TyPat a)
+deriving instance Eq (Type a)
+deriving instance Eq (QType a)
+deriving instance Ord (TyPat a)
+deriving instance Ord (Type a)
+deriving instance Ord (QType a)
+
+{-
+-- TODO precedence and so on
+instance (Show (Annotation a Type), Annotated a Type ~ b) => Show (Type a) where
+  show t = case t of
+    TyApply (_ :< TyCon "->") (_ :< TyPack r) | [a, b] <- map snd $ Record.toList r -> "(" ++ show_ a ++ " -> " ++ show_ b ++ ")"
+    TyApply a b   -> show_ a ++ " " ++ show_ b
+    TyBang t      -> "!" ++ show_ t
+    TyCon n       -> n
+    TyFlat ts     -> "{" ++ intercalate ", " (map show_ (Set.toList ts)) ++ "}"
+    TyLambda a b  -> "\\" ++ show_ a ++ " -> " ++ show_ b
+    TyPack r      -> "[" ++ Record.showGuts show_ r ++ "]"
+    TyRecord r    -> "(" ++ Record.showGuts show_ r ++ ")"
+    TyUni n       -> n
+    TyVar v       -> v
+-}
+{-
+instance (Show (Annotated a b), Show (Annotated a Type), Annotated a (Impure b) ~ c) => Show c where
   show (a :< t :# es) = show t ++ " # " ++ show es -- TODO hide annotation from t
 
-instance Show a => Show (Tagged a QType) where
-  show (a :< Mono t) = show (a :< t)
-  show (a :< Forall vs c (_ :< t)) = "forall " ++ unwords (map fst vs) ++  ". " ++ (show c ++ " => ") ++ show (a :< t) -- TODO this isn't quite right
-  show (a :< QTyUni n) = n
+instance (Show (Annotation a QType), Show (Annotated a Type)) => Show (Annotated a QType) where
+  show (a :< q) = case q of
+    Mono t               -> show t
+    Forall vs c (_ :< t) -> "forall " ++ unwords (map fst vs) ++  ". " ++ (show c ++ " => ") ++ show (a :< t) -- TODO this isn't quite right
+    QTyUni n             -> n ++ " @ " ++ show a
 
-instance Show a => Show (Tagged a TyPat) where
+instance Show (Annotation a TyPat) => Show (Annotated a TyPat) where
   show (_ :< TyPatVar n)  = n
   show (_ :< TyPatPack r) = "[" ++ Record.showGuts show r ++ "]"
 
@@ -104,34 +90,37 @@ instance Show Kind where
   show KindType       = "Type"
   show (KindUni n)    = n
 
-instance TagTraversable Type where
-  tagTraverse' f t = case t of
-    TyApply a b  -> TyApply <$> tagTraverse f a <*> tagTraverse f b
-    TyBang t     -> TyBang <$> tagTraverse f t
+instance AnnTraversable Type where
+  annTraverse' f t = case t of
+    TyApply a b  -> TyApply <$> annTraverse f a <*> annTraverse f b
+    TyBang t     -> TyBang <$> annTraverse f t
     TyCon n      -> pure $ TyCon n
-    TyEffects es -> TyEffects . Set.fromList <$> traverse (tagTraverse f) (Set.toList es)
-    TyLambda a b -> TyLambda <$> tagTraverse f a <*> tagTraverse f b
-    TyPack r     -> TyPack <$> traverse (tagTraverse f) r
-    TyRecord r   -> TyRecord <$> traverse (tagTraverse f) r
+    TyFlat ts    -> TyFlat . Set.fromList <$> traverse (annTraverse f) (Set.toList ts)
+    TyLambda a b -> TyLambda <$> annTraverse f a <*> annTraverse f b
+    TyPack r     -> TyPack <$> traverse (annTraverse f) r
+    TyRecord r   -> TyRecord <$> traverse (annTraverse f) r
     TyUni n      -> pure $ TyUni n
     TyVar v      -> pure $ TyVar v
 
-instance TagTraversable b => TagTraversable (Impure b) where
-  tagTraverse' f (t :# e) = (:#) <$> tagTraverse f t <*> tagTraverse f e
+instance AnnTraversable b => AnnTraversable (Impure b) where
+  annTraverse' f (t :# e) = (:#) <$> annTraverse f t <*> annTraverse f e
 
-instance TagTraversable QType where
-  tagTraverse' f (Mono t)        = Mono <$> tagTraverse' f t
-  tagTraverse' f (Forall vs c t) = (\c t -> Forall vs c t) <$> tagTraverse f c <*> tagTraverse f t
-  tagTraverse' f (QTyUni n)      = pure (QTyUni n)
+instance AnnTraversable QType where
+  annTraverse' f (Mono t)        = Mono <$> annTraverse f t
+  annTraverse' f (Forall vs c t) = Forall vs <$> annTraverse f c <*> annTraverse f t
+  annTraverse' f (QTyUni n)      = pure (QTyUni n)
 
-instance TagTraversable TyPat where
-  tagTraverse' f (TyPatVar n)  = pure $ TyPatVar n
-  tagTraverse' f (TyPatPack r) = TyPatPack <$> traverse (tagTraverse f) r
+instance AnnTraversable TyPat where
+  annTraverse' f (TyPatVar n)  = pure $ TyPatVar n
+  annTraverse' f (TyPatPack r) = TyPatPack <$> traverse (annTraverse f) r
 
 
 class Polymorphic a where
   unis :: a -> [Name]
   vars :: a -> [Name]
+-}
+
+{-
 
 type TypeTraversable a = SemiTraversable (Kinded Type) a
 
@@ -212,10 +201,12 @@ instance PseudoTraversable Kind Kind Kind Kind where
     _             -> pure k
 
 instance PseudoTraversable Kind Kind (Kinded Type) (Kinded Type) where
-  pseudoTraverse = tagTraverse
+  pseudoTraverse = annTraverse
 
 instance PseudoTraversable Kind Kind (Kinded QType) (Kinded QType) where
   pseudoTraverse f k = case k of
     (k :< Mono t)         -> (\(k :< t) -> k :< Mono t) <$> pseudoTraverse f (k :< t)
     (k :< Forall vs cs t) -> (:<) <$> pseudoTraverse f k <*> ((\cs t -> Forall vs cs t) <$> pseudoTraverse f cs <*> pseudoTraverse f t)
     (k :< QTyUni n)       -> (:<) <$> pseudoTraverse f k <*> pure (QTyUni n)
+
+-}

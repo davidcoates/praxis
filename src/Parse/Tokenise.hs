@@ -2,7 +2,9 @@ module Parse.Tokenise
   ( tokenise
   ) where
 
+import           Annotate
 import           AST                      (Lit (..), QString (..))
+import           Common
 import           Parse.Tokenise.Layout
 import           Parse.Tokenise.Token
 import           Parse.Tokenise.Tokeniser
@@ -13,17 +15,16 @@ import           Tag
 import           Control.Applicative      (Alternative, Applicative, empty,
                                            liftA2, (<|>))
 import           Data.Char
-import           Data.Foldable            (asum)
 import           Data.List                (intercalate)
 
-tokenise :: Bool -> String -> Praxis [Annotated Token]
+tokenise :: Bool -> String -> Praxis [Sourced Token]
 tokenise topLevel s = save stage $ do
-  set stage Tokenise
+  stage .= Tokenise
   ts <- runTokeniser atom s
   let ts' = layout topLevel ts
   logStr Debug (showTokens ts')
   return ts'
-    where showTokens = unwords . map (show . value) . filter (\x -> case value x of { Whitespace -> False ; _ -> True })
+    where showTokens = unwords . map (show . view value) . filter (\x -> case view value x of { Whitespace -> False ; _ -> True })
 
 -- // START OF NON-BACKTRACKING PARSER COMBINATORS
 

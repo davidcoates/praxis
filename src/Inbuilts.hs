@@ -4,41 +4,46 @@ module Inbuilts
   ( initialState
   ) where
 
-import           AST          (Lit (..))
-import {-# SOURCE #-} Check        (check)
-import           Env.KEnv     (KEnv)
-import qualified Env.KEnv     as KEnv (fromList)
-import           Env.TEnv     (TEnv)
-import qualified Env.TEnv     as TEnv (fromList)
-import           Env.VEnv     (VEnv)
-import qualified Env.VEnv     as VEnv (fromList)
+import           AST                 (Lit (..))
+import           Check.Type.Annotate
+import           Check.Type.Check    (check)
+import           Common
+import           Env.KEnv            (KEnv)
+import qualified Env.KEnv            as KEnv (fromList)
+import           Env.TEnv            (TEnv)
+import qualified Env.TEnv            as TEnv (fromList)
+import           Env.VEnv            (VEnv)
+import qualified Env.VEnv            as VEnv (fromList)
 import           Error
-import           Parse        (Annotated, parse)
+import           Parse               (parse)
+import           Parse.Annotate
 import           Praxis
 import qualified Record
-import           Source       (Source)
+import           Source
 import           Tag
-import           Type         hiding (mono)
+import           Type                hiding (mono)
 import           Value
 
-import qualified Control.Lens as Lens (set)
-import           Data.List    (nub, sort)
+import           Control.Lens        as Lens (set)
+import           Data.List           (nub, sort)
+import qualified Data.Set            as Set (empty)
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
-initialState = Lens.set tEnv initialTEnv $ Lens.set vEnv initialVEnv $ Lens.set kEnv initialKEnv $ emptyState
+initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ emptyState
 
-mono :: String -> Kinded QType
-mono s = let (k :< t) = runStatic m in k :< Mono t
-  where m = save kEnv $ (set kEnv initialKEnv >> (parse s :: Praxis (Annotated Type)) >>= check :: Praxis (Kinded Type))
+mono :: String -> Typed QType
+mono s = let (a :< t) = runStatic m in a :< Mono (a :< t)
+  where m :: Praxis (Typed Type)
+        m = save kEnv $ (kEnv .= initialKEnv >> (parse s :: Praxis (Parsed Type)) >>= check :: Praxis (Typed Type))
 
-trivial :: Kinded Type
-trivial = KindConstraint :< TyRecord Record.unit -- TODO constraint type? Or TyEffects -> TyFlat
+trivial :: Typed Type
+trivial = (Phantom, ()) :< TyFlat Set.empty
 
-poly :: [(Name, Kind)] -> String -> Kinded QType
-poly ks s = let (KindType :< Mono t) = mono s in KindType :< Forall ks trivial (KindType :< t)
+poly :: [(Name, Kind)] -> String -> Typed QType
+poly ks s = let (a :< Mono t) = mono s in a :< Forall ks trivial t
 
-prelude :: [(Name, Kinded QType, Value)]
+prelude :: [(Name, Typed QType, Value)]
 prelude =
   [ ("add",      mono "(Int, Int) -> Int",     lift (+))
   , ("sub",      mono "(Int, Int) -> Int",     lift (-))

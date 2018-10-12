@@ -6,43 +6,44 @@ module Eval
   ( Evaluable(..)
   ) where
 
-import           Check.AST
-import           Common      (asum)
-import           Env.VEnv    (VEnv, elim, elimN, intro)
-import qualified Env.VEnv    as VEnv (fromList, lookup)
+import           AST
+import           Check.Annotate
+import           Common
+import           Env.VEnv       (VEnv, elim, elimN, intro)
+import qualified Env.VEnv       as VEnv (fromList, lookup)
 import           Praxis
 import           Record
 import           Tag
 import           Value
 
-import           Data.List   (find)
-import           Data.Monoid (Sum (..))
-import           Prelude     hiding (exp)
+import           Data.List      (find)
+import           Data.Monoid    (Sum (..))
+import           Prelude        hiding (exp)
 
 class Evaluable a b | a -> b where
-  eval' :: a -> Praxis b
-  eval  :: a -> Praxis b
+  eval' :: Kinded a -> Praxis b
+  eval  :: Kinded a -> Praxis b
   eval e = save stage $ do
-    set stage Evaluate
+    stage .= Evaluate
     eval' e
 
-instance Evaluable (Annotated Program) () where
+instance Evaluable Program () where
   eval' = program
 
-instance Evaluable (Annotated Exp) Value where
+instance Evaluable Exp Value where
   eval' = exp
 
-program :: Annotated Program -> Praxis ()
+program :: Kinded Program -> Praxis ()
 program (_ :< Program ds) = mapM_ decl ds
 
-decl :: Annotated Decl -> Praxis ()
+decl :: Kinded Decl -> Praxis ()
 decl (a :< e) = case e of
 
   DeclVar n t e -> do
     e' <- exp e
     intro n e'
 
-stmt :: Annotated Stmt -> Praxis (Sum Int)
+stmt :: Kinded Stmt -> Praxis (Sum Int)
 stmt (_ :< s) = case s of
 
   StmtDecl d -> decl d >> return (Sum 0)
@@ -50,7 +51,7 @@ stmt (_ :< s) = case s of
   StmtExp e  -> exp e >> return (Sum 1)
 
 
-exp :: Annotated Exp -> Praxis Value
+exp :: Kinded Exp -> Praxis Value
 exp (_ :< e) = case e of
 
   Apply f x -> do
@@ -96,7 +97,7 @@ exp (_ :< e) = case e of
     return v
 
 
-cases :: Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
+cases :: Value -> [(Kinded Pat, Kinded Exp)] -> Praxis Value
 cases x [] = error ("no matching pattern" ++ show x)
 cases x ((p,e):ps) = case bind x p of
   Just c  -> do
@@ -107,11 +108,11 @@ cases x ((p,e):ps) = case bind x p of
   Nothing ->
     cases x ps
 
-forceBind :: Value -> Annotated Pat -> Praxis Int
+forceBind :: Value -> Kinded Pat -> Praxis Int
 forceBind v p = case bind v p of Just i  -> i
                                  Nothing -> error "no matching pattern" -- TODO
 
-bind :: Value -> Annotated Pat -> Maybe (Praxis Int)
+bind :: Value -> Kinded Pat -> Maybe (Praxis Int)
 bind v (_ :< p) = case p of
 
   PatAt n p

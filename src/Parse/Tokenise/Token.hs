@@ -1,16 +1,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Parse.Tokenise.Token
-  ( Annotated(..)
-  , Token(..)
+  ( Token(..)
   ) where
 
 import           AST    (Lit (..), QString (..))
 import           Pretty
 import           Source
 import           Tag
-
-type Annotated a = Tag Source a
 
 data Token = QVarId QString
            | QConId QString

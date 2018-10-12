@@ -1,19 +1,20 @@
 module Error
   ( Error(..)
   , SyntaxError(..)
-  , CheckError(..)
-  , DeclError(..)
   , ParseSource(..)
   , ParseError(..)
   ) where
 
-import           Check.Constraint (Derivation)
+import qualified Check.Error as Check
 import           Common
-import           Source           (Source)
+import           Source      (Source)
+import           Stage
+import           Tag
 
+-- TODO move errors to subdirs like Check.Error
 data Error = LexicalError ParseSource ParseError
            | SyntaxError  SyntaxError
-           | CheckError   CheckError
+           | CheckError Check.Error
 
 data ParseSource = Source Source
                  | EOF
@@ -24,23 +25,20 @@ data ParseError = Option ParseError ParseError
 
 data SyntaxError = SweetError ParseSource ParseError
                  | BangError Source Name
-                 | DeclError DeclError
+                 | LacksBinding Name Source
                  | DoError Source
                  | InfixError -- TODO
 
-data DeclError = MismatchedArity Name (Source, Int) (Source, Int)
-               | LacksBinding Name Source
+instance Show Error where
+  show e = "<error>"
 
-data CheckError = Contradiction Derivation
-                | NotInScope String Source
-                | Stuck
-                | Underdefined Derivation
-
+{-
 instance Show Error where
   show e = case e of
     LexicalError s e -> "Lexical error: " ++ show e ++ " at " ++ show s
     SyntaxError e    -> "Syntax error: "  ++ show e
-    CheckError e     -> "Check error: "   ++ show e
+    TypeError e      -> "Type error: " ++ show e
+    KindError e      -> "Kind error: " ++ show e
 
 instance Show ParseSource where
   show EOF        = "<end of file>"
@@ -73,4 +71,4 @@ instance Show CheckError where
     NotInScope n s  -> "Not in scope: " ++ n ++ " at " ++ show s
     Stuck           -> "Infinite loop detected :("
     Underdefined d  -> "Failed to completely deduce the unification variable(s) present in: " ++ show d
-
+-}

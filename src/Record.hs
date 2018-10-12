@@ -15,7 +15,7 @@ module Record
 
 import           Common
 
-import           Control.Arrow (second)
+import qualified Control.Arrow
 import           Data.List     (intercalate)
 import           Data.Map      (Map)
 import qualified Data.Map      as Map
@@ -33,7 +33,7 @@ instance Ord a => Ord (Record a) where
   r `compare` s = toCanonicalList r `compare` toCanonicalList s
 
 instance Functor Record where
-  fmap f (Record r) = Record (map (second f) r)
+  fmap f (Record r) = Record (map (Control.Arrow.second f) r)
 
 instance Foldable Record where
   foldr f x (Record r) = foldr f x (map snd r)

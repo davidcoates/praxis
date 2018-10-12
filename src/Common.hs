@@ -1,25 +1,28 @@
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE UndecidableInstances   #-}
-
 module Common
   ( Name
   , asum
+  , both
   , series
-  , PseudoTraversable(..)
-  , SemiTraversable(..)
-  , extract
-  , Substitutable(..)
-  , subs
+  , set
+  , view
+  , over
+  , (.=)
+  , (%=)
+  , use
+  , first
+  , second
+  , Const(..)
+  , Identity(..)
   ) where
 
-import           Control.Applicative   (Const (..), liftA2)
-import           Data.Foldable         (fold)
-import           Data.Functor.Identity (Identity (..))
-import           Data.Monoid           ((<>))
-import           Data.Traversable      (sequenceA)
+import           Control.Applicative    (Const (..))
+import           Data.Foldable          (fold)
+import           Data.Functor.Identity  (Identity (..))
+import           Data.Traversable       (sequenceA)
+
+import           Control.Lens           (over, set, use, view, (%=), (.=), _1,
+                                         _2)
+import           Control.Lens.Traversal (both)
 
 type Name = String
 
@@ -30,20 +33,8 @@ asum xs = fold <$> series xs
 series :: (Applicative f, Traversable t) => t (f a) -> f (t a)
 series = sequenceA
 
-class PseudoTraversable a b c d | a b c -> d where
-  pseudoTraverse :: Applicative f => (a -> f b) -> c -> f d
+first :: Functor f => (a -> f b) -> (a, n) -> f (b, n)
+first = _1
 
-type SemiTraversable a b = PseudoTraversable a a b b
-
-semiTraverse :: (Applicative f, SemiTraversable a b) => (a -> f a) -> b -> f b
-semiTraverse = pseudoTraverse
-
-extract :: (Monoid b, SemiTraversable a a) => (a -> b) -> a -> b
-extract f = getConst . semiTraverse (Const . f)
-
-class Substitutable a b where
-  sub :: (a -> Maybe b) -> b -> b
-
-subs :: (Substitutable a b, SemiTraversable b c) => (a -> Maybe b) -> c -> c
-subs f = runIdentity . semiTraverse (Identity . sub f)
-
+second :: Functor f => (a -> f b) -> (n, a) -> f (n, b)
+second = _2

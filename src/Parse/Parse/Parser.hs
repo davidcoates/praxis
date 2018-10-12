@@ -5,22 +5,26 @@ module Parse.Parse.Parser
   , satisfy
   , try
   , lookAhead
-  , annotated
+  , parsed
   , (<?>)
   , (<|?>)
   ) where
 
+import           Annotate
+import           Common
 import           Error
+import           Parse.Annotate
 import           Parse.Parse.AST
 import qualified Parse.Prim           as Prim
 import qualified Parse.Tokenise.Token as Token
 import           Praxis               (Praxis, throwError)
 import           Source               (Source (..))
+import           Stage
 import           Tag
 
 import           Control.Applicative  (Alternative (..), Applicative (..))
 
-type Token = Token.Annotated Token.Token
+type Token = Sourced Token.Token
 
 newtype Parser a = Parser { _runParser :: Prim.Parser Token (Tag Source a) }
 
@@ -38,12 +42,12 @@ instance Alternative Parser where
   Parser a <|> Parser b = Parser (a <|> b)
 
 instance Monad Parser where
-  Parser a >>= f = Parser (a >>= \x -> _runParser (f (value x)))
+  Parser a >>= f = Parser (a >>= \x -> _runParser (f (view value x)))
 
-runParser :: Parser a -> [Token] -> Praxis (Tag Source a)
-runParser (Parser p) ts = makeError $ Prim.runParser (p <* Prim.eof) ts tag -- TODO eof here breaks error messages
-  where makeError (Left (s, e)) = throwError $ SyntaxError (SweetError s e)
-        makeError (Right x)     = pure x
+runParser :: Parser a -> [Token] -> Praxis (Tag (Source, ()) a)
+runParser (Parser p) ts = makeError $ Prim.runParser (p <* Prim.eof) ts (view tag) -- TODO eof here breaks error messages
+  where makeError (Left (s, e))    = throwError $ SyntaxError (SweetError s e)
+        makeError (Right (a :< x)) = pure ((a, ()) :< x)
 
 token :: (Token.Token -> Maybe a) -> Parser a
 token f = Parser $ Prim.token (lift . fmap f)
@@ -51,7 +55,7 @@ token f = Parser $ Prim.token (lift . fmap f)
         lift _             = Nothing
 
 satisfy :: (Token.Token -> Bool) -> Parser Token.Token
-satisfy f = Parser $ Prim.satisfy (f . value)
+satisfy f = Parser $ Prim.satisfy (f . view value)
 
 try :: Parser a -> Parser a
 try = lift Prim.try
@@ -60,8 +64,8 @@ lookAhead :: Parser a -> Parser a
 lookAhead = lift Prim.lookAhead
 
 -- Used to extract annotation
-annotated :: Parser a -> Parser (Tag Source a)
-annotated = lift (fmap (\(a :< x) -> a :< (a :< x)))
+parsed :: Parser a -> Parser (Tag (Source, ()) a)
+parsed = lift (fmap (\(a :< x) -> a :< ((a, ()) :< x)))
 
 infix 0 <?>
 (<?>) :: Parser a -> String -> Parser a

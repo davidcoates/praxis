@@ -9,6 +9,8 @@ module Parse.Tokenise.Tokeniser
   , (<|?>)
   ) where
 
+import           Annotate
+import           Common
 import           Error                (Error (..))
 import qualified Parse.Prim           as Prim
 import           Parse.Tokenise.Token
@@ -19,7 +21,7 @@ import           Tag
 import           Control.Applicative  (Alternative (..), Applicative (..))
 import           Data.List            (intercalate)
 
-newtype Tokeniser a = Tokeniser { _runTokeniser :: Prim.Parser (Annotated Char) (Annotated a) }
+newtype Tokeniser a = Tokeniser { _runTokeniser :: Prim.Parser (Sourced Char) (Sourced a) }
 
 lift f (Tokeniser a) = Tokeniser (f a)
 
@@ -37,13 +39,13 @@ instance Alternative Tokeniser where
 instance Monad Tokeniser where
   Tokeniser a >>= f = Tokeniser (a >>= \(a :< x) -> liftA2 (\_ y -> y) (a :< x) <$> _runTokeniser (f x))
 
-runTokeniser :: Tokeniser a -> String -> Praxis [Annotated a]
-runTokeniser (Tokeniser p) cs = makeError $ Prim.runParser (all p) (sourced cs) tag
+runTokeniser :: Tokeniser a -> String -> Praxis [Sourced a]
+runTokeniser (Tokeniser p) cs = makeError $ Prim.runParser (all p) (sourced cs) (view tag)
   where all p = (Prim.eof *> pure []) <|> liftA2 (:) p (all p)
         makeError (Left (s, e)) = throwError (LexicalError s e)
         makeError (Right x)     = pure x
 
-sourced :: String -> [Annotated Char]
+sourced :: String -> [Sourced Char]
 sourced = sourced' Pos { line = 1, column = 1 }
   where sourced' _     [] = []
         sourced' p (c:cs) = let p' = advance c p in make p c : sourced' p' cs
@@ -61,7 +63,7 @@ token f = Tokeniser $ Prim.token (lift . fmap f)
         lift _             = Nothing
 
 satisfy :: (Char -> Bool) -> Tokeniser Char
-satisfy f = Tokeniser $ Prim.satisfy (f . value)
+satisfy f = Tokeniser $ Prim.satisfy (f . (view value))
 
 try :: Tokeniser a -> Tokeniser a
 try = lift Prim.try

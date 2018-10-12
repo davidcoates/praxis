@@ -12,43 +12,41 @@ module Parse.Parse.AST
   , Tok(..)
   ) where
 
-import           AST    (Lit (..), Pat (..), QString)
+import           Annotate
+import           AST      (Lit (..), Pat (..), QString)
 import           Pretty
 import           Record
 import           Source
 import           Tag
 import           Type
 
-type Annotation = Source
+data Decl a = DeclFun Name [Annotated a Pat] (Annotated a Exp)
+            | DeclSig Name (Annotated a QType, Annotated a Type)
 
-type Annotated a = Tagged Annotation a
-
-data Decl a = DeclFun Name [a (Pat a)] (a (Exp a))
-            | DeclSig Name (a (Impure QType a))
-
-data Exp a = Apply (a (Exp a)) (a (Exp a))
-           | Case (a (Exp a)) [(a (Pat a), a (Exp a))]
-           | Cases [(a (Pat a), a (Exp a))]
-           | Do [a (Stmt a)]
-           | If (a (Exp a)) (a (Exp a)) (a (Exp a))
+data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
+           | Case (Annotated a Exp) [(Annotated a Pat, Annotated a Exp)]
+           | Cases [(Annotated a Pat, Annotated a Exp)]
+           | Do [Annotated a Stmt]
+           | If (Annotated a Exp) (Annotated a Exp) (Annotated a Exp)
            | Lit Lit
-           | Mixfix [a (Tok a)]
-           | Read Name (a (Exp a))
-           | Record (Record (a (Exp a)))
-           | Sig (a (Exp a)) (a (Impure Type a))
+           | Mixfix [Annotated a Tok]
+           | Read Name (Annotated a Exp)
+           | Record (Record (Annotated a Exp))
+           | Sig (Annotated a Exp) (Annotated a Type, Annotated a Type)
            | Var Name
            | VarBang Name
 
 type Op = QString
 
-data Program a = Program [a (Decl a)]
+data Program a = Program [Annotated a Decl]
 
-data Stmt a = StmtDecl (a (Decl a))
-            | StmtExp (a (Exp a))
+data Stmt a = StmtDecl (Annotated a Decl)
+            | StmtExp (Annotated a Exp)
 
-data Tok a = TExp (a (Exp a))
+data Tok a = TExp (Annotated a Exp)
            | TOp Op
 
+{-
 instance TreeString (Annotated Decl) where
   treeString = treeRec $ \x -> case x of
     DeclFun f ps e -> Node (f ++ show ps ++ " = ") [treeString e]
@@ -92,3 +90,5 @@ instance Show (Annotated Program) where
 
 instance Show (Annotated Stmt) where
   show = showTree
+
+-}

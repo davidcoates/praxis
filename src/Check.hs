@@ -1,18 +1,13 @@
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-
 module Check
   ( Checkable(..)
-  , Annotated
   ) where
 
-import           Check.AST
+import           AST
+import           Check.Annotate
 import           Check.Generate
-import           Check.Solve     (solve)
 import           Check.System
 import           Common
+import           Parse.Annotate
 import qualified Parse.Parse.AST as Parse (Annotated)
 import           Praxis
 import           Record
@@ -24,15 +19,22 @@ import           Data.Maybe      (fromMaybe)
 import qualified Data.Set        as Set
 import           Prelude         hiding (log)
 
-class Checkable a b | a -> b where
-  check :: a -> Praxis b
+class Checkable a where
+  check :: Parsed a -> Praxis (Kinded a)
+
+instance Checkable Program where
+  check = undefined
+
+{-
   check p = save stage $ do
-    set stage Check
-    set system initialSystem
+    put stage Check
+    put system initialSystem
     p' <- check' p
     return p'
   check' :: a -> Praxis b
+-}
 
+{-
 checkWithSub :: (Show (Annotated b), TagTraversable b, Generatable a (Annotated b)) => a -> Praxis (Annotated b)
 checkWithSub p = do
   p' <- generate p
@@ -69,3 +71,5 @@ instance Checkable (Parse.Annotated Type) (Kinded Type) where
     log Debug p''
     return p''
 
+
+-}

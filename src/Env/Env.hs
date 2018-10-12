@@ -14,10 +14,11 @@ module Env.Env
   )
 where
 
-import           Control.Arrow (second)
-import           Data.List     (intercalate)
-import           Prelude       hiding (lookup)
-import qualified Prelude       (lookup)
+import           Common
+import           Control.Lens (Traversal)
+import           Data.List    (intercalate)
+import           Prelude      hiding (lookup)
+import qualified Prelude      (lookup)
 
 -- TODO Cosider putting source in Env
 newtype Env a b = Env [(a, b)]
@@ -26,7 +27,7 @@ deriving instance Foldable (Env a)
 deriving instance Traversable (Env a)
 
 instance Functor (Env a) where
-  fmap f (Env l) = Env (fmap (second f) l)
+  fmap f (Env l) = Env (fmap (over second f) l)
 
 fromList :: [(a, b)] -> Env a b
 fromList = Env

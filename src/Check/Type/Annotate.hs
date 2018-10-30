@@ -24,7 +24,7 @@ type instance Annotation TypeCheck Exp = (Typed Type, Typed Type)
 type instance Annotation TypeCheck Pat = Typed Type
 type instance Annotation TypeCheck Program = ()
 type instance Annotation TypeCheck QType = ()
-type instance Annotation TypeCheck Stmt = ()
+type instance Annotation TypeCheck Stmt = Typed Type
 type instance Annotation TypeCheck TyPat = ()
 type instance Annotation TypeCheck Type = ()
 
@@ -36,7 +36,7 @@ instance Complete TypeCheck where
     IPat     -> f a
     IProgram -> pure ()
     IQType   -> pure ()
-    IStmt    -> pure ()
+    IStmt    -> f a
     ITyPat   -> pure ()
     IType    -> pure ()
 

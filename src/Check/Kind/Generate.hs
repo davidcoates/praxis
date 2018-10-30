@@ -31,10 +31,10 @@ kind = view annotation
 
 throwCheckError r = throwError (CheckError r)
 
-instance Explorable a => Generatable TypeCheck KindCheck a where
+instance Recursive a => Generatable TypeCheck KindCheck a where
   generate' = introspect gen
 
-gen :: Explorable a => Annotated TypeCheck a -> Analysis Praxis KindCheck a
+gen :: Recursive a => Annotated TypeCheck a -> Intro Praxis KindCheck a
 gen x = case typeof x of
   IDataAlt -> Notice (pure ())
   IDecl    -> Notice (introspect gen (view annotation x))
@@ -42,7 +42,7 @@ gen x = case typeof x of
   IPat     -> Notice (introspect gen (view annotation x))
   IProgram -> Notice (pure ())
   IQType   -> Notice (pure ())
-  IStmt    -> Notice (pure ())
+  IStmt    -> Notice (introspect gen (view annotation x))
   IType    -> Realise (genType x)
   -- TODO TyPat?
 

@@ -25,7 +25,7 @@ type instance Annotation KindCheck Exp = (Kinded Type, Kinded Type)
 type instance Annotation KindCheck Pat = Kinded Type
 type instance Annotation KindCheck Program = ()
 type instance Annotation KindCheck QType = () -- TODO Perhaps this should be Kind
-type instance Annotation KindCheck Stmt = ()
+type instance Annotation KindCheck Stmt = Kinded Type
 type instance Annotation KindCheck TyPat = Kind
 type instance Annotation KindCheck Type = Kind
 
@@ -37,6 +37,6 @@ instance Complete KindCheck where
     IPat     -> f a
     IProgram -> pure ()
     IQType   -> pure ()
-    IStmt    -> pure ()
+    IStmt    -> f a
     ITyPat   -> pure a
     IType    -> pure a

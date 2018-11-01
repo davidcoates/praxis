@@ -26,12 +26,16 @@ module Introspect
   , Stmt
   , TyPat
   , Type
+  , TypeConstraint
+  , KindConstraint
   ) where
 
-import qualified Data.Set as Set (fromList, toList)
+import qualified Data.Set              as Set (fromList, toList)
 
 import           Annotate
 import           AST
+import           Check.Kind.Constraint (KindConstraint (..))
+import           Check.Type.Constraint (TypeConstraint (..))
 import           Common
 import           Type
 
@@ -55,22 +59,26 @@ data I a where
   IStmt    :: I Stmt
   ITyPat   :: I TyPat
   IType    :: I Type
+  ITypeConstraint :: I TypeConstraint
+  IKindConstraint :: I KindConstraint
 
 typeof :: forall a s. Recursive a => Annotated s a -> I a
 typeof _ = witness :: I a
 
 transfer :: forall a b f s. (Recursive a, Recursive b, Applicative f) => (a s -> f (a s)) -> b s -> f (b s)
 transfer f x = case (witness :: I a, witness :: I b) of
-  (IDataAlt, IDataAlt) -> f x
-  (IDecl, IDecl)       -> f x
-  (IExp, IExp)         -> f x
-  (IPat, IPat)         -> f x
-  (IProgram, IProgram) -> f x
-  (IQType, IQType)     -> f x
-  (IStmt, IStmt)       -> f x
-  (ITyPat, ITyPat)     -> f x
-  (IType, IType)       -> f x
-  _                    -> pure x
+  (IDataAlt, IDataAlt)               -> f x
+  (IDecl, IDecl)                     -> f x
+  (IExp, IExp)                       -> f x
+  (IPat, IPat)                       -> f x
+  (IProgram, IProgram)               -> f x
+  (IQType, IQType)                   -> f x
+  (IStmt, IStmt)                     -> f x
+  (ITyPat, ITyPat)                   -> f x
+  (IType, IType)                     -> f x
+  (ITypeConstraint, ITypeConstraint) -> f x
+  (IKindConstraint, IKindConstraint) -> f x
+  _                                  -> pure x
 
 type Intro f s a = Analysis f (Annotated s a) (Annotation s a)
 
@@ -174,3 +182,16 @@ instance Recursive Type where
     TyPack r     -> TyPack <$> traverse f r
     TyRecord r   -> TyRecord <$> traverse f r
     TyVar n      -> pure (TyVar n)
+
+instance Recursive TypeConstraint where
+  witness = ITypeConstraint
+  recurse f x = case x of
+    Class t                      -> Class <$> f t
+    Check.Type.Constraint.Eq a b -> Check.Type.Constraint.Eq <$> f a <*> f b
+    Generalises q t              -> Generalises <$> f q <*> f t
+    Specialises t q              -> Specialises <$> f t <*> f q
+
+instance Recursive KindConstraint where
+  witness = IKindConstraint
+  recurse f x = case x of
+    Check.Kind.Constraint.Eq a b -> pure $ Check.Kind.Constraint.Eq a b

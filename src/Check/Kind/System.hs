@@ -21,9 +21,9 @@ import           Type                  (Kind)
 
 data System = System
   { _sol         :: [(Name, Kind)]
-  , _constraints :: [Kinded (Const Constraint)]
-  , _staging     :: [Kinded (Const Constraint)]
-  , _axioms      :: [Kinded (Const Constraint)]
+  , _constraints :: [Kinded KindConstraint]
+  , _staging     :: [Kinded KindConstraint]
+  , _axioms      :: [Kinded KindConstraint]
   }
 
 makeLenses ''System

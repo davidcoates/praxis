@@ -6,6 +6,7 @@ module Check.Kind.Require
   , our
   ) where
 
+import           Annotate
 import           Check.Kind.Annotate
 import           Check.Kind.Constraint
 import           Check.Kind.System
@@ -14,20 +15,21 @@ import           Common
 import           Control.Lens          (Lens')
 import           Praxis
 import           Source
+import           Stage                 (KindCheck)
 import           Tag
 import           Type
 
-require :: Kinded (Const Constraint) -> Praxis ()
+require :: Kinded KindConstraint -> Praxis ()
 require c = our . constraints %= (c:)
 
-requires :: [Kinded (Const Constraint)] -> Praxis ()
+requires :: [Kinded KindConstraint] -> Praxis ()
 requires = mapM_ require
 
-newConstraint :: Constraint -> Reason -> Source -> Kinded (Const Constraint)
-newConstraint c r s = (s, Derivation { _origin = c, _reason = r }) :< (Const c)
+newConstraint :: KindConstraint KindCheck -> Reason -> Source -> Kinded KindConstraint
+newConstraint c r s = (s, Derivation { _antecedent = Nothing, _reason = r }) :< c
 
-implies :: Kinded (Const Constraint) -> Constraint -> Kinded (Const Constraint)
-implies d c = set value (Const c) d
+implies :: Kinded KindConstraint -> KindConstraint KindCheck -> Kinded KindConstraint
+implies d c = over annotation (set antecedent (Just d)) (set value c d)
 
 our :: Lens' PraxisState System
 our = system . kindSystem

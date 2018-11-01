@@ -7,5 +7,5 @@ import           Check.Kind.Constraint
 import           Common
 import           Tag
 
-data Error = Contradiction (Kinded (Const Constraint))
+data Error = Contradiction (Kinded KindConstraint)
            | Stuck

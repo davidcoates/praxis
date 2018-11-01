@@ -17,8 +17,6 @@ type Kinded a = Annotated KindCheck a
 -- TODO incomplete
 -- TODO use records
 
-type instance Annotation KindCheck (Const Constraint) = Derivation -- TODO should this be here?
-
 type instance Annotation KindCheck DataAlt = ()
 type instance Annotation KindCheck Decl = Kinded Type
 type instance Annotation KindCheck Exp = (Kinded Type, Kinded Type)
@@ -28,15 +26,19 @@ type instance Annotation KindCheck QType = () -- TODO Perhaps this should be Kin
 type instance Annotation KindCheck Stmt = Kinded Type
 type instance Annotation KindCheck TyPat = Kind
 type instance Annotation KindCheck Type = Kind
+type instance Annotation KindCheck TypeConstraint = ()
+type instance Annotation KindCheck KindConstraint = Derivation
 
 instance Complete KindCheck where
   complete f i a = case i of
-    IDataAlt -> pure ()
-    IDecl    -> f a
-    IExp     -> both f a
-    IPat     -> f a
-    IProgram -> pure ()
-    IQType   -> pure ()
-    IStmt    -> f a
-    ITyPat   -> pure a
-    IType    -> pure a
+    IDataAlt        -> pure ()
+    IDecl           -> f a
+    IExp            -> both f a
+    IPat            -> f a
+    IProgram        -> pure ()
+    IQType          -> pure ()
+    IStmt           -> f a
+    ITyPat          -> pure a
+    IType           -> pure a
+    ITypeConstraint -> pure ()
+    IKindConstraint -> antecedent (series . (f <$>)) a

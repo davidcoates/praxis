@@ -2,7 +2,7 @@
 
 module Check.Type.System
   ( System
-  , sol
+  , tsol
   , qsol
   , constraints
   , staging
@@ -20,21 +20,19 @@ import           Source
 import           Tag
 import           Type                  (QType, Type)
 
-type C = Typed (Const Constraint) -- For some reason makeLenses complains when trying to use the RHS directly
-
 data System = System
-  { _sol         :: [(Name, Typed Type)]
+  { _tsol        :: [(Name, Typed Type)]
   , _qsol        :: [(Name, Typed QType)]
-  , _constraints :: [C]
-  , _staging     :: [C]
-  , _axioms      :: [C]
+  , _constraints :: [Typed TypeConstraint]
+  , _staging     :: [Typed TypeConstraint]
+  , _axioms      :: [Typed TypeConstraint]
   }
 
 makeLenses ''System
 
 initialSystem :: System
 initialSystem = System
-  { _sol         = []
+  { _tsol        = []
   , _qsol        = []
   , _constraints = []
   , _staging     = []

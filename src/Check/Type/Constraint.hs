@@ -1,29 +1,32 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
 module Check.Type.Constraint
-  ( Constraint(..)
+  ( TypeConstraint(..)
   , Derivation(..)
+  , antecedent
+  , reason
   , Reason(..)
   ) where
 
 import           Annotate
 import           Common
 import           Source
-import           Stage      (TypeCheck)
+import           Stage        (TypeCheck)
 import           Type
 
-import           Data.Maybe (fromMaybe)
-import           Prelude    hiding (drop)
+import           Control.Lens (makeLenses)
+import           Data.Maybe   (fromMaybe)
+import           Prelude      hiding (drop)
 
-type Typed a = Annotated TypeCheck a
-
-data Constraint = Class (Typed Type)
-                | Eq (Typed Type) (Typed Type)
-                | Generalises (Typed QType) (Typed Type)
-                | Specialises (Typed Type) (Typed QType)
+-- The parameter is only to allow introspection, we always expect it to be TypeCheck
+data TypeConstraint a = Class (Annotated a Type)
+                      | Eq (Annotated a Type) (Annotated a Type)
+                      | Generalises (Annotated a QType) (Annotated a Type)
+                      | Specialises (Annotated a Type) (Annotated a QType)
   deriving (Eq, Ord)
 
 {-
@@ -65,8 +68,11 @@ instance Show Reason where
                      | otherwise   -> "User-supplied signature"
     UnsafeView n     -> "Variable '" ++ n ++ "' used before being viewed"
 
-data Derivation = Derivation { origin :: Constraint, reason :: Reason }
+data Derivation = Derivation
+  { _antecedent :: Maybe (Annotated TypeCheck TypeConstraint)
+  , _reason     :: Reason }
 
+makeLenses ''Derivation
 {-
 instance Show Derivation where
   show c = "derived from: " ++ show (origin c) ++ "; reason: " ++ show (reason c)

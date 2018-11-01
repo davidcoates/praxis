@@ -5,20 +5,23 @@
 {-# LANGUAGE UndecidableInstances  #-}
 
 module Check.Kind.Constraint
-  ( Constraint(..)
+  ( KindConstraint(..)
   , Derivation(..)
   , Reason(..)
-  , origin
+  , antecedent
   , reason
   ) where
 
+import           Annotate
 import           Common
 import           Control.Lens (makeLenses)
 import           Source
+import           Stage        (KindCheck)
 import           Tag
 import           Type
 
-data Constraint = Eq Kind Kind
+-- The parameter is only to allow introspection, we always expect it to be KindCheck
+data KindConstraint a = Eq Kind Kind
   deriving (Eq, Ord)
 
 data Reason = AppType
@@ -32,8 +35,8 @@ instance Show Reason where
     Unknown  -> "<Unknown>"
 
 data Derivation = Derivation
-  { _origin :: Constraint
-  , _reason :: Reason }
+  { _antecedent :: Maybe (Annotated KindCheck KindConstraint)
+  , _reason     :: Reason }
 
 makeLenses ''Derivation
 

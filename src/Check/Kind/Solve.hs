@@ -35,7 +35,7 @@ import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
 solve :: Praxis [(Name, Kind)]
-solve = save stage $ save system $ do
+solve = save stage $ save our $ do
   stage .= KindCheck Solve
   solve'
   use (our . sol)
@@ -57,7 +57,7 @@ solve' = spin progress `chain` stuck
             -- logList Normal cs
             throwError (CheckError (KindError (Stuck)))
 
-spin :: (Kinded (Const Constraint) -> Praxis Bool) -> Praxis State
+spin :: (Kinded KindConstraint -> Praxis Bool) -> Praxis State
 spin solve = do
   cs <- (nub . sort) <$> use (our . constraints)
   case cs of
@@ -84,8 +84,8 @@ unis k = case k of
   KindType       -> []
 
 
-progress :: Kinded (Const Constraint) -> Praxis Bool
-progress c'@(d :< Const c) = case c of
+progress :: Kinded KindConstraint -> Praxis Bool
+progress c'@(d :< c) = case c of
 
   Eq k1 k2 | k1 == k2  -> tautology
 
@@ -104,7 +104,7 @@ progress c'@(d :< Const c) = case c of
         defer = require c' >> return False
         contradiction = throwError . CheckError . KindError . Contradiction $ c'
         introduce cs = requires (map (c' `implies`) cs) >> return True
-        swap = case c of Eq k1 k2 -> progress (d :< Const (Eq k2 k1))
+        swap = case c of Eq k1 k2 -> progress (d :< Eq k2 k1)
 
 ksub :: (Name -> Maybe Kind) -> Kind -> Kind
 ksub f k = case k of
@@ -115,17 +115,9 @@ ksub f k = case k of
   KindRecord r   -> KindRecord (fmap (ksub f) r)
   KindType       -> k
 
-{-
-ksub' :: (Kind -> Kind) -> forall a. Recursive a => Kinded a -> Intro Identity KindCheck a
-ksub' f t = case typeof t of
-  IType  -> Notice (Identity (f (view annotation t)))
-  ITyPat -> Notice (Identity (f (view annotation t)))
-  _      -> Notice (Identity (view annotation t))
--}
-
-cmap :: (Kind -> Kind) -> Kinded (Const Constraint) -> Kinded (Const Constraint)
+cmap :: (Kind -> Kind) -> Kinded KindConstraint -> Kinded KindConstraint
 cmap f c = let f' (Eq k1 k2) = Eq (f k1) (f k2) in
-  over value (\(Const x) -> Const (f' x)) (over (annotation . origin) f' c)
+  over value f' (over (annotation . antecedent) (cmap f <$>) c)
 
 (~>) :: Name -> Kind -> Praxis Bool
 (~>) n k = do

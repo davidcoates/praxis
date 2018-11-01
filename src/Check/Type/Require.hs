@@ -4,29 +4,36 @@ module Check.Type.Require
   , newConstraint
   , implies
   , share
+  , our
   ) where
 
-import           Check.System
+import           Annotate
+import           Check.System          hiding (System)
 import           Check.Type.Annotate
 import           Check.Type.Constraint
 import           Check.Type.System
 import           Common
+import           Control.Lens          (Lens')
 import           Praxis
 import           Source
+import           Stage                 (TypeCheck)
 import           Tag
 import           Type
 
-require :: Typed (Const Constraint) -> Praxis ()
+require :: Typed TypeConstraint -> Praxis ()
 require c = system . typeSystem . constraints %= (c:)
 
-requires :: [Typed (Const Constraint)] -> Praxis ()
+requires :: [Typed TypeConstraint] -> Praxis ()
 requires = mapM_ require
 
-newConstraint :: Constraint -> Reason -> Source -> Typed (Const Constraint)
-newConstraint c r s = (s, Derivation { origin = c, reason = r }) :< (Const c)
+newConstraint :: TypeConstraint TypeCheck -> Reason -> Source -> Typed TypeConstraint
+newConstraint c r s = (s, Derivation { _antecedent = Nothing, _reason = r }) :< c
 
-implies :: Typed (Const Constraint) -> Constraint -> Typed (Const Constraint)
-implies d c = set value (Const c) d
+implies :: Typed TypeConstraint -> TypeConstraint TypeCheck -> Typed TypeConstraint
+implies d c = over annotation (set antecedent (Just d)) (set value c d)
 
-share :: Typed Type -> Constraint
+share :: Typed Type -> TypeConstraint TypeCheck
 share t = Class $ (Phantom, ()) :< TyApply ((Phantom, ()) :< TyCon "Share") t
+
+our :: Lens' PraxisState System
+our = system . typeSystem

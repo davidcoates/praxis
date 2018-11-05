@@ -7,9 +7,7 @@ module Error
 
 import qualified Check.Error as Check
 import           Common
-import           Source      (Source)
 import           Stage
-import           Tag
 
 -- TODO move errors to subdirs like Check.Error
 data Error = LexicalError ParseSource ParseError

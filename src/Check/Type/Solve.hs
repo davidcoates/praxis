@@ -16,8 +16,6 @@ import           Env.TEnv               (ungeneralise)
 import           Error
 import           Praxis
 import           Record
-import           Source
-import           Tag
 import           Type
 
 import           Control.Applicative    (Const (..), liftA2)

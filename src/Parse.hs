@@ -16,8 +16,6 @@ import qualified Parse.Parse     as Sweet (Parseable (..))
 import qualified Parse.Parse.AST as Sweet (Exp, Program)
 import           Parse.Tokenise  (tokenise)
 import           Praxis
-import           Source          (Source)
-import           Tag
 import           Type            (Kind, Type)
 
 class Parseable a where

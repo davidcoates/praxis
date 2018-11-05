@@ -12,12 +12,9 @@ module Check.Kind.Constraint
   , reason
   ) where
 
-import           Annotate
 import           Common
 import           Control.Lens (makeLenses)
-import           Source
 import           Stage        (KindCheck)
-import           Tag
 import           Type
 
 -- The parameter is only to allow introspection, we always expect it to be KindCheck

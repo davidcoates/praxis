@@ -7,17 +7,13 @@ module Check.Type.Require
   , our
   ) where
 
-import           Annotate
 import           Check.System          hiding (System)
 import           Check.Type.Annotate
 import           Check.Type.Constraint
 import           Check.Type.System
 import           Common
-import           Control.Lens          (Lens')
 import           Praxis
-import           Source
 import           Stage                 (TypeCheck)
-import           Tag
 import           Type
 
 require :: Typed TypeConstraint -> Praxis ()

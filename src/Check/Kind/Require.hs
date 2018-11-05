@@ -6,17 +6,13 @@ module Check.Kind.Require
   , our
   ) where
 
-import           Annotate
 import           Check.Kind.Annotate
 import           Check.Kind.Constraint
 import           Check.Kind.System
 import           Check.System          hiding (System)
 import           Common
-import           Control.Lens          (Lens')
 import           Praxis
-import           Source
 import           Stage                 (KindCheck)
-import           Tag
 import           Type
 
 require :: Kinded KindConstraint -> Praxis ()

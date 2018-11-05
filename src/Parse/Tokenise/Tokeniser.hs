@@ -9,14 +9,11 @@ module Parse.Tokenise.Tokeniser
   , (<|?>)
   ) where
 
-import           Annotate
 import           Common
 import           Error                (Error (..))
 import qualified Parse.Prim           as Prim
 import           Parse.Tokenise.Token
 import           Praxis               (Praxis, throwError)
-import           Source
-import           Tag
 
 import           Control.Applicative  (Alternative (..), Applicative (..))
 import           Data.List            (intercalate)

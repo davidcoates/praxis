@@ -6,9 +6,9 @@ module Check.Generate
   ( Generatable(..)
   ) where
 
-import           Annotate
 import           AST            (Program)
 import           Check.Annotate
+import           Common
 import           Parse.Annotate
 import           Praxis
 import           Stage

@@ -19,10 +19,7 @@ import           Error
 import           Introspect
 import           Praxis
 import qualified Record
-import           Source
 import           Stage
-import           Stage
-import           Tag
 import           Type
 
 import qualified Data.Set              as Set

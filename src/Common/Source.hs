@@ -1,4 +1,4 @@
-module Source
+module Common.Source
   ( Pos(..)
   , Source(..)
   , (<>)

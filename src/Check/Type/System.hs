@@ -11,13 +11,9 @@ module Check.Type.System
   , initialSystem
   ) where
 
-import           Control.Lens          (makeLenses)
-
 import           Check.Type.Annotate
 import           Check.Type.Constraint
 import           Common
-import           Source
-import           Tag
 import           Type                  (QType, Type)
 
 data System = System

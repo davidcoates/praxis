@@ -10,7 +10,6 @@ module Type
 --  , Polymorphic(..)
   ) where
 
-import           Annotate
 import           Common
 import           Record
 

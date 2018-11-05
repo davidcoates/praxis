@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Tag
+module Common.Tag
   ( Tag(..)
   , tag
   , value

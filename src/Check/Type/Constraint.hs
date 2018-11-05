@@ -12,9 +12,7 @@ module Check.Type.Constraint
   , Reason(..)
   ) where
 
-import           Annotate
 import           Common
-import           Source
 import           Stage        (TypeCheck)
 import           Type
 

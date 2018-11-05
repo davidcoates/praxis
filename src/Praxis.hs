@@ -57,9 +57,7 @@ import           Common
 import           Env                  (KEnv, TEnv, VEnv)
 import           Error                (Error)
 import           Record               (Record)
-import           Source
 import           Stage
-import           Tag                  (Tag (..))
 import           Type
 
 import           Control.Applicative  (liftA2)

@@ -2,15 +2,12 @@ module Parse.Tokenise
   ( tokenise
   ) where
 
-import           Annotate
 import           AST                      (Lit (..), QString (..))
 import           Common
 import           Parse.Tokenise.Layout
 import           Parse.Tokenise.Token
 import           Parse.Tokenise.Tokeniser
 import           Praxis                   hiding (try)
-import           Source
-import           Tag
 
 import           Control.Applicative      (Alternative, Applicative, empty,
                                            liftA2, (<|>))

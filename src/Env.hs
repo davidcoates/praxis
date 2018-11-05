@@ -4,8 +4,7 @@ module Env
   , KEnv
   ) where
 
-import           Annotate
-import           Common   (Name)
+import           Common
 import           Env.Env  (Env)
 import           Env.LEnv (LEnv)
 import           Stage

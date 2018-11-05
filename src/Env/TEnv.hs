@@ -28,8 +28,6 @@ import qualified Env.LEnv              as LEnv
 import           Error
 import           Introspect            (sub)
 import           Praxis
-import           Source                (Source)
-import           Tag
 import           Type
 
 import           Control.Monad         (replicateM)

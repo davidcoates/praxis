@@ -23,9 +23,7 @@ import           Parse.Annotate        (Parsed)
 import qualified Parse.Parse.AST       as Parse
 import           Praxis
 import           Record
-import           Source
 import           Stage
-import           Tag
 import           Type                  hiding (getEffects)
 
 import           Control.Applicative   (liftA2)

@@ -12,12 +12,9 @@ module Parse.Parse.AST
   , Tok(..)
   ) where
 
-import           Annotate
-import           AST      (Lit (..), Pat (..), QString)
-import           Pretty
+import           AST    (Lit (..), Pat (..), QString)
+import           Common
 import           Record
-import           Source
-import           Tag
 import           Type
 
 data Decl a = DeclFun Name [Annotated a Pat] (Annotated a Exp)

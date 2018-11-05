@@ -19,8 +19,6 @@ import           Parse               (parse)
 import           Parse.Annotate
 import           Praxis
 import qualified Record
-import           Source
-import           Tag
 import           Type                hiding (mono)
 import           Value
 

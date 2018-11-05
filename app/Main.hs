@@ -8,9 +8,7 @@ import qualified Env.VEnv             as VEnv (lookup)
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
-import           Pretty               (indent)
 import           Record
-import           Tag
 import           Type
 import           Value
 

@@ -10,7 +10,6 @@ module Parse.Parse.Parser
   , (<|?>)
   ) where
 
-import           Annotate
 import           Common
 import           Error
 import           Parse.Annotate
@@ -18,9 +17,7 @@ import           Parse.Parse.AST
 import qualified Parse.Prim           as Prim
 import qualified Parse.Tokenise.Token as Token
 import           Praxis               (Praxis, throwError)
-import           Source               (Source (..))
 import           Stage
-import           Tag
 
 import           Control.Applicative  (Alternative (..), Applicative (..))
 

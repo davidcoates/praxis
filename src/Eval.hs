@@ -13,7 +13,6 @@ import           Env.VEnv       (VEnv, elim, elimN, intro)
 import qualified Env.VEnv       as VEnv (fromList, lookup)
 import           Praxis
 import           Record
-import           Tag
 import           Value
 
 import           Data.List      (find)

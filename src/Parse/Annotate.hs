@@ -4,6 +4,7 @@ module Parse.Annotate
   ( Parsed
   ) where
 
+import           Common
 import           Introspect
 import           Stage      (Parse)
 

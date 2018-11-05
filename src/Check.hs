@@ -11,7 +11,6 @@ import           Parse.Annotate
 import qualified Parse.Parse.AST as Parse (Annotated)
 import           Praxis
 import           Record
-import           Tag
 import           Type
 
 import           Control.Arrow   (first)

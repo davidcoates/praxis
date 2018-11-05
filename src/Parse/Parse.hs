@@ -6,7 +6,6 @@ module Parse.Parse
   ( Parseable(..)
   ) where
 
-import           Annotate
 import           AST                  (Lit (..), QString (..))
 import           Common
 import           Parse.Annotate
@@ -17,9 +16,7 @@ import qualified Parse.Tokenise.Token as Token
 import           Praxis               hiding (try)
 import           Record               (Record)
 import qualified Record
-import           Source
 import           Stage                (Parse)
-import           Tag
 import           Type
 
 import           Control.Applicative  (Const (..), liftA2, liftA3, (<**>),

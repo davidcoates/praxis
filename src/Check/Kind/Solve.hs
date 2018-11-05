@@ -21,9 +21,7 @@ import           Error
 import           Introspect
 import           Praxis
 import           Record
-import           Source
 import           Stage
-import           Tag
 import           Type
 
 import           Control.Applicative    (Const (..), liftA2)

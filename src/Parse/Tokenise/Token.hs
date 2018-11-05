@@ -5,9 +5,7 @@ module Parse.Tokenise.Token
   ) where
 
 import           AST    (Lit (..), QString (..))
-import           Pretty
-import           Source
-import           Tag
+import           Common
 
 data Token = QVarId QString
            | QConId QString

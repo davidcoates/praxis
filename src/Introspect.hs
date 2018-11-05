@@ -16,7 +16,6 @@ module Introspect
   , sub
   , extract
   , only
-  , module Annotate
   , DataAlt
   , Decl
   , Exp
@@ -32,7 +31,6 @@ module Introspect
 
 import qualified Data.Set              as Set (fromList, toList)
 
-import           Annotate
 import           AST
 import           Check.Kind.Constraint (KindConstraint (..))
 import           Check.Type.Constraint (TypeConstraint (..))

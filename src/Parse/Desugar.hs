@@ -14,8 +14,6 @@ import           Parse.Parse.AST        (Op)
 import qualified Parse.Parse.AST        as Parse
 import           Praxis
 import           Record                 (pair)
-import           Source
-import           Tag
 import           Type                   (Kind, Type)
 
 import           Control.Applicative    (Const, liftA2, liftA3)

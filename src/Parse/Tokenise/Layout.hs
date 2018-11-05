@@ -2,10 +2,9 @@ module Parse.Tokenise.Layout
   ( layout
   ) where
 
-import           Annotate
+import           Common
 import           Parse.Tokenise.Token
 import           Praxis
-import           Source
 
 lbrace :: Sourced Token
 lbrace = Phantom :< Special '{'

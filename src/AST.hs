@@ -18,10 +18,8 @@ import           Data.Map         (Map)
 import qualified Data.Map         as Map
 import           Data.Traversable (sequenceA)
 
-import           Annotate
 import           Common
 import           Record
-import           Tag
 import           Type
 
 data Decl a = DeclVar Name (Maybe (Annotated a QType, Annotated a Type)) (Annotated a Exp)

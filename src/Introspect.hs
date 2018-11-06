@@ -93,7 +93,7 @@ omnispect f x = set annotation <$> complete (omnispect f) (typeof x) (view annot
   Notice c  -> c *> recurse (omnispect f) (view value x)
   )
 
-sub :: forall a s. (Recursive a, Complete s) => (a s -> Maybe (a s)) -> Annotated s a -> Annotated s a
+sub :: forall a b s. (Recursive a, Recursive b, Complete s) => (a s -> Maybe (a s)) -> Annotated s b -> Annotated s b
 sub f x = runIdentity $ omnispect f' x where
   f' :: forall a. Recursive a => Annotated s a -> Omni Identity s a
   f' y = case transfer f (view value y) of

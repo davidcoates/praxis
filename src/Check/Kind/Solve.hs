@@ -6,6 +6,7 @@
 
 module Check.Kind.Solve
   ( solve
+  , ksub
   ) where
 
 import           AST
@@ -42,6 +43,8 @@ data State = Cold
            | Warm
            | Done
 
+throwKindError = throwError . CheckError . KindError
+
 solve' :: Praxis State
 solve' = spin progress `chain` stuck
     where chain :: Praxis State -> Praxis State -> Praxis State
@@ -53,7 +56,7 @@ solve' = spin progress `chain` stuck
             -- FIXME
             -- cs <- get (our . constraints)
             -- logList Normal cs
-            throwError (CheckError (KindError (Stuck)))
+            throwKindError Stuck
 
 spin :: (Kinded KindConstraint -> Praxis Bool) -> Praxis State
 spin solve = do
@@ -100,7 +103,7 @@ progress c'@(d :< c) = case c of
   where solved = return True
         tautology = solved
         defer = require c' >> return False
-        contradiction = throwError . CheckError . KindError . Contradiction $ c'
+        contradiction = throwKindError (Contradiction c')
         introduce cs = requires (map (c' `implies`) cs) >> return True
         swap = case c of Eq k1 k2 -> progress (d :< Eq k2 k1)
 
@@ -114,8 +117,8 @@ ksub f k = case k of
   KindType       -> k
 
 cmap :: (Kind -> Kind) -> Kinded KindConstraint -> Kinded KindConstraint
-cmap f c = let f' (Eq k1 k2) = Eq (f k1) (f k2) in
-  over value f' (over (annotation . antecedent) (cmap f <$>) c)
+cmap f c = over value f' (over (annotation . antecedent) (cmap f <$>) c)
+  where f' (k1 `Eq` k2) = f k1 `Eq` f k2
 
 (~>) :: Name -> Kind -> Praxis Bool
 (~>) n k = do

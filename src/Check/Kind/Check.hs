@@ -1,30 +1,28 @@
-module Check.Type.Check
+module Check.Kind.Check
   ( check
   ) where
 
+import           Check.Kind.Annotate
+import           Check.Kind.Generate
+import           Check.Kind.Require
+import           Check.Kind.Solve
+import           Check.Kind.System
 import           Check.Type.Annotate
-import           Check.Type.Generate
-import           Check.Type.Require
-import           Check.Type.Solve
-import           Check.Type.System
 import           Common
 import           Introspect
-import           Parse.Annotate
 import           Praxis
 import           Stage
 import           Type
 
-check :: Recursive a => Parsed a -> Praxis (Typed a)
+check :: Recursive a => Typed a -> Praxis (Kinded a)
 check a = save stage $ do
-  stage .= TypeCheck Warmup
+  stage .= KindCheck Warmup
   our .= initialSystem
   b <- generate a
-  (ts, qs) <- solve
-  let c = sub (\t -> case t of { TyUni n -> lookup n ts; _ -> Nothing }) b
-  let d = sub (\q -> case q of { QTyUni n -> lookup n qs; _ -> Nothing }) c
-  -- TODO log a b c d ts qs
-  -- TODO FIXME add defaulting (need to wait until after kinds?)
-  return d
+  ks <- solve
+  -- ksub (`lookup` ks)
+  -- FIXME
+  return undefined
 
 {-
 fullSol :: (KindTraversable a, TypeTraversable a) => ([(Name, Kinded Type)], [(Name, Kind)]) -> a -> a

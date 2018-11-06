@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE Rank2Types           #-}
+{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Check.Type.Solve
@@ -7,15 +9,19 @@ module Check.Type.Solve
   ) where
 
 import           AST
+import           Check.Error
 import           Check.Type.Annotate
 import           Check.Type.Constraint
+import           Check.Type.Error
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
 import           Env.TEnv               (ungeneralise)
 import           Error
+import           Introspect
 import           Praxis
 import           Record
+import           Stage
 import           Type
 
 import           Control.Applicative    (Const (..), liftA2)
@@ -26,16 +32,15 @@ import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
-solve :: Praxis ([(Name, Typed Type)], [(Name, Typed QType)])
-solve = undefined
-
-{-
+solve :: Praxis ([(Name, Type TypeCheck)], [(Name, QType TypeCheck)])
 solve = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve'
-  t <- get (our . tsol)
-  q <- get (our . qsol)
+  t <- use (our . tsol)
+  q <- use (our . qsol)
   return (t, q)
+
+throwTypeError = throwError . CheckError . TypeError
 
 data State = Cold
            | Warm
@@ -52,11 +57,11 @@ solve' = spin progress `chain` spin generalise `chain` stuck
 -- FIXME
 --            cs <- get (our . constraints)
 --            logList Normal cs
-            throwError (CheckError Stuck)
+            throwTypeError Stuck
 
-spin :: (Derivation -> Praxis Bool) -> Praxis State
+spin :: (Typed TypeConstraint -> Praxis Bool) -> Praxis State
 spin solve = do
-  cs <- (nub . sort) <$> get (our . constraints)
+  cs <- (nub . sort) <$> use (our . constraints)
   case cs of
     [] -> return Done
     _  -> do
@@ -66,44 +71,48 @@ spin solve = do
       return $ if warm then Warm else Cold
   where
     loop = do
-      cs <- get (our . staging)
+      cs <- use (our . staging)
       case cs of
         []     -> return False
         (c:cs) -> (our . staging .= cs) >> liftA2 (||) (solve c) loop
 
-generalise :: Typed (Const Constraint) -> Praxis Bool
+unis = extract (only f)
+ where f (TyUni n) = [n]
+       f _         = []
+
+generalise :: Typed TypeConstraint -> Praxis Bool
 generalise d = do
-  ds <- liftA2 (++) (get (our . constraints)) (get (our . staging))
-  case constraint d of
+  ds <- liftA2 (++) (use (our . constraints)) (use (our . staging))
+  case view value d of
     Generalises (_ :< QTyUni n) t -> generalise' ds n t
     Generalises _               _ -> error "unreachable?"
     _                             -> defer
   where
     defer = require d >> return False
-    generalise' :: [Derivation] -> Name -> Typed Type -> Praxis Bool
-    generalise' ds n t = case classes (extract unis t) ds of
+    generalise' :: [Typed TypeConstraint] -> Name -> Typed Type -> Praxis Bool
+    generalise' ds n t = case classes (unis t) ds of
       Nothing -> defer
-      Just ts -> qTySolve n (generaliseType ts t)
+      Just ts -> qsolve n (generaliseType ts t)
 
-generaliseType :: [Typed Type] -> Typed Type -> Typed QType
+generaliseType :: [Typed Type] -> Typed Type -> QType TypeCheck
 generaliseType ts (a :< t) = case us of
-  [] -> a :< Mono t
+  [] -> Mono (a :< t)
   _  -> undefined -- TODO For each uni in t, find an annotated kind. Use this to build up [(Name, Kind)]
-  where us = extract unis (a :< t)
+  where us = unis (a :< t)
         vs = map (:[]) ['a'..]
         f u = (`lookup` zip us vs)
 
 -- TODO use sets here?
-classes :: [Name] -> [Typed (Const Constraint)] -> Maybe [Typed Type]
-classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case constraint d of
-  Class t         -> let ns' = extract unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
-  Eq t1 t2    -> if any (`elem` (extract unis t1 ++ extract unis t2)) ns then Nothing else Just []
+classes :: [Name] -> [Typed TypeConstraint] -> Maybe [Typed Type]
+classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
+  Class t         -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
+  Eq t1 t2    -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
   Generalises q t -> Just [] -- TODO not sure about these
   Specialises t q -> Just []
 
 
-progress :: Derivation -> Praxis Bool
-progress d = case constraint d of
+progress :: Typed TypeConstraint -> Praxis Bool
+progress d = case view value d of
 
   Class (k1 :< TyApply (k2 :< TyCon "Share") (a :< p)) -> case p of -- TODO Need instance solver!
     TyApply (_ :< TyCon "->") _ -> tautology
@@ -114,7 +123,7 @@ progress d = case constraint d of
 
   Eq t1 t2 | t1 == t2 -> tautology
 
-  Eq (_ :< TyUni x) t -> if x `elem` extract unis t then contradiction else tySolve x t
+  Eq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else tsolve x (view value t)
   Eq _ (_ :< TyUni _) -> swap
 
   Eq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ Eq t1 t2 ]
@@ -129,27 +138,27 @@ progress d = case constraint d of
 
   Eq t1@(_ :< TyFlat e1) t2@(_ :< TyFlat e2)
     | e1 > e2 -> swap
-    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` extract unis t2 then defer else tySolve n t2
-    | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = tySolve n (TyFlat Set.empty)
+    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` unis t2 then defer else tsolve n (view value t2)
+    | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = tsolve n (TyFlat Set.empty)
                                              empty _              = contradiction
                                          in foldr (\a b -> empty a >> b) solved e2
     | Just ((n1, l1), (n2, l2)) <- liftA2 (,) (snake e1) (snake e2) ->
         if n1 == n2 then do
-          a <- freshUniE
-          tySolve n1 (KindEffect :< TyFlat (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2]))
+          a <- freshUniT
+          tsolve n1 (TyFlat (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2]))
         else
-          tySolve n1 (KindEffect :< TyFlat (Set.union (Set.difference l2 l1) (Set.singleton (KindEffect :< TyUni n2)))) -- TODO adding KindEffects, is this a problem?
+          tsolve n1 (TyFlat (Set.union (Set.difference l2 l1) (Set.singleton ((Phantom, ()) :< TyUni n2))))
     | Just (n1, l1) <- snake e1 ->
         if literals e2 then
           if Set.isSubsetOf l1 e2 then
             defer
             -- FIXME This isn't correct! We could add any subset of l1 to n1
-            -- tySolve n1 (KindEffect :< TyFlat (Set.difference e2 l1)) -- TODO for all these differences, need to flatten?
+            -- tsolve n1 (TyFlat (Set.difference e2 l1)) -- TODO for all these differences, need to flatten?
           else
             contradiction
         else
           defer
-    | null (extract unis t1 ++ extract unis t2) -> contradiction
+    | null (unis t1 ++ unis t2) -> contradiction
     | otherwise                     -> defer
 
   Specialises _ (_ :< QTyUni _) -> defer
@@ -165,72 +174,40 @@ progress d = case constraint d of
   where solved = return True
         tautology = solved
         defer = require d >> return False
-        contradiction = throwError . CheckError . Contradiction $ d
-        introduce cs = requireAll (map (d `implies`) cs) >> return True
-        swap = case constraint d of t1 `Eq` t2 -> progress d{ constraint = t2 `Eq` t1 }
+        contradiction = throwTypeError (Contradiction d)
+        introduce cs = requires (map (d `implies`) cs) >> return True
+        swap = case view value d of t1 `Eq` t2 -> progress (set value (t2 `Eq` t1) d)
 
         snake :: Set (Typed Type) -> Maybe (Name, Set (Typed Type))
         snake es = case Set.toList es of
-          ((_ :< TyUni n):es) -> if null (concatMap (extract unis) es) then Just (n, Set.fromList es) else Nothing
+          ((_ :< TyUni n):es) -> if null (concatMap unis es) then Just (n, Set.fromList es) else Nothing
           _                   -> Nothing
 
         literals :: Set (Typed Type) -> Bool
-        literals es = null (concatMap (extract unis) (Set.toList es))
+        literals es = null (concatMap unis (Set.toList es))
 
-qTySolve :: Name -> Typed QType -> Praxis Bool
-qTySolve n q = do
-  let f :: Typed QType -> Praxis (Typed QType)
-      f = pure . subs (\n' -> if n == n' then Just q else Nothing)
-  over (our . qTySol) ((n, q):)
-  modify our (pseudoTraverse f)
-  modify tEnv (traverse f)
-  reuse n
-  return True
-
-tySolve :: Name -> Typed Type -> Praxis Bool
-tySolve n p = do
-  let f :: Typed Type -> Praxis (Typed Type)
-      f = tyGenSub (\n' -> if n == n' then Just p else Nothing)
-  over (our . tySol) ((n, p):)
-  modify our (pseudoTraverse f)
-  modify tEnv (traverse (pseudoTraverse f))
-  reuse n
-  return True
-
-
-tcmap :: (Typed Type -> Typed Type) -> Typed (Const Constraint) -> Typed (Const Constraint)
-tcmap f c = over value f' (over (annotation . origin) f' c)
-  where f' c = case c of
-    Eq t1 t2 -> Eq (f t1) (f t2)
-    -- TODO FIXME
-
-qcmap :: (Typed QType -> Typed QType) -> Typed (Const Constraint) -> Typed (Const Constraint)
-qcmap = undefined
--- qcmap = over value f' (over (annotation . origin) f' c)
-
+smap :: (forall a. Recursive a => Typed a -> Typed a) -> Praxis ()
+smap f = do
+  let lower :: forall a. (Recursive a, Annotation TypeCheck a ~ ()) => (Typed a -> Typed a) -> a TypeCheck -> a TypeCheck
+      lower f = view value . f . ((Phantom, ()) :<)
+  our . qsol %= fmap (over second (lower f))
+  our . tsol %= fmap (over second (lower f))
+  our . constraints %= fmap f
+  our . staging %= fmap f
+  our . axioms %= fmap f
+  tEnv %= over traverse f
 
 tsolve :: Name -> Type TypeCheck -> Praxis Bool
 tsolve n t = do
-  let f :: forall a. Recursive a => Typed a -> Typed a
-      f = sub (\t' -> case t' of { TyUni n' | n == n' -> Just t; _ -> Nothing })
+  smap $ sub (\t' -> case t' of { TyUni n' | n == n' -> Just t; _ -> Nothing })
   our . tsol %= ((n, t):)
-  our . constraints %= fmap (cmap f)
-  our . staging %= fmap (cmap f)
-  our . axioms %= fmap (cmap f)
-  -- tEnv %= over traverse f
   reuse n
   return True
 
 qsolve :: Name -> QType TypeCheck -> Praxis Bool
 qsolve n q = do
-  let f :: forall a. Recursive a => Typed a -> Typed a
-      f = sub (\q' -> case q' of { QTyUni n' | n == n' -> Just q; _ -> Nothing })
+  smap $ sub (\q' -> case q' of { QTyUni n' | n == n' -> Just q; _ -> Nothing })
   our . qsol %= ((n, q):)
-  our . constraints %= fmap (qcmap f)
-  our . staging %= fmap (qcmap f)
-  our . axioms %= fmap (qcmap f)
-  -- tEnv %= over traverse f
   reuse n
   return True
 
--}

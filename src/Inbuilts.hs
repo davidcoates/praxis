@@ -4,36 +4,36 @@ module Inbuilts
   ( initialState
   ) where
 
-import           AST                 (Lit (..))
-import           Check.Type.Annotate
-import           Check.Type.Check    (check)
+import           AST              (Lit (..))
+import           Check.Annotate
+import           Check.Type.Check (check)
 import           Common
-import           Env.KEnv            (KEnv)
-import qualified Env.KEnv            as KEnv (fromList)
-import           Env.TEnv            (TEnv)
-import qualified Env.TEnv            as TEnv (fromList)
-import           Env.VEnv            (VEnv)
-import qualified Env.VEnv            as VEnv (fromList)
+import           Env.KEnv         (KEnv)
+import qualified Env.KEnv         as KEnv (fromList)
+import           Env.TEnv         (TEnv)
+import qualified Env.TEnv         as TEnv (fromList)
+import           Env.VEnv         (VEnv)
+import qualified Env.VEnv         as VEnv (fromList)
 import           Error
-import           Parse               (parse)
+import           Parse            (parse)
 import           Parse.Annotate
 import           Praxis
 import qualified Record
-import           Type                hiding (mono)
+import           Type             hiding (mono)
 import           Value
 
-import           Control.Lens        as Lens (set)
-import           Data.List           (nub, sort)
-import qualified Data.Set            as Set (empty)
+import           Control.Lens     as Lens (set)
+import           Data.List        (nub, sort)
+import qualified Data.Set         as Set (empty)
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
 initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ emptyState
 
 mono :: String -> Typed QType
-mono s = let (a :< t) = runStatic m in a :< Mono (a :< t)
+mono s = let (a :< t) = runStatic m in (view source (a :< t), ()) :< Mono (a :< t)
   where m :: Praxis (Typed Type)
-        m = save kEnv $ (kEnv .= initialKEnv >> (parse s :: Praxis (Parsed Type)) >>= check :: Praxis (Typed Type))
+        m = (parse s :: Praxis (Parsed Type)) >>= check :: Praxis (Typed Type)
 
 trivial :: Typed Type
 trivial = (Phantom, ()) :< TyFlat Set.empty

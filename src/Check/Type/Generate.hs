@@ -4,20 +4,18 @@
 {-# LANGUAGE TypeFamilies           #-}
 
 module Check.Type.Generate
-  (
+  ( generate
   ) where
 
 import           AST
-import           Check.Generate
-import           Check.System
 import           Check.Type.Annotate
 import           Check.Type.Constraint
 import           Check.Type.Require
+import           Check.Type.System
 import           Common
 import qualified Env.KEnv              as KEnv
 import           Env.TEnv
 import           Error
-import           Inbuilts              hiding (ty)
 import           Introspect
 import           Parse.Annotate        (Parsed)
 import qualified Parse.Parse.AST       as Parse
@@ -39,8 +37,14 @@ ty = view annotation
 
 throwCheckError r = throwError (CheckError r)
 
-instance Recursive a => Generatable Parse TypeCheck a where
-  generate' = introspect gen
+generate :: Recursive a => Parsed a -> Praxis (Typed a)
+generate x = save stage $ do
+  stage .= TypeCheck Generate
+  x' <- introspect gen x
+  -- log Debug x'
+  -- cs <- use (our . constraints)
+  -- logList Debug (nub . sort $ cs)
+  return x'
 
 gen :: Recursive a => Parsed a -> Intro Praxis TypeCheck a
 gen x = case typeof x of

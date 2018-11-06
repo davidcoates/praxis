@@ -4,11 +4,10 @@
 {-# LANGUAGE TypeFamilies           #-}
 
 module Check.Kind.Generate
-  (
+  ( generate
   ) where
 
 import           Check.Error
-import           Check.Generate
 import           Check.Kind.Annotate
 import           Check.Kind.Constraint
 import           Check.Kind.Require
@@ -28,8 +27,17 @@ kind = view annotation
 
 throwCheckError r = throwError (CheckError r)
 
-instance Recursive a => Generatable TypeCheck KindCheck a where
-  generate' = introspect gen
+generate :: Recursive a => Typed a -> Praxis (Kinded a)
+generate x = save stage $ do
+  stage .= KindCheck Generate
+  x' <- generate' x
+  -- log Debug x'
+  -- cs <- use (our . constraints)
+  -- logList Debug (nub . sort $ cs)
+  return x'
+
+generate' :: Recursive a => Typed a -> Praxis (Kinded a)
+generate' = introspect gen
 
 gen :: Recursive a => Annotated TypeCheck a -> Intro Praxis KindCheck a
 gen x = case typeof x of

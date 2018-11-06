@@ -25,13 +25,6 @@ class Evaluable a b => Interpretable a b where
     interpret s
 
 instance Interpretable Program () where
-  interpret _ = undefined
-
-instance Interpretable Exp Value where
-  interpret _ = undefined
-
-{-
-instance Interpretable Program () where
   interpret s = do
     x <- parse s :: Praxis (Parsed Program)
     y <- check x :: Praxis (Kinded Program)
@@ -44,5 +37,3 @@ instance Interpretable Exp Value where
     y <- check x :: Praxis (Kinded Exp)
     v <- eval y
     return (y, v)
-
--}

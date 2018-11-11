@@ -4,7 +4,8 @@ module Common.Source
   , (<>)
   ) where
 
-import           Data.Monoid ((<>))
+import           Data.Monoid    (Monoid (..))
+import           Data.Semigroup (Semigroup (..))
 
 data Pos = Pos { line :: Int, column :: Int }
 
@@ -20,8 +21,10 @@ instance Show Source where
 --  show s       = show (start s)
 --  show s       = show (start s) ++ " to " ++ show (end s) ++ " aka {" ++ spelling s ++ "}"
 
+instance Semigroup Source where
+  Phantom <> s = s
+  s <> Phantom = s
+  s1 <> s2     = Source { start = start s1, end = end s2, spelling = spelling s1 ++ spelling s2 }
+
 instance Monoid Source where
   mempty = Phantom
-  mappend Phantom s = s
-  mappend s Phantom = s
-  mappend s1     s2 = Source { start = start s1, end = end s2, spelling = spelling s1 ++ spelling s2 }

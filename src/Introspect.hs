@@ -16,6 +16,7 @@ module Introspect
   , sub
   , extract
   , only
+  , amap
   , DataAlt
   , Decl
   , Exp
@@ -107,6 +108,14 @@ extract f x = getConst $ omnispect f' x where
 
 only :: forall a b s. (Monoid b, Recursive a) => (a s -> b) -> (forall a. Recursive a => Annotated s a -> b)
 only f x = getConst $ transfer (Const . f) (view value x)
+
+-- map over annotations
+amap :: forall a s. (Recursive a, Complete s) => (forall a. Recursive a => I a -> Annotation s a -> Annotation s a) -> Annotated s a -> Annotated s a
+amap f = let g :: forall a. Recursive a => Annotated s a -> Identity (Annotated s a)
+             g = Identity . amap f
+             h :: forall a. Recursive a => Annotated s a -> Intro Identity s a
+             h x = Notice (complete g (typeof x) (f (typeof x) (view annotation x)))
+          in runIdentity . introspect h
 
 -- Implementations below here
 

@@ -16,7 +16,7 @@ module Introspect
   , sub
   , extract
   , only
-  , amap
+  , asub
   , DataAlt
   , Decl
   , Exp
@@ -65,19 +65,22 @@ typeof :: forall a s. Recursive a => Annotated s a -> I a
 typeof _ = witness :: I a
 
 transfer :: forall a b f s. (Recursive a, Recursive b, Applicative f) => (a s -> f (a s)) -> b s -> f (b s)
-transfer f x = case (witness :: I a, witness :: I b) of
-  (IDataAlt, IDataAlt)               -> f x
-  (IDecl, IDecl)                     -> f x
-  (IExp, IExp)                       -> f x
-  (IPat, IPat)                       -> f x
-  (IProgram, IProgram)               -> f x
-  (IQType, IQType)                   -> f x
-  (IStmt, IStmt)                     -> f x
-  (ITyPat, ITyPat)                   -> f x
-  (IType, IType)                     -> f x
-  (ITypeConstraint, ITypeConstraint) -> f x
-  (IKindConstraint, IKindConstraint) -> f x
-  _                                  -> pure x
+transfer f x = switch (witness :: I a) (witness :: I b) (f x) (pure x)
+
+switch :: forall a b c. (Recursive a, Recursive b) => I a -> I b -> ((a ~ b) => c) -> c -> c
+switch a b eq neq = case (a, b) of
+  (IDataAlt, IDataAlt)               -> eq
+  (IDecl, IDecl)                     -> eq
+  (IExp, IExp)                       -> eq
+  (IPat, IPat)                       -> eq
+  (IProgram, IProgram)               -> eq
+  (IQType, IQType)                   -> eq
+  (IStmt, IStmt)                     -> eq
+  (ITyPat, ITyPat)                   -> eq
+  (IType, IType)                     -> eq
+  (ITypeConstraint, ITypeConstraint) -> eq
+  (IKindConstraint, IKindConstraint) -> eq
+  _                                  -> neq
 
 type Intro f s a = Analysis f (Annotated s a) (Annotation s a)
 
@@ -109,13 +112,16 @@ extract f x = getConst $ omnispect f' x where
 only :: forall a b s. (Monoid b, Recursive a) => (a s -> b) -> (forall a. Recursive a => Annotated s a -> b)
 only f x = getConst $ transfer (Const . f) (view value x)
 
--- map over annotations
-amap :: forall a s. (Recursive a, Complete s) => (forall a. Recursive a => I a -> Annotation s a -> Annotation s a) -> Annotated s a -> Annotated s a
-amap f = let g :: forall a. Recursive a => Annotated s a -> Identity (Annotated s a)
-             g = Identity . amap f
-             h :: forall a. Recursive a => Annotated s a -> Intro Identity s a
-             h x = Notice (complete g (typeof x) (f (typeof x) (view annotation x)))
-          in runIdentity . introspect h
+-- sub over annotations
+asub :: forall a b s. (Recursive a, Recursive b, Complete s) => I a -> (Annotation s a -> Maybe (Annotation s a)) -> Annotated s b -> Annotated s b
+asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . asub i f)) x
+  where a = view annotation x
+        a' :: Annotation s b
+        a' = switch i (typeof x) (case f a of { Nothing -> a''; Just a' -> a' }) a''
+        a'' :: Annotation s b
+        a'' = runIdentity . complete f' (typeof x) $ a
+        f' :: forall a. Recursive a => Annotated s a -> Identity (Annotated s a)
+        f' = Identity . asub i f
 
 -- Implementations below here
 

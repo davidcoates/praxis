@@ -28,19 +28,14 @@ data SyntaxError = SweetError ParseSource ParseError
                  | InfixError -- TODO
 
 instance Show Error where
-  show e = "<error>"
-
-{-
-instance Show Error where
   show e = case e of
     LexicalError s e -> "Lexical error: " ++ show e ++ " at " ++ show s
-    SyntaxError e    -> "Syntax error: "  ++ show e
-    TypeError e      -> "Type error: " ++ show e
-    KindError e      -> "Kind error: " ++ show e
+    SyntaxError e    -> "Syntax error: " -- ++ show e
+    CheckError e     -> "Check error: " -- ++ show e
 
 instance Show ParseSource where
-  show EOF        = "<end of file>"
-  show (Source s) = show s
+  show EOF              = "<end of file>"
+  show (Error.Source s) = show s
 
 instance Show ParseError where
   show e = case toList e of
@@ -51,6 +46,7 @@ instance Show ParseError where
           toList (Atom s)     = [s]
           toList Generic      = []
 
+{-
 instance Show SyntaxError where
   show e = case e of
     SweetError s e -> show s ++ " ... " ++ show e

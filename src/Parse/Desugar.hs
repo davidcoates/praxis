@@ -27,14 +27,13 @@ import           Prelude                hiding (exp, log)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
--- Show (Parsed b) =>
 class Desugarable a b | a -> b where
   desugar' :: (Parsed a) -> Praxis (Parsed b)
   desugar  :: (Parsed a) -> Praxis (Parsed b)
   desugar x = save stage $ do
     stage .= Desugar
     x' <- desugar' x
-    -- log Debug x'
+    log Debug x'
     return x'
 
 instance Desugarable Parse.Program Program where

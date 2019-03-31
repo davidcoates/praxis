@@ -17,9 +17,9 @@ instance Show Pos where
 
 instance Show Source where
   show Phantom = "<?>"
-  show s       = spelling s
+--  show s       = spelling s
 --  show s       = show (start s)
---  show s       = show (start s) ++ " to " ++ show (end s) ++ " aka {" ++ spelling s ++ "}"
+  show s       = show (start s) ++ " to " ++ show (end s) ++ " aka {" ++ spelling s ++ "}"
 
 instance Semigroup Source where
   Phantom <> s = s

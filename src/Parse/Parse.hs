@@ -30,12 +30,11 @@ import           Prelude              hiding (exp, log)
 class Parseable a where
   parse  :: [Sourced Token] -> Praxis (Parsed a)
 
--- Show (Parsed a) =>
-parse' :: Parser (a Parse) -> [Sourced Token] -> Praxis (Parsed a)
+parse' :: Show (Parsed a) => Parser (a Parse) -> [Sourced Token] -> Praxis (Parsed a)
 parse' parser ts = save stage $ do
   stage .= Parse
   x <- runParser parser ts
---  log Debug x
+  log Debug x
   return x
 
 instance Parseable Program where
@@ -51,7 +50,7 @@ instance Parseable (Const Kind) where
   parse ts = save stage $ do
     stage .= Parse
     a :< x <- runParser kind ts
---    log Debug x
+    log Debug x
     return (a :< Const x)
 
 

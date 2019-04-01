@@ -58,8 +58,7 @@ data QString = QString { qualification :: [String], name :: String }
   deriving (Ord, Eq)
 
 instance Show QString where
-  show s | qualification s == [] = name s
-         | otherwise             = intercalate "." (qualification s ++ [name s])
+  show s = intercalate "." (qualification s ++ [name s])
 
 data Stmt a = StmtDecl (Annotated a Decl)
             | StmtExp (Annotated a Exp)
@@ -71,10 +70,6 @@ instance Show Lit where
   show (String s) = show s
 
 {-
-instance Show QString where
-  show s = (if prefix == "" then "" else prefix ++ ".") ++ name s
-    where prefix = intercalate "." (qualification s)
-
 instance TagTraversable Decl where
   tagTraverse' f (DeclVar n t e) = (DeclVar n) <$> sequenceA (tagTraverse f <$> t) <*> tagTraverse f e
 

@@ -43,19 +43,18 @@ poly ks s = let (a :< Mono t) = mono s in a :< Forall ks trivial t
 
 prelude :: [(Name, Typed QType, Value)]
 prelude =
-  [ ("add",      mono "(Int, Int) -> Int",     lift (+))
-  , ("sub",      mono "(Int, Int) -> Int",     lift (-))
-  , ("mul",      mono "(Int, Int) -> Int",     lift (*))
-  , ("getInt",   mono "() -> Int # StdIn",     F (\(R _) -> liftIO ((L . Int) <$> readLn)))
-  , ("putInt",   mono "Int -> () # StdOut",    F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
-  , ("putStrLn", mono "String -> () # StdOut", F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
+  [ ("add",      mono "(Int, Int) -> Int", lift (+))
+  , ("sub",      mono "(Int, Int) -> Int", lift (-))
+  , ("mul",      mono "(Int, Int) -> Int", lift (*))
+  , ("getInt",   mono "() -> Int",         F (\(R _) -> liftIO ((L . Int) <$> readLn)))
+  , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
+  , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
   , ("dot",      poly
       [ ("a", KindType)
       , ("b", KindType)
       , ("c", KindType)
-      , ("e1", KindEffect)
-      , ("e2", KindEffect)] "(b -> c # e1, a -> b # e2) -> a -> c # e1 + e2", -- TODO shouldn't need kinds here in forall
-                                               F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
+      ] "(b -> c, a -> b) -> a -> c", -- TODO shouldn't need kinds here in forall
+        F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
   ]
   where
         lift :: (Int -> Int -> Int) -> Value
@@ -67,10 +66,8 @@ preludeKinds =
   , ("Bool",   KindType)
   , ("String", KindType)
   , ("Char",   KindType)
-  , ("StdOut", KindEffect)
-  , ("StdIn",  KindEffect)
   , ("Share",  KindFun KindType KindConstraint)
-  , ("->",     KindFun (KindRecord (Record.triple KindType KindType KindEffect)) KindType)
+  , ("->",     KindFun (KindRecord (Record.pair KindType KindType)) KindType)
   ]
 
 initialVEnv :: VEnv

@@ -31,7 +31,6 @@ fullSol :: (KindTraversable a, TypeTraversable a) => ([(Name, Kinded Type)], [(N
 fullSol (tySol, kindSol) = subs f . subs (`lookup` tySol) . subs (`lookup` kindSol)
   where f :: (Kind, Name) -> Maybe (Kinded Type) -- Trivial defaulting
         f (k, n) = if head n /= '?' then Nothing else (k :<) <$> case k of -- TODO fix the /= '?' hack
-          KindEffect -> Just $ TyEffects Set.empty
           KindType   -> Just $ TyRecord Record.unit
           _          -> Nothing
 

@@ -21,7 +21,6 @@ import qualified Data.Set    as Set
 
 data Kind = KindUni Name
           | KindConstraint
-          | KindEffect
           | KindFun Kind Kind
           | KindRecord (Record Kind)
           | KindType
@@ -32,10 +31,10 @@ data QType a = Mono (Annotated a Type)
              | QTyUni Name
 
 data Type a = TyUni Name                                      -- Compares less than all other types
-            | TyApply (Annotated a Type) (Annotated a Type)   -- ^Type-level application : (a -> #b) -> #a -> #b
+            | TyApply (Annotated a Type) (Annotated a Type)   -- ^Type-level application : (#a -> #b) -> #a -> #b
             | TyBang (Annotated a Type)
-            | TyCon Name                                      -- ^Includes (->) : [T, T , E] -> T
-            | TyFlat (Set (Annotated a Type))                 -- Used for effects and constraints
+            | TyCon Name                                      -- ^Includes (->) : [T, T] -> T
+            | TyFlat (Set (Annotated a Type))                 -- Used for constraints
             | TyLambda (Annotated a TyPat) (Annotated a Type) -- ^A type-level lambda : ?1 -> ?2
             | TyPack   (Record (Annotated a Type))            -- ^A type pack with a record kind
             | TyRecord (Record (Annotated a Type))            -- ^A type record : T
@@ -55,7 +54,6 @@ instance Show Kind where
   show k = case k of
     KindUni n -> n
     KindConstraint -> "Constraint"
-    KindEffect -> "Effect"
     KindFun k1 k2 -> show k1 ++ " -> " ++ show k2
     KindRecord r -> "[" ++ showGuts show r ++ "]"
     KindType -> "Type"

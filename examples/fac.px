@@ -3,13 +3,13 @@ fac = cases
   0 -> 1
   n -> n * fac (n - 1)
 
-main : () -> () # StdIn + StdOut
+main : () -> ()
 main () = do
   putStrLn "Enter a number:"
   x = getInt ()
   putInt (fac x)
 
 -- Without prompts
-main' : () -> () # StdIn + StdOut
+main' : () -> ()
 main' = putInt . fac . getInt
 

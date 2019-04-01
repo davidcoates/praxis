@@ -22,7 +22,7 @@ import qualified Parse.Parse.AST       as Parse
 import           Praxis
 import           Record
 import           Stage
-import           Type                  hiding (getEffects)
+import           Type
 
 import           Control.Applicative   (liftA2)
 import           Data.Foldable         (foldlM)

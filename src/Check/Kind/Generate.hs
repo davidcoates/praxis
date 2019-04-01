@@ -61,11 +61,10 @@ genType x = let s = view source x in (\(k :< t) -> (s, k) :< t) <$> case view va
       require $ newConstraint ((kind f') `Eq` KindFun (kind a') k) AppType s
       return (k :< TyApply f' a')
 
-    -- TODO allow constraints here too, not just effects
     TyFlat ts -> do
       ts' <- traverse generate' (Set.toList ts)
-      requires $ map (\t -> newConstraint (kind t `Eq` KindEffect) (Custom "typ: TyFlat TODO") s) ts'
-      return (KindEffect :< TyFlat (Set.fromList ts'))
+      requires $ map (\t -> newConstraint (kind t `Eq` KindConstraint) (Custom "typ: TyFlat TODO") s) ts'
+      return (KindConstraint :< TyFlat (Set.fromList ts'))
 
     TyCon n -> do
       e <- KEnv.lookup n

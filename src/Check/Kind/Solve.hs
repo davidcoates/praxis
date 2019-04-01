@@ -79,7 +79,6 @@ unis :: Kind -> [Name]
 unis k = case k of
   KindUni n      -> [n]
   KindConstraint -> []
-  KindEffect     -> []
   KindFun k1 k2  -> unis k1 ++ unis k2
   KindRecord r   -> concatMap (unis . snd) (toList r)
   KindType       -> []
@@ -111,7 +110,6 @@ ksub :: (Name -> Maybe Kind) -> Kind -> Kind
 ksub f k = case k of
   KindUni n      -> fromMaybe k (f n)
   KindConstraint -> k
-  KindEffect     -> k
   KindFun k1 k2  -> KindFun (ksub f k1) (ksub f k2)
   KindRecord r   -> KindRecord (fmap (ksub f) r)
   KindType       -> k

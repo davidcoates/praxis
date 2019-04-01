@@ -1,11 +1,11 @@
 
 data List a = Nil | Cons (a, List a)
 
-map_ : (!a -> b # e) -> !List a -> () # e
+map_ : (!a -> b) -> !List a -> ()
 map_ _ Nil = ()
 map_ f (Cons (x, xs)) = f x then map_ f xs
 
-main : () -> () # StdOut
+main : () -> ()
 main () = do
   xs = Cons (1, Cons (2, Cons (3, Nil)))
   map_ putInt !xs

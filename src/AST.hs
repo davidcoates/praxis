@@ -22,7 +22,7 @@ import           Common
 import           Record
 import           Type
 
-data Decl a = DeclVar Name (Maybe (Annotated a QType, Annotated a Type)) (Annotated a Exp)
+data Decl a = DeclVar Name (Maybe (Annotated a QType)) (Annotated a Exp)
             | DeclData Name (Maybe (Annotated a TyPat)) [Annotated a DataAlt]
 
 data DataAlt a = DataAlt Name (Annotated a Type)
@@ -36,7 +36,7 @@ data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
            | Lit Lit
            | Read Name (Annotated a Exp)
            | Record (Record (Annotated a Exp))
-           | Sig (Annotated a Exp) (Annotated a Type, Annotated a Type)
+           | Sig (Annotated a Exp) (Annotated a Type)
            | Var Name
 
 -- |AST for Literals

@@ -124,7 +124,7 @@ varsym = token varsym' <?> "varsym"
   where varsym' (Token.QVarSym n) | null (qualification n) = Just (name n)
         varsym' _                 = Nothing
 
--- For some operators we don't want to reserve like effect + and forall .
+-- We don't want to reserve some operators, namely forall . and constrant +
 userOp :: String -> Parser ()
 userOp s = token userOp' *> pure () <?> "op '" ++ s ++ "'"
   where userOp' (Token.QVarSym n) | null (qualification n) && name n == s = Just ()
@@ -277,35 +277,22 @@ expRead = liftT4 (\_ x _ e -> Parse.Read x e) (try prefix) varid (reservedId "in
 
 raw a = (Phantom, ()) :< a
 
-sig :: Parser (Parsed QType, Parsed Type)
-sig = ((\a -> (a, raw empty)) <$> parsed qty) <|> ((\(a :< p, e) -> (a :< Mono (a :< p), e)) <$> impure)
+sig :: Parser (Parsed QType)
+sig = parsed qty <|> ((\(a :< p) -> (a :< Mono (a :< p))) <$> parsed ty)
   where qty :: Parser (QType Parse)
         qty = try (reservedId "forall") #> liftT3 Forall (many1 var <# dot) constraints (parsed ty)
         constraints :: Parser (Parsed Type)
-        constraints = pure $ raw (TyCon "Trivial") -- TODO constraints
+        constraints = parsed $ pure empty      -- TODO constraints
         var = liftT2 (,) varid (pure KindType) -- TODO allow kinds
 
 empty :: Type Parse
 empty = TyFlat Set.empty
 
-impure :: Parser (Parsed Type, Parsed Type)
-impure = liftT2O f (parsed ty) (reservedOp "#") (parsed effs) <|?> "impure"
-  where f p Nothing   = (p, raw empty)
-        f p (Just es) = (p, es)
-
-effs :: Parser (Type Parse)
-effs = TyFlat . Set.fromList <$> sepBy1 (parsed eff) plus
-
-eff :: Parser (Type Parse)
-eff = efLit <|> efVar <?> "effect"
-  where efLit = TyCon <$> try conid
-        efVar = TyVar <$> try varid
-
 ty :: Parser (Type Parse)
-ty = liftT2O f (parsed ty') (reservedOp "->") impure
-  where f :: Parsed Type -> Maybe (Parsed Type, Parsed Type) -> Type Parse
-        f p Nothing        = view value p
-        f p (Just (p', e)) = TyApply (raw (TyCon "->")) (raw (TyPack (Record.triple p p' e))) -- TODO sources
+ty = liftT2O f (parsed ty') (reservedOp "->") (parsed ty)
+  where f :: Parsed Type -> Maybe (Parsed Type) -> Type Parse
+        f p Nothing   = view value p
+        f p (Just p') = TyApply (raw (TyCon "->")) (raw (TyPack (Record.pair p p'))) -- TODO sources
         ty' = tyUnit <|> tyVar <|> tyCon <|> tyRecord <|> tyParen
         tyParen = special '(' #> ty <# special ')'
 

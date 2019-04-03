@@ -42,12 +42,12 @@ generate' = introspect gen
 gen :: Recursive a => Annotated TypeCheck a -> Intro Praxis KindCheck a
 gen x = case typeof x of
   IDataAlt -> Notice (pure ())
-  IDecl    -> Notice (introspect gen (view annotation x))
-  IExp     -> Notice (both (introspect gen) (view annotation x))
+  IDecl    -> Notice (pure ())
+  IExp     -> Notice (introspect gen (view annotation x))
   IPat     -> Notice (introspect gen (view annotation x))
   IProgram -> Notice (pure ())
   IQType   -> Notice (pure ())
-  IStmt    -> Notice (introspect gen (view annotation x))
+  IStmt    -> Notice (pure ())
   IType    -> Realise (genType x)
   -- TODO TyPat?
 

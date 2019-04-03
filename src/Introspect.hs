@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE Rank2Types                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE FlexibleInstances     #-}
 
 module Introspect
   ( Analysis(..)
@@ -44,6 +45,7 @@ data Analysis f a b = Realise (f a)
 class Recursive a where
   witness :: I a
   recurse :: Applicative f => (forall a. Recursive a => Annotated s a -> f (Annotated t a)) -> a s -> f (a t)
+--  label   :: a s -> String
 
 class Complete s where
   complete :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> f (Annotated s a)) -> I a -> Annotation s a -> f (Annotation s a)
@@ -123,6 +125,14 @@ asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . a
         f' :: forall a. Recursive a => Annotated s a -> Identity (Annotated s a)
         f' = Identity . asub i f
 
+{-
+flatShow :: (Recursive a, Complete s) => Annotated s a -> String
+flatShow = undefined
+
+instance (Recursive a, Complete s, x ~ Annotation s a) => Show (Tag (Source, x) (a s)) where
+  show = flatShow
+-}
+
 -- Implementations below here
 
 instance Recursive DataAlt where
@@ -133,7 +143,7 @@ instance Recursive DataAlt where
 instance Recursive Decl where
   witness = IDecl
   recurse f x = case x of
-    DeclVar n t e -> DeclVar n <$> series ((\(a, b) -> (,) <$> f a <*> f b) <$> t) <*> f e
+    DeclVar n t e -> DeclVar n <$> series (f <$> t) <*> f e
     DeclData n t ts -> DeclData n <$> series (f <$> t) <*> traverse f ts
 
 instance Recursive Exp where
@@ -147,7 +157,7 @@ instance Recursive Exp where
     Lit l        -> pure (Lit l)
     Read n a     -> Read n <$> f a
     Record r     -> Record <$> traverse f r
-    Sig e (a, b) -> Sig <$> f e <*> ((,) <$> f a <*> f b)
+    Sig e t      -> Sig <$> f e <*> f t
     Var n        -> pure (Var n)
 
 instance Recursive Pat where

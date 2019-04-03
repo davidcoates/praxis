@@ -18,7 +18,7 @@ import           Record
 import           Type
 
 data Decl a = DeclFun Name [Annotated a Pat] (Annotated a Exp)
-            | DeclSig Name (Annotated a QType, Annotated a Type)
+            | DeclSig Name (Annotated a QType)
 
 data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
            | Case (Annotated a Exp) [(Annotated a Pat, Annotated a Exp)]
@@ -29,7 +29,7 @@ data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
            | Mixfix [Annotated a Tok]
            | Read Name (Annotated a Exp)
            | Record (Record (Annotated a Exp))
-           | Sig (Annotated a Exp) (Annotated a Type, Annotated a Type)
+           | Sig (Annotated a Exp) (Annotated a Type)
            | Var Name
            | VarBang Name
 

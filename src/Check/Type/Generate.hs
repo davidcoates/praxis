@@ -66,13 +66,12 @@ parallel (x:xs) = do
   return (a:as)
 
 -- TODO move this somewhere
-fun :: Typed Type -> Typed Type -> Typed Type -> Typed Type
-fun a b c = let
+fun :: Typed Type -> Typed Type -> Typed Type
+fun a b = let
   sa = view source a
   sb = view source b
-  sc = view source c
-  s = (sa <> sb <> sc) { spelling = spelling sa ++ " -> " ++ spelling sb ++ " # " ++ spelling sc } in
-  (s, ()) :< TyApply ((s, ()) :< TyCon "->") ((s, ()) :< TyPack (Record.triple a b c))
+  s = (sa <> sb) { spelling = spelling sa ++ " -> " ++ spelling sb } in
+  (s, ()) :< TyApply ((s, ()) :< TyCon "->") ((s, ()) :< TyPack (Record.pair a b))
 
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `Eq` t2) r s
@@ -112,8 +111,8 @@ decl = split $ \(s, d) -> case d of
   DeclVar n sig e -> do
 
     -- TODO if polymorphic, de shoud be empty. Is this guaranteed?
-    (dq, de) <- case sig of Nothing     -> liftA2 (,) freshUniQ freshUniT
-                            Just (t, e) -> pure (cast t, cast e)
+    dq <- case sig of Nothing -> freshUniQ
+                      Just t  -> pure (cast t)
 
     -- TODO if user supplied a monomorphic type, we could just insert it here
     intro n dq
@@ -121,23 +120,21 @@ decl = split $ \(s, d) -> case d of
     dt <- freshUniT
 
     e' <- exp e
-    let (et, ee) = ty e'
-    equal dt et (UserSignature (Just n)) s -- TODO UserSignature isn't a great name for this ut is Nothing
-    equal de ee (UserSignature (Just n)) s
+    equal dt (ty e') (UserSignature (Just n)) s -- TODO UserSignature isn't a great name for this ut is Nothing
     require $ newConstraint (dq `Generalises` dt) (Generalisation n) s
 
-    return (ee, DeclVar n Nothing e')
+    return ((), DeclVar n Nothing e')
 
 stmt :: Parsed Stmt -> Praxis (Typed Stmt, Maybe (Typed Type))
 stmt = splitFree $ \(s, x) -> case x of
 
   StmtDecl d -> do
     d' <- decl d
-    return (ty d', StmtDecl d', Nothing)
+    return ((), StmtDecl d', Nothing)
 
   StmtExp e -> do
     e' <- exp e
-    return (snd (ty e'), StmtExp e', Just (fst (ty e')))
+    return ((), StmtExp e', Just (ty e'))
 
 
 mono :: Typed Type -> Typed QType
@@ -151,58 +148,50 @@ exp = split $ \(s, e) -> case e of
     ye <- freshUniT
     f' <- exp f
     x' <- exp x
-    let (ft, fe) = ty f'
-    let (xt, xe) = ty x'
-    require $ newConstraint (ft `Eq` fun xt yt ye) AppFun s
-    let e = flat [fe, xe, ye]
-    return ((yt, e), Apply f' x')
+    let ft = ty f'
+    let xt = ty x'
+    require $ newConstraint (ft `Eq` fun xt yt) AppFun s
+    return (yt, Apply f' x')
 
   Case x alts -> do
     x' <- exp x
-    let (xt, e1) = ty x'
+    let xt = ty x'
     alts' <- parallel (map bind alts)
     t1 <- equals (map (view tag . fst) alts') CaseCongruence
-    (t2, e2) <- equalsImpure (map (view tag . snd) alts') CaseCongruence
+    t2 <- equals (map (view tag . snd) alts') CaseCongruence
     require $ newConstraint (xt `Eq` t1) CaseCongruence s -- TODO probably should pick a better name for this
-    return ((xt, flat [e1, e2]), Case x' alts')
+    return (xt, Case x' alts')
 
   Cases alts -> closure $ do
     alts' <- parallel (map bind alts)
     t1 <- equals (map (view tag . fst) alts') CaseCongruence
-    (t2, e) <- equalsImpure (map (view tag . snd) alts') CaseCongruence
-    return ((fun t1 t2 e, empty), Cases alts')
+    t2 <- equals (map (view tag . snd) alts') CaseCongruence
+    return (fun t1 t2, Cases alts')
 
   Do ss -> do
     let f Nothing = 0
         f _       = 1
     (ss', i) <- traverseSum (\x -> over second f <$> stmt x) ss
     (_, Just t) <- stmt (last ss)
-    let e = flat $ map (view annotation) ss'
     elimN i
-    return ((t, e), Do ss')
+    return (t, Do ss')
 
   If a b c -> do
     a' <- exp a
     (b', c') <- join (exp b) (exp c)
-    let (at, ae) = ty a'
-    let (bt, be) = ty b'
-    let (ct, ce) = ty c'
-    require $ newConstraint (at `Eq` ((Phantom, ()) :< TyCon "Bool")) IfCondition s
-    require $ newConstraint (bt `Eq` ct) IfCongruence s
-    let e = flat [ae, be, ce]
-    return ((bt, e), If a' b' c')
+    require $ newConstraint (ty a' `Eq` ((Phantom, ()) :< TyCon "Bool")) IfCondition s
+    require $ newConstraint (ty b' `Eq` ty c') IfCongruence s
+    return (ty b', If a' b' c')
 
   Lambda p e -> closure $ do
     (p', i) <- pat p
     e' <- exp e
     elimN i
-    let pt       = ty p'
-    let (et, ee) = ty e'
-    return ((fun pt et ee, empty), Lambda p' e')
+    return (fun (ty p') (ty e'), Lambda p' e')
 
   Lit x -> do
     let t = case x of { Int _ -> TyCon "Int" ; Bool _ -> TyCon "Bool" ; String _ -> TyCon "String" ; Char _ -> TyCon "Char" }
-    return (((Phantom, ()) :< t, empty), Lit x)
+    return ((Phantom, ()) :< t, Lit x)
 
   Read n e -> do
     t <- read s n
@@ -213,9 +202,8 @@ exp = split $ \(s, e) -> case e of
 
   Record r -> do
     r' <- traverse exp r
-    let e = flat (map (snd . ty . snd) (Record.toList r'))
-    let t = (Phantom, ()) :< TyRecord (fmap (fst . ty) r')
-    return ((t, e), Record r')
+    let t = (Phantom, ()) :< TyRecord (fmap ty r')
+    return (t, Record r')
 
 {-
   Sig e t -> do
@@ -227,16 +215,10 @@ exp = split $ \(s, e) -> case e of
 
   Var n -> do
     t <- mark s n
-    return ((t, empty), Var n)
+    return (t, Var n)
 
 equals :: [(Source, Typed Type)] -> Reason -> Praxis (Typed Type)
 equals ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
-
-equalsImpure :: [(Source, (Typed Type, Typed Type))] -> Reason -> Praxis (Typed Type, Typed Type)
-equalsImpure ts r = do
-  t <- equals (map (\(s, (t, e)) -> (s, t)) ts) r
-  let e = flat $ map (\(_, (_, e)) -> e) ts
-  return (t, e)
 
 bind :: (Parsed Pat, Parsed Exp) -> Praxis (Typed Pat, Typed Exp)
 bind (s :< p, e) = do

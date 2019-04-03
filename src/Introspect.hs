@@ -25,6 +25,7 @@ module Introspect
   , Program
   , QType
   , Stmt
+  , Tok
   , TyPat
   , Type
   , TypeConstraint
@@ -58,6 +59,7 @@ data I a where
   IProgram :: I Program
   IQType   :: I QType
   IStmt    :: I Stmt
+  ITok     :: I Tok
   ITyPat   :: I TyPat
   IType    :: I Type
   ITypeConstraint :: I TypeConstraint
@@ -78,6 +80,7 @@ switch a b eq neq = case (a, b) of
   (IProgram, IProgram)               -> eq
   (IQType, IQType)                   -> eq
   (IStmt, IStmt)                     -> eq
+  (ITok, ITok)                       -> eq
   (ITyPat, ITyPat)                   -> eq
   (IType, IType)                     -> eq
   (ITypeConstraint, ITypeConstraint) -> eq
@@ -143,8 +146,10 @@ instance Recursive DataAlt where
 instance Recursive Decl where
   witness = IDecl
   recurse f x = case x of
-    DeclVar n t e -> DeclVar n <$> series (f <$> t) <*> f e
     DeclData n t ts -> DeclData n <$> series (f <$> t) <*> traverse f ts
+    DeclFun n ps e  -> DeclFun n <$> traverse f ps <*> f e
+    DeclSig n t     -> DeclSig n <$> f t
+    DeclVar n t e   -> DeclVar n <$> series (f <$> t) <*> f e
 
 instance Recursive Exp where
   witness = IExp
@@ -155,10 +160,12 @@ instance Recursive Exp where
     If a b c     -> If <$> f a <*> f b <*> f c
     Lambda a b   -> Lambda <$> f a <*> f b
     Lit l        -> pure (Lit l)
+    Mixfix ts    -> Mixfix <$> traverse f ts
     Read n a     -> Read n <$> f a
     Record r     -> Record <$> traverse f r
     Sig e t      -> Sig <$> f e <*> f t
     Var n        -> pure (Var n)
+    VarBang n    -> pure (Var n)
 
 instance Recursive Pat where
   witness = IPat
@@ -186,6 +193,12 @@ instance Recursive QType where
     Mono t        -> Mono <$> f t
     Forall ks a b -> Forall ks <$> f a <*> f b
     QTyUni n      -> pure (QTyUni n)
+
+instance Recursive Tok where
+  witness = ITok
+  recurse f x = case x of
+    TExp e -> TExp <$> f e
+    TOp o  -> pure (TOp o)
 
 instance Recursive TyPat where
   witness = ITyPat

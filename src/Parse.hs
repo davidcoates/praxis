@@ -13,7 +13,6 @@ import           Common
 import           Parse.Annotate
 import           Parse.Desugar   (Desugarable (..))
 import qualified Parse.Parse     as Sweet (Parseable (..))
-import qualified Parse.Parse.AST as Sweet (Exp, Program)
 import           Parse.Tokenise  (tokenise)
 import           Praxis
 import           Type            (Kind, Type)
@@ -24,13 +23,13 @@ class Parseable a where
 instance Parseable Program where
   parse s = do
     ts <- tokenise True s
-    p <- Sweet.parse ts :: Praxis (Parsed Sweet.Program)
+    p <- Sweet.parse ts :: Praxis (Parsed Program)
     desugar p
 
 instance Parseable Exp where
   parse s = do
     ts <- tokenise False s
-    p <- Sweet.parse ts :: Praxis (Parsed Sweet.Exp)
+    p <- Sweet.parse ts :: Praxis (Parsed Exp)
     desugar p
 
 instance Parseable Type where

@@ -18,7 +18,6 @@ import           Env.TEnv
 import           Error
 import           Introspect
 import           Parse.Annotate        (Parsed)
-import qualified Parse.Parse.AST       as Parse
 import           Praxis
 import           Record
 import           Stage

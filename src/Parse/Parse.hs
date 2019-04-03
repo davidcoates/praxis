@@ -6,10 +6,9 @@ module Parse.Parse
   ( Parseable(..)
   ) where
 
-import           AST                  (Lit (..), QString (..))
+import           AST
 import           Common
 import           Parse.Annotate
-import           Parse.Parse.AST      as Parse
 import           Parse.Parse.Parser
 import           Parse.Tokenise.Token (Token (..))
 import qualified Parse.Tokenise.Token as Token
@@ -235,7 +234,7 @@ expVar :: Parser (Exp Parse)
 expVar = Var <$> try varid <?> "var" -- TODO should be qvarid
 
 expLit :: Parser (Exp Parse)
-expLit = Parse.Lit <$> lit
+expLit = AST.Lit <$> lit
 
 expRecord :: Parser (Exp Parse)
 expRecord = expUnit -- TODO
@@ -246,7 +245,7 @@ whitespace = try (token whitespace') <?> "whitespace"
   where whitespace' Token.Whitespace = Just ()
         whitespace' _                = Nothing
 
-lit :: Parser Lit
+lit :: Parser AST.Lit
 lit = try (token lit') <?> "literal"
   where lit' (Token.Lit x) = Just x
         lit' _             = Nothing
@@ -272,7 +271,7 @@ patLit :: Parser (Pat Parse)
 patLit = PatLit <$> lit
 
 expRead :: Parser (Exp Parse)
-expRead = liftT4 (\_ x _ e -> Parse.Read x e) (try prefix) varid (reservedId "in") (parsed exp) <?> "read expression"
+expRead = liftT4 (\_ x _ e -> Read x e) (try prefix) varid (reservedId "in") (parsed exp) <?> "read expression"
   where prefix = reservedId "read"
 
 raw a = (Phantom, ()) :< a

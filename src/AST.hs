@@ -6,6 +6,8 @@ module AST
   , Decl(..)
   , Exp(..)
   , Lit(..)
+  , Op
+  , Tok(..)
   , Name
   , Pat(..)
   , Program(..)
@@ -22,8 +24,10 @@ import           Common
 import           Record
 import           Type
 
-data Decl a = DeclVar Name (Maybe (Annotated a QType)) (Annotated a Exp)
-            | DeclData Name (Maybe (Annotated a TyPat)) [Annotated a DataAlt]
+data Decl a = DeclData Name (Maybe (Annotated a TyPat)) [Annotated a DataAlt]
+            | DeclFun Name [Annotated a Pat] (Annotated a Exp) -- ^Parsing only
+            | DeclSig Name (Annotated a QType) -- ^Parsing only
+            | DeclVar Name (Maybe (Annotated a QType)) (Annotated a Exp)
 
 data DataAlt a = DataAlt Name (Annotated a Type)
 
@@ -34,10 +38,19 @@ data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
            | If (Annotated a Exp) (Annotated a Exp) (Annotated a Exp)
            | Lambda (Annotated a Pat) (Annotated a Exp)
            | Lit Lit
+           | Mixfix [Annotated a Tok] -- ^Parsing only
            | Read Name (Annotated a Exp)
            | Record (Record (Annotated a Exp))
            | Sig (Annotated a Exp) (Annotated a Type)
            | Var Name
+           | VarBang Name -- ^Parsing only
+
+-- |Parsing only
+type Op = QString
+
+-- |Parsing only
+data Tok a = TExp (Annotated a Exp)
+           | TOp Op
 
 -- |AST for Literals
 data Lit = Bool Bool

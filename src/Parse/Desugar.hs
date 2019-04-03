@@ -10,8 +10,6 @@ import           AST
 import           Common
 import           Error
 import           Parse.Annotate
-import           Parse.Parse.AST        (Op)
-import qualified Parse.Parse.AST        as Parse
 import           Praxis
 import           Record                 (pair)
 import           Type                   (Kind, Type)
@@ -27,113 +25,113 @@ import           Prelude                hiding (exp, log)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
-class Desugarable a b | a -> b where
-  desugar' :: (Parsed a) -> Praxis (Parsed b)
-  desugar  :: (Parsed a) -> Praxis (Parsed b)
+class Desugarable a where
+  desugar' :: (Parsed a) -> Praxis (Parsed a)
+  desugar  :: (Parsed a) -> Praxis (Parsed a)
   desugar x = save stage $ do
     stage .= Desugar
     x' <- desugar' x
     log Debug x'
     return x'
 
-instance Desugarable Parse.Program Program where
+instance Desugarable Program where
   desugar' = program
 
-instance Desugarable Parse.Exp Exp where
+instance Desugarable Exp where
   desugar' = exp
 
-instance Desugarable Type Type where
+instance Desugarable Type where
   desugar' = pure
 
-instance Desugarable (Const Kind) (Const Kind) where
+instance Desugarable (Const Kind) where
   desugar' = pure
 
-program :: Parsed Parse.Program -> Praxis (Parsed Program)
-program (a :< Parse.Program ds) = do
+program :: Parsed Program -> Praxis (Parsed Program)
+program (a :< Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-stmts :: [Parsed Parse.Stmt] -> Praxis [Parsed Stmt]
+stmts :: [Parsed Stmt] -> Praxis [Parsed Stmt]
 stmts     [] = pure []
-stmts (s:ss) | a :< Parse.StmtExp e <- s = do
+stmts (s:ss) | a :< StmtExp e <- s = do
                 e' <- exp e
                 ss' <- stmts ss
                 return (a :< StmtExp e' : ss')
              | otherwise = do
                 let (ds, rs) = span isStmtDecl (s:ss)
-                ds' <- decls (map (\(_ :< Parse.StmtDecl d) -> d) ds)
+                ds' <- decls (map (\(_ :< StmtDecl d) -> d) ds)
                 rs' <- stmts rs
                 return $ map (\(a :< d) -> a :< StmtDecl (a :< d)) ds' ++ rs'
-                  where isStmtDecl (_ :< Parse.StmtDecl _) = True
+                  where isStmtDecl (_ :< StmtDecl _) = True
                         isStmtDecl _                       = False
 
-exp :: Parsed Parse.Exp -> Praxis (Parsed Exp)
+exp :: Parsed Exp -> Praxis (Parsed Exp)
 exp (a :< x) = case x of
 
-  Parse.Apply x (a' :< Parse.VarBang s) ->
-    exp (a :< Parse.Apply x (a' :< Parse.Var s))
+  Apply x (a' :< VarBang s) ->
+    exp (a :< Apply x (a' :< Var s))
 
-  Parse.Apply x y   -> do
+  Apply x y   -> do
     x' <- exp x
     y' <- exp y
     return (a :< Apply x' y')
 
-  -- exp (a :< Parse.Apply (a :< Parse.Cases alts) e)
-  Parse.Case e alts  -> do
+  -- exp (a :< Apply (a :< Cases alts) e)
+  Case e alts  -> do
     e' <- exp e
     alts' <- sequence $ map alt alts
     return (a :< Case e' alts')
       where alt (p, e) = liftA2 (,) (pat p) (exp e)
 
-  Parse.Cases alts -> do
+  Cases alts -> do
     alts' <- sequence $ map alt alts
     return (a :< Cases alts')
       where alt (p, e) = liftA2 (,) (pat p) (exp e)
 
-  Parse.Do ss       -> do
+  Do ss       -> do
     ss' <- stmts ss
     return (a :< Do ss')
 
-  Parse.If e1 e2 e3 -> do
+  If e1 e2 e3 -> do
     e1' <- exp e1
     e2' <- exp e2
     e3' <- exp e3
     return (a :< If e1' e2' e3')
 
-  Parse.Mixfix ts   -> mixfix ts
+  Mixfix ts   -> mixfix ts
 
-  Parse.Lit lit     -> pure (a :< Lit lit)
+  Lit lit     -> pure (a :< Lit lit)
 
-  Parse.Read n e    -> do
+  Read n e    -> do
     e' <- exp e
     return (a :< Read n e')
 
-  Parse.Record r    -> do
+  Record r    -> do
     r' <- traverse exp r
     return (a :< Record r')
 
-  Parse.Sig e t     -> do
+  Sig e t     -> do
     e' <- exp e
     return (a :< Sig e' t)
 
-  Parse.Var s       -> pure (a :< Var s)
+  Var s       -> pure (a :< Var s)
 
-  Parse.VarBang s   -> throwSyntaxError (BangError (fst a) s)
+  VarBang s   -> throwSyntaxError (BangError (fst a) s)
 
 
 throwSyntaxError :: SyntaxError -> Praxis a
 throwSyntaxError = throwError . SyntaxError
 
-decls :: [Parsed Parse.Decl] -> Praxis [Parsed Decl]
+decls :: [Parsed Decl] -> Praxis [Parsed Decl]
 decls []              = pure []
 decls (a :< d : ds) = case d of
 
-  Parse.DeclSig n t -> do
+  DeclSig n t -> do
     ds <- decls ds
     case ds of (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
                _                                       -> throwSyntaxError (LacksBinding n (fst a))
 
-  Parse.DeclFun n ps e -> do
+  DeclFun n ps e -> do
     ps <- mapM pat ps
     e  <- exp e
     let d = a :< DeclVar n Nothing (lambda ps e)
@@ -146,25 +144,25 @@ decls (a :< d : ds) = case d of
                                             | otherwise -> return $ d:ds
 
 -- TODO check for overlapping patterns?
-pat :: Parsed Parse.Pat -> Praxis (Parsed Pat)
+pat :: Parsed Pat -> Praxis (Parsed Pat)
 pat (a :< x) = case x of
 
-  Parse.PatRecord r -> do
+  PatRecord r -> do
     r' <- traverse pat r
     return (a :< PatRecord r)
 
-  Parse.PatVar x    -> pure (a :< PatVar x)
+  PatVar x    -> pure (a :< PatVar x)
 
-  Parse.PatLit l    -> pure (a :< PatLit l)
+  PatLit l    -> pure (a :< PatLit l)
 
 
-type Tok = DAG.Tok (Tag (Source, ()) Op) (Parsed Exp)
+type MTok = DAG.Tok (Tag (Source, ()) Op) (Parsed Exp)
 
-tok :: Parsed Parse.Tok -> Praxis Tok
-tok (a :< Parse.TOp op) = pure (DAG.TOp (a :< op))
-tok (a :< Parse.TExp e) = DAG.TExpr <$> exp e
+tok :: Parsed Tok -> Praxis MTok
+tok (a :< TOp op) = pure (DAG.TOp (a :< op))
+tok (a :< TExp e) = DAG.TExpr <$> exp e
 
-mixfix :: [Parsed Parse.Tok] -> Praxis (Parsed Exp)
+mixfix :: [Parsed Tok] -> Praxis (Parsed Exp)
 mixfix ts = do
   ts' <- mapM tok ts
   -- TODO do something with report?

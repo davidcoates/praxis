@@ -13,7 +13,6 @@ module Parse.Parse.Parser
 import           Common
 import           Error
 import           Parse.Annotate
-import           Parse.Parse.AST
 import qualified Parse.Prim           as Prim
 import qualified Parse.Tokenise.Token as Token
 import           Praxis               (Praxis, throwError)

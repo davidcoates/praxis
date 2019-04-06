@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
@@ -9,6 +10,7 @@ module Parse.Desugar
 import           AST
 import           Common
 import           Error
+import           Introspect             (Recursive)
 import           Parse.Annotate
 import           Praxis
 import           Record                 (pair)
@@ -26,25 +28,23 @@ import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
 class Desugarable a where
-  desugar' :: (Parsed a) -> Praxis (Parsed a)
-  desugar  :: (Parsed a) -> Praxis (Parsed a)
-  desugar x = save stage $ do
-    stage .= Desugar
-    x' <- desugar' x
-    log Debug x'
-    return x'
+  desugar :: (Parsed a) -> Praxis (Parsed a)
+
+desugar' :: (Recursive a) => ((Parsed a) -> Praxis (Parsed a)) -> (Parsed a) -> Praxis (Parsed a)
+desugar' f x = save stage $ do
+  stage .= Desugar
+  x' <- f x
+  log Debug x'
+  return x'
 
 instance Desugarable Program where
-  desugar' = program
+  desugar = desugar' program
 
 instance Desugarable Exp where
-  desugar' = exp
+  desugar = desugar' exp
 
 instance Desugarable Type where
-  desugar' = pure
-
-instance Desugarable (Const Kind) where
-  desugar' = pure
+  desugar = pure
 
 program :: Parsed Program -> Praxis (Parsed Program)
 program (a :< Program ds) = do
@@ -63,7 +63,7 @@ stmts (s:ss) | a :< StmtExp e <- s = do
                 rs' <- stmts rs
                 return $ map (\(a :< d) -> a :< StmtDecl (a :< d)) ds' ++ rs'
                   where isStmtDecl (_ :< StmtDecl _) = True
-                        isStmtDecl _                       = False
+                        isStmtDecl _                 = False
 
 exp :: Parsed Exp -> Praxis (Parsed Exp)
 exp (a :< x) = case x of

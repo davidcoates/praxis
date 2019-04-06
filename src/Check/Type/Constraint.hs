@@ -27,14 +27,6 @@ data TypeConstraint a = Class (Annotated a Type)
                       | Specialises (Annotated a Type) (Annotated a QType)
   deriving (Eq, Ord)
 
-{-
-instance Show Constraint where
-  show (Class t)         = show t
-  show (Eq t1 t2)    = show t1 ++ " ~ " ++ show t2
-  show (Generalises q t) = show q ++ " >> " ++ show t
-  show (Specialises t q) = show t ++ " < " ++ show q
--}
-
 data Reason = AppFun
             | Captured Name
             | CaseCongruence
@@ -71,8 +63,6 @@ data Derivation = Derivation
   , _reason     :: Reason }
 
 makeLenses ''Derivation
-{-
-instance Show Derivation where
-  show c = "derived from: " ++ show (origin c) ++ "; reason: " ++ show (reason c)
--}
 
+instance Show (Annotated TypeCheck TypeConstraint) => Show Derivation where
+  show c = show (view reason c) ++ " " ++ show (view antecedent c)

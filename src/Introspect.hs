@@ -1,8 +1,9 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE Rank2Types                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE StandaloneDeriving        #-}
 
 module Introspect
   ( Analysis(..)
@@ -46,10 +47,11 @@ data Analysis f a b = Realise (f a)
 class Recursive a where
   witness :: I a
   recurse :: Applicative f => (forall a. Recursive a => Annotated s a -> f (Annotated t a)) -> a s -> f (a t)
---  label   :: a s -> String
 
 class Complete s where
   complete :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> f (Annotated s a)) -> I a -> Annotation s a -> f (Annotation s a)
+  label :: Recursive a => Annotated s a -> String
+  label _ = ""
 
 data I a where
   IDataAlt :: I DataAlt
@@ -127,14 +129,6 @@ asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . a
         a'' = runIdentity . complete f' (typeof x) $ a
         f' :: forall a. Recursive a => Annotated s a -> Identity (Annotated s a)
         f' = Identity . asub i f
-
-{-
-flatShow :: (Recursive a, Complete s) => Annotated s a -> String
-flatShow = undefined
-
-instance (Recursive a, Complete s, x ~ Annotation s a) => Show (Tag (Source, x) (a s)) where
-  show = flatShow
--}
 
 -- Implementations below here
 
@@ -231,3 +225,39 @@ instance Recursive KindConstraint where
   witness = IKindConstraint
   recurse f x = case x of
     Check.Kind.Constraint.Eq a b -> pure $ Check.Kind.Constraint.Eq a b
+
+-- Show
+
+instance (Complete s, Recursive a, x ~ Annotation s a) => Show (Tag (Source, x) (a s)) where
+  show t@((s, a) :< x) = f s (label t) ++ show' x where
+    f Phantom l | l == "" = ""
+    f Phantom l = "[" ++ l ++ "] "
+    f s       l | l == "" = "[" ++ show (start s) ++ "] "
+    f s       l = "[" ++ show (start s) ++ " " ++ l ++ "] "
+    show' :: forall a s. (Complete s, Recursive a) => (a s) -> String
+    show' = case (witness :: I a) of
+      IDataAlt        -> show
+      IDecl           -> show
+      IExp            -> show
+      IPat            -> show
+      IProgram        -> show
+      IQType          -> show
+      IStmt           -> show
+      ITok            -> show
+      ITyPat          -> show
+      IType           -> show
+      ITypeConstraint -> show
+      IKindConstraint -> show
+
+deriving instance Complete s => Show (DataAlt s)
+deriving instance Complete s => Show (Decl s)
+deriving instance Complete s => Show (Exp s)
+deriving instance Complete s => Show (Pat s)
+deriving instance Complete s => Show (Program s)
+deriving instance Complete s => Show (QType s)
+deriving instance Complete s => Show (Stmt s)
+deriving instance Complete s => Show (Tok s)
+deriving instance Complete s => Show (TyPat s)
+deriving instance Complete s => Show (Type s)
+deriving instance Complete s => Show (TypeConstraint s)
+deriving instance Complete s => Show (KindConstraint s)

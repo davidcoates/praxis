@@ -4,7 +4,7 @@ github:              davidcoates/praxis
 license:             GPL-3
 author:              David Coates
 maintainer:          davidcoates95@gmail.com
-copyright:           2018 David Coates
+copyright:           2019 David Coates
 
 extra-source-files:
 - README.md
@@ -27,6 +27,7 @@ dependencies:
 - lens >= 4.15.4 && <5
 - digits >= 0.3
 - earley-mixfix-extra >= 0.1
+
 library:
   source-dirs: src
 

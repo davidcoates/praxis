@@ -4,9 +4,9 @@ module Check
 
 import           Check.Annotate
 import qualified Check.Kind.Check as Kind
+import           Check.System
 import qualified Check.Type.Check as Type
-import Check.System
-import Common
+import           Common
 import           Introspect
 import           Parse.Annotate
 import           Praxis

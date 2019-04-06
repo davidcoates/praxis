@@ -52,8 +52,8 @@ deriving instance Ord (QType a)
 
 instance Show Kind where
   show k = case k of
-    KindUni n -> n
+    KindUni n      -> n
     KindConstraint -> "Constraint"
-    KindFun k1 k2 -> show k1 ++ " -> " ++ show k2
-    KindRecord r -> "[" ++ showGuts show r ++ "]"
-    KindType -> "Type"
+    KindFun k1 k2  -> show k1 ++ " -> " ++ show k2
+    KindRecord r   -> "[" ++ showGuts show r ++ "]"
+    KindType       -> "Type"

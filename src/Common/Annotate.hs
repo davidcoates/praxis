@@ -26,7 +26,3 @@ annotation :: Functor f => (a -> f b) -> Tag (Source, a) c -> f (Tag (Source, b)
 annotation = tag . second
 
 type Sourced a = Tag Source a
-
--- TODO eventually use a pretty printer
-instance Show (Tag (Source, a) b) where
-  show = show . view (tag . first)

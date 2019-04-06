@@ -37,7 +37,5 @@ data Derivation = Derivation
 
 makeLenses ''Derivation
 
-{-
-instance Show Derivation where
-  show c = "derived from: " ++ show (origin c) ++ "; reason: " ++ show (reason c)
--}
+instance Show (Annotated KindCheck KindConstraint) => Show Derivation where
+  show c = show (view reason c) ++ " " ++ show (view antecedent c)

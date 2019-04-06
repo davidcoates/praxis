@@ -3,7 +3,7 @@ module Parse.Tokenise
   ) where
 
 import           AST                      (Lit (..), QString (..))
-import           Common hiding (asum)
+import           Common                   hiding (asum)
 import           Parse.Tokenise.Layout
 import           Parse.Tokenise.Token
 import           Parse.Tokenise.Tokeniser
@@ -12,8 +12,8 @@ import           Praxis                   hiding (try)
 import           Control.Applicative      (Alternative, Applicative, empty,
                                            liftA2, (<|>))
 import           Data.Char
+import           Data.Foldable            (asum)
 import           Data.List                (intercalate)
-import Data.Foldable (asum)
 
 tokenise :: Bool -> String -> Praxis [Sourced Token]
 tokenise topLevel s = save stage $ do

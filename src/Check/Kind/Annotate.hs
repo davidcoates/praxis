@@ -42,3 +42,11 @@ instance Complete KindCheck where
     IType           -> pure a
     ITypeConstraint -> pure ()
     IKindConstraint -> antecedent (series . (f <$>)) a
+  label t = let a = view annotation t in case typeof t of
+    IExp            -> show a
+    IPat            -> show a
+    ITyPat          -> show a
+    IType           -> show a
+    IKindConstraint -> show a
+    _               -> ""
+

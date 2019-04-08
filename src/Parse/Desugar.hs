@@ -116,7 +116,7 @@ exp (a :< x) = case x of
 
   Var s       -> pure (a :< Var s)
 
-  VarBang s   -> throwSyntaxError (BangError (fst a) s)
+  VarBang s   -> throwSyntaxError (BangError s (fst a))
 
 
 throwSyntaxError :: SyntaxError -> Praxis a

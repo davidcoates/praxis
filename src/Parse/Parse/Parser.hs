@@ -42,7 +42,7 @@ instance Monad Parser where
 
 runParser :: Parser a -> [Token] -> Praxis (Tag (Source, ()) a)
 runParser (Parser p) ts = makeError $ Prim.runParser (p <* Prim.eof) ts (view tag) -- TODO eof here breaks error messages
-  where makeError (Left (s, e))    = throwError $ SyntaxError (SweetError s e)
+  where makeError (Left (s, e))    = throwError $ SyntaxError (SweetError e s)
         makeError (Right (a :< x)) = pure ((a, ()) :< x)
 
 token :: (Token.Token -> Maybe a) -> Parser a

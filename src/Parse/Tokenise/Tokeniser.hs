@@ -39,7 +39,7 @@ instance Monad Tokeniser where
 runTokeniser :: Tokeniser a -> String -> Praxis [Sourced a]
 runTokeniser (Tokeniser p) cs = makeError $ Prim.runParser (all p) (sourced cs) (view tag)
   where all p = (Prim.eof *> pure []) <|> liftA2 (:) p (all p)
-        makeError (Left (s, e)) = throwError (LexicalError s e)
+        makeError (Left (s, e)) = throwError (LexicalError e s)
         makeError (Right x)     = pure x
 
 sourced :: String -> [Sourced Char]

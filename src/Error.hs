@@ -10,10 +10,11 @@ import           Common
 import           Stage
 
 -- TODO move errors to subdirs like Check.Error
-data Error = LexicalError ParseSource ParseError
+data Error = LexicalError ParseError ParseSource
            | SyntaxError  SyntaxError
            | CheckError Check.Error
 
+-- TODO should EOF be an option in Source?
 data ParseSource = Source Source
                  | EOF
 
@@ -21,17 +22,17 @@ data ParseError = Option ParseError ParseError
                 | Atom String
                 | Generic
 
-data SyntaxError = SweetError ParseSource ParseError
-                 | BangError Source Name
+data SyntaxError = SweetError ParseError ParseSource
+                 | BangError Name Source
                  | LacksBinding Name Source
                  | DoError Source
                  | InfixError -- TODO
 
 instance Show Error where
   show e = case e of
-    LexicalError s e -> "Lexical error: " ++ show e ++ " at " ++ show s
-    SyntaxError e    -> "Syntax error: " -- ++ show e
-    CheckError e     -> "Check error: " -- ++ show e
+    LexicalError e s -> show e ++ " at " ++ show s
+    SyntaxError e    -> show e
+    CheckError e     -> show e
 
 instance Show ParseSource where
   show EOF              = "<end of file>"
@@ -46,23 +47,10 @@ instance Show ParseError where
           toList (Atom s)     = [s]
           toList Generic      = []
 
-{-
 instance Show SyntaxError where
   show e = case e of
-    SweetError s e -> show s ++ " ... " ++ show e
-    BangError s n  -> show s ++ " ... " ++ "Observed variable '" ++ show n ++ "' is not the argument of a function"
-    DeclError e    -> show e
-    DoError s      -> show s ++ " ... " ++ "Last statement of a 'do' block is not an expression"
+    SweetError e s-> show e ++ " at " ++ show s
+    BangError n s  -> "Observed variable '" ++ n ++ "' is not the argument of a function" ++ " at " ++ show s
+    LacksBinding n s -> "Variable '" ++ n ++ "' lacks a binding" ++ " at " ++ show s
+    DoError s      -> "Last statement of a 'do' block is not an expression" ++ " at " ++ show s
     InfixError     -> "TODO <infix error>"
-
-instance Show DeclError where
-  show (MismatchedArity n (s1,i1) (s2,i2)) = "Mismatched arities for function '" ++ n ++ "'. Declared with arities " ++ show i1 ++ " at " ++ show s1 ++ " and " ++ show i2 ++ " at " ++ show s2
-  show (LacksBinding n s) = "The function '" ++ n ++ "' at " ++ show s ++ " lacks an accompanying binding"
-
-instance Show CheckError where
-  show e = case e of
-    Contradiction d -> "Contradiction: " ++ show d
-    NotInScope n s  -> "Not in scope: " ++ n ++ " at " ++ show s
-    Stuck           -> "Infinite loop detected :("
-    Underdefined d  -> "Failed to completely deduce the unification variable(s) present in: " ++ show d
--}

@@ -40,9 +40,9 @@ generate :: Recursive a => Parsed a -> Praxis (Typed a)
 generate x = save stage $ do
   stage .= TypeCheck Generate
   x' <- introspect gen x
-  -- log Debug x'
-  -- cs <- use (our . constraints)
-  -- logList Debug (nub . sort $ cs)
+  log Debug x'
+  cs <- use (our . constraints)
+  logList Debug (nub . sort $ cs)
   return x'
 
 gen :: Recursive a => Parsed a -> Intro Praxis TypeCheck a
@@ -69,7 +69,9 @@ fun :: Typed Type -> Typed Type -> Typed Type
 fun a b = let
   sa = view source a
   sb = view source b
-  s = (sa <> sb) { spelling = spelling sa ++ " -> " ++ spelling sb } in
+  -- TODO this doesn't work
+  -- s = (sa <> sb) { spelling = spelling sa ++ " -> " ++ spelling sb } in
+  s = sa <> sb in
   (s, ()) :< TyApply ((s, ()) :< TyCon "->") ((s, ()) :< TyPack (Record.pair a b))
 
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()

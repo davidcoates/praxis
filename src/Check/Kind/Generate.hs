@@ -31,9 +31,6 @@ generate :: Recursive a => Typed a -> Praxis (Kinded a)
 generate x = save stage $ do
   stage .= KindCheck Generate
   x' <- generate' x
-  -- log Debug x'
-  -- cs <- use (our . constraints)
-  -- logList Debug (nub . sort $ cs)
   return x'
 
 generate' :: Recursive a => Typed a -> Praxis (Kinded a)

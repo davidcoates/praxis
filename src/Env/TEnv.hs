@@ -114,7 +114,6 @@ ungeneralise _ (_ :< Forall vs cs t) = do
   l <- zipWith (\(n, _) (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshUniT
   let t'   = sub (\t -> case t of { TyUni n -> n `Prelude.lookup` l; _ -> Nothing }) t
       cs' = [] -- FIXME TODO derivations derived from cs
---  log Debug t'
   system . typeSystem . axioms %= (++ cs')
   return t'
 ungeneralise s (k :< QTyUni n) = do

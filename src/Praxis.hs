@@ -162,8 +162,8 @@ try c f g = do
     Left  e -> lift (State.put s)  >> f e
     Right x -> lift (State.put s') >> g x
 
-runStatic :: Praxis a -> a
-runStatic c = case fst $ unsafePerformIO (run c' emptyState) of
+runStatic :: PraxisState -> Praxis a -> a
+runStatic s c = case fst $ unsafePerformIO (run c' s) of
   Left e  -> internalError (show e)
   Right x -> x
   where c' = (flags . static .= True) >> c
@@ -193,7 +193,7 @@ logStr l x = do
   b <- shouldLog l
   when b $ do
     s <- use stage
-    -- We don't use liftIO here so we can show Trace logs
+    -- We don't use liftIO here so we can show static Trace logs
     lift (lift (putStrLn ("Output from stage: " ++ show s)))
     lift (lift (putStrLn x))
 

@@ -13,9 +13,6 @@ import           Praxis
 
 check :: Recursive a => Parsed a -> Praxis (Kinded a)
 check x = do
-  logStr Debug "test"
   system .= initialSystem
-  logStr Debug "test"
   x' <- Type.check x
-  logStr Debug "test"
   Kind.check x'

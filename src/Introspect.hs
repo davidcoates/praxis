@@ -19,6 +19,7 @@ module Introspect
   , extract
   , only
   , asub
+  , retag
   , DataAlt
   , Decl
   , Exp
@@ -119,7 +120,7 @@ extract f x = getConst $ omnispect f' x where
 only :: forall a b s. (Monoid b, Recursive a) => (a s -> b) -> (forall a. Recursive a => Annotated s a -> b)
 only f x = getConst $ transfer (Const . f) (view value x)
 
--- sub over annotations
+-- |Substitue over annotations
 asub :: forall a b s. (Recursive a, Recursive b, Complete s) => I a -> (Annotation s a -> Maybe (Annotation s a)) -> Annotated s b -> Annotated s b
 asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . asub i f)) x
   where a = view annotation x
@@ -129,6 +130,11 @@ asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . a
         a'' = runIdentity . complete f' (typeof x) $ a
         f' :: forall a. Recursive a => Annotated s a -> Identity (Annotated s a)
         f' = Identity . asub i f
+
+retag :: forall s t b. Recursive b => (forall a. Recursive a => I a -> Annotation s a -> Annotation t a) -> Annotated s b -> Annotated t b
+retag f = runIdentity . introspect f'
+  where f' :: forall a. Recursive a => Annotated s a -> Intro Identity t a
+        f' x = Notice (Identity (f (typeof x) (view annotation x)))
 
 -- Implementations below here
 

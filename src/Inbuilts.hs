@@ -1,39 +1,47 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs            #-}
+{-# LANGUAGE Rank2Types       #-}
 
 module Inbuilts
   ( initialState
   ) where
 
-import           AST              (Lit (..))
+import           AST            (Lit (..))
 import           Check.Annotate
-import           Check.Type.Check (check)
 import           Common
-import           Env.KEnv         (KEnv)
-import qualified Env.KEnv         as KEnv (fromList)
-import           Env.TEnv         (TEnv)
-import qualified Env.TEnv         as TEnv (fromList)
-import           Env.VEnv         (VEnv)
-import qualified Env.VEnv         as VEnv (fromList)
+import           Env.KEnv       (KEnv)
+import qualified Env.KEnv       as KEnv (fromList)
+import           Env.TEnv       (TEnv)
+import qualified Env.TEnv       as TEnv (fromList)
+import           Env.VEnv       (VEnv)
+import qualified Env.VEnv       as VEnv (fromList)
 import           Error
-import           Parse            (parse)
+import           Introspect
+import           Parse          (parse)
 import           Parse.Annotate
 import           Praxis
 import qualified Record
-import           Type             hiding (mono)
+import           Stage
+import           Type           hiding (mono)
 import           Value
 
-import           Control.Lens     as Lens (set)
-import           Data.List        (nub, sort)
-import qualified Data.Set         as Set (empty)
+import           Control.Lens   as Lens (set)
+import           Data.List      (nub, sort)
+import qualified Data.Set       as Set (empty)
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
 initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ emptyState
 
+-- TODO this actually introduces source information, but we ideally want it to be Phantom
 mono :: String -> Typed QType
-mono s = let (a :< t) = runStatic m in (view source (a :< t), ()) :< Mono (a :< t)
+mono s = let (a :< t) = runStatic initialState m in (view source (a :< t), ()) :< Mono (a :< t)
   where m :: Praxis (Typed Type)
-        m = (parse s :: Praxis (Parsed Type)) >>= check :: Praxis (Typed Type)
+        m = retag f <$> (parse s :: Praxis (Parsed Type))
+        f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
+        f i x = case i of
+          IType  -> ()
+          IQType -> ()
 
 trivial :: Typed Type
 trivial = (Phantom, ()) :< TyFlat Set.empty

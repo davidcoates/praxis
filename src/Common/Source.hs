@@ -20,8 +20,8 @@ instance Show Source where
   show s       = show (start s) ++ " to " ++ show (end s) ++ " aka {" ++ spelling s ++ "}"
 
 instance Semigroup Source where
-  Phantom <> s = s
-  s <> Phantom = s
+  Phantom <> s = s -- TODO this isn't really good, but tokenising relies on it
+  s <> Phantom = s -- as above
   s1 <> s2     = Source { start = start s1, end = end s2, spelling = spelling s1 ++ spelling s2 }
 
 instance Monoid Source where

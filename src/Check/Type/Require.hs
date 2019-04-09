@@ -23,10 +23,10 @@ requires :: [Typed TypeConstraint] -> Praxis ()
 requires = mapM_ require
 
 newConstraint :: TypeConstraint TypeCheck -> Reason -> Source -> Typed TypeConstraint
-newConstraint c r s = (s, Derivation { _antecedent = Nothing, _reason = r }) :< c
+newConstraint c r s = (s, Root r) :< c
 
 implies :: Typed TypeConstraint -> TypeConstraint TypeCheck -> Typed TypeConstraint
-implies d c = over annotation (set antecedent (Just d)) (set value c d)
+implies d c = let s = view source d in (s, Antecedent d) :< c
 
 share :: Typed Type -> TypeConstraint TypeCheck
 share t = Class $ (Phantom, ()) :< TyApply ((Phantom, ()) :< TyCon "Share") t

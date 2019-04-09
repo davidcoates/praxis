@@ -235,11 +235,21 @@ instance Recursive KindConstraint where
 -- Show
 
 instance (Complete s, Recursive a, x ~ Annotation s a) => Show (Tag (Source, x) (a s)) where
-  show t@((s, a) :< x) = f s (label t) ++ show' x where
-    f Phantom l | l == "" = ""
-    f Phantom l = "[" ++ l ++ "] "
-    f s       l | l == "" = "[" ++ show (start s) ++ "] "
-    f s       l = "[" ++ show (start s) ++ " " ++ l ++ "] "
+  show t = case (witness :: I a) of
+    ITypeConstraint -> proofShow t
+    IKindConstraint -> proofShow t
+    _               -> flatShow t
+    where
+    proofShow t@((s, a) :< x) = sourceShow s ++ show' x ++ anteShow (label t) where
+      sourceShow Phantom = ""
+      sourceShow s       = "[" ++ show (start s) ++ "] "
+      anteShow l | l == "" = ""
+      anteShow l = " " ++ l
+    flatShow t@((s, a) :< x) = annShow s (label t) ++ show' x where
+      annShow Phantom l | l == "" = ""
+      annShow Phantom l = "[" ++ l ++ "] "
+      annShow s       l | l == "" = "[" ++ show (start s) ++ "] "
+      annShow s       l = "[" ++ l ++ " " ++ show (start s) ++ "] "
     show' :: forall a s. (Complete s, Recursive a) => (a s) -> String
     show' = case (witness :: I a) of
       IDataAlt        -> show

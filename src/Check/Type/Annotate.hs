@@ -39,7 +39,7 @@ instance Complete TypeCheck where
     IStmt           -> pure ()
     ITyPat          -> pure ()
     IType           -> pure ()
-    ITypeConstraint -> antecedent (series . (f <$>)) a
+    ITypeConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
     IKindConstraint -> pure ()
   label t = let a = view annotation t in case typeof t of
     IExp            -> show a

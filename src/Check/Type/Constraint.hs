@@ -1,24 +1,18 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Check.Type.Constraint
   ( TypeConstraint(..)
   , Derivation(..)
-  , antecedent
-  , reason
   , Reason(..)
   ) where
 
 import           Common
-import           Stage        (TypeCheck)
+import           Stage      (TypeCheck)
 import           Type
 
-import           Control.Lens (makeLenses)
-import           Data.Maybe   (fromMaybe)
-import           Prelude      hiding (drop)
+import           Data.Maybe (fromMaybe)
+import           Prelude    hiding (drop)
 
 -- The parameter is only to allow introspection, we always expect it to be TypeCheck
 data TypeConstraint a = Class (Annotated a Type)
@@ -58,11 +52,9 @@ instance Show Reason where
                      | otherwise   -> "User-supplied signature"
     UnsafeView n     -> "Variable '" ++ n ++ "' used before being viewed"
 
-data Derivation = Derivation
-  { _antecedent :: Maybe (Annotated TypeCheck TypeConstraint)
-  , _reason     :: Reason }
-
-makeLenses ''Derivation
+data Derivation = Root Reason
+                | Antecedent (Annotated TypeCheck TypeConstraint)
 
 instance Show (Annotated TypeCheck TypeConstraint) => Show Derivation where
-  show c = show (view reason c) ++ " " ++ show (view antecedent c)
+  show (Root r)       = "\n|-> (" ++ show r ++ ")"
+  show (Antecedent a) =  "\n|-> " ++ show a

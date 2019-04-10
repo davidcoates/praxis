@@ -126,16 +126,16 @@ decl = split $ \(s, d) -> case d of
 
     return ((), DeclVar n Nothing e')
 
-stmt :: Parsed Stmt -> Praxis (Typed Stmt, Maybe (Typed Type))
-stmt = splitFree $ \(s, x) -> case x of
+stmt :: Parsed Stmt -> Praxis (Typed Stmt)
+stmt = split $ \(s, x) -> case x of
 
   StmtDecl d -> do
     d' <- decl d
-    return ((), StmtDecl d', Nothing)
+    return ((), StmtDecl d')
 
   StmtExp e -> do
     e' <- exp e
-    return ((), StmtExp e', Just (ty e'))
+    return ((), StmtExp e')
 
 
 mono :: Typed Type -> Typed QType
@@ -170,11 +170,11 @@ exp = split $ \(s, e) -> case e of
     return (fun t1 t2, Cases alts')
 
   Do ss -> do
-    let f Nothing = 0
-        f _       = 1
-    (ss', i) <- traverseSum (\x -> over second f <$> stmt x) ss
-    (_, Just t) <- stmt (last ss)
-    elimN i
+    ss' <- traverse stmt ss
+    let f (StmtDecl _) = 1
+        f (StmtExp _)  = 0
+    elimN (sum (map (f . view value) ss'))
+    let t = (\(_ :< StmtExp ((_, t) :< _)) -> t) (last ss')
     return (t, Do ss')
 
   If a b c -> do

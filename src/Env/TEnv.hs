@@ -112,7 +112,7 @@ ungeneralise _ (_ :< Mono t) = return t
 ungeneralise _ (_ :< Forall vs cs t) = do
   -- TODO need to stores kinds somewhere?
   l <- zipWith (\(n, _) (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshUniT
-  let t'   = sub (\t -> case t of { TyUni n -> n `Prelude.lookup` l; _ -> Nothing }) t
+  let t'   = sub (\t -> case t of { TyVar n -> n `Prelude.lookup` l; _ -> Nothing }) t
       cs' = [] -- FIXME TODO derivations derived from cs
   system . typeSystem . axioms %= (++ cs')
   return t'

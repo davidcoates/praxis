@@ -111,13 +111,11 @@ decl = split $ \(s, d) -> case d of
   -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n sig e -> do
-    dq <- case sig of Nothing -> freshUniQ
+    dt <- case sig of Nothing -> freshUniT
                       Just t  -> pure (cast t)
-    intro n dq
-    dt <- freshUniT
+    intro n (view tag dt :< Mono dt)
     e' <- exp e
     equal dt (ty e') (UserSignature (Just n)) s
-    require $ newConstraint (dq `Generalises` dt) (Generalisation n) s
     return ((), DeclVar n Nothing e')
 
 stmt :: Parsed Stmt -> Praxis (Typed Stmt)

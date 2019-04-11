@@ -71,9 +71,6 @@ data I a where
 typeof :: forall a s. Recursive a => Annotated s a -> I a
 typeof _ = witness :: I a
 
-transfer :: forall a b f s. (Recursive a, Recursive b, Applicative f) => (a s -> f (a s)) -> b s -> f (b s)
-transfer f x = switch (witness :: I a) (witness :: I b) (f x) (pure x)
-
 switch :: forall a b c. (Recursive a, Recursive b) => I a -> I b -> ((a ~ b) => c) -> c -> c
 switch a b eq neq = case (a, b) of
   (IDataAlt, IDataAlt)               -> eq
@@ -105,10 +102,16 @@ omnispect f x = set annotation <$> complete (omnispect f) (typeof x) (view annot
   Notice c  -> c *> recurse (omnispect f) (view value x)
   )
 
+transferA :: forall a b f s. (Recursive a, Recursive b, Applicative f) => (a s -> f (a s)) -> b s -> f (b s)
+transferA f x = switch (witness :: I a) (witness :: I b) (f x) (pure x)
+
+transferM :: forall a b f s. (Recursive a, Recursive b) => (a s -> Maybe (a s)) -> b s -> Maybe (b s)
+transferM f x = switch (witness :: I a) (witness :: I b) (f x) Nothing
+
 sub :: forall a b s. (Recursive a, Recursive b, Complete s) => (a s -> Maybe (a s)) -> Annotated s b -> Annotated s b
 sub f x = runIdentity $ omnispect f' x where
   f' :: forall a. Recursive a => Annotated s a -> Omni Identity s a
-  f' y = case transfer f (view value y) of
+  f' y = case transferM f (view value y) of
     Nothing -> Notice (Identity ())
     Just y' -> Realise (Identity y')
 
@@ -118,7 +121,7 @@ extract f x = getConst $ omnispect f' x where
   f' y = Notice (Const (f y))
 
 only :: forall a b s. (Monoid b, Recursive a) => (a s -> b) -> (forall a. Recursive a => Annotated s a -> b)
-only f x = getConst $ transfer (Const . f) (view value x)
+only f x = getConst $ transferA (Const . f) (view value x)
 
 -- |Substitue over annotations
 asub :: forall a b s. (Recursive a, Recursive b, Complete s) => I a -> (Annotation s a -> Maybe (Annotation s a)) -> Annotated s b -> Annotated s b
@@ -156,6 +159,7 @@ instance Recursive Exp where
   recurse f x = case x of
     Apply a b    -> Apply <$> f a <*> f b
     Case a as    -> Case <$> f a <*> traverse (\(a, b) -> (,) <$> f a <*> f b) as
+    Cases as     -> Cases <$> traverse (\(a, b) -> (,) <$> f a <*> f b) as
     Do ss        -> Do <$> traverse f ss
     If a b c     -> If <$> f a <*> f b <*> f c
     Lambda a b   -> Lambda <$> f a <*> f b
@@ -192,7 +196,6 @@ instance Recursive QType where
   recurse f x = case x of
     Mono t        -> Mono <$> f t
     Forall ks a b -> Forall ks <$> f a <*> f b
-    QTyUni n      -> pure (QTyUni n)
 
 instance Recursive Tok where
   witness = ITok
@@ -224,8 +227,6 @@ instance Recursive TypeConstraint where
   recurse f x = case x of
     Class t                      -> Class <$> f t
     Check.Type.Constraint.Eq a b -> Check.Type.Constraint.Eq <$> f a <*> f b
-    Generalises q t              -> Generalises <$> f q <*> f t
-    Specialises t q              -> Specialises <$> f t <*> f q
 
 instance Recursive KindConstraint where
   witness = IKindConstraint

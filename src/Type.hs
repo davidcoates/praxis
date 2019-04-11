@@ -28,7 +28,6 @@ data Kind = KindUni Name
 
 data QType a = Mono (Annotated a Type)
              | Forall [(Name, Kind)] (Annotated a Type) (Annotated a Type) -- ^First type is constraint
-             | QTyUni Name
 
 data Type a = TyUni Name                                      -- Compares less than all other types
             | TyApply (Annotated a Type) (Annotated a Type)   -- ^Type-level application : (#a -> #b) -> #a -> #b

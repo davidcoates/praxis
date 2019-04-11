@@ -26,8 +26,8 @@ import           Type
 
 data Decl a = DeclData Name (Maybe (Annotated a TyPat)) [Annotated a DataAlt]
             | DeclFun Name [Annotated a Pat] (Annotated a Exp) -- ^Parsing only
-            | DeclSig Name (Annotated a QType) -- ^Parsing only
-            | DeclVar Name (Maybe (Annotated a QType)) (Annotated a Exp)
+            | DeclSig Name (Annotated a Type) -- ^Parsing only
+            | DeclVar Name (Maybe (Annotated a Type)) (Annotated a Exp)
 
 data DataAlt a = DataAlt Name (Annotated a Type)
 

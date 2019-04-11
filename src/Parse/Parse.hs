@@ -269,6 +269,9 @@ expRead = liftT4 (\_ x _ e -> Read x e) (try prefix) varid (reservedId "in") (pa
 
 raw a = (Phantom, ()) :< a
 
+sig :: Parser (Parsed Type)
+sig = parsed ty
+{-
 sig :: Parser (Parsed QType)
 sig = parsed qty <|> ((\(a :< p) -> (a :< Mono (a :< p))) <$> parsed ty)
   where qty :: Parser (QType Parse)
@@ -276,6 +279,7 @@ sig = parsed qty <|> ((\(a :< p) -> (a :< Mono (a :< p))) <$> parsed ty)
         constraints :: Parser (Parsed Type)
         constraints = parsed $ pure empty      -- TODO constraints
         var = liftT2 (,) varid (pure KindType) -- TODO allow kinds
+-}
 
 empty :: Type Parse
 empty = TyFlat Set.empty

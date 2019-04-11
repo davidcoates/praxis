@@ -11,6 +11,7 @@ import           Check.Type.Annotate
 import           Common
 import           Introspect
 import           Praxis
+import           Prelude             hiding (log)
 import           Stage
 import           Type
 
@@ -20,18 +21,6 @@ check a = save stage $ do
   our .= initialSystem
   b <- generate a
   ks <- solve
-  -- ksub (`lookup` ks)
-  -- FIXME
-  return undefined
-
-{-
-fullSol :: (KindTraversable a, TypeTraversable a) => ([(Name, Kinded Type)], [(Name, Kind)]) -> a -> a
-fullSol (tySol, kindSol) = subs f . subs (`lookup` tySol) . subs (`lookup` kindSol)
-  where f :: (Kind, Name) -> Maybe (Kinded Type) -- Trivial defaulting
-        f (k, n) = if head n /= '?' then Nothing else (k :<) <$> case k of -- TODO fix the /= '?' hack
-          KindType   -> Just $ TyRecord Record.unit
-          _          -> Nothing
-
-checkNoUnis :: (KindTraversable a, TypeTraversable a) => a -> Praxis ()
-checkNoUnis p = if null (extract (unis :: Kind -> [Name]) p ++ extract (unis :: Kinded Type -> [Name]) p) then pure () else error "checkNoUnis TODO a proper error"
--}
+  -- let c = sub (\k -> case k of { KindUni n -> lookup n ks; _ -> Nothing }) b
+  -- return c
+  undefined

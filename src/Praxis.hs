@@ -33,7 +33,6 @@ module Praxis
   , system
 
   , freshUniT
-  , freshUniQ
   , freshUniK
   , freshVar
   , reuse
@@ -86,7 +85,6 @@ data Flags = Flags
 
 data Fresh = Fresh
   { _freshUniTs :: [String]
-  , _freshUniQs :: [String]
   , _freshUniEs :: [String]
   , _freshUniKs :: [String]
   , _freshVars  :: [String]
@@ -120,7 +118,6 @@ throwError = Control.Monad.Except.throwError
 
 defaultFresh = Fresh
   { _freshUniTs   = map (("?t"++) . show) [0..]
-  , _freshUniQs   = map (("?Q"++) . show) [0..]
   , _freshUniEs   = map (("?e"++) . show) [0..]
   , _freshUniKs   = map (("?k"++) . show) [0..]
   , _freshVars    = map (("?x"++) . show) [0..]
@@ -210,12 +207,6 @@ freshUniT = do
   (x:xs) <- use (fresh . freshUniTs)
   fresh . freshUniTs .= xs
   return ((Phantom, ()) :< TyUni x)
-
-freshUniQ :: Praxis (Typed QType)
-freshUniQ = do
-  (x:xs) <- use (fresh . freshUniQs)
-  fresh . freshUniQs .= xs
-  return ((Phantom, ()) :< QTyUni x)
 
 freshUniK :: Praxis Kind
 freshUniK = do

@@ -116,8 +116,3 @@ ungeneralise _ (_ :< Forall vs cs t) = do
       cs' = [] -- FIXME TODO derivations derived from cs
   system . typeSystem . axioms %= (++ cs')
   return t'
-ungeneralise s (k :< QTyUni n) = do
-  q <- freshUniQ
-  t <- freshUniT
-  require $ newConstraint (t `Specialises` q) Specialisation s
-  return t

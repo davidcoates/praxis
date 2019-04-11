@@ -32,13 +32,12 @@ import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
-solve :: Praxis ([(Name, Type TypeCheck)], [(Name, QType TypeCheck)])
+solve :: Praxis [(Name, Type TypeCheck)]
 solve = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve'
   t <- use (our . tsol)
-  q <- use (our . qsol)
-  return (t, q)
+  return t
 
 throwTypeError = throwError . CheckError . TypeError
 
@@ -47,13 +46,16 @@ data State = Cold
            | Done
 
 solve' :: Praxis State
-solve' = spin progress `chain` spin generalise `chain` stuck
+solve' = spin progress `chain` stuck
     where chain :: Praxis State -> Praxis State -> Praxis State
           chain p1 p2 = p1 >>= \s -> case s of
             Cold -> p2
             Warm -> solve'
             Done -> return Done
-          stuck = throwTypeError Stuck
+          stuck = do
+            cs <- (nub . sort) <$> use (our . constraints)
+            logList Debug cs
+            throwTypeError Stuck
 
 spin :: (Typed TypeConstraint -> Praxis Bool) -> Praxis State
 spin solve = do
@@ -76,36 +78,11 @@ unis = extract (only f)
  where f (TyUni n) = [n]
        f _         = []
 
-generalise :: Typed TypeConstraint -> Praxis Bool
-generalise d = do
-  ds <- liftA2 (++) (use (our . constraints)) (use (our . staging))
-  case view value d of
-    Generalises (_ :< QTyUni n) t -> generalise' ds n t
-    Generalises _               _ -> error "unreachable?"
-    _                             -> defer
-  where
-    defer = require d >> return False
-    generalise' :: [Typed TypeConstraint] -> Name -> Typed Type -> Praxis Bool
-    generalise' ds n t = case classes (unis t) ds of
-      Nothing -> defer
-      Just ts -> qsolve n (generaliseType ts t)
-
-generaliseType :: [Typed Type] -> Typed Type -> QType TypeCheck
-generaliseType ts (a :< t) = case us of
-  [] -> Mono (a :< t)
-  _  -> undefined -- TODO For each uni in t, find an annotated kind. Use this to build up [(Name, Kind)]
-  where us = unis (a :< t)
-        vs = map (:[]) ['a'..]
-        f u = (`lookup` zip us vs)
-
 -- TODO use sets here?
 classes :: [Name] -> [Typed TypeConstraint] -> Maybe [Typed Type]
 classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
   Class t         -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
   Eq t1 t2    -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
-  Generalises q t -> Just [] -- TODO not sure about these
-  Specialises t q -> Just []
-
 
 progress :: Typed TypeConstraint -> Praxis Bool
 progress d = case view value d of
@@ -157,14 +134,6 @@ progress d = case view value d of
     | null (unis t1 ++ unis t2) -> contradiction
     | otherwise                     -> defer
 
-  Specialises _ (_ :< QTyUni _) -> defer
-
-  Specialises t q -> do
-    t' <- ungeneralise Phantom q
-    introduce [ Eq t t' ]
-
-  Generalises _ _ -> defer
-
   _ -> contradiction
 
   where solved = return True
@@ -186,7 +155,6 @@ smap :: (forall a. Recursive a => Typed a -> Typed a) -> Praxis ()
 smap f = do
   let lower :: forall a. (Recursive a, Annotation TypeCheck a ~ ()) => (Typed a -> Typed a) -> a TypeCheck -> a TypeCheck
       lower f = view value . f . ((Phantom, ()) :<)
-  our . qsol %= fmap (over second (lower f))
   our . tsol %= fmap (over second (lower f))
   our . constraints %= fmap f
   our . staging %= fmap f
@@ -197,13 +165,6 @@ tsolve :: Name -> Type TypeCheck -> Praxis Bool
 tsolve n t = do
   smap $ sub (\t' -> case t' of { TyUni n' | n == n' -> Just t; _ -> Nothing })
   our . tsol %= ((n, t):)
-  reuse n
-  return True
-
-qsolve :: Name -> QType TypeCheck -> Praxis Bool
-qsolve n q = do
-  smap $ sub (\q' -> case q' of { QTyUni n' | n == n' -> Just q; _ -> Nothing })
-  our . qsol %= ((n, q):)
   reuse n
   return True
 

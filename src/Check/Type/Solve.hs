@@ -53,11 +53,7 @@ solve' = spin progress `chain` spin generalise `chain` stuck
             Cold -> p2
             Warm -> solve'
             Done -> return Done
-          stuck = do
--- FIXME
---            cs <- get (our . constraints)
---            logList Normal cs
-            throwTypeError Stuck
+          stuck = throwTypeError Stuck
 
 spin :: (Typed TypeConstraint -> Praxis Bool) -> Praxis State
 spin solve = do

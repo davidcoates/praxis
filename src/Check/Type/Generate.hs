@@ -87,6 +87,7 @@ splitFree f x = do
   (a', x', b) <- f (view source x, view value x)
   return ((view source x, a') :< x', b)
 
+-- TODO use retag
 cast :: Recursive a => Parsed a -> Typed a
 cast = runIdentity . introspect f where
   f :: Recursive a => Parsed a -> Intro Identity TypeCheck a
@@ -110,20 +111,13 @@ decl = split $ \(s, d) -> case d of
   -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n sig e -> do
-
-    -- TODO if polymorphic, de shoud be empty. Is this guaranteed?
     dq <- case sig of Nothing -> freshUniQ
                       Just t  -> pure (cast t)
-
-    -- TODO if user supplied a monomorphic type, we could just insert it here
     intro n dq
-
     dt <- freshUniT
-
     e' <- exp e
-    equal dt (ty e') (UserSignature (Just n)) s -- TODO UserSignature isn't a great name for this ut is Nothing
+    equal dt (ty e') (UserSignature (Just n)) s
     require $ newConstraint (dq `Generalises` dt) (Generalisation n) s
-
     return ((), DeclVar n Nothing e')
 
 stmt :: Parsed Stmt -> Praxis (Typed Stmt)

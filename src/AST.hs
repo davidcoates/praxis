@@ -1,9 +1,13 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module AST
-  ( Decl(..)
+  ( DataAlt(..)
+  , Decl(..)
   , Exp(..)
   , Lit(..)
+  , Op
+  , Tok(..)
   , Name
   , Pat(..)
   , Program(..)
@@ -15,27 +19,38 @@ import           Data.List        (intercalate)
 import           Data.Map         (Map)
 import qualified Data.Map         as Map
 import           Data.Traversable (sequenceA)
-import           Pretty
+
+import           Common
 import           Record
-import           Tag
 import           Type
 
-data Decl a = DeclVar Name (Maybe (a (Impure QType a))) (a (Exp a))
-            | DeclData Name (Maybe (a (TyPat a))) [a (DataAlt a)]
+data Decl a = DeclData Name (Maybe (Annotated a TyPat)) [Annotated a DataAlt]
+            | DeclFun Name [Annotated a Pat] (Annotated a Exp) -- ^Parsing only
+            | DeclSig Name (Annotated a Type) -- ^Parsing only
+            | DeclVar Name (Maybe (Annotated a Type)) (Annotated a Exp)
 
-data DataAlt a = DataAlt Name (a (Type a))
+data DataAlt a = DataAlt Name (Annotated a Type)
 
-data Exp a = Apply (a (Exp a)) (a (Exp a))
-           | Case (a (Exp a)) [(a (Pat a), a (Exp a))]
-           | Cases [(a (Pat a), a (Exp a))]
-           | Do [a (Stmt a)]
-           | If (a (Exp a)) (a (Exp a)) (a (Exp a))
-           | Lambda (a (Pat a)) (a (Exp a))
+data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
+           | Case (Annotated a Exp) [(Annotated a Pat, Annotated a Exp)]
+           | Cases [(Annotated a Pat, Annotated a Exp)]
+           | Do [Annotated a Stmt]
+           | If (Annotated a Exp) (Annotated a Exp) (Annotated a Exp)
+           | Lambda (Annotated a Pat) (Annotated a Exp)
            | Lit Lit
-           | Read Name (a (Exp a))
-           | Record (Record (a (Exp a)))
-           | Sig (a (Exp a)) (a (Impure Type a))
+           | Mixfix [Annotated a Tok] -- ^Parsing only
+           | Read Name (Annotated a Exp)
+           | Record (Record (Annotated a Exp))
+           | Sig (Annotated a Exp) (Annotated a Type)
            | Var Name
+           | VarBang Name -- ^Parsing only
+
+-- |Parsing only
+type Op = QString
+
+-- |Parsing only
+data Tok a = TExp (Annotated a Exp)
+           | TOp Op
 
 -- |AST for Literals
 data Lit = Bool Bool
@@ -44,24 +59,30 @@ data Lit = Bool Bool
          | String String
   deriving (Eq)
 
-data Pat a = PatAt Name (a (Pat a))
+data Pat a = PatAt Name (Annotated a Pat)
            | PatHole
            | PatLit Lit
-           | PatRecord (Record (a (Pat a)))
+           | PatRecord (Record (Annotated a Pat))
            | PatVar Name
 
-data Program a = Program [a (Decl a)]
+data Program a = Program [Annotated a Decl]
 
 data QString = QString { qualification :: [String], name :: String }
   deriving (Ord, Eq)
 
-data Stmt a = StmtDecl (a (Decl a))
-            | StmtExp (a (Exp a))
-
 instance Show QString where
-  show s = (if prefix == "" then "" else prefix ++ ".") ++ name s
-    where prefix = intercalate "." (qualification s)
+  show s = intercalate "." (qualification s ++ [name s])
 
+data Stmt a = StmtDecl (Annotated a Decl)
+            | StmtExp (Annotated a Exp)
+
+instance Show Lit where
+  show (Bool b)   = show b
+  show (Char c)   = show c
+  show (Int i)    = show i
+  show (String s) = show s
+
+{-
 instance TagTraversable Decl where
   tagTraverse' f (DeclVar n t e) = (DeclVar n) <$> sequenceA (tagTraverse f <$> t) <*> tagTraverse f e
 
@@ -137,12 +158,6 @@ instance Show a => Show (Tagged a Decl) where
 instance Show a => Show (Tagged a Exp) where
   show = showTree
 
-instance Show Lit where
-  show (Bool b)   = show b
-  show (Char c)   = show c
-  show (Int i)    = show i
-  show (String s) = show s
-
 instance Show a => Show (Tagged a Pat) where
   show = showTree
 
@@ -151,3 +166,4 @@ instance Show a => Show (Tagged a Program) where
 
 instance Show a => Show (Tagged a Stmt) where
   show = showTree
+-}

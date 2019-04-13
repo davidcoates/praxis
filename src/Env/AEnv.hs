@@ -11,7 +11,7 @@ module Env.AEnv
   , intro
   , join
   , lookup
-  , use
+  , mark
   )
 where
 
@@ -46,8 +46,8 @@ elimN n (AEnv l) = AEnv $ Env.elimN n l
 intro :: a -> b -> AEnv a b -> AEnv a b
 intro a b (AEnv l) = AEnv (Env.intro a (False, b) l)
 
-use :: Eq a => a -> AEnv a b -> AEnv a b
-use x (AEnv l) = AEnv $ Env.adjust (\(_, b) -> (True, b)) x l
+mark :: Eq a => a -> AEnv a b -> AEnv a b
+mark x (AEnv l) = AEnv $ Env.adjust (\(_, b) -> (True, b)) x l
 
 lookup :: Eq a => a -> AEnv a b -> Maybe (Bool, b)
 lookup x (AEnv l) = Env.lookup x l

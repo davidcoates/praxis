@@ -15,10 +15,12 @@ module Record
 
 import           Common
 
-import           Control.Arrow (second)
+import qualified Control.Arrow
 import           Data.List     (intercalate)
 import           Data.Map      (Map)
 import qualified Data.Map      as Map
+
+-- TODO move this to Common
 
 data Field = Implicit Int
            | Explicit Name
@@ -33,7 +35,7 @@ instance Ord a => Ord (Record a) where
   r `compare` s = toCanonicalList r `compare` toCanonicalList s
 
 instance Functor Record where
-  fmap f (Record r) = Record (map (second f) r)
+  fmap f (Record r) = Record (map (Control.Arrow.second f) r)
 
 instance Foldable Record where
   foldr f x (Record r) = foldr f x (map snd r)
@@ -79,7 +81,7 @@ toCanonicalList :: Record a -> [(Maybe Name, a)]
 toCanonicalList (Record r) = toList (Record (Map.toList (Map.fromList r)))
 
 showGuts :: (a -> String) -> Record a -> String
-showGuts f r = intercalate ", " (map showEntry (toList r))
+showGuts f r = intercalate "," (map showEntry (toList r))
   where showEntry (Nothing, a) = f a
         showEntry (Just n,  a) = n ++ "=" ++ f a
 
@@ -87,6 +89,6 @@ instance Show a => Show (Record a) where
   show r = "(" ++ showGuts show r ++ ")"
 
 showKeys :: Record a -> String
-showKeys r = "(" ++ intercalate ", " (map showKey (toList r)) ++ ")"
+showKeys r = "(" ++ intercalate "," (map showKey (toList r)) ++ ")"
   where showKey (Nothing, _) = "_"
         showKey (Just n,  _) = n ++ "=_"

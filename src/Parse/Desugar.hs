@@ -1,24 +1,22 @@
+{-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Parse.Desugar
   ( Desugarable(..)
-  , module Parse.Desugar.AST
   ) where
 
+import           AST
 import           Common
 import           Error
-import           Parse.Desugar.AST
-import           Parse.Parse.AST        (Op)
-import qualified Parse.Parse.AST        as Parse
+import           Introspect             (Recursive)
+import           Parse.Annotate
 import           Praxis
 import           Record                 (pair)
-import           Source
-import           Tag
 import           Type                   (Kind, Type)
 
-import           Control.Applicative    (liftA2, liftA3)
+import           Control.Applicative    (Const, liftA2, liftA3)
 import           Control.Arrow          (left)
 import           Control.Monad          (unless)
 import           Data.List              (intersperse)
@@ -29,121 +27,118 @@ import           Prelude                hiding (exp, log)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
-type Annotated a = Tagged Source a
+class Desugarable a where
+  desugar :: (Parsed a) -> Praxis (Parsed a)
 
-class Show b => Desugarable a b | a -> b where
-  desugar' :: a -> Praxis b
-  desugar  :: a -> Praxis b
-  desugar x = save stage $ do
-    set stage Desugar
-    x' <- desugar' x
-    log Debug x'
-    return x'
+desugar' :: (Recursive a) => ((Parsed a) -> Praxis (Parsed a)) -> (Parsed a) -> Praxis (Parsed a)
+desugar' f x = save stage $ do
+  stage .= Desugar
+  x' <- f x
+  log Debug x'
+  return x'
 
-instance Desugarable (Annotated Parse.Program) (Annotated Program) where
-  desugar' = program
+instance Desugarable Program where
+  desugar = desugar' program
 
-instance Desugarable (Annotated Parse.Exp) (Annotated Exp) where
-  desugar' = exp
+instance Desugarable Exp where
+  desugar = desugar' exp
 
-instance Desugarable (Annotated Type) (Annotated Type) where
-  desugar' = pure
+instance Desugarable Type where
+  desugar = pure
 
-instance Desugarable Kind Kind where
-  desugar' = pure
+instance Desugarable Kind where
+  desugar = pure
 
-program :: Annotated Parse.Program -> Praxis (Annotated Program)
-program (a :< Parse.Program ds) = do
+program :: Parsed Program -> Praxis (Parsed Program)
+program (a :< Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-stmts :: [Annotated Parse.Stmt] -> Praxis [Annotated Stmt]
+stmts :: [Parsed Stmt] -> Praxis [Parsed Stmt]
 stmts     [] = pure []
-stmts (s:ss) | a :< Parse.StmtExp e <- s = do
+stmts (s:ss) | a :< StmtExp e <- s = do
                 e' <- exp e
                 ss' <- stmts ss
                 return (a :< StmtExp e' : ss')
              | otherwise = do
                 let (ds, rs) = span isStmtDecl (s:ss)
-                ds' <- decls (map (\(_ :< Parse.StmtDecl d) -> d) ds)
+                ds' <- decls (map (\(_ :< StmtDecl d) -> d) ds)
                 rs' <- stmts rs
                 return $ map (\(a :< d) -> a :< StmtDecl (a :< d)) ds' ++ rs'
-                  where isStmtDecl (_ :< Parse.StmtDecl _) = True
-                        isStmtDecl _                       = False
+                  where isStmtDecl (_ :< StmtDecl _) = True
+                        isStmtDecl _                 = False
 
-exp :: Annotated Parse.Exp -> Praxis (Annotated Exp)
-exp e = ($ e) $ rec $ \a x -> case x of
+exp :: Parsed Exp -> Praxis (Parsed Exp)
+exp (a :< x) = case x of
 
-  Parse.Apply x (a' :< Parse.VarBang s) ->
-    exp (a :< Parse.Apply x (a' :< Parse.Var s))
+  Apply x (a' :< VarBang s) ->
+    exp (a :< Apply x (a' :< Var s))
 
-  Parse.Apply x y   -> do
+  Apply x y   -> do
     x' <- exp x
     y' <- exp y
     return (a :< Apply x' y')
 
-  -- exp (a :< Parse.Apply (a :< Parse.Cases alts) e)
-  Parse.Case e alts  -> do
+  -- exp (a :< Apply (a :< Cases alts) e)
+  Case e alts  -> do
     e' <- exp e
     alts' <- sequence $ map alt alts
     return (a :< Case e' alts')
       where alt (p, e) = liftA2 (,) (pat p) (exp e)
 
-  Parse.Cases alts -> do
+  Cases alts -> do
     alts' <- sequence $ map alt alts
     return (a :< Cases alts')
       where alt (p, e) = liftA2 (,) (pat p) (exp e)
 
-  Parse.Do ss       -> do
+  Do ss       -> do
     ss' <- stmts ss
     return (a :< Do ss')
 
-  Parse.If e1 e2 e3 -> do
+  If e1 e2 e3 -> do
     e1' <- exp e1
     e2' <- exp e2
     e3' <- exp e3
     return (a :< If e1' e2' e3')
 
-  Parse.Mixfix ts   -> mixfix ts
+  Mixfix ts   -> mixfix ts
 
-  Parse.Lit lit     -> pure (a :< Lit lit)
+  Lit lit     -> pure (a :< Lit lit)
 
-  Parse.Read n e    -> do
+  Read n e    -> do
     e' <- exp e
     return (a :< Read n e')
 
-  Parse.Record r    -> do
+  Record r    -> do
     r' <- traverse exp r
     return (a :< Record r')
 
-  Parse.Sig e t     -> do
+  Sig e t     -> do
     e' <- exp e
     return (a :< Sig e' t)
 
-  Parse.Var s       -> pure (a :< Var s)
+  Var s       -> pure (a :< Var s)
 
-  Parse.VarBang s   -> throwSyntaxError (BangError a s)
+  VarBang s   -> throwSyntaxError (BangError s (fst a))
 
 
 throwSyntaxError :: SyntaxError -> Praxis a
 throwSyntaxError = throwError . SyntaxError
 
-throwDeclError :: DeclError -> Praxis a
-throwDeclError = throwSyntaxError . DeclError
-
-decls :: [Annotated Parse.Decl] -> Praxis [Annotated Decl]
+decls :: [Parsed Decl] -> Praxis [Parsed Decl]
 decls []              = pure []
 decls (a :< d : ds) = case d of
 
-  Parse.DeclSig n t -> do
+  DeclSig n t -> do
     ds <- decls ds
     case ds of (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
-               _                                         -> throwDeclError (LacksBinding n a)
+               _                                       -> throwSyntaxError (LacksBinding n (fst a))
 
-  Parse.DeclFun n ps e -> do
+  DeclFun n ps e -> do
     ps <- mapM pat ps
     e  <- exp e
     let d = a :< DeclVar n Nothing (lambda ps e)
+        lambda :: [Parsed Pat] -> Parsed Exp -> Parsed Exp
         lambda     [] e = e
         lambda (p:ps) e = a :< Lambda p (lambda ps e)
     ds <- decls ds
@@ -152,25 +147,25 @@ decls (a :< d : ds) = case d of
                                             | otherwise -> return $ d:ds
 
 -- TODO check for overlapping patterns?
-pat :: Annotated Parse.Pat -> Praxis (Annotated Pat)
-pat p = ($ p) $ rec $ \a x -> case x of
+pat :: Parsed Pat -> Praxis (Parsed Pat)
+pat (a :< x) = case x of
 
-  Parse.PatRecord r -> do
+  PatRecord r -> do
     r' <- traverse pat r
     return (a :< PatRecord r)
 
-  Parse.PatVar x    -> pure (a :< PatVar x)
+  PatVar x    -> pure (a :< PatVar x)
 
-  Parse.PatLit l    -> pure (a :< PatLit l)
+  PatLit l    -> pure (a :< PatLit l)
 
 
-type Tok = DAG.Tok (Tag Source Op) (Annotated Exp)
+type MTok = DAG.Tok (Tag (Source, ()) Op) (Parsed Exp)
 
-tok :: Annotated Parse.Tok -> Praxis Tok
-tok (a :< Parse.TOp op) = pure (DAG.TOp (a :< op))
-tok (a :< Parse.TExp e) = DAG.TExpr <$> exp e
+tok :: Parsed Tok -> Praxis MTok
+tok (a :< TOp op) = pure (DAG.TOp (a :< op))
+tok (a :< TExp e) = DAG.TExpr <$> exp e
 
-mixfix :: [Annotated Parse.Tok] -> Praxis (Annotated Exp)
+mixfix :: [Parsed Tok] -> Praxis (Parsed Exp)
 mixfix ts = do
   ts' <- mapM tok ts
   -- TODO do something with report?
@@ -178,7 +173,10 @@ mixfix ts = do
   case parses of [e] -> return e
                  _   -> error "TODO resolve error make a proper error for this (ambiguous mixfix parse)"
 
-type OpTable = DAG.DAG Int [DAG.Op (Tag Source Op) (Annotated Exp)]
+type OpTable = DAG.DAG Int [DAG.Op (Tag (Source, ()) Op) (Parsed Exp)]
+
+raw :: a -> Tag (Source, ()) a
+raw x = (Phantom, ()) :< x
 
 -- TODO build this dynamically from bindings
 opTable :: OpTable
@@ -193,8 +191,8 @@ opTable = DAG.DAG
       7 -> [ mul ]
       9 -> [ dot ]
   }
-  where build a s n = DAG.Op { DAG.fixity = DAG.Infix a, DAG.parts = [Phantom :< QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
-        build' n e1 e2 = Phantom :< Apply (Phantom :< Var n) (Phantom :< Record (pair e1 e2)) -- TODO annotations?
+  where build a s n = DAG.Op { DAG.fixity = DAG.Infix a, DAG.parts = [raw $ QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
+        build' n e1 e2 = raw $ Apply (raw $ Var n) (raw $ Record (pair e1 e2)) :: Parsed Exp -- TODO annotations?
         add = build DAG.LeftAssoc "+" "add"
         sub = build DAG.LeftAssoc "-" "sub"
         mul = build DAG.LeftAssoc "*" "mul"

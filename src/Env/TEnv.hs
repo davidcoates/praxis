@@ -8,83 +8,88 @@ module Env.TEnv
   , join
   , lookup
   , read
-  , use
+  , mark
   , closure
+
+  , ungeneralise
   )
 where
 
-import           Check.Constraint
+import           Check.Error
 import           Check.System
+import           Check.Type.Annotate
+import           Check.Type.Constraint
+import           Check.Type.Require
+import           Check.Type.System
 import           Common
-import           Env              (TEnv)
-import           Env.LEnv         (LEnv, fromList)
-import qualified Env.LEnv         as LEnv
+import           Env                   (TEnv)
+import           Env.LEnv              (LEnv, fromList)
+import qualified Env.LEnv              as LEnv
 import           Error
+import           Introspect            (sub)
 import           Praxis
-import           Source           (Source)
-import           Tag
 import           Type
 
-import           Control.Monad    (replicateM)
-import           Prelude          hiding (log, lookup, read)
-import qualified Prelude          (lookup)
+import           Control.Monad         (replicateM)
+import           Prelude               hiding (log, lookup, read)
+import qualified Prelude               (lookup)
 
 
 elim :: Praxis ()
-elim = over tEnv LEnv.elim
+elim = tEnv %= LEnv.elim
 
 elimN :: Int -> Praxis ()
-elimN n = over tEnv (LEnv.elimN n)
+elimN n = tEnv %= LEnv.elimN n
 
-intro :: Name -> Kinded QType -> Praxis ()
-intro n p = over tEnv (LEnv.intro n p)
+intro :: Name -> Typed QType -> Praxis ()
+intro n p = tEnv %= LEnv.intro n p
 
 join :: Praxis a -> Praxis b -> Praxis (a, b)
 join f1 f2 = do
-  l <- get tEnv
+  l <- use tEnv
   x <- f1
-  l1 <- get tEnv
-  set tEnv l
+  l1 <- use tEnv
+  tEnv .= l
   y <- f2
-  l2 <- get tEnv
-  set tEnv (LEnv.join l1 l2)
+  l2 <- use tEnv
+  tEnv .= LEnv.join l1 l2
   return (x, y)
 
 closure :: Praxis a -> Praxis a
 closure x = do
-  over tEnv LEnv.push
+  tEnv %= LEnv.push
   r <- x
-  over tEnv LEnv.pop
+  tEnv %= LEnv.pop
   return r
 
--- TODO reduce duplicaiton here
-read :: Source -> Name -> Praxis (Kinded Type)
+-- TODO reduce duplication here
+read :: Source -> Name -> Praxis (Typed Type)
 read s n = do
-  l <- get tEnv
+  l <- use tEnv
   case LEnv.lookup n l of
     Just (c, u, t) -> do
-      t <- ungeneralise t
-      requireAll [ newDerivation (share t) (UnsafeView n) s | not u ]
-      requireAll [ newDerivation (share t) (Captured n) s   | c ]
+      t <- ungeneralise s t
+      requires [ newConstraint (share t) (UnsafeView n) s | not u ]
+      requires [ newConstraint (share t) (Captured n) s   | c ]
       return t
     Nothing     -> throwError (CheckError (NotInScope n s))
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
-use :: Source -> Name -> Praxis (Kinded Type)
-use s n = do
-  l <- get tEnv
+mark :: Source -> Name -> Praxis (Typed Type)
+mark s n = do
+  l <- use tEnv
   case LEnv.lookup n l of
     Just (c, u, t) -> do
-      set tEnv (LEnv.use n l)
-      t <- ungeneralise t
-      requireAll [ newDerivation (share t) (Shared n)   s | u ]
-      requireAll [ newDerivation (share t) (Captured n) s | c ]
+      tEnv .= LEnv.mark n l
+      t <- ungeneralise s t
+      requires [ newConstraint (share t) (Shared n)   s | u ]
+      requires [ newConstraint (share t) (Captured n) s | c ]
       return t
     Nothing     -> throwError (CheckError (NotInScope n s))
 
-lookup :: Name -> Praxis (Maybe (Kinded QType))
+lookup :: Name -> Praxis (Maybe (Typed QType))
 lookup n = do
-  l <- get tEnv
+  l <- use tEnv
   case LEnv.lookup n l of
     Just (_, _, t) -> return (Just t)
     Nothing        -> return Nothing
@@ -95,21 +100,19 @@ f : forall a. a -> a
 f x = x : a -- This a refers to the a introduced by f
 
 Which means we need some map from TyVars to TyUnis
-So that in-scope TyVars can get subbed.
+So that in-scope TyVars can use subbed.
 
 Alternative is to transform the source which would mess up error messages
 
 OR don't allow this, and don't allow explicit forall.
 -}
-ungeneralise :: Kinded QType -> Praxis (Kinded Type)
-ungeneralise (k :< Mono t) = return (k :< t)
-ungeneralise x@(KindType :< Forall vs cs (KindType :< t)) = do
-  sub <- zipWith (\(n, k) (_ :< t) -> (n, k :< t)) vs <$> replicateM (length vs) freshUniT
-  let f = subs (`Prelude.lookup` sub)
+-- TODO move this somewhere else
+ungeneralise :: Source -> Typed QType -> Praxis (Typed Type)
+ungeneralise _ (_ :< Mono t) = return t
+ungeneralise _ (_ :< Forall vs cs t) = do
+  -- TODO need to stores kinds somewhere?
+  l <- zipWith (\(n, _) (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshUniT
+  let t'   = sub (\t -> case t of { TyVar n -> n `Prelude.lookup` l; _ -> Nothing }) t
       cs' = [] -- FIXME TODO derivations derived from cs
-      t' = f (KindType :< t)
-  log Debug t'
-  over (system . axioms) (++ cs')
+  system . typeSystem . axioms %= (++ cs')
   return t'
-
-

@@ -1,21 +1,17 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Parse.Tokenise.Token
-  ( Annotated(..)
-  , Token(..)
+  ( Token(..)
   ) where
 
 import           AST    (Lit (..), QString (..))
-import           Pretty
-import           Source
-import           Tag
-
-type Annotated a = Tag Source a
+import           Common
 
 data Token = QVarId QString
            | QConId QString
            | QVarSym QString
            | QConSym QString
+           | ReservedCon String
            | ReservedOp String
            | ReservedId String
            | Lit Lit
@@ -23,12 +19,14 @@ data Token = QVarId QString
            | Whitespace -- ^Consider whitespace a token to allow parser to construct accurate spelling
 
 instance Show Token where
-  show (QVarId q)     = show q
-  show (QConId q)     = show q
-  show (QVarSym q)    = show q
-  show (QConSym q)    = show q
-  show (ReservedOp s) = s
-  show (ReservedId s) = s
-  show (Lit l)        = show l
-  show (Special c)    = [c]
-  show Whitespace     = ""
+  show x = case x of
+    QVarId q      -> show q
+    QConId q      -> show q
+    QVarSym q     -> show q
+    QConSym q     -> show q
+    ReservedCon s -> s
+    ReservedOp s  -> s
+    ReservedId s  -> s
+    Lit l         -> show l
+    Special c     -> [c]
+    Whitespace    -> ""

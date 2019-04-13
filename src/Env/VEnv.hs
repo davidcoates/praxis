@@ -9,7 +9,7 @@ module Env.VEnv
   )
 where
 
-import           Common  (Name)
+import           Common
 import           Env     (VEnv)
 import           Env.Env (Env, fromList)
 import qualified Env.Env as Env
@@ -21,18 +21,18 @@ import           Prelude hiding (lookup)
 
 elim :: Praxis ()
 elim = do
-  l <- get vEnv
-  set vEnv (Env.elim l)
+  l <- use vEnv
+  vEnv .= Env.elim l
 
 elimN :: Int -> Praxis ()
 elimN n = do
-  l <- get vEnv
-  set vEnv (Env.elimN n l)
+  l <- use vEnv
+  vEnv .= Env.elimN n l
 
 intro :: Name -> Value -> Praxis ()
-intro n v = over vEnv (Env.intro n v)
+intro n v = vEnv %= Env.intro n v
 
 lookup :: Name -> Praxis (Maybe Value)
 lookup n = do
-  l <- get vEnv
+  l <- use vEnv
   return (Env.lookup n l)

@@ -1,15 +1,14 @@
 module Main where
 
 import           AST
-import           Check.AST            (Annotated)
+import           Check.Annotate
+import           Common
 import qualified Env.TEnv             as TEnv (lookup)
 import qualified Env.VEnv             as VEnv (lookup)
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
-import           Pretty               (indent)
 import           Record
-import           Tag
 import           Type
 import           Value
 
@@ -39,8 +38,8 @@ parse xs = do
           parse' _   = msg "Too many arguments"
 
 file :: String -> Praxis ()
-file f = pretty (interpretFile f :: Praxis (Annotated Program, ())) (return ()) onFileSuccess
-  where onFileSuccess = get (flags . interactive) >>= (\i -> if i then repl else runMain)
+file f = pretty (interpretFile f :: Praxis (Kinded Program, ())) (return ()) onFileSuccess
+  where onFileSuccess = use (flags . interactive) >>= (\i -> if i then repl else runMain)
 
 msg :: String -> Praxis ()
 msg s = liftIO (putStrLn s)
@@ -49,9 +48,9 @@ runMain :: Praxis ()
 runMain = do
   t <- TEnv.lookup "main"
   case t of Nothing -> msg "Missing main function"
-            Just (_ :< Mono (TyApply (_ :< TyCon "->") (_ :< TyPack a))) | [(Nothing, _ :< r), (Nothing, _ :< r'), _] <- Record.toList a
-                                                                         , r  == TyRecord Record.unit
-                                                                         , r' == TyRecord Record.unit ->
+            Just (_ :< Mono (_ :< TyApply (_ :< TyCon "->") (_ :< TyPack a))) | [(Nothing, _ :< r), (Nothing, _ :< r')] <- Record.toList a
+                                                                              , r  == TyRecord Record.unit
+                                                                              , r' == TyRecord Record.unit ->
               do { Just (F f) <- VEnv.lookup "main"; f (R Record.unit); return () }
             _ -> msg "Ill-typed main function"
 
@@ -65,7 +64,7 @@ repl = forever $ do
 eval :: String -> Praxis ()
 eval s = do
   -- TODO fix this so we can have declarations
-  (_, v) <- interpret s :: Praxis (Annotated Exp, Value)
+  (_, v) <- interpret s :: Praxis (Kinded Exp, Value)
   liftIO $ print v
 
 meta :: String -> Praxis ()
@@ -80,10 +79,10 @@ data Option = Option [(String, Praxis ())]
 data Arg = Arg { shortName :: String, longName :: String, option :: Option }
 
 myArgs :: [Arg]
-myArgs = [ Arg { shortName = "l", longName = "level", option = Option [ ("debug", set (flags . level) Debug)
-                                                                      , ("trace", set (flags . level) Trace)
+myArgs = [ Arg { shortName = "l", longName = "level", option = Option [ ("debug", flags . level .= Debug)
+                                                                      , ("trace", flags . level .= Trace)
                                                                       ] }
-         , Arg { shortName = "i", longName = "interactive", option = Flag (set (flags . interactive) True) }
+         , Arg { shortName = "i", longName = "interactive", option = Flag (flags . interactive .= True) }
          ]
 
 args :: [String] -> Praxis [String]

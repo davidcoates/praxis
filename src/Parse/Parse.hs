@@ -6,54 +6,48 @@ module Parse.Parse
   ( Parseable(..)
   ) where
 
-import           AST                  (Lit (..), QString (..))
-import           Parse.Parse.AST      (Annotated (..))
-import           Parse.Parse.AST      as Parse
+import           AST
+import           Common
+import           Introspect           (Recursive)
+import           Parse.Annotate
 import           Parse.Parse.Parser
 import           Parse.Tokenise.Token (Token (..))
 import qualified Parse.Tokenise.Token as Token
 import           Praxis               hiding (try)
 import           Record               (Record)
 import qualified Record
-import           Source
-import           Tag
+import           Stage                (Parse)
 import           Type
 
-import           Control.Applicative  (liftA2, liftA3, (<**>), (<|>))
+import           Control.Applicative  (Const (..), liftA2, liftA3, (<**>),
+                                       (<|>))
 import qualified Control.Applicative  as Applicative (empty)
 import           Control.Lens         (view)
 import           Data.Maybe           (fromJust, isJust)
 import qualified Data.Set             as Set
 import           Prelude              hiding (exp, log)
 
-type T a = a (Tag Source)
-
 class Parseable a where
-  parse  :: [Token.Annotated Token] -> Praxis a
+  parse  :: [Sourced Token] -> Praxis (Parsed a)
 
-parse' :: Show (Annotated a) => Parser (T a) -> [Token.Annotated Token] -> Praxis (Annotated a)
+parse' :: Recursive a => Parser (a Parse) -> [Sourced Token] -> Praxis (Parsed a)
 parse' parser ts = save stage $ do
-  set stage Parse
+  stage .= Parse
   x <- runParser parser ts
   log Debug x
   return x
 
-instance Parseable (Annotated Program) where
+instance Parseable Program where
   parse = parse' program
 
-instance Parseable (Annotated Exp) where
+instance Parseable Exp where
   parse = parse' exp
 
-instance Parseable (Annotated Type) where
+instance Parseable Type where
   parse = parse' ty
 
 instance Parseable Kind where
-  parse ts = save stage $ do
-    set stage Parse
-    _ :< x <- runParser kind ts
-    log Debug x
-    return x
-
+  parse = parse' kind
 
 -- TODO move these to Parse/Parser?
 optional :: Parser a -> Parser ()
@@ -125,7 +119,7 @@ varsym = token varsym' <?> "varsym"
   where varsym' (Token.QVarSym n) | null (qualification n) = Just (name n)
         varsym' _                 = Nothing
 
--- For some operators we don't want to reserve like effect + and forall .
+-- We don't want to reserve some operators, namely forall . and constrant +
 userOp :: String -> Parser ()
 userOp s = token userOp' *> pure () <?> "op '" ++ s ++ "'"
   where userOp' (Token.QVarSym n) | null (qualification n) && name n == s = Just ()
@@ -141,6 +135,11 @@ reservedId :: String -> Parser ()
 reservedId s = satisfy reservedId' *> pure () <?> "reserved id '" ++ s ++ "'"
   where reservedId' (Token.ReservedId s') | s == s' = True
         reservedId' _                     = False
+
+reservedCon :: String -> Parser ()
+reservedCon s = satisfy reservedCon' *> pure () <?> "reserved con '" ++ s ++ "'"
+  where reservedCon' (Token.ReservedCon s') | s == s' = True
+        reservedCon' _                      = False
 
 reservedOp :: String -> Parser ()
 reservedOp s = satisfy reservedOp' *> pure () <?> "reserved op '" ++ s ++ "'"
@@ -166,26 +165,26 @@ block :: Parser a -> Parser [a]
 block p = liftT3 (\_ p ps -> p:ps) lbrace p block'
   where block' = (try rbrace *> pure []) <|> liftT2 (:) (semi #> p) block'
 
-program :: Parser (T Program)
-program = fmap Program (optional whitespace *> block (annotated topDecl) <* optional whitespace)
+program :: Parser (Program Parse)
+program = fmap Program (optional whitespace *> block (parsed topDecl) <* optional whitespace)
 
-topDecl :: Parser (T Decl)
+topDecl :: Parser (Decl Parse)
 topDecl = decl <|?> "topDecl" -- TODO
 
-decl :: Parser (T Decl)
+decl :: Parser (Decl Parse)
 decl = funType <|> funDecl <|?> "decl"
 
-funType :: Parser (T Decl)
-funType = liftT2 DeclSig (try prefix) (annotated sig) <|?> "funType"
+funType :: Parser (Decl Parse)
+funType = liftT2 DeclSig (try prefix) sig <|?> "funType"
   where prefix = varid <# reservedOp ":"
 
-funDecl :: Parser (T Decl)
-funDecl = liftT2 ($) (try prefix) (annotated exp) <?> "funDecl"
-  where prefix = liftT3 (\v ps _ -> DeclFun v ps) varid (many (annotated pat)) (reservedOp "=")
+funDecl :: Parser (Decl Parse)
+funDecl = liftT2 ($) (try prefix) (parsed exp) <?> "funDecl"
+  where prefix = liftT3 (\v ps _ -> DeclFun v ps) varid (many (parsed pat)) (reservedOp "=")
 
-exp :: Parser (T Exp)
+exp :: Parser (Exp Parse)
 exp = mixfixexp
-{- liftT2 f (annotated mixfixexp) (optionMaybe sig)
+{- liftT2 f (parsed mixfixexp) (optionMaybe sig)
   where sig = reservedOp ":" #> ty
         f (_ :< e) Nothing  = e
         f e (Just t) = Sig e t
@@ -196,49 +195,49 @@ left f p = unroll <$> p
   where unroll [x]      = x
         unroll (x:y:ys) = unroll (f x y : ys)
 
-leftT :: (Annotated a -> Annotated a -> T a) -> Parser [Annotated a] -> Parser (T a)
-leftT f p = value <$> left (\x y -> tag x :< f x y) p
+leftT :: (Parsed a -> Parsed a -> a Parse) -> Parser [Parsed a] -> Parser (a Parse)
+leftT f p = view value <$> left (\x y -> view tag x :< f x y) p
 
-mixfixexp :: Parser (T Exp)
+mixfixexp :: Parser (Exp Parse)
 mixfixexp = Mixfix <$> some (try top <|> texp)
-  where top = (\t -> tag t :< TOp (value t)) <$> annotated qop
-        texp = (\t -> tag t :< TExp t) <$> annotated lexp
+  where top = (\t -> view tag t :< TOp (view value t)) <$> parsed qop
+        texp = (\t -> view tag t :< TExp t) <$> parsed lexp
 
 qop :: Parser Op
 qop = qvarsym -- TODO
 
 -- TODO should do be here?
-lexp :: Parser (T Exp)
+lexp :: Parser (Exp Parse)
 lexp = expRead <|> expDo <|> expCase <|> expCases <|> fexp <|?> "lexp"
 
-fexp :: Parser (T Exp)
-fexp = leftT Apply (some (annotated aexp))
+fexp :: Parser (Exp Parse)
+fexp = leftT Apply (some (parsed aexp))
 
-aexp :: Parser (T Exp)
+aexp :: Parser (Exp Parse)
 aexp = expRecord <|> parens <|> expVar <|> expLit <|?> "aexp"
   where parens = liftT3 (\_ e _ -> e) (try (special '(')) exp (special ')')
 
-stmt :: Parser (T Stmt)
-stmt = try (StmtDecl <$> annotated decl) <|> (StmtExp <$> annotated exp)
+stmt :: Parser (Stmt Parse)
+stmt = try (StmtDecl <$> parsed decl) <|> (StmtExp <$> parsed exp)
 
-alt = liftT2 (,) (annotated pat) (reservedOp "->" #> annotated exp)
+alt = liftT2 (,) (parsed pat) (reservedOp "->" #> parsed exp)
 
-expCase :: Parser (T Exp)
-expCase = Case <$> (try (reservedId "case") #> annotated exp) <*> (reservedId "of" #> block alt)
+expCase :: Parser (Exp Parse)
+expCase = Case <$> (try (reservedId "case") #> parsed exp) <*> (reservedId "of" #> block alt)
 
-expCases :: Parser (T Exp)
+expCases :: Parser (Exp Parse)
 expCases = Cases <$> (try (reservedId "cases") #> block alt)
 
-expDo :: Parser (T Exp)
-expDo = Do <$> (try (reservedId "do") #> block (annotated stmt))
+expDo :: Parser (Exp Parse)
+expDo = Do <$> (try (reservedId "do") #> block (parsed stmt))
 
-expVar :: Parser (T Exp)
+expVar :: Parser (Exp Parse)
 expVar = Var <$> try varid <?> "var" -- TODO should be qvarid
 
-expLit :: Parser (T Exp)
-expLit = Parse.Lit <$> lit
+expLit :: Parser (Exp Parse)
+expLit = AST.Lit <$> lit
 
-expRecord :: Parser (T Exp)
+expRecord :: Parser (Exp Parse)
 expRecord = expUnit -- TODO
   where expUnit = unit *> pure (Record Record.unit)
 
@@ -247,81 +246,90 @@ whitespace = try (token whitespace') <?> "whitespace"
   where whitespace' Token.Whitespace = Just ()
         whitespace' _                = Nothing
 
-lit :: Parser Lit
+lit :: Parser AST.Lit
 lit = try (token lit') <?> "literal"
   where lit' (Token.Lit x) = Just x
         lit' _             = Nothing
 
-pat :: Parser (T Pat)
+pat :: Parser (Pat Parse)
 pat = patHole <|> patVar <|> patLit <|> patRecord <|?> "pat"
 
 unit :: Parser ()
 unit = try (special '(' #> special ')') *> return ()
 
-patHole :: Parser (T Pat)
+patHole :: Parser (Pat Parse)
 patHole = try (special '_') *> return PatHole
 
-patRecord :: Parser (T Pat)
+patRecord :: Parser (Pat Parse)
 patRecord = patUnit -- TODO
-  where patUnit :: Parser (T Pat)
+  where patUnit :: Parser (Pat Parse)
         patUnit = unit *> return (PatRecord Record.unit)
 
-patVar :: Parser (T Pat)
+patVar :: Parser (Pat Parse)
 patVar = PatVar <$> try varid
 
-patLit :: Parser (T Pat)
+patLit :: Parser (Pat Parse)
 patLit = PatLit <$> lit
 
-expRead :: Parser (T Exp)
-expRead = liftT4 (\_ x _ e -> Parse.Read x e) (try prefix) varid (reservedId "in") (annotated exp) <?> "read expression"
+expRead :: Parser (Exp Parse)
+expRead = liftT4 (\_ x _ e -> Read x e) (try prefix) varid (reservedId "in") (parsed exp) <?> "read expression"
   where prefix = reservedId "read"
 
-makeImpure :: Annotated a -> T (Impure a)
-makeImpure t = t :# (Phantom :< TyEffects Set.empty)
+raw a = (Phantom, ()) :< a
 
-sig :: Parser (T (Impure QType))
-sig = (makeImpure <$> annotated qty) <|> ((\((a :< p) :# e) -> (a :< Mono p) :# e) <$> impure)
-  where qty :: Parser (T QType)
-        qty = try (reservedId "forall") #> liftT3 Forall (many1 var <# dot) constraints (annotated ty)
-        constraints = pure $ Phantom :< TyCon "Trivial" -- TODO constraints
+sig :: Parser (Parsed Type)
+sig = parsed ty
+{-
+sig :: Parser (Parsed QType)
+sig = parsed qty <|> ((\(a :< p) -> (a :< Mono (a :< p))) <$> parsed ty)
+  where qty :: Parser (QType Parse)
+        qty = try (reservedId "forall") #> liftT3 Forall (many1 var <# dot) constraints (parsed ty)
+        constraints :: Parser (Parsed Type)
+        constraints = parsed $ pure empty      -- TODO constraints
         var = liftT2 (,) varid (pure KindType) -- TODO allow kinds
+-}
 
-impure :: Parser (T (Impure Type))
-impure = liftT2O f (annotated ty) (reservedOp "#") (annotated effs) <|?> "impure"
-  where f p Nothing   = makeImpure p
-        f p (Just es) = p :# es
+empty :: Type Parse
+empty = TyFlat Set.empty
 
-effs :: Parser (T Type)
-effs = TyEffects . Set.fromList <$> sepBy1 (annotated eff) plus
-
-eff :: Parser (T Type)
-eff = efLit <|> efVar <?> "effect"
-  where efLit = TyCon <$> try conid
-        efVar = TyVar <$> try varid
-
-ty :: Parser (T Type)
-ty = liftT2O f (annotated ty') (reservedOp "->") impure
-  where f p Nothing          = value p
-        f p (Just (p' :# e)) = TyApply (Phantom :< TyCon "->") (Phantom :< TyPack (Record.triple p p' e)) -- TODO sources
-        ty' = tyUnit <|> tyVar <|> tyCon <|> tyRecord <|> tyParen
+ty :: Parser (Type Parse)
+ty = liftT2O f (parsed ty') (reservedOp "->") (parsed ty)
+  where f :: Parsed Type -> Maybe (Parsed Type) -> Type Parse
+        f p Nothing   = view value p
+        f p (Just p') = TyApply (raw (TyCon "->")) (raw (TyPack (Record.pair p p'))) -- TODO sources
+        ty' = tyUnit <|> tyVar <|> tyCon <|> tyRecord <|> tyParen -- TODO need tyUnit???
         tyParen = special '(' #> ty <# special ')'
 
-tyRecord :: Parser (T Type)
-tyRecord = TyRecord <$> record (annotated ty)
+tyRecord :: Parser (Type Parse)
+tyRecord = TyRecord <$> record '(' ')' (parsed ty)
 
-tyUnit :: Parser (T Type)
+tyUnit :: Parser (Type Parse)
 tyUnit = unit *> return (TyRecord Record.unit)
 
-tyVar :: Parser (T Type)
+tyVar :: Parser (Type Parse)
 tyVar = TyVar <$> try varid
 
-tyCon :: Parser (T Type)
+tyCon :: Parser (Type Parse)
 tyCon = TyCon <$> try conid
 
-kind :: Parser Kind
-kind = undefined -- FIXME
+kind :: Parser (Kind Parse)
+kind = liftT2O f (parsed kind') (reservedOp "->") (parsed kind)
+  where f :: Parsed Kind -> Maybe (Parsed Kind) -> Kind Parse
+        f p Nothing   = view value p
+        f p (Just p') = KindFun p p'
+        kind' = kindType <|> kindConstraint <|> kindRecord <|> kindParen
+        kindParen = special '(' #> kind <# special ')'
 
-record :: Parser (Annotated a) -> Parser (Record (Annotated a))
-record p = try (special '(' #> guts <# special ')')
+kindType :: Parser (Kind Parse)
+kindType = try (reservedCon "Type") #> pure KindType
+
+kindConstraint :: Parser (Kind Parse)
+kindConstraint = try (reservedCon "Constraint") #> pure KindConstraint
+
+kindRecord :: Parser (Kind Parse)
+kindRecord = KindRecord <$> record '[' ']' (parsed kind)
+
+record :: Char -> Char -> Parser (Parsed a) -> Parser (Record (Parsed a))
+record l r p = try (special l #> guts <# special r)
   where guts = (Record.fromList . zip (repeat Nothing)) <$> sepBy2 p (special ',') -- FIXME (add optional fields)
 

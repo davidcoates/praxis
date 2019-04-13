@@ -3,12 +3,11 @@ module Parse.Tokenise
   ) where
 
 import           AST                      (Lit (..), QString (..))
+import           Common                   hiding (asum)
 import           Parse.Tokenise.Layout
 import           Parse.Tokenise.Token
 import           Parse.Tokenise.Tokeniser
 import           Praxis                   hiding (try)
-import           Source
-import           Tag
 
 import           Control.Applicative      (Alternative, Applicative, empty,
                                            liftA2, (<|>))
@@ -16,14 +15,14 @@ import           Data.Char
 import           Data.Foldable            (asum)
 import           Data.List                (intercalate)
 
-tokenise :: Bool -> String -> Praxis [Annotated Token]
+tokenise :: Bool -> String -> Praxis [Sourced Token]
 tokenise topLevel s = save stage $ do
-  set stage Tokenise
+  stage .= Tokenise
   ts <- runTokeniser atom s
   let ts' = layout topLevel ts
   logStr Debug (showTokens ts')
   return ts'
-    where showTokens = unwords . map (show . value) . filter (\x -> case value x of { Whitespace -> False ; _ -> True })
+    where showTokens = unwords . map (show . view value) . filter (\x -> case view value x of { Whitespace -> False ; _ -> True })
 
 -- // START OF NON-BACKTRACKING PARSER COMBINATORS
 
@@ -59,16 +58,17 @@ atom = (whitespace *> pure Whitespace) <|> lexeme
 
 
 reservedids = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall"]
+reservedcons = ["Type", "Constraint"]
 reservedops = [":", "=>", "=", "\\", "->", "#", "@", "|"]
 
 lexeme :: Tokeniser Token
-lexeme = qstuff <|> reservedid <|> reservedop <|> literal <|> special <|?> "lexeme"
+lexeme = qstuff <|> reservedid <|> reservedcon <|> reservedop <|> literal <|> special <|?> "lexeme"
 
 modid :: Tokeniser [String]
 modid = liftA2 (:) conid (many (try (char '.' *> conid)))
 
 conid :: Tokeniser String
-conid = liftA2 (:) (try large) (many idLetter) <?> "conid"
+conid = liftA2 (:) (try large) (many idLetter) `excludes` reservedcons <?> "conid"
 
 varid :: Tokeniser String
 varid = liftA2 (:) (try small) (many idLetter) `excludes` reservedids <?> "varid"
@@ -94,6 +94,9 @@ qstuff = try $ do
 
 reservedid :: Tokeniser Token
 reservedid = ReservedId <$> asum (map (try . string) reservedids)
+
+reservedcon :: Tokeniser Token
+reservedcon = ReservedCon <$> asum (map (try . string) reservedcons)
 
 reservedop :: Tokeniser Token
 reservedop = ReservedOp <$> asum (map (try . string) reservedops)

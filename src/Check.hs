@@ -1,71 +1,18 @@
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-
 module Check
-  ( Checkable(..)
-  , Annotated
+  ( check
   ) where
 
-import           Check.AST
-import           Check.Generate
-import           Check.Solve     (solve)
+import           Check.Annotate
+import qualified Check.Kind.Check as Kind
 import           Check.System
+import qualified Check.Type.Check as Type
 import           Common
-import qualified Parse.Parse.AST as Parse (Annotated)
+import           Introspect
+import           Parse.Annotate
 import           Praxis
-import           Record
-import           Tag
-import           Type
 
-import           Control.Arrow   (first)
-import           Data.Maybe      (fromMaybe)
-import qualified Data.Set        as Set
-import           Prelude         hiding (log)
-
-class Checkable a b | a -> b where
-  check :: a -> Praxis b
-  check p = save stage $ do
-    set stage Check
-    set system initialSystem
-    p' <- check' p
-    return p'
-  check' :: a -> Praxis b
-
-checkWithSub :: (Show (Annotated b), TagTraversable b, Generatable a (Annotated b)) => a -> Praxis (Annotated b)
-checkWithSub p = do
-  p' <- generate p
-  sol <- solve
-  let f g (t, e, s) = (g <$> t, g <$> e, s)
-      p'' = tagMap (f (fullSol sol)) p'
-  log Debug p''
-  return p''
-
-fullSol :: (KindTraversable a, TypeTraversable a) => ([(Name, Kinded Type)], [(Name, Kind)]) -> a -> a
-fullSol (tySol, kindSol) = subs f . subs (`lookup` tySol) . subs (`lookup` kindSol)
-  where f :: (Kind, Name) -> Maybe (Kinded Type) -- Trivial defaulting
-        f (k, n) = if head n /= '?' then Nothing else (k :<) <$> case k of -- TODO fix the /= '?' hack
-          KindEffect -> Just $ TyEffects Set.empty
-          KindType   -> Just $ TyRecord Record.unit
-          _          -> Nothing
-
-{- TODO actually use this
-checkNoUnis :: (KindTraversable a, TypeTraversable a) => a -> Praxis ()
-checkNoUnis p = if null (extract (unis :: Kind -> [Name]) p ++ extract (unis :: Kinded Type -> [Name]) p) then pure () else error "checkNoUnis TODO a proper error"
--}
-
-instance Checkable (Parse.Annotated Program) (Annotated Program) where
-  check' = checkWithSub
-
-instance Checkable (Parse.Annotated Exp) (Annotated Exp) where
-  check' = checkWithSub
-
-instance Checkable (Parse.Annotated Type) (Kinded Type) where
-  check' p = do
-    p' <- generate p
-    sol <- solve
-    let p'' = fullSol sol p'
-    log Debug p''
-    return p''
-
+check :: Recursive a => Parsed a -> Praxis (Kinded a)
+check x = do
+  system .= initialSystem
+  x' <- Type.check x
+  Kind.check x'

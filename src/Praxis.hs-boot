@@ -15,6 +15,6 @@ import           Control.Monad.State  (StateT)
 
 data PraxisState
 
-type Praxis a = ExceptT Error (StateT PraxisState IO) a
+type Praxis = ExceptT Error (StateT PraxisState IO)
 
 internalError :: String -> a

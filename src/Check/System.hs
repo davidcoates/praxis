@@ -1,42 +1,33 @@
-{-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Check.System
   ( System
+  , typeSystem
+  , kindSystem
+
   , initialSystem
 
-  -- |System lenses
-  , axioms
-  , changed
-  , constraints
-  , tySol
-  , kindSol
-  , staging
+  , module Type
+  , module Kind
   ) where
 
-import           Check.Constraint (Constraint, Derivation)
-import           Common           (Name)
-import           Type             (Kind, Kinded, Type)
+import qualified Check.Kind.System as Kind
+import qualified Check.Type.System as Type
 
-import           Control.Lens     (makeLenses)
+import           Control.Lens      (makeLenses)
 
 initialSystem :: System
 initialSystem = System
-  { _tySol       = []
-  , _kindSol     = []
-  , _constraints = []
-  , _axioms      = []
-  , _changed     = False
-  , _staging     = []
+  { _typeSystem = Type.initialSystem
+  , _kindSystem = Kind.initialSystem
   }
 
 data System = System
-  { _tySol       :: [(Name, Kinded Type)]
-  , _kindSol     :: [(Name, Kind)]
-  , _constraints :: [Derivation]
-  , _staging     :: [Derivation]
-  , _axioms      :: [Constraint]
-  , _changed     :: Bool
-  } deriving (Show)
+  { _typeSystem :: Type.System
+  , _kindSystem :: Kind.System
+  }
 
 makeLenses ''System
+
+instance Show System where
+  show _ = "<system>"

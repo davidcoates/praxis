@@ -3,8 +3,8 @@ module Resolve
   ) where
 
 import           AST
+import           Common
 import           Parse
-import           Source
 
 data ResolverError = UnknownName String Source
 

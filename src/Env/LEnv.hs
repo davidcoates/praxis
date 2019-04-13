@@ -11,7 +11,7 @@ module Env.LEnv
   , intro
   , join
   , lookup
-  , use
+  , mark
   , push
   , pop
   )
@@ -48,10 +48,10 @@ elimN n (LEnv l ls) = LEnv (AEnv.elimN n l) ls
 intro :: a -> b -> LEnv a b -> LEnv a b
 intro a b (LEnv l ls) = LEnv (AEnv.intro a b l) ls
 
-use :: Eq a => a -> LEnv a b -> LEnv a b
-use x (LEnv l ls) = let (m:ms) = f (l:ls) in LEnv m ms
+mark :: Eq a => a -> LEnv a b -> LEnv a b
+mark x (LEnv l ls) = let (m:ms) = f (l:ls) in LEnv m ms
   where f (l:ls) = case AEnv.lookup x l of
-          Just _  -> AEnv.use x l : ls
+          Just _  -> AEnv.mark x l : ls
           Nothing -> l : f ls
 
 lookup :: Eq a => a -> LEnv a b -> Maybe (Bool, Bool, b)

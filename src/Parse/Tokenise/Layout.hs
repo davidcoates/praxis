@@ -2,24 +2,23 @@ module Parse.Tokenise.Layout
   ( layout
   ) where
 
+import           Common
 import           Parse.Tokenise.Token
 import           Praxis
-import           Source
-import           Tag
 
-lbrace :: Annotated Token
+lbrace :: Sourced Token
 lbrace = Phantom :< Special '{'
 
-rbrace :: Annotated Token
+rbrace :: Sourced Token
 rbrace = Phantom :< Special '}'
 
-semi :: Annotated Token
+semi :: Sourced Token
 semi = Phantom :< Special ';'
 
 -- |Inserts phantom layout tokens based on indentation
-layout :: Bool -> [Annotated Token] -> [Annotated Token]
+layout :: Bool -> [Sourced Token] -> [Sourced Token]
 layout topLevel ts = l (-1) topLevel [] ts
-  where l :: Int -> Bool -> [Int] -> [Annotated Token] -> [Annotated Token] -- This function works by magic
+  where l :: Int -> Bool -> [Int] -> [Sourced Token] -> [Sourced Token] -- This function works by magic
         l i b cs (t@(_:<Whitespace):ts) = t : l i b cs ts
         l i b cs [] = replicate (length cs) rbrace
         l i True cs (t@(_:<Special '{'):ts) = t : l i False cs ts

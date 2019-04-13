@@ -11,8 +11,8 @@ module Parse.Prim
   , (<|?>)
   ) where
 
+import           Common
 import           Error
-import           Source              (Source)
 
 import           Control.Applicative (Alternative, Applicative, empty, liftA2,
                                       pure, (<|>))
@@ -50,7 +50,7 @@ instance Monad (Parser t) where
 
 runParser :: Parser t a -> [t] -> (t -> Source) -> Either (ParseSource, ParseError) a
 runParser p ts f = let (x,y,_) = _runParser p ts in
-  case x of Left e  -> Left (if null y then EOF else Source (f (head y)), e)
+  case x of Left e  -> Left (if null y then EOF else Error.Source (f (head y)), e)
             Right x -> Right x
 
 eof :: Parser t ()

@@ -4,14 +4,15 @@ module Env
   , KEnv
   ) where
 
-import           Common   (Name)
+import           Common
 import           Env.Env  (Env)
 import           Env.LEnv (LEnv)
-import           Type     (Kind, Kinded, QType)
+import           Stage
+import           Type     (Kind, QType)
 import           Value    (Value)
 
 type VEnv = Env Name Value
 
-type TEnv = LEnv Name (Kinded QType)
+type TEnv = LEnv Name (Annotated TypeCheck QType)
 
-type KEnv = Env Name Kind
+type KEnv = Env Name (Annotated KindCheck Kind)

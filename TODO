@@ -47,7 +47,6 @@ instance Functor (\a -> Either [a, b], Trivial)
 
 instance Functor (Set, Ord)
 
-
 Explicit forall for poly types? Otherwise it refers to tyvar in scope?
 Need to add a map somewhere from TyVar to TyUni. Could fit entirely in KEnv, perhaps.
 
@@ -55,4 +54,7 @@ Rename KindRecord -> KindPack ?
 
 Kind of QType doesn't really make sense?
 
-Desugaring case of to cases introduces an unnecessary closure. NOT good. Should probably have both or desugar cases to case of instead.
+Should QType's really be kinded? Seems unnecessary.
+
+Consistent use of TypeCheck/KindCheck vs Annotated TypeCheck blah
+

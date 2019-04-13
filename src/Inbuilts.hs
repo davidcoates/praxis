@@ -1,73 +1,92 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs            #-}
+{-# LANGUAGE Rank2Types       #-}
 
 module Inbuilts
   ( initialState
   ) where
 
-import           AST          (Lit (..))
-import {-# SOURCE #-} Check        (check)
-import           Env.KEnv     (KEnv)
-import qualified Env.KEnv     as KEnv (fromList)
-import           Env.TEnv     (TEnv)
-import qualified Env.TEnv     as TEnv (fromList)
-import           Env.VEnv     (VEnv)
-import qualified Env.VEnv     as VEnv (fromList)
+import           AST            (Lit (..))
+import           Check.Annotate
+import           Common
+import           Env.KEnv       (KEnv)
+import qualified Env.KEnv       as KEnv (fromList)
+import           Env.TEnv       (TEnv)
+import qualified Env.TEnv       as TEnv (fromList)
+import           Env.VEnv       (VEnv)
+import qualified Env.VEnv       as VEnv (fromList)
 import           Error
-import           Parse        (Annotated, parse)
+import           Introspect
+import           Parse          (parse)
+import           Parse.Annotate
 import           Praxis
 import qualified Record
-import           Source       (Source)
-import           Tag
-import           Type         hiding (mono)
+import           Stage
+import           Type           hiding (mono)
 import           Value
 
-import qualified Control.Lens as Lens (set)
-import           Data.List    (nub, sort)
+import           Control.Lens   as Lens (set)
+import           Data.List      (nub, sort)
+import qualified Data.Set       as Set (empty)
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
-initialState = Lens.set tEnv initialTEnv $ Lens.set vEnv initialVEnv $ Lens.set kEnv initialKEnv $ emptyState
+initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ emptyState
 
-mono :: String -> Kinded QType
-mono s = let (k :< t) = runStatic m in k :< Mono t
-  where m = save kEnv $ (set kEnv initialKEnv >> (parse s :: Praxis (Annotated Type)) >>= check :: Praxis (Kinded Type))
+-- TODO this actually introduces source information, but we ideally want it to be Phantom
+mono :: String -> Typed QType
+mono s = let (a :< t) = runStatic initialState m in (view source (a :< t), ()) :< Mono (a :< t)
+  where m :: Praxis (Typed Type)
+        m = retag f <$> (parse s :: Praxis (Parsed Type))
+        f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
+        f i x = case i of
+          IType  -> ()
+          IQType -> ()
 
-trivial :: Kinded Type
-trivial = KindConstraint :< TyRecord Record.unit -- TODO constraint type? Or TyEffects -> TyFlat
+trivial :: Typed Type
+trivial = (Phantom, ()) :< TyFlat Set.empty
 
-poly :: [(Name, Kind)] -> String -> Kinded QType
-poly ks s = let (KindType :< Mono t) = mono s in KindType :< Forall ks trivial (KindType :< t)
+poly :: [(Name, Typed Kind)] -> String -> Typed QType
+poly ks s = let (a :< Mono t) = mono s in a :< Forall ks trivial t
 
-prelude :: [(Name, Kinded QType, Value)]
+kind :: String -> Typed Kind
+kind s = runStatic initialState m
+  where m :: Praxis (Typed Kind)
+        m = retag f <$> (parse s :: Praxis (Parsed Kind))
+        f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
+        f i x = case i of
+          IKind  -> ()
+
+-- TODO reduce duplication with retag
+
+prelude :: [(Name, Typed QType, Value)]
 prelude =
-  [ ("add",      mono "(Int, Int) -> Int",     lift (+))
-  , ("sub",      mono "(Int, Int) -> Int",     lift (-))
-  , ("mul",      mono "(Int, Int) -> Int",     lift (*))
-  , ("getInt",   mono "() -> Int # StdIn",     F (\(R _) -> liftIO ((L . Int) <$> readLn)))
-  , ("putInt",   mono "Int -> () # StdOut",    F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
-  , ("putStrLn", mono "String -> () # StdOut", F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
+  [ ("add",      mono "(Int, Int) -> Int", lift (+))
+  , ("sub",      mono "(Int, Int) -> Int", lift (-))
+  , ("mul",      mono "(Int, Int) -> Int", lift (*))
+  , ("getInt",   mono "() -> Int",         F (\(R _) -> liftIO ((L . Int) <$> readLn)))
+  , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
+  , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
   , ("dot",      poly
-      [ ("a", KindType)
-      , ("b", KindType)
-      , ("c", KindType)
-      , ("e1", KindEffect)
-      , ("e2", KindEffect)] "(b -> c # e1, a -> b # e2) -> a -> c # e1 + e2", -- TODO shouldn't need kinds here in forall
-                                               F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
+      [ ("a", kind "Type")
+      , ("b", kind "Type")
+      , ("c", kind "Type")
+      ] "(b -> c, a -> b) -> a -> c", -- TODO shouldn't need kinds here in forall
+        F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
   ]
   where
         lift :: (Int -> Int -> Int) -> Value
         lift f = F (\(R r) -> case Record.unpair r of (L (Int a), L (Int b)) -> pure (L (Int (f a b))))
 
-preludeKinds :: [(Name, Kind)]
+-- TODO use parser for this
+preludeKinds :: [(Name, Typed Kind)]
 preludeKinds =
-  [ ("Int",    KindType)
-  , ("Bool",   KindType)
-  , ("String", KindType)
-  , ("Char",   KindType)
-  , ("StdOut", KindEffect)
-  , ("StdIn",  KindEffect)
-  , ("Share",  KindFun KindType KindConstraint)
-  , ("->",     KindFun (KindRecord (Record.triple KindType KindType KindEffect)) KindType)
+  [ ("Int",    kind "Type")
+  , ("Bool",   kind "Type")
+  , ("String", kind "Type")
+  , ("Char",   kind "Type")
+  , ("Share",  kind "Type -> Constraint")
+  , ("->",     kind "[Type, Type] -> Type")
   ]
 
 initialVEnv :: VEnv
@@ -77,4 +96,8 @@ initialTEnv :: TEnv
 initialTEnv = TEnv.fromList (map (\(n, t, _) -> (n, t)) prelude)
 
 initialKEnv :: KEnv
-initialKEnv = KEnv.fromList preludeKinds
+initialKEnv = KEnv.fromList (map (\(a,b) -> (a, retag f b)) preludeKinds) where
+  f :: forall a. Recursive a => I a -> Annotation TypeCheck a -> Annotation KindCheck a
+  f i x = case i of
+    IKind  -> ()
+

@@ -23,6 +23,7 @@ module Introspect
   , DataAlt
   , Decl
   , Exp
+  , Kind
   , Pat
   , Program
   , QType
@@ -58,6 +59,7 @@ data I a where
   IDataAlt :: I DataAlt
   IDecl    :: I Decl
   IExp     :: I Exp
+  IKind    :: I Kind
   IPat     :: I Pat
   IProgram :: I Program
   IQType   :: I QType
@@ -76,6 +78,7 @@ switch a b eq neq = case (a, b) of
   (IDataAlt, IDataAlt)               -> eq
   (IDecl, IDecl)                     -> eq
   (IExp, IExp)                       -> eq
+  (IKind, IKind)                     -> eq
   (IPat, IPat)                       -> eq
   (IProgram, IProgram)               -> eq
   (IQType, IQType)                   -> eq
@@ -171,6 +174,15 @@ instance Recursive Exp where
     Var n        -> pure (Var n)
     VarBang n    -> pure (Var n)
 
+instance Recursive Kind where
+  witness = IKind
+  recurse f x = case x of
+    KindUni n      -> pure (KindUni n)
+    KindConstraint -> pure KindConstraint
+    KindFun a b    -> KindFun <$> f a <*> f b
+    KindRecord r   -> KindRecord <$> traverse f r
+    KindType       -> pure KindType
+
 instance Recursive Pat where
   witness = IPat
   recurse f x = case x of
@@ -195,7 +207,7 @@ instance Recursive QType where
   witness = IQType
   recurse f x = case x of
     Mono t        -> Mono <$> f t
-    Forall ks a b -> Forall ks <$> f a <*> f b
+    Forall ks a b -> Forall <$> traverse (second f) ks <*> f a <*> f b
 
 instance Recursive Tok where
   witness = ITok
@@ -231,7 +243,7 @@ instance Recursive TypeConstraint where
 instance Recursive KindConstraint where
   witness = IKindConstraint
   recurse f x = case x of
-    Check.Kind.Constraint.Eq a b -> pure $ Check.Kind.Constraint.Eq a b
+    Check.Kind.Constraint.Eq a b -> Check.Kind.Constraint.Eq <$> f a <*> f b
 
 -- Show
 
@@ -253,22 +265,26 @@ instance (Complete s, Recursive a, x ~ Annotation s a) => Show (Tag (Source, x) 
       annShow s       l = "[" ++ l ++ " " ++ show (start s) ++ "] "
     show' :: forall a s. (Complete s, Recursive a) => (a s) -> String
     show' = case (witness :: I a) of
-      IDataAlt        -> show
-      IDecl           -> show
-      IExp            -> show
-      IPat            -> show
-      IProgram        -> show
-      IQType          -> show
-      IStmt           -> show
-      ITok            -> show
-      ITyPat          -> show
-      IType           -> show
-      ITypeConstraint -> show
-      IKindConstraint -> show
+      IDataAlt        -> showP
+      IDecl           -> showP
+      IExp            -> showP
+      IPat            -> showP
+      IProgram        -> showP
+      IQType          -> showP
+      IStmt           -> showP
+      ITok            -> showP
+      ITyPat          -> showP
+      IType           -> showP
+      ITypeConstraint -> showP
+      IKindConstraint -> showP
+    showP :: forall a. Show a => a -> String
+    showP s = "(" ++ show s ++ ")"
+    -- TODO use the show setting stuff for parens
 
 deriving instance Complete s => Show (DataAlt s)
 deriving instance Complete s => Show (Decl s)
 deriving instance Complete s => Show (Exp s)
+deriving instance Complete s => Show (Kind s)
 deriving instance Complete s => Show (Pat s)
 deriving instance Complete s => Show (Program s)
 deriving instance Complete s => Show (QType s)
@@ -278,3 +294,13 @@ deriving instance Complete s => Show (TyPat s)
 deriving instance Complete s => Show (Type s)
 deriving instance Complete s => Show (TypeConstraint s)
 deriving instance Complete s => Show (KindConstraint s)
+
+{-
+instance Complete s => Show (Kind s) where
+  show k = case k of
+    KindUni n -> n
+    KindConstraint -> "Constraint"
+    KindFun k1 k2  -> show k1 ++ " -> " ++ show k2
+    KindRecord r   -> "[" ++ showGuts show r ++ "]"
+    KindType       -> "Type"
+-}

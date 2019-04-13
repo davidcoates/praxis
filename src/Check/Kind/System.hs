@@ -14,10 +14,11 @@ module Check.Kind.System
 import           Check.Kind.Annotate
 import           Check.Kind.Constraint
 import           Common
+import           Stage
 import           Type                  (Kind)
 
 data System = System
-  { _sol         :: [(Name, Kind)]
+  { _sol         :: [(Name, Kind KindCheck)]
   , _constraints :: [Kinded KindConstraint]
   , _staging     :: [Kinded KindConstraint]
   , _axioms      :: [Kinded KindConstraint]

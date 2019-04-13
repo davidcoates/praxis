@@ -6,7 +6,8 @@ module Stage
   , KindCheck
   ) where
 
-data Stage = Tokenise
+data Stage = Unknown
+           | Tokenise
            | Parse
            | Desugar
            | TypeCheck Check
@@ -19,6 +20,7 @@ data Check = Warmup
 
 instance Show Stage where
   show s = case s of
+    Unknown     -> "Unknown"
     Tokenise    -> "Tokenise"
     Parse       -> "Parse"
     Desugar     -> "Desugar"

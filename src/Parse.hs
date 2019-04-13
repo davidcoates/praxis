@@ -37,3 +37,9 @@ instance Parseable Type where
     ts <- tokenise False s
     p <- Sweet.parse ts :: Praxis (Parsed Type)
     desugar p
+
+instance Parseable Kind where
+  parse s = do
+    ts <- tokenise False s
+    p <- Sweet.parse ts :: Praxis (Parsed Kind)
+    desugar p

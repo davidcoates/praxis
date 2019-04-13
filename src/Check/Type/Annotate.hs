@@ -19,6 +19,7 @@ type Typed a = Annotated TypeCheck a
 type instance Annotation TypeCheck DataAlt = ()
 type instance Annotation TypeCheck Decl = ()
 type instance Annotation TypeCheck Exp = Typed Type
+type instance Annotation TypeCheck Kind = ()
 type instance Annotation TypeCheck Pat = Typed Type
 type instance Annotation TypeCheck Program = ()
 type instance Annotation TypeCheck QType = ()
@@ -33,6 +34,7 @@ instance Complete TypeCheck where
     IDataAlt        -> pure ()
     IDecl           -> pure ()
     IExp            -> f a
+    IKind           -> pure ()
     IPat            -> f a
     IProgram        -> pure ()
     IQType          -> pure ()

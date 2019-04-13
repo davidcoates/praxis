@@ -58,16 +58,17 @@ atom = (whitespace *> pure Whitespace) <|> lexeme
 
 
 reservedids = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall"]
+reservedcons = ["Type", "Constraint"]
 reservedops = [":", "=>", "=", "\\", "->", "#", "@", "|"]
 
 lexeme :: Tokeniser Token
-lexeme = qstuff <|> reservedid <|> reservedop <|> literal <|> special <|?> "lexeme"
+lexeme = qstuff <|> reservedid <|> reservedcon <|> reservedop <|> literal <|> special <|?> "lexeme"
 
 modid :: Tokeniser [String]
 modid = liftA2 (:) conid (many (try (char '.' *> conid)))
 
 conid :: Tokeniser String
-conid = liftA2 (:) (try large) (many idLetter) <?> "conid"
+conid = liftA2 (:) (try large) (many idLetter) `excludes` reservedcons <?> "conid"
 
 varid :: Tokeniser String
 varid = liftA2 (:) (try small) (many idLetter) `excludes` reservedids <?> "varid"
@@ -93,6 +94,9 @@ qstuff = try $ do
 
 reservedid :: Tokeniser Token
 reservedid = ReservedId <$> asum (map (try . string) reservedids)
+
+reservedcon :: Tokeniser Token
+reservedcon = ReservedCon <$> asum (map (try . string) reservedcons)
 
 reservedop :: Tokeniser Token
 reservedop = ReservedOp <$> asum (map (try . string) reservedops)

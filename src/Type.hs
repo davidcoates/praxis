@@ -19,15 +19,14 @@ import           Data.Monoid ((<>))
 import           Data.Set    (Set)
 import qualified Data.Set    as Set
 
-data Kind = KindUni Name
-          | KindConstraint
-          | KindFun Kind Kind
-          | KindRecord (Record Kind)
-          | KindType
-  deriving (Ord, Eq)
+data Kind a = KindUni Name
+            | KindConstraint
+            | KindFun (Annotated a Kind) (Annotated a Kind)
+            | KindRecord (Record (Annotated a Kind))
+            | KindType
 
 data QType a = Mono (Annotated a Type)
-             | Forall [(Name, Kind)] (Annotated a Type) (Annotated a Type) -- ^First type is constraint
+             | Forall [(Name, Annotated a Kind)] (Annotated a Type) (Annotated a Type) -- ^First type is constraint
 
 data Type a = TyUni Name                                      -- Compares less than all other types
             | TyApply (Annotated a Type) (Annotated a Type)   -- ^Type-level application : (#a -> #b) -> #a -> #b
@@ -42,17 +41,11 @@ data Type a = TyUni Name                                      -- Compares less t
 data TyPat a = TyPatVar Name
              | TyPatPack (Record (Annotated a TyPat))
 
+deriving instance Eq (Kind a)
 deriving instance Eq (TyPat a)
 deriving instance Eq (Type a)
 deriving instance Eq (QType a)
+deriving instance Ord (Kind a)
 deriving instance Ord (TyPat a)
 deriving instance Ord (Type a)
 deriving instance Ord (QType a)
-
-instance Show Kind where
-  show k = case k of
-    KindUni n      -> n
-    KindConstraint -> "Constraint"
-    KindFun k1 k2  -> show k1 ++ " -> " ++ show k2
-    KindRecord r   -> "[" ++ showGuts show r ++ "]"
-    KindType       -> "Type"

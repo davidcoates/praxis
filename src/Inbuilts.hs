@@ -46,8 +46,18 @@ mono s = let (a :< t) = runStatic initialState m in (view source (a :< t), ()) :
 trivial :: Typed Type
 trivial = (Phantom, ()) :< TyFlat Set.empty
 
-poly :: [(Name, Kind)] -> String -> Typed QType
+poly :: [(Name, Typed Kind)] -> String -> Typed QType
 poly ks s = let (a :< Mono t) = mono s in a :< Forall ks trivial t
+
+kind :: String -> Typed Kind
+kind s = runStatic initialState m
+  where m :: Praxis (Typed Kind)
+        m = retag f <$> (parse s :: Praxis (Parsed Kind))
+        f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
+        f i x = case i of
+          IKind  -> ()
+
+-- TODO reduce duplication with retag
 
 prelude :: [(Name, Typed QType, Value)]
 prelude =
@@ -58,9 +68,9 @@ prelude =
   , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
   , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
   , ("dot",      poly
-      [ ("a", KindType)
-      , ("b", KindType)
-      , ("c", KindType)
+      [ ("a", kind "Type")
+      , ("b", kind "Type")
+      , ("c", kind "Type")
       ] "(b -> c, a -> b) -> a -> c", -- TODO shouldn't need kinds here in forall
         F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
   ]
@@ -68,14 +78,15 @@ prelude =
         lift :: (Int -> Int -> Int) -> Value
         lift f = F (\(R r) -> case Record.unpair r of (L (Int a), L (Int b)) -> pure (L (Int (f a b))))
 
-preludeKinds :: [(Name, Kind)]
+-- TODO use parser for this
+preludeKinds :: [(Name, Typed Kind)]
 preludeKinds =
-  [ ("Int",    KindType)
-  , ("Bool",   KindType)
-  , ("String", KindType)
-  , ("Char",   KindType)
-  , ("Share",  KindFun KindType KindConstraint)
-  , ("->",     KindFun (KindRecord (Record.pair KindType KindType)) KindType)
+  [ ("Int",    kind "Type")
+  , ("Bool",   kind "Type")
+  , ("String", kind "Type")
+  , ("Char",   kind "Type")
+  , ("Share",  kind "Type -> Constraint")
+  , ("->",     kind "[Type, Type] -> Type")
   ]
 
 initialVEnv :: VEnv
@@ -85,4 +96,8 @@ initialTEnv :: TEnv
 initialTEnv = TEnv.fromList (map (\(n, t, _) -> (n, t)) prelude)
 
 initialKEnv :: KEnv
-initialKEnv = KEnv.fromList preludeKinds
+initialKEnv = KEnv.fromList (map (\(a,b) -> (a, retag f b)) preludeKinds) where
+  f :: forall a. Recursive a => I a -> Annotation TypeCheck a -> Annotation KindCheck a
+  f i x = case i of
+    IKind  -> ()
+

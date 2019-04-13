@@ -6,7 +6,6 @@
 
 module Check.Kind.Solve
   ( solve
-  , ksub
   ) where
 
 import           AST
@@ -33,7 +32,7 @@ import           Data.Set               (Set, union)
 import qualified Data.Set               as Set
 import           Prelude                hiding (log)
 
-solve :: Praxis [(Name, Kind)]
+solve :: Praxis [(Name, Kind KindCheck)]
 solve = save stage $ save our $ do
   stage .= KindCheck Solve
   solve'
@@ -58,6 +57,7 @@ solve' = spin progress `chain` stuck
             -- logList Normal cs
             throwKindError Stuck
 
+-- TODO reduce duplication with Type Solve spin
 spin :: (Kinded KindConstraint -> Praxis Bool) -> Praxis State
 spin solve = do
   cs <- (nub . sort) <$> use (our . constraints)
@@ -75,57 +75,50 @@ spin solve = do
         []     -> return False
         (c:cs) -> (our . staging .= cs) >> liftA2 (||) (solve c) loop
 
-unis :: Kind -> [Name]
-unis k = case k of
-  KindUni n      -> [n]
-  KindConstraint -> []
-  KindFun k1 k2  -> unis k1 ++ unis k2
-  KindRecord r   -> concatMap (unis . snd) (toList r)
-  KindType       -> []
-
+unis = extract (only f) where
+  f k = case k of
+    KindUni n      -> [n]
+    KindConstraint -> []
+    KindFun a b    -> unis a ++ unis b
+    KindRecord a   -> concatMap (unis . snd) (toList a)
+    KindType       -> []
+-- TODO find some way of combining traverseM and traverseA and use that here
 
 progress :: Kinded KindConstraint -> Praxis Bool
-progress c'@(d :< c) = case c of
+progress d = case view value d of
 
   Eq k1 k2 | k1 == k2  -> tautology
 
-  Eq (KindUni x) k -> if x `elem` unis k then contradiction else x ~> k
-  Eq _ (KindUni _) -> swap
+  Eq (_ :< KindUni x) k -> if x `elem` unis k then contradiction else x ~> (view value k)
+  Eq _ (_ :< KindUni _) -> swap
 
-  Eq (KindRecord r1) (KindRecord r2) | sort (keys r1) == sort (keys r2) ->
+  Eq (_ :< KindRecord r1) (_ :< KindRecord r2) | sort (keys r1) == sort (keys r2) ->
     let values = map snd . Record.toCanonicalList in introduce (zipWith Eq (values r1) (values r2)) -- TODO create zipRecord or some such
 
-  Eq (KindFun t1 t2) (KindFun t3 t4) -> introduce [ Eq t1 t3, Eq t2 t4 ]
+  Eq (_ :< KindFun t1 t2) (_ :< KindFun t3 t4) -> introduce [ Eq t1 t3, Eq t2 t4 ]
 
   _ -> contradiction
 
   where solved = return True
         tautology = solved
-        defer = require c' >> return False
-        contradiction = throwKindError (Contradiction c')
-        introduce cs = requires (map (c' `implies`) cs) >> return True
-        swap = case c of Eq k1 k2 -> progress (d :< Eq k2 k1)
+        defer = require d >> return False
+        contradiction = throwKindError (Contradiction d)
+        introduce cs = requires (map (d `implies`) cs) >> return True
+        swap = case view value d of t1 `Eq` t2 -> progress (set value (t2 `Eq` t1) d)
 
-ksub :: (Name -> Maybe Kind) -> Kind -> Kind
-ksub f k = case k of
-  KindUni n      -> fromMaybe k (f n)
-  KindConstraint -> k
-  KindFun k1 k2  -> KindFun (ksub f k1) (ksub f k2)
-  KindRecord r   -> KindRecord (fmap (ksub f) r)
-  KindType       -> k
-
-cmap :: (Kind -> Kind) -> Kinded KindConstraint -> Kinded KindConstraint
-cmap f c = over value f' (over (annotation . antecedent) (cmap f <$>) c)
-  where f' (k1 `Eq` k2) = f k1 `Eq` f k2
-
-(~>) :: Name -> Kind -> Praxis Bool
-(~>) n k = do
-  let f :: Kind -> Kind
-      f = ksub (\n' -> if n == n' then Just k else Nothing)
-  our . sol %= ((n, k):)
-  our . constraints %= fmap (cmap f)
-  our . staging %= fmap (cmap f)
-  our . axioms %= fmap (cmap f)
+smap :: (forall a. Recursive a => Kinded a -> Kinded a) -> Praxis ()
+smap f = do
+  let lower :: forall a. (Recursive a, Annotation KindCheck a ~ ()) => (Kinded a -> Kinded a) -> a KindCheck -> a KindCheck
+      lower f = view value . f . ((Phantom, ()) :<)
+  our . sol %= fmap (over second (lower f))
+  our . constraints %= fmap f
+  our . staging %= fmap f
+  our . axioms %= fmap f
   kEnv %= over traverse f
+
+(~>) :: Name -> Kind KindCheck -> Praxis Bool
+(~>) n k = do
+  smap $ sub (\k' -> case k' of { KindUni n' | n == n' -> Just k; _ -> Nothing })
+  our . sol %= ((n, k):)
   reuse n
   return True

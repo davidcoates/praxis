@@ -9,14 +9,15 @@ module Env.KEnv
   )
 where
 
+import           Check.Kind.Annotate
 import           Common
-import           Env     (KEnv)
-import           Env.Env (Env, fromList)
-import qualified Env.Env as Env
+import           Env                 (KEnv)
+import           Env.Env             (Env, fromList)
+import qualified Env.Env             as Env
 import           Praxis
 import           Type
 
-import           Prelude hiding (lookup)
+import           Prelude             hiding (lookup)
 
 elim :: Praxis ()
 elim = do
@@ -28,10 +29,10 @@ elimN n = do
   l <- use kEnv
   kEnv .= Env.elimN n l
 
-intro :: Name -> Kind -> Praxis ()
+intro :: Name -> Kinded Kind -> Praxis ()
 intro n v = kEnv %= Env.intro n v
 
-lookup :: Name -> Praxis (Maybe Kind)
+lookup :: Name -> Praxis (Maybe (Kinded Kind))
 lookup n = do
   l <- use kEnv
   return (Env.lookup n l)

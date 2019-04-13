@@ -15,4 +15,4 @@ type VEnv = Env Name Value
 
 type TEnv = LEnv Name (Annotated TypeCheck QType)
 
-type KEnv = Env Name Kind
+type KEnv = Env Name (Annotated KindCheck Kind)

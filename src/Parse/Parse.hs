@@ -46,6 +46,9 @@ instance Parseable Exp where
 instance Parseable Type where
   parse = parse' ty
 
+instance Parseable Kind where
+  parse = parse' kind
+
 -- TODO move these to Parse/Parser?
 optional :: Parser a -> Parser ()
 optional p = p *> pure () <|> pure ()
@@ -132,6 +135,11 @@ reservedId :: String -> Parser ()
 reservedId s = satisfy reservedId' *> pure () <?> "reserved id '" ++ s ++ "'"
   where reservedId' (Token.ReservedId s') | s == s' = True
         reservedId' _                     = False
+
+reservedCon :: String -> Parser ()
+reservedCon s = satisfy reservedCon' *> pure () <?> "reserved con '" ++ s ++ "'"
+  where reservedCon' (Token.ReservedCon s') | s == s' = True
+        reservedCon' _                      = False
 
 reservedOp :: String -> Parser ()
 reservedOp s = satisfy reservedOp' *> pure () <?> "reserved op '" ++ s ++ "'"
@@ -289,11 +297,11 @@ ty = liftT2O f (parsed ty') (reservedOp "->") (parsed ty)
   where f :: Parsed Type -> Maybe (Parsed Type) -> Type Parse
         f p Nothing   = view value p
         f p (Just p') = TyApply (raw (TyCon "->")) (raw (TyPack (Record.pair p p'))) -- TODO sources
-        ty' = tyUnit <|> tyVar <|> tyCon <|> tyRecord <|> tyParen
+        ty' = tyUnit <|> tyVar <|> tyCon <|> tyRecord <|> tyParen -- TODO need tyUnit???
         tyParen = special '(' #> ty <# special ')'
 
 tyRecord :: Parser (Type Parse)
-tyRecord = TyRecord <$> record (parsed ty)
+tyRecord = TyRecord <$> record '(' ')' (parsed ty)
 
 tyUnit :: Parser (Type Parse)
 tyUnit = unit *> return (TyRecord Record.unit)
@@ -304,10 +312,24 @@ tyVar = TyVar <$> try varid
 tyCon :: Parser (Type Parse)
 tyCon = TyCon <$> try conid
 
-kind :: Parser Kind
-kind = undefined -- FIXME
+kind :: Parser (Kind Parse)
+kind = liftT2O f (parsed kind') (reservedOp "->") (parsed kind)
+  where f :: Parsed Kind -> Maybe (Parsed Kind) -> Kind Parse
+        f p Nothing   = view value p
+        f p (Just p') = KindFun p p'
+        kind' = kindType <|> kindConstraint <|> kindRecord <|> kindParen
+        kindParen = special '(' #> kind <# special ')'
 
-record :: Parser (Parsed a) -> Parser (Record (Parsed a))
-record p = try (special '(' #> guts <# special ')')
+kindType :: Parser (Kind Parse)
+kindType = try (reservedCon "Type") #> pure KindType
+
+kindConstraint :: Parser (Kind Parse)
+kindConstraint = try (reservedCon "Constraint") #> pure KindConstraint
+
+kindRecord :: Parser (Kind Parse)
+kindRecord = KindRecord <$> record '[' ']' (parsed kind)
+
+record :: Char -> Char -> Parser (Parsed a) -> Parser (Record (Parsed a))
+record l r p = try (special l #> guts <# special r)
   where guts = (Record.fromList . zip (repeat Nothing)) <$> sepBy2 p (special ',') -- FIXME (add optional fields)
 

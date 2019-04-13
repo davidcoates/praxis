@@ -30,11 +30,8 @@ throwCheckError r = throwError (CheckError r)
 generate :: Recursive a => Typed a -> Praxis (Kinded a)
 generate x = save stage $ do
   stage .= KindCheck Generate
-  x' <- generate' x
+  x' <- introspect gen x
   return x'
-
-generate' :: Recursive a => Typed a -> Praxis (Kinded a)
-generate' = introspect gen
 
 gen :: Recursive a => Annotated TypeCheck a -> Intro Praxis KindCheck a
 gen x = case typeof x of
@@ -45,44 +42,49 @@ gen x = case typeof x of
   IProgram -> Notice (pure ())
   IQType   -> Notice (pure ())
   IStmt    -> Notice (pure ())
-  IType    -> Realise (genType x)
+  IType    -> Realise (ty x)
   -- TODO TyPat?
 
-genType :: Typed Type -> Praxis (Kinded Type)
-genType x = let s = view source x in (\(k :< t) -> (s, k) :< t) <$> case view value x of
+split :: ((Source, a TypeCheck) -> Praxis (Annotation KindCheck a, a KindCheck)) -> Typed a -> Praxis (Kinded a)
+split f x = do
+  (a', x') <- f (view source x, view value x)
+  return ((view source x, a') :< x')
+
+ty :: Typed Type -> Praxis (Kinded Type)
+ty = split $ \(s, t) -> case t of
 
     TyApply f a -> do
       k <- freshUniK
-      f' <- generate' f
-      a' <- generate' a
-      require $ newConstraint ((kind f') `Eq` KindFun (kind a') k) AppType s
-      return (k :< TyApply f' a')
+      f' <- ty f
+      a' <- ty a
+      require $ newConstraint (kind f' `Eq` ((Phantom, ()) :< KindFun (kind a') k)) AppType s
+      return (k, TyApply f' a')
 
     TyFlat ts -> do
-      ts' <- traverse generate' (Set.toList ts)
-      requires $ map (\t -> newConstraint (kind t `Eq` KindConstraint) (Custom "typ: TyFlat TODO") s) ts'
-      return (KindConstraint :< TyFlat (Set.fromList ts'))
+      ts' <- traverse ty (Set.toList ts)
+      requires $ map (\t -> newConstraint (kind t `Eq` ((Phantom, ()) :< KindConstraint)) (Custom "typ: TyFlat TODO") s) ts'
+      return ((Phantom, ()) :< KindConstraint, TyFlat (Set.fromList ts'))
 
     TyCon n -> do
       e <- KEnv.lookup n
       case e of Nothing -> throwCheckError (NotInScope n s)
-                Just k  -> return (k :< TyCon n)
+                Just k  -> return (k, TyCon n)
 
     TyPack r -> do -- This one is easy
-      r' <- traverse generate' r
-      return (KindRecord (fmap kind r') :< TyPack r')
+      r' <- traverse ty r
+      return ((Phantom, ()) :< KindRecord (fmap kind r'), TyPack r')
 
     TyRecord r -> do
-      r' <- traverse generate' r
-      requires $ map (\t -> newConstraint (kind t `Eq` KindType) (Custom "typ: TyRecord TODO") s) (map snd (Record.toList r'))
-      return (KindType :< TyRecord r')
+      r' <- traverse ty r
+      requires $ map (\t -> newConstraint (kind t `Eq` ((Phantom, ()) :< KindType)) (Custom "typ: TyRecord TODO") s) (map snd (Record.toList r'))
+      return ((Phantom, ()) :< KindType, TyRecord r')
 
     TyVar v -> do
       e <- KEnv.lookup v
       case e of
-        Just k -> return (k :< TyVar v)
+        Just k -> return (k, TyVar v)
         Nothing -> do
           k <- freshUniK
           KEnv.intro v k
-          return (k :< TyVar v)
+          return (k, TyVar v)
 

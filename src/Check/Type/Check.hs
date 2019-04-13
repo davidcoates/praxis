@@ -18,8 +18,7 @@ check :: Recursive a => Parsed a -> Praxis (Typed a)
 check a = save stage $ do
   stage .= TypeCheck Warmup
   our .= initialSystem
-  b <- generate a
+  a' <- generate a
   ts <- solve
-  let c = sub (\t -> case t of { TyUni n -> lookup n ts; _ -> Nothing }) b
+  return $ sub (\t -> case t of { TyUni n -> lookup n ts; _ -> Nothing }) a'
   -- TODO FIXME add defaulting (need to wait until after kinds?)
-  return c

@@ -17,7 +17,7 @@ import           Stage                 (TypeCheck)
 import           Type
 
 require :: Typed TypeConstraint -> Praxis ()
-require c = system . typeSystem . constraints %= (c:)
+require c = our . constraints %= (c:)
 
 requires :: [Typed TypeConstraint] -> Praxis ()
 requires = mapM_ require

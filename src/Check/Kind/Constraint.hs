@@ -1,24 +1,17 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Check.Kind.Constraint
   ( KindConstraint(..)
   , Derivation(..)
   , Reason(..)
-  , antecedent
-  , reason
   ) where
 
 import           Common
-import           Control.Lens (makeLenses)
-import           Stage        (KindCheck)
+import           Stage  (KindCheck)
 import           Type
 
--- The parameter is only to allow introspection, we always expect it to be KindCheck
-data KindConstraint a = Eq Kind Kind
+data KindConstraint a = Eq (Annotated a Kind) (Annotated a Kind)
   deriving (Eq, Ord)
 
 data Reason = AppType
@@ -31,11 +24,9 @@ instance Show Reason where
     Custom s -> s
     Unknown  -> "<Unknown>"
 
-data Derivation = Derivation
-  { _antecedent :: Maybe (Annotated KindCheck KindConstraint)
-  , _reason     :: Reason }
-
-makeLenses ''Derivation
+data Derivation = Root Reason
+                | Antecedent (Annotated KindCheck KindConstraint)
 
 instance Show (Annotated KindCheck KindConstraint) => Show Derivation where
-  show c = show (view reason c) ++ " " ++ show (view antecedent c)
+  show (Root r)       = "\n|-> (" ++ show r ++ ")"
+  show (Antecedent a) =  "\n|-> " ++ show a

@@ -48,7 +48,7 @@ runMain :: Praxis ()
 runMain = do
   t <- TEnv.lookup "main"
   case t of Nothing -> msg "Missing main function"
-            Just (_ :< Mono (_ :< TyApply (_ :< TyCon "->") (_ :< TyPack a))) | [(Nothing, _ :< r), (Nothing, _ :< r'), _] <- Record.toList a
+            Just (_ :< Mono (_ :< TyApply (_ :< TyCon "->") (_ :< TyPack a))) | [(Nothing, _ :< r), (Nothing, _ :< r')] <- Record.toList a
                                                                               , r  == TyRecord Record.unit
                                                                               , r' == TyRecord Record.unit ->
               do { Just (F f) <- VEnv.lookup "main"; f (R Record.unit); return () }

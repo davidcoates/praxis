@@ -46,6 +46,9 @@ instance Desugarable Exp where
 instance Desugarable Type where
   desugar = pure
 
+instance Desugarable Kind where
+  desugar = pure
+
 program :: Parsed Program -> Praxis (Parsed Program)
 program (a :< Program ds) = do
   ds <- decls ds

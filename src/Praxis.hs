@@ -50,6 +50,7 @@ module Praxis
   where
 
 import           AST                  (Lit)
+import           Check.Kind.Annotate  (Kinded)
 import qualified Check.System         as Check (System)
 import           Check.Type.Annotate  (Typed)
 import           Common
@@ -128,7 +129,7 @@ emptyState = PraxisState
   { _filename     = "<stdin>"
   , _flags        = defaultFlags
   , _fresh        = defaultFresh
-  , _stage        = unset "stage"
+  , _stage        = Unknown
   , _tEnv         = unset "tenv"
   , _kEnv         = unset "kenv"
   , _vEnv         = unset "vEnv"
@@ -208,11 +209,11 @@ freshUniT = do
   fresh . freshUniTs .= xs
   return ((Phantom, ()) :< TyUni x)
 
-freshUniK :: Praxis Kind
+freshUniK :: Praxis (Kinded Kind)
 freshUniK = do
   (k:ks) <- use (fresh . freshUniKs)
   fresh . freshUniKs .= ks
-  return (KindUni k)
+  return ((Phantom, ()) :< KindUni k)
 
 freshVar :: Praxis Name
 freshVar = do

@@ -16,7 +16,6 @@ data Token = QVarId QString
            | ReservedId String
            | Lit Lit
            | Special Char
-           | Whitespace -- ^Consider whitespace a token to allow parser to construct accurate spelling
 
 instance Show Token where
   show x = case x of
@@ -29,4 +28,3 @@ instance Show Token where
     ReservedId s  -> s
     Lit l         -> show l
     Special c     -> [c]
-    Whitespace    -> ""

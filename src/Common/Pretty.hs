@@ -8,4 +8,3 @@ indent = indents . lines
 
 indents :: [String] -> String
 indents = unlines . map ("  " ++)
-

@@ -1,10 +1,11 @@
 module Parse.Tokenise.Tokeniser
-  ( Tokeniser(..)
-  , runTokeniser
-  , token
-  , satisfy
-  , try
+  ( Tokeniser
   , lookAhead
+  , phantom
+  , runTokeniser
+  , satisfy
+  , token
+  , try
   , (<?>)
   , (<|?>)
   ) where
@@ -46,13 +47,16 @@ sourced :: String -> [Sourced Char]
 sourced = sourced' Pos { line = 1, column = 1 }
   where sourced' _     [] = []
         sourced' p (c:cs) = let p' = advance c p in make p c : sourced' p' cs
-        make p c = Source { start = p, end = p, spelling = [c] } :< c
+        make p c = Source { start = p, end = p } :< c
 
         advance :: Char -> Pos -> Pos
         advance '\t' p = p { column = math (column p) }
           where math = (+ 1) . (* 8) . (+ 1) . (`div` 8) . subtract 1
         advance '\n' p = Pos { line = line p + 1, column = 1 }
         advance _    p = p { column = column p + 1 }
+
+phantom :: Tokeniser a -> Tokeniser a
+phantom (Tokeniser a) = Tokeniser $ (\(_ :< x) -> (Phantom :< x)) <$> a
 
 token :: (Char -> Maybe a) -> Tokeniser a
 token f = Tokeniser $ Prim.token (lift . fmap f)

@@ -22,9 +22,11 @@ tokenise topLevel s = save stage $ do
   let ts' = layout topLevel ts
   logStr Debug (showTokens ts')
   return ts'
-    where showTokens = unwords . map (show . view value) . filter (\x -> case view value x of { Whitespace -> False ; _ -> True })
+    where showTokens = unwords . map (show . view value)
 
 -- // START OF NON-BACKTRACKING PARSER COMBINATORS
+optional :: Tokeniser p -> Tokeniser ()
+optional p = p *> pure () <|> pure ()
 
 many :: Tokeniser p -> Tokeniser [p]
 many p = liftA2 (:) (try p) (many p) <|> pure []
@@ -52,7 +54,7 @@ string [c]    = (:[]) <$> char c
 string (c:cs) = liftA2 (:) (char c) (string cs)
 
 atom :: Tokeniser Token
-atom = (whitespace *> pure Whitespace) <|> lexeme
+atom = phantom (optional (try whitespace)) *> lexeme <* phantom (optional (try whitespace))
 
 -- // END OF NON-BACKTRACKING PARSER COMBINATORS
 
@@ -132,18 +134,18 @@ integer = Lit . Int <$> decimal <?> "integer"
   where decimal :: Tokeniser Int
         decimal = read <$> some (try (satisfy isDigit))
 
-whitespace :: Tokeniser String
-whitespace = try (concat <$> some whitestuff) <?> "whitespace"
+whitespace :: Tokeniser ()
+whitespace = some whitestuff *> pure () <?> "whitespace"
 
-whitestuff :: Tokeniser String
+whitestuff :: Tokeniser ()
 whitestuff = whitechar <|> comment
 
-comment :: Tokeniser String
-comment = try (string "--") *> many (satisfy (\x -> not (x `elem` "\r\n\f"))) *> newline
+comment :: Tokeniser ()
+comment = try (string "--") *> many (satisfy (\x -> not (x `elem` "\r\n\f"))) *> newline *> pure ()
 
-whitechar :: Tokeniser String
-whitechar = try newline <|> try ((:[]) <$> satisfy isSpace)
+whitechar :: Tokeniser ()
+whitechar = try newline <|> try (satisfy isSpace *> pure ())
 
-newline :: Tokeniser String
-newline = try (string "\r\n") <|> try (string "\r") <|> try (string "\n") <|> string "\f"
+newline :: Tokeniser ()
+newline = (try (string "\r\n") <|> try (string "\r") <|> try (string "\n") <|> string "\f") *> pure ()
 

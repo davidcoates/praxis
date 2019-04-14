@@ -19,7 +19,6 @@ semi = Phantom :< Special ';'
 layout :: Bool -> [Sourced Token] -> [Sourced Token]
 layout topLevel ts = l (-1) topLevel [] ts
   where l :: Int -> Bool -> [Int] -> [Sourced Token] -> [Sourced Token] -- This function works by magic
-        l i b cs (t@(_:<Whitespace):ts) = t : l i b cs ts
         l i b cs [] = replicate (length cs) rbrace
         l i True cs (t@(_:<Special '{'):ts) = t : l i False cs ts
         l i b cs (t@(a:<x):ts) | b         = lbrace : t : l i' b' (j:cs) ts

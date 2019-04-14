@@ -49,45 +49,23 @@ instance Parseable Type where
 instance Parseable Kind where
   parse = parse' kind
 
--- TODO move these to Parse/Parser?
-optional :: Parser a -> Parser ()
-optional p = p *> pure () <|> pure ()
-
-liftT2 :: (a -> b -> c) -> Parser a -> Parser b -> Parser c
-liftT2 f a b = liftA2 f a (optional whitespace *> b)
-
-liftT3 :: (a -> b -> c -> d) -> Parser a -> Parser b -> Parser c -> Parser d
-liftT3 f a b c = liftT2 f a b <*> (optional whitespace *> c)
-
-liftT4 :: (a -> b -> c -> d -> e) -> Parser a -> Parser b -> Parser c -> Parser d -> Parser e
-liftT4 f a b c d = liftT3 f a b c <*> (optional whitespace *> d)
-
-liftT2O :: (a -> Maybe b -> c) -> Parser a -> Parser s -> Parser b -> Parser c
-liftT2O f pa ps pc = liftA2 f pa ((Just <$> (try (optional whitespace *> ps) #> pc)) <|> pure Nothing)
-
-(#>) :: Parser a -> Parser b -> Parser b
-(#>) = liftT2 (\_ b -> b)
-
-(<#) :: Parser a -> Parser b -> Parser a
-(<#) = liftT2 (\a _ -> a)
-
 -- TODO consistent backtracing
 
 -- Non back-tracking
+optional :: Parser a -> Parser (Maybe a)
+optional p = Just <$> p <|> pure Nothing
+
 many :: Parser p -> Parser [p]
-many p = liftT2 (:) (try p) (many p) <|> pure []
+many p = (:) <$> try p <*> many p <|> pure []
 
 many1 :: Parser p -> Parser [p]
-many1 p = liftT2 (:) p (many p)
+many1 p = (:) <$> p <*> many p
 
 some :: Parser p -> Parser [p]
-some p = liftT2 (:) p (many p)
+some p = (:) <$> p <*> many p
 
 sepBy1 :: Parser a -> Parser b -> Parser [a]
-sepBy1 p sep = liftT2 (:) p (many (sep #> p))
-
-sepBy2 :: Parser a -> Parser b -> Parser [a]
-sepBy2 p sep = liftT2 (:) p (sep #> sepBy1 p sep)
+sepBy1 p sep = (:) <$> p <*> many (sep *> p)
 
 qconid :: Parser QString
 qconid = token qconid' <?> "qconid"
@@ -162,11 +140,11 @@ semi :: Parser ()
 semi = special ';'
 
 block :: Parser a -> Parser [a]
-block p = liftT3 (\_ p ps -> p:ps) lbrace p block'
-  where block' = (try rbrace *> pure []) <|> liftT2 (:) (semi #> p) block'
+block p = (:) <$> (lbrace *> p) <*> block'
+  where block' = (try rbrace *> pure []) <|> (:) <$> (semi *> p) <*> block'
 
 program :: Parser (Program Parse)
-program = fmap Program (optional whitespace *> block (parsed topDecl) <* optional whitespace)
+program = Program <$> block (parsed topDecl)
 
 topDecl :: Parser (Decl Parse)
 topDecl = decl <|?> "topDecl" -- TODO
@@ -175,17 +153,17 @@ decl :: Parser (Decl Parse)
 decl = funType <|> funDecl <|?> "decl"
 
 funType :: Parser (Decl Parse)
-funType = liftT2 DeclSig (try prefix) sig <|?> "funType"
-  where prefix = varid <# reservedOp ":"
+funType = DeclSig <$> try prefix <*> sig <|?> "funType"
+  where prefix = varid <* reservedOp ":"
 
 funDecl :: Parser (Decl Parse)
-funDecl = liftT2 ($) (try prefix) (parsed exp) <?> "funDecl"
-  where prefix = liftT3 (\v ps _ -> DeclFun v ps) varid (many (parsed pat)) (reservedOp "=")
+funDecl = try prefix <*> parsed exp <?> "funDecl"
+  where prefix = (\v ps _ -> DeclFun v ps) <$> varid <*> many (parsed pat) <*> reservedOp "="
 
 exp :: Parser (Exp Parse)
 exp = mixfixexp
-{- liftT2 f (parsed mixfixexp) (optionMaybe sig)
-  where sig = reservedOp ":" #> ty
+{- liftA2 f (parsed mixfixexp) (optionMaybe sig)
+  where sig = reservedOp ":" *> ty
         f (_ :< e) Nothing  = e
         f e (Just t) = Sig e t
 -}
@@ -215,21 +193,21 @@ fexp = leftT Apply (some (parsed aexp))
 
 aexp :: Parser (Exp Parse)
 aexp = expRecord <|> parens <|> expVar <|> expLit <|?> "aexp"
-  where parens = liftT3 (\_ e _ -> e) (try (special '(')) exp (special ')')
+  where parens = try (special '(') *> exp <* special ')'
 
 stmt :: Parser (Stmt Parse)
 stmt = try (StmtDecl <$> parsed decl) <|> (StmtExp <$> parsed exp)
 
-alt = liftT2 (,) (parsed pat) (reservedOp "->" #> parsed exp)
+alt = (,) <$> parsed pat <*> (reservedOp "->" *> parsed exp)
 
 expCase :: Parser (Exp Parse)
-expCase = Case <$> (try (reservedId "case") #> parsed exp) <*> (reservedId "of" #> block alt)
+expCase = Case <$> (try (reservedId "case") *> parsed exp) <*> (reservedId "of" *> block alt)
 
 expCases :: Parser (Exp Parse)
-expCases = Cases <$> (try (reservedId "cases") #> block alt)
+expCases = Cases <$> (try (reservedId "cases") *> block alt)
 
 expDo :: Parser (Exp Parse)
-expDo = Do <$> (try (reservedId "do") #> block (parsed stmt))
+expDo = Do <$> (try (reservedId "do") *> block (parsed stmt))
 
 expVar :: Parser (Exp Parse)
 expVar = Var <$> try varid <?> "var" -- TODO should be qvarid
@@ -238,13 +216,7 @@ expLit :: Parser (Exp Parse)
 expLit = AST.Lit <$> lit
 
 expRecord :: Parser (Exp Parse)
-expRecord = expUnit -- TODO
-  where expUnit = unit *> pure (Record Record.unit)
-
-whitespace :: Parser ()
-whitespace = try (token whitespace') <?> "whitespace"
-  where whitespace' Token.Whitespace = Just ()
-        whitespace' _                = Nothing
+expRecord = Record <$> record '(' ')' (parsed exp)
 
 lit :: Parser AST.Lit
 lit = try (token lit') <?> "literal"
@@ -254,16 +226,11 @@ lit = try (token lit') <?> "literal"
 pat :: Parser (Pat Parse)
 pat = patHole <|> patVar <|> patLit <|> patRecord <|?> "pat"
 
-unit :: Parser ()
-unit = try (special '(' #> special ')') *> return ()
-
 patHole :: Parser (Pat Parse)
 patHole = try (special '_') *> return PatHole
 
 patRecord :: Parser (Pat Parse)
-patRecord = patUnit -- TODO
-  where patUnit :: Parser (Pat Parse)
-        patUnit = unit *> return (PatRecord Record.unit)
+patRecord = PatRecord <$> record '(' ')' (parsed pat)
 
 patVar :: Parser (Pat Parse)
 patVar = PatVar <$> try varid
@@ -272,7 +239,7 @@ patLit :: Parser (Pat Parse)
 patLit = PatLit <$> lit
 
 expRead :: Parser (Exp Parse)
-expRead = liftT4 (\_ x _ e -> Read x e) (try prefix) varid (reservedId "in") (parsed exp) <?> "read expression"
+expRead = Read <$> (try prefix *> varid) <*> (reservedId "in" *> parsed exp) <?> "read expression"
   where prefix = reservedId "read"
 
 raw a = (Phantom, ()) :< a
@@ -283,28 +250,25 @@ sig = parsed ty
 sig :: Parser (Parsed QType)
 sig = parsed qty <|> ((\(a :< p) -> (a :< Mono (a :< p))) <$> parsed ty)
   where qty :: Parser (QType Parse)
-        qty = try (reservedId "forall") #> liftT3 Forall (many1 var <# dot) constraints (parsed ty)
+        qty = Forall <$> (try (reservedId "forall" *> many1 var) <*> (dot *> constraints) <*> parsed ty
         constraints :: Parser (Parsed Type)
         constraints = parsed $ pure empty      -- TODO constraints
-        var = liftT2 (,) varid (pure KindType) -- TODO allow kinds
+        var = (,) <$> varid <*> pure KindType -- TODO allow kinds
 -}
 
 empty :: Type Parse
 empty = TyFlat Set.empty
 
 ty :: Parser (Type Parse)
-ty = liftT2O f (parsed ty') (reservedOp "->") (parsed ty)
+ty = f <$> parsed ty' <*> optional (try (reservedOp "->") *> parsed ty)
   where f :: Parsed Type -> Maybe (Parsed Type) -> Type Parse
         f p Nothing   = view value p
         f p (Just p') = TyApply (raw (TyCon "->")) (raw (TyPack (Record.pair p p'))) -- TODO sources
-        ty' = tyUnit <|> tyVar <|> tyCon <|> tyRecord <|> tyParen -- TODO need tyUnit???
-        tyParen = special '(' #> ty <# special ')'
+        ty' = tyVar <|> tyCon <|> tyRecord <|> tyParen
+        tyParen = special '(' *> ty <* special ')'
 
 tyRecord :: Parser (Type Parse)
 tyRecord = TyRecord <$> record '(' ')' (parsed ty)
-
-tyUnit :: Parser (Type Parse)
-tyUnit = unit *> return (TyRecord Record.unit)
 
 tyVar :: Parser (Type Parse)
 tyVar = TyVar <$> try varid
@@ -313,23 +277,25 @@ tyCon :: Parser (Type Parse)
 tyCon = TyCon <$> try conid
 
 kind :: Parser (Kind Parse)
-kind = liftT2O f (parsed kind') (reservedOp "->") (parsed kind)
+kind = f <$> parsed kind' <*> optional (try (reservedOp "->") *> parsed kind)
   where f :: Parsed Kind -> Maybe (Parsed Kind) -> Kind Parse
         f p Nothing   = view value p
         f p (Just p') = KindFun p p'
         kind' = kindType <|> kindConstraint <|> kindRecord <|> kindParen
-        kindParen = special '(' #> kind <# special ')'
+        kindParen = special '(' *> kind <* special ')'
 
 kindType :: Parser (Kind Parse)
-kindType = try (reservedCon "Type") #> pure KindType
+kindType = try (reservedCon "Type") *> pure KindType
 
 kindConstraint :: Parser (Kind Parse)
-kindConstraint = try (reservedCon "Constraint") #> pure KindConstraint
+kindConstraint = try (reservedCon "Constraint") *> pure KindConstraint
 
 kindRecord :: Parser (Kind Parse)
 kindRecord = KindRecord <$> record '[' ']' (parsed kind)
 
+-- FIXME (add optional fields)
 record :: Char -> Char -> Parser (Parsed a) -> Parser (Record (Parsed a))
-record l r p = try (special l #> guts <# special r)
-  where guts = (Record.fromList . zip (repeat Nothing)) <$> sepBy2 p (special ',') -- FIXME (add optional fields)
+record l r p = Record.fromList . zip (repeat Nothing) <$> recordList where
+  recordList = try (special l *> special r) *> pure [] <|> ((:) <$> try (special l *> p <* special ',') <*> rest)
+  rest = sepBy1 p (special ',') <* special r
 

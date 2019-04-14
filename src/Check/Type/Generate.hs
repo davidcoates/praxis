@@ -66,13 +66,7 @@ parallel (x:xs) = do
 
 -- TODO move this somewhere
 fun :: Typed Type -> Typed Type -> Typed Type
-fun a b = let
-  sa = view source a
-  sb = view source b
-  -- TODO this doesn't work
-  -- s = (sa <> sb) { spelling = spelling sa ++ " -> " ++ spelling sb } in
-  s = sa <> sb in
-  (s, ()) :< TyApply ((s, ()) :< TyCon "->") ((s, ()) :< TyPack (Record.pair a b))
+fun a b = (Phantom, ()) :< TyApply ((Phantom, ()) :< TyCon "->") ((Phantom, ()) :< TyPack (Record.pair a b))
 
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `Eq` t2) r s

@@ -7,8 +7,8 @@ module Praxis
   , Stage(..)
   , emptyState
 
-  , throwError
-  , internalError -- Prefer this over Prelude.error
+  , throw
+  , panic -- Prefer this over Prelude.error
 
   , save
   , try
@@ -49,13 +49,12 @@ module Praxis
   )
   where
 
+import           Annotate
 import           AST                  (Lit)
-import           Check.Kind.Annotate  (Kinded)
 import qualified Check.System         as Check (System)
-import           Check.Type.Annotate  (Typed)
 import           Common
 import           Env                  (KEnv, TEnv, VEnv)
-import           Error                (Error)
+import           Kind
 import           Record               (Record)
 import           Stage
 import           Type
@@ -63,8 +62,7 @@ import           Type
 import           Control.Applicative  (liftA2)
 import           Control.Lens         (Lens', makeLenses, traverseOf)
 import           Control.Monad        (when)
-import           Control.Monad.Except (ExceptT, runExceptT)
-import qualified Control.Monad.Except (throwError)
+import           Control.Monad.Except (ExceptT, runExceptT, throwError)
 import           Control.Monad.State  (StateT, gets, lift, runStateT)
 import qualified Control.Monad.State  as State (get, modify, put)
 import           Data.Maybe           (fromMaybe)
@@ -108,14 +106,13 @@ data PraxisState = PraxisState
 instance Show PraxisState where
   show s = "<praxis state>"
 
-type Praxis = ExceptT Error (StateT PraxisState IO)
+type Praxis = ExceptT String (StateT PraxisState IO)
 
 defaultFlags :: Flags
 defaultFlags = Flags { _level = Normal, _interactive = False, _static = False }
 
-
-throwError :: Error -> Praxis a
-throwError = Control.Monad.Except.throwError
+throw :: Show a => a -> Praxis b
+throw = throwError . show
 
 defaultFresh = Fresh
   { _freshUniTs   = map (("?t"++) . show) [0..]
@@ -135,10 +132,10 @@ emptyState = PraxisState
   , _vEnv         = unset "vEnv"
   , _system       = unset "system"
   }
-  where unset s = internalError ("unset " ++ s)
+  where unset s = panic ("unset " ++ s)
 
-internalError :: String -> a
-internalError s = error ("<<<INTERNAL ERROR>>> " ++ s)
+panic :: String -> a
+panic s = error ("<<<INTERNAL ERROR>>> " ++ s)
 
 makeLenses ''Flags
 makeLenses ''Fresh
@@ -152,7 +149,7 @@ save l c = do
   return r
 
 -- TODO think of a better name for this
-try :: Praxis a -> (Error -> Praxis b) -> (a -> Praxis b) -> Praxis b
+try :: Praxis a -> (String -> Praxis b) -> (a -> Praxis b) -> Praxis b
 try c f g = do
   s <- lift State.get
   (x, s') <- liftIO $ run c s
@@ -162,19 +159,19 @@ try c f g = do
 
 runStatic :: PraxisState -> Praxis a -> a
 runStatic s c = case fst $ unsafePerformIO (run c' s) of
-  Left e  -> internalError (show e)
+  Left e  -> panic (show e)
   Right x -> x
   where c' = (flags . static .= True) >> c
 
 assert :: Lens' PraxisState a -> (a -> Bool) -> String -> Praxis b -> Praxis b
 assert l p s c = do
   x <- use l
-  if p x then c else internalError s
+  if p x then c else panic s
 
 liftIO :: IO a -> Praxis a
 liftIO io = assert (flags . static) (== False) "liftIO NOT STATIC" (lift (lift io))
 
-run :: Praxis a -> PraxisState -> IO (Either Error a, PraxisState)
+run :: Praxis a -> PraxisState -> IO (Either String a, PraxisState)
 run = runStateT . runExceptT
 
 shouldLog :: Level -> Praxis Bool

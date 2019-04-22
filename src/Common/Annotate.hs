@@ -26,3 +26,7 @@ annotation :: Functor f => (a -> f b) -> Tag (Source, a) c -> f (Tag (Source, b)
 annotation = tag . second
 
 type Sourced a = Tag Source a
+
+instance Show a => Show (Sourced a) where
+  show (Phantom :< x) = show x
+  show (a :< x)       = show (start a) ++ " " ++ show x

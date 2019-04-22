@@ -6,18 +6,17 @@ module Eval
   ( Evaluable(..)
   ) where
 
+import           Annotate
 import           AST
-import           Check.Annotate
 import           Common
-import           Env.VEnv       (VEnv, elim, elimN, intro)
-import qualified Env.VEnv       as VEnv (fromList, lookup)
+import           Env.VEnv    (VEnv, elim, elimN, intro)
+import qualified Env.VEnv    as VEnv (fromList, lookup)
 import           Praxis
 import           Record
 import           Value
 
-import           Data.List      (find)
-import           Data.Monoid    (Sum (..))
-import           Prelude        hiding (exp)
+import           Data.Monoid (Sum (..))
+import           Prelude     hiding (exp)
 
 class Evaluable a b | a -> b where
   eval' :: Kinded a -> Praxis b

@@ -2,14 +2,13 @@ module Check.Type.Check
   ( check
   ) where
 
-import           Check.Type.Annotate
+import           Annotate
 import           Check.Type.Generate
 import           Check.Type.Require
 import           Check.Type.Solve
 import           Check.Type.System
 import           Common
 import           Introspect
-import           Parse.Annotate
 import           Praxis
 import           Stage
 import           Type

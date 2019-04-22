@@ -1,23 +1,8 @@
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE UndecidableInstances #-}
-
-module Check.Type.Constraint
-  ( TypeConstraint(..)
-  , Derivation(..)
-  , Reason(..)
+module Check.Type.Reason
+  ( Reason(..)
   ) where
 
 import           Common
-import           Stage      (TypeCheck)
-import           Type
-
-import           Data.Maybe (fromMaybe)
-import           Prelude    hiding (drop)
-
--- The parameter is only to allow introspection, we always expect it to be TypeCheck
-data TypeConstraint a = Class (Annotated a Type)
-                      | Eq (Annotated a Type) (Annotated a Type)
-  deriving (Eq, Ord)
 
 data Reason = AppFun
             | Captured Name
@@ -45,10 +30,3 @@ instance Show Reason where
     UserSignature n  | Just f <- n -> "User-supplied signature '" ++ f ++ "'"
                      | otherwise   -> "User-supplied signature"
     UnsafeView n     -> "Variable '" ++ n ++ "' used before being viewed"
-
-data Derivation = Root Reason
-                | Antecedent (Annotated TypeCheck TypeConstraint)
-
-instance Show (Annotated TypeCheck TypeConstraint) => Show Derivation where
-  show (Root r)       = "\n|-> (" ++ show r ++ ")"
-  show (Antecedent a) =  "\n|-> " ++ show a

@@ -7,14 +7,16 @@ module Parse.Desugar
   ( Desugarable(..)
   ) where
 
+import           Annotate
 import           AST
 import           Common
-import           Error
 import           Introspect             (Recursive)
-import           Parse.Annotate
+import           Kind                   (Kind)
+import           Parse.Desugar.Error
 import           Praxis
-import           Record                 (pair)
-import           Type                   (Kind, Type)
+import           Record                 (Record, pair)
+import qualified Record                 (toList)
+import           Type                   (Type)
 
 import           Control.Applicative    (Const, liftA2, liftA3)
 import           Control.Arrow          (left)
@@ -68,6 +70,14 @@ stmts (s:ss) | a :< StmtExp e <- s = do
                   where isStmtDecl (_ :< StmtDecl _) = True
                         isStmtDecl _                 = False
 
+record :: Source -> (Record b -> b) -> (a -> Praxis b) -> Record a -> Praxis b
+record s build f r = do
+  r' <- traverse f r
+  case Record.toList r' of
+    [(Nothing, x)] -> return $ x
+    [(Just _, _)]  -> throw $ RecordError s
+    _              -> return $ build r'
+
 exp :: Parsed Exp -> Praxis (Parsed Exp)
 exp (a :< x) = case x of
 
@@ -109,9 +119,7 @@ exp (a :< x) = case x of
     e' <- exp e
     return (a :< Read n e')
 
-  Record r    -> do
-    r' <- traverse exp r
-    return (a :< Record r')
+  Record r    -> record (fst a) (\r' -> a :< Record r') exp r
 
   Sig e t     -> do
     e' <- exp e
@@ -119,11 +127,8 @@ exp (a :< x) = case x of
 
   Var s       -> pure (a :< Var s)
 
-  VarBang s   -> throwSyntaxError (BangError s (fst a))
+  VarBang s   -> throw (BangError s (fst a))
 
-
-throwSyntaxError :: SyntaxError -> Praxis a
-throwSyntaxError = throwError . SyntaxError
 
 decls :: [Parsed Decl] -> Praxis [Parsed Decl]
 decls []              = pure []
@@ -132,7 +137,7 @@ decls (a :< d : ds) = case d of
   DeclSig n t -> do
     ds <- decls ds
     case ds of (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
-               _                                       -> throwSyntaxError (LacksBinding n (fst a))
+               _                                         -> throw (LacksBinding n (fst a))
 
   DeclFun n ps e -> do
     ps <- mapM pat ps
@@ -150,9 +155,7 @@ decls (a :< d : ds) = case d of
 pat :: Parsed Pat -> Praxis (Parsed Pat)
 pat (a :< x) = case x of
 
-  PatRecord r -> do
-    r' <- traverse pat r
-    return (a :< PatRecord r)
+  PatRecord r -> record (fst a) (\r' -> a :< PatRecord r') pat r
 
   PatVar x    -> pure (a :< PatVar x)
 

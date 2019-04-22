@@ -1,4 +1,3 @@
-{-# LANGUAGE KindSignatures  #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Check.Kind.System
@@ -11,17 +10,15 @@ module Check.Kind.System
   , initialSystem
   ) where
 
-import           Check.Kind.Annotate
-import           Check.Kind.Constraint
+import           Annotate
 import           Common
-import           Stage
-import           Type                  (Kind)
+import           Kind
 
 data System = System
   { _sol         :: [(Name, Kind KindCheck)]
-  , _constraints :: [Kinded KindConstraint]
-  , _staging     :: [Kinded KindConstraint]
-  , _axioms      :: [Kinded KindConstraint]
+  , _constraints :: [Kinded Constraint]
+  , _staging     :: [Kinded Constraint]
+  , _axioms      :: [Kinded Constraint]
   }
 
 makeLenses ''System

@@ -15,16 +15,18 @@ module Common.Misc
   , second
   , Const(..)
   , Identity(..)
+  , intercalate
+  , Void
   ) where
 
 import           Control.Applicative    (Const (..))
-import           Data.Foldable          (fold)
-import           Data.Functor.Identity  (Identity (..))
-import           Data.Traversable       (sequenceA)
-
 import           Control.Lens           (Lens', makeLenses, over, set, use,
                                          view, (%=), (.=), _1, _2)
 import           Control.Lens.Traversal (both)
+import           Data.Foldable          (fold)
+import           Data.Functor.Identity  (Identity (..))
+import           Data.List              (intercalate)
+import           Data.Traversable       (sequenceA)
 
 type Name = String
 
@@ -41,3 +43,4 @@ first = _1
 second :: Functor f => (a -> f b) -> (n, a) -> f (n, b)
 second = _2
 
+data Void

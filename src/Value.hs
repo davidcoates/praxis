@@ -3,7 +3,7 @@ module Value
   ) where
 
 import           AST    (Lit)
-import {-# SOURCE #-} Praxis
+import {-# SOURCE #-} Praxis (Praxis)
 import           Record
 
 data Value = L Lit

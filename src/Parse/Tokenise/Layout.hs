@@ -3,8 +3,7 @@ module Parse.Tokenise.Layout
   ) where
 
 import           Common
-import           Parse.Tokenise.Token
-import           Praxis
+import           Token
 
 lbrace :: Sourced Token
 lbrace = Phantom :< Special '{'

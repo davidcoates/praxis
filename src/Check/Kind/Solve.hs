@@ -8,21 +8,18 @@ module Check.Kind.Solve
   ( solve
   ) where
 
+import           Annotate
 import           AST
-import           Check.Error
-import           Check.Kind.Annotate
-import           Check.Kind.Constraint
 import           Check.Kind.Error
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
 import           Env.TEnv               (ungeneralise)
-import           Error
 import           Introspect
+import           Kind
 import           Praxis
 import           Record
 import           Stage
-import           Type
 
 import           Control.Applicative    (Const (..), liftA2)
 import           Control.Monad.Identity (Identity (..))
@@ -42,8 +39,6 @@ data State = Cold
            | Warm
            | Done
 
-throwKindError = throwError . CheckError . KindError
-
 solve' :: Praxis State
 solve' = spin progress `chain` stuck
     where chain :: Praxis State -> Praxis State -> Praxis State
@@ -55,10 +50,10 @@ solve' = spin progress `chain` stuck
             -- FIXME
             -- cs <- get (our . constraints)
             -- logList Normal cs
-            throwKindError Stuck
+            throw Stuck
 
 -- TODO reduce duplication with Type Solve spin
-spin :: (Kinded KindConstraint -> Praxis Bool) -> Praxis State
+spin :: (Kinded Constraint -> Praxis Bool) -> Praxis State
 spin solve = do
   cs <- (nub . sort) <$> use (our . constraints)
   case cs of
@@ -84,7 +79,7 @@ unis = extract (only f) where
     KindType       -> []
 -- TODO find some way of combining traverseM and traverseA and use that here
 
-progress :: Kinded KindConstraint -> Praxis Bool
+progress :: Kinded Constraint -> Praxis Bool
 progress d = case view value d of
 
   Eq k1 k2 | k1 == k2  -> tautology
@@ -102,7 +97,7 @@ progress d = case view value d of
   where solved = return True
         tautology = solved
         defer = require d >> return False
-        contradiction = throwKindError (Contradiction d)
+        contradiction = throw (Contradiction d)
         introduce cs = requires (map (d `implies`) cs) >> return True
         swap = case view value d of t1 `Eq` t2 -> progress (set value (t2 `Eq` t1) d)
 

@@ -2,11 +2,10 @@ module Check.Kind.Error
   ( Error(..)
   ) where
 
-import           Check.Kind.Annotate
-import           Check.Kind.Constraint
-import           Common
+import           Annotate
+import           Kind
 
-data Error = Contradiction (Kinded KindConstraint)
+data Error = Contradiction (Kinded Constraint)
            | Stuck
 
 instance Show Error where

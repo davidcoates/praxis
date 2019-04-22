@@ -20,27 +20,13 @@ module Introspect
   , only
   , asub
   , retag
-  , DataAlt
-  , Decl
-  , Exp
-  , Kind
-  , Pat
-  , Program
-  , QType
-  , Stmt
-  , Tok
-  , TyPat
-  , Type
-  , TypeConstraint
-  , KindConstraint
   ) where
 
-import qualified Data.Set              as Set (fromList, toList)
+import qualified Data.Set as Set (fromList, toList)
 
 import           AST
-import           Check.Kind.Constraint (KindConstraint (..))
-import           Check.Type.Constraint (TypeConstraint (..))
 import           Common
+import           Kind
 import           Type
 
 data Analysis f a b = Realise (f a)
@@ -67,8 +53,8 @@ data I a where
   ITok     :: I Tok
   ITyPat   :: I TyPat
   IType    :: I Type
-  ITypeConstraint :: I TypeConstraint
-  IKindConstraint :: I KindConstraint
+  ITypeConstraint :: I Type.Constraint
+  IKindConstraint :: I Kind.Constraint
 
 typeof :: forall a s. Recursive a => Annotated s a -> I a
 typeof _ = witness :: I a
@@ -224,26 +210,26 @@ instance Recursive TyPat where
 instance Recursive Type where
   witness = IType
   recurse f x = case x of
-    TyUni n      -> pure (TyUni n)
-    TyApply a b  -> TyApply <$> f a <*> f b
-    TyBang a     -> TyBang <$> f a
-    TyCon n      -> pure (TyCon n)
-    TyFlat ts    -> TyFlat <$> (Set.fromList <$> traverse f (Set.toList ts))
-    TyLambda a b -> TyLambda <$> f a <*> f b
-    TyPack r     -> TyPack <$> traverse f r
-    TyRecord r   -> TyRecord <$> traverse f r
-    TyVar n      -> pure (TyVar n)
+    TyUni n     -> pure (TyUni n)
+    TyApply a b -> TyApply <$> f a <*> f b
+    TyBang a    -> TyBang <$> f a
+    TyCon n     -> pure (TyCon n)
+    TyFlat ts   -> TyFlat <$> (Set.fromList <$> traverse f (Set.toList ts))
+    TyFun a b   -> TyFun <$> f a <*> f b
+    TyPack r    -> TyPack <$> traverse f r
+    TyRecord r  -> TyRecord <$> traverse f r
+    TyVar n     -> pure (TyVar n)
 
-instance Recursive TypeConstraint where
+instance Recursive Type.Constraint where
   witness = ITypeConstraint
   recurse f x = case x of
-    Class t                      -> Class <$> f t
-    Check.Type.Constraint.Eq a b -> Check.Type.Constraint.Eq <$> f a <*> f b
+    Class t     -> Class <$> f t
+    Type.Eq a b -> Type.Eq <$> f a <*> f b
 
-instance Recursive KindConstraint where
+instance Recursive Kind.Constraint where
   witness = IKindConstraint
   recurse f x = case x of
-    Check.Kind.Constraint.Eq a b -> Check.Kind.Constraint.Eq <$> f a <*> f b
+    Kind.Eq a b -> Kind.Eq <$> f a <*> f b
 
 -- Show
 
@@ -268,6 +254,7 @@ instance (Complete s, Recursive a, x ~ Annotation s a) => Show (Tag (Source, x) 
       IDataAlt        -> showP
       IDecl           -> showP
       IExp            -> showP
+      IKind           -> showP
       IPat            -> showP
       IProgram        -> showP
       IQType          -> showP
@@ -292,8 +279,8 @@ deriving instance Complete s => Show (Stmt s)
 deriving instance Complete s => Show (Tok s)
 deriving instance Complete s => Show (TyPat s)
 deriving instance Complete s => Show (Type s)
-deriving instance Complete s => Show (TypeConstraint s)
-deriving instance Complete s => Show (KindConstraint s)
+deriving instance Complete s => Show (Type.Constraint s)
+deriving instance Complete s => Show (Kind.Constraint s)
 
 {-
 instance Complete s => Show (Kind s) where

@@ -5,147 +5,96 @@ module Parse.Tokenise
 import           AST                      (Lit (..), QString (..))
 import           Common                   hiding (asum)
 import           Parse.Tokenise.Layout
-import           Parse.Tokenise.Token
 import           Parse.Tokenise.Tokeniser
-import           Praxis                   hiding (try)
+import           Praxis                   hiding (run, throw)
+import           Token
 
-import           Control.Applicative      (Alternative, Applicative, empty,
-                                           liftA2, (<|>))
-import           Data.Char
+import           Control.Applicative      (Alternative (..), Applicative (..))
 import           Data.Foldable            (asum)
 import           Data.List                (intercalate)
+import           Prelude                  hiding (until)
 
 tokenise :: Bool -> String -> Praxis [Sourced Token]
 tokenise topLevel s = save stage $ do
   stage .= Tokenise
-  ts <- runTokeniser atom s
+  ts <- run token s
+  logStr Debug (showTokens ts)
   let ts' = layout topLevel ts
   logStr Debug (showTokens ts')
   return ts'
     where showTokens = unwords . map (show . view value)
 
--- // START OF NON-BACKTRACKING PARSER COMBINATORS
-optional :: Tokeniser p -> Tokeniser ()
-optional p = p *> pure () <|> pure ()
+-- Helper functions
+until :: Tokeniser a -> Tokeniser b -> Tokeniser [b]
+until p t = (p *> pure []) <|> ((:) <$> t <*> until p t)
 
-many :: Tokeniser p -> Tokeniser [p]
-many p = liftA2 (:) (try p) (many p) <|> pure []
-
-some :: Tokeniser p -> Tokeniser [p]
-some p = liftA2 (:) p (many p)
-
-exclude :: Eq p => Tokeniser p -> p -> Tokeniser p
-exclude p x = excludes p [x]
-
-excludes :: Eq p => Tokeniser p -> [p] -> Tokeniser p
-excludes p xs = p >>= (\y -> if y `elem` xs then empty else pure y)
+while :: Tokeniser a -> Tokeniser b -> Tokeniser [b]
+while p t = (p *> ((:) <$> t <*> while p t)) <|> pure []
 
 char :: Char -> Tokeniser Char
-char c = satisfy (== c)
+char c = match (== c)
 
-anyChar :: Tokeniser Char
-anyChar = satisfy (const True)
+isSymbol = (`elem` "!#$%&*+./<=>?@\\^|-~:")
+isLower = (`elem` ['a'..'z'])
+isUpper = (`elem` ['A'..'Z'])
+isDigit = (`elem` ['0'..'9'])
+isSpace = (`elem` " \t")
+isAlphaNum c = isLower c || isUpper c || isDigit c
+isLetter c = c `elem` "_\'" || isAlphaNum c
 
-oneOf :: [Char] -> Tokeniser Char
-oneOf cs = satisfy (`elem` cs)
+token :: Tokeniser (Maybe Token)
+token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> stuff)) <|> throw "illegal character"
 
-string :: String -> Tokeniser String
-string [c]    = (:[]) <$> char c
-string (c:cs) = liftA2 (:) (char c) (string cs)
+whitespace :: Tokeniser ()
+whitespace = newline <|> space <|> comment
+  where newline = match (`elem` "\r\n\f") *> pure ()
+        space = match isSpace *> pure ()
+        comment = matches 2 (== "--") *> until newline consume *> pure ()
 
-atom :: Tokeniser Token
-atom = phantom (optional (try whitespace)) *> lexeme <* phantom (optional (try whitespace))
+special :: Tokeniser Token
+special = Special <$> match (`elem` "(),;[]`{}_")
 
--- // END OF NON-BACKTRACKING PARSER COMBINATORS
+literal :: Tokeniser Token
+literal = int <|> chara <|> string
 
+int :: Tokeniser Token
+int = satisfy isDigit *> (Lit . Int <$> decimal)
+  where decimal :: Tokeniser Int
+        decimal = read <$> while (satisfy isDigit) consume
 
-reservedids = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall"]
+-- TODO
+escape :: Char -> Char
+escape 'n' = '\n'
+escape x   = x
+
+chara :: Tokeniser Token
+chara = char '\'' *> ((Lit . Char <$> inner) <* char '\'' <|> throw "unterminated character literal") where
+  inner :: Tokeniser Char
+  inner = (char '\\' *> (escape <$> consume)) <|> match (/= '\'')
+
+string :: Tokeniser Token
+string = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminated string literal") where
+  inner :: Tokeniser String
+  inner = while (satisfy (/= '"')) ((char '\\' *> (escape <$> consume)) <|> consume)
+
+reservedids = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall", "let"]
 reservedcons = ["Type", "Constraint"]
 reservedops = [":", "=>", "=", "\\", "->", "#", "@", "|"]
 
-lexeme :: Tokeniser Token
-lexeme = qstuff <|> reservedid <|> reservedcon <|> reservedop <|> literal <|> special <|?> "lexeme"
-
-modid :: Tokeniser [String]
-modid = liftA2 (:) conid (many (try (char '.' *> conid)))
-
-conid :: Tokeniser String
-conid = liftA2 (:) (try large) (many idLetter) `excludes` reservedcons <?> "conid"
-
-varid :: Tokeniser String
-varid = liftA2 (:) (try small) (many idLetter) `excludes` reservedids <?> "varid"
-
-idLetter :: Tokeniser Char
-idLetter = try (satisfy isAlphaNum) <|> try (char '_') <|> try (char '\'')
-
-varsym :: Tokeniser String
-varsym = try (liftA2 (:) (symbol `exclude` ':') (many symbol) `excludes` reservedops) <?> "varsym" -- TODO exclude dashes
-
-consym :: Tokeniser String
-consym = try (liftA2 (:) (char ':') (many symbol) `excludes` reservedops) <?> "consym"
-
-qstuff :: Tokeniser Token
-qstuff = try $ do
-  qs <- modid <|> pure []
-  let simple = fmap (\(f, s) -> f QString{qualification=[], name=s}) stuff
-  let full   = fmap (\(f, s) -> f QString{qualification=qs, name=s}) (try (char '.' *> stuff)) <|> pure (QConId QString{qualification = init qs, name = last qs})
-  if null qs then simple else full
-    where stuff :: Tokeniser (QString -> Token, String)
-          stuff = qualify QVarId varid <|> qualify QConId conid <|> qualify QVarSym varsym <|> qualify QConSym consym <|?> "varid, conid, varsym, or consym"
-          qualify f = fmap (\s -> (f, s))
-
-reservedid :: Tokeniser Token
-reservedid = ReservedId <$> asum (map (try . string) reservedids)
-
-reservedcon :: Tokeniser Token
-reservedcon = ReservedCon <$> asum (map (try . string) reservedcons)
-
-reservedop :: Tokeniser Token
-reservedop = ReservedOp <$> asum (map (try . string) reservedops)
-
-small :: Tokeniser Char
-small = try (satisfy isLower) <?> "small"
-
-large :: Tokeniser Char
-large = try (satisfy isUpper) <?> "large"
-
-symbol :: Tokeniser Char
-symbol = ascSymbol <|> try (satisfy isSymbol) <?> "symbol"
-
-ascSymbol :: Tokeniser Char
-ascSymbol = try $ oneOf "!#$%&*+./<=>?@\\^|-~:"
-
-special :: Tokeniser Token
-special = Special <$> try (oneOf "(),;[]`{}_") <?> "special"  -- TODO should _ be special?
-
-literal :: Tokeniser Token
-literal = integer <|> charLit <|> stringLit <|?> "literal"
-
-charLit :: Tokeniser Token
-charLit = try (char '\'') *> (Lit . Char <$> inner) <* (char '\'' <?> "terminating '") <?> "char"
-  where inner = anyChar `excludes` ['\\', '\''] -- TODO
-
-stringLit :: Tokeniser Token
-stringLit = try (char '\"') *> (Lit . String <$> inner) <* char '\"' <?> "string"
-  where inner = many (anyChar `excludes` ['\\','\"']) -- TODO
-
-integer :: Tokeniser Token
-integer = Lit . Int <$> decimal <?> "integer"
-  where decimal :: Tokeniser Int
-        decimal = read <$> some (try (satisfy isDigit))
-
-whitespace :: Tokeniser ()
-whitespace = some whitestuff *> pure () <?> "whitespace"
-
-whitestuff :: Tokeniser ()
-whitestuff = whitechar <|> comment
-
-comment :: Tokeniser ()
-comment = try (string "--") *> many (satisfy (\x -> not (x `elem` "\r\n\f"))) *> newline *> pure ()
-
-whitechar :: Tokeniser ()
-whitechar = try newline <|> try (satisfy isSpace *> pure ())
-
-newline :: Tokeniser ()
-newline = (try (string "\r\n") <|> try (string "\r") <|> try (string "\n") <|> string "\f") *> pure ()
-
+-- Possibly qualified, possibly reserved conid / varid / consym / varsym
+stuff :: Tokeniser Token
+stuff = form <$> stuff' where
+  stuff' = ((:[]) <$> varid) <|> ((:[]) <$> sym) <|> qualified
+  varid = satisfy isLower *> while (satisfy isLetter) consume
+  conid = satisfy isUpper *> while (satisfy isLetter) consume
+  sym = satisfy isSymbol *> while (satisfy isSymbol) consume
+  qualified = (:) <$> conid <*> ((satisfies 2 (\[x, y] -> x == '.' && (isLower y || isUpper y || isSymbol y)) *> consume *> stuff') <|> pure [])
+  form :: [String] -> Token
+  form [x] | x `elem` reservedids = ReservedId x
+           | x `elem` reservedcons = ReservedCon x
+           | x `elem` reservedops = ReservedOp x
+  form xs = let qs = QString (init xs) (last xs) in case last xs of
+    x | isLower (head x) -> QVarId qs
+    x | isUpper (head x) -> QConId qs
+    x | head x == ':'    -> QConSym qs
+    _                    -> QVarSym qs

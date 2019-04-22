@@ -7,25 +7,22 @@ module Check.Kind.Generate
   ( generate
   ) where
 
+import           Annotate
 import           Check.Error
-import           Check.Kind.Annotate
-import           Check.Kind.Constraint
+import           Check.Kind.Reason
 import           Check.Kind.Require
-import           Check.Type.Annotate
 import           Common
-import qualified Env.KEnv              as KEnv
-import           Error
+import qualified Env.KEnv           as KEnv
 import           Introspect
+import           Kind
 import           Praxis
 import qualified Record
 import           Stage
-import           Type
+import           Type               hiding (Constraint (..))
 
-import qualified Data.Set              as Set
+import qualified Data.Set           as Set
 
 kind = view annotation
-
-throwCheckError r = throwError (CheckError r)
 
 generate :: Recursive a => Typed a -> Praxis (Kinded a)
 generate x = save stage $ do
@@ -33,7 +30,7 @@ generate x = save stage $ do
   x' <- introspect gen x
   return x'
 
-gen :: Recursive a => Annotated TypeCheck a -> Intro Praxis KindCheck a
+gen :: Recursive a => Typed a -> Intro Praxis KindCheck a
 gen x = case typeof x of
   IDataAlt -> Notice (pure ())
   IDecl    -> Notice (pure ())
@@ -60,6 +57,13 @@ ty = split $ \(s, t) -> case t of
       require $ newConstraint (kind f' `Eq` ((Phantom, ()) :< KindFun (kind a') k)) AppType s
       return (k, TyApply f' a')
 
+    TyFun a b -> do
+      a' <- ty a
+      b' <- ty b
+      require $ newConstraint (kind a' `Eq` ((Phantom, ()) :< KindType)) (Custom "typ: TyFun TODO") s
+      require $ newConstraint (kind b' `Eq` ((Phantom, ()) :< KindType)) (Custom "typ: TyFun TODO") s
+      return ((Phantom, ()) :< KindType, TyFun a' b')
+
     TyFlat ts -> do
       ts' <- traverse ty (Set.toList ts)
       requires $ map (\t -> newConstraint (kind t `Eq` ((Phantom, ()) :< KindConstraint)) (Custom "typ: TyFlat TODO") s) ts'
@@ -67,7 +71,7 @@ ty = split $ \(s, t) -> case t of
 
     TyCon n -> do
       e <- KEnv.lookup n
-      case e of Nothing -> throwCheckError (NotInScope n s)
+      case e of Nothing -> throw (NotInScope n s)
                 Just k  -> return (k, TyCon n)
 
     TyPack r -> do -- This one is easy

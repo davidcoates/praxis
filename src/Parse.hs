@@ -8,14 +8,15 @@ module Parse
   , Parsed(..)
   ) where
 
+import           Annotate
 import           AST
 import           Common
-import           Parse.Annotate
+import           Kind           (Kind)
 import           Parse.Desugar  (Desugarable (..))
-import qualified Parse.Parse    as Sweet (Parseable (..))
+import qualified Parse.Parse    as Sweet
 import           Parse.Tokenise (tokenise)
 import           Praxis
-import           Type           (Kind, Type)
+import           Type           (Type)
 
 class Parseable a where
   parse  :: String -> Praxis (Parsed a)

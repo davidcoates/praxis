@@ -1,81 +1,74 @@
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Parse.Tokenise.Tokeniser
   ( Tokeniser
-  , lookAhead
-  , phantom
-  , runTokeniser
+  , run
+  , consume
   , satisfy
-  , token
-  , try
-  , (<?>)
-  , (<|?>)
+  , satisfies
+  , match
+  , matches
+  , throw
   ) where
 
 import           Common
-import           Error                (Error (..))
-import qualified Parse.Prim           as Prim
-import           Parse.Tokenise.Token
-import           Praxis               (Praxis, throwError)
+import           Parse.Parser        (Parser (..))
+import qualified Parse.Parser        as Parser (match, run, satisfies, throw)
+import           Praxis              (Praxis)
+import qualified Praxis              (throw)
+import           Token
 
-import           Control.Applicative  (Alternative (..), Applicative (..))
-import           Data.List            (intercalate)
+import           Control.Applicative (Alternative (..), Applicative (..))
 
-newtype Tokeniser a = Tokeniser { _runTokeniser :: Prim.Parser (Sourced Char) (Sourced a) }
-
-lift f (Tokeniser a) = Tokeniser (f a)
+newtype Tokeniser a = Tokeniser { runTokeniser :: Parser (Sourced Char) (Sourced a) }
 
 instance Functor Tokeniser where
-  fmap f = lift (fmap (fmap f))
+  fmap f (Tokeniser t) = Tokeniser (fmap (fmap f) t)
 
 instance Applicative Tokeniser where
-  pure x = Tokeniser (pure (pure x))
-  liftA2 f (Tokeniser a) (Tokeniser b) = Tokeniser (liftA2 (liftA2 f) a b)
+  pure x = Tokeniser $ pure (pure x)
+  (<*>) (Tokeniser s) (Tokeniser t) = Tokeniser $ (fmap (<*>) s) <*> t
 
 instance Alternative Tokeniser where
   empty = Tokeniser empty
   Tokeniser a <|> Tokeniser b = Tokeniser (a <|> b)
 
-instance Monad Tokeniser where
-  Tokeniser a >>= f = Tokeniser (a >>= \(a :< x) -> liftA2 (\_ y -> y) (a :< x) <$> _runTokeniser (f x))
-
-runTokeniser :: Tokeniser a -> String -> Praxis [Sourced a]
-runTokeniser (Tokeniser p) cs = makeError $ Prim.runParser (all p) (sourced cs) (view tag)
-  where all p = (Prim.eof *> pure []) <|> liftA2 (:) p (all p)
-        makeError (Left (s, e)) = throwError (LexicalError e s)
-        makeError (Right x)     = pure x
+run :: Show a => Tokeniser (Maybe a) -> String -> Praxis [Sourced a]
+run (Tokeniser t) cs = all (sourced cs)
+  where all [] = pure []
+        all cs = case Parser.run t cs of
+          Left e                  -> Praxis.throw $ e
+          Right (s :< Just x, cs) -> ((:) <$> pure (s :< x) <*> all cs)
+          Right (_, cs)           -> all cs
 
 sourced :: String -> [Sourced Char]
 sourced = sourced' Pos { line = 1, column = 1 }
   where sourced' _     [] = []
-        sourced' p (c:cs) = let p' = advance c p in make p c : sourced' p' cs
+        sourced' p (c:cs) = make p c : sourced' (advance c p) cs
         make p c = Source { start = p, end = p } :< c
-
         advance :: Char -> Pos -> Pos
         advance '\t' p = p { column = math (column p) }
           where math = (+ 1) . (* 8) . (+ 1) . (`div` 8) . subtract 1
         advance '\n' p = Pos { line = line p + 1, column = 1 }
         advance _    p = p { column = column p + 1 }
 
-phantom :: Tokeniser a -> Tokeniser a
-phantom (Tokeniser a) = Tokeniser $ (\(_ :< x) -> (Phantom :< x)) <$> a
+satisfies :: Int -> (String -> Bool) -> Tokeniser ()
+satisfies i f = Tokeniser (Parser.satisfies i (f . map (view value)) *> pure (pure ()))
 
-token :: (Char -> Maybe a) -> Tokeniser a
-token f = Tokeniser $ Prim.token (lift . fmap f)
-  where lift (a :< Just x) = Just (a :< x)
-        lift _             = Nothing
+satisfy :: (Char -> Bool) -> Tokeniser ()
+satisfy p = satisfies 1 (\[c] -> p c)
 
-satisfy :: (Char -> Bool) -> Tokeniser Char
-satisfy f = Tokeniser $ Prim.satisfy (f . (view value))
+matches :: Int -> (String -> Bool) -> Tokeniser String
+matches n p = satisfies n p *> consumes n
+  where consumes 0 = pure ""
+        consumes n = (:) <$> consume <*> consumes (n - 1)
 
-try :: Tokeniser a -> Tokeniser a
-try = lift Prim.try
+match :: (Char -> Bool) -> Tokeniser Char
+match p = Tokeniser $ Parser.match (p . view value)
 
-lookAhead :: Tokeniser a -> Tokeniser a
-lookAhead = lift Prim.lookAhead
+consume :: Tokeniser Char
+consume = match (const True)
 
-infix 0 <?>
-(<?>) :: Tokeniser a -> String -> Tokeniser a
-Tokeniser p <?> s = Tokeniser (p Prim.<?> s)
-
-infix 0 <|?>
-(<|?>) :: Tokeniser a -> String -> Tokeniser a
-Tokeniser p <|?> s = Tokeniser (p Prim.<|?> s)
+throw :: String -> Tokeniser a
+throw = Tokeniser . Parser.throw

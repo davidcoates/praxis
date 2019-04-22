@@ -12,7 +12,14 @@ import           Data.Monoid         ((<>))
 
 data Tag a b = a :< b
 
-infixr 6 :<
+{-
+There is no way to get a <> b :< c to parse as (a <> b) :< c
+and simultaenously a :< b : c to parse as (a :< b) : c
+(without changing the fixity of <> or :)
+
+I've prefered the second, otherwise this should be 5.
+-}
+infixl 6 :<
 
 instance Eq b => Eq (Tag a b) where
   (_ :< a) == (_ :< b) = a == b
@@ -29,6 +36,12 @@ instance Functor (Tag a) where
 instance Monoid a => Applicative (Tag a) where
   pure x = mempty :< x
   liftA2 f (a :< x) (b :< y) = (a <> b) :< f x y
+
+instance Foldable (Tag a) where
+  foldr f x (a :< y) = f y x
+
+instance Traversable (Tag a) where
+  traverse = value
 
 tag :: Functor f => (a -> f c) -> Tag a b -> f (Tag c b)
 tag f (a :< x) = (:< x) <$> f a

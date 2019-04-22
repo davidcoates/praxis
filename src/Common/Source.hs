@@ -17,7 +17,7 @@ instance Show Pos where
 
 instance Show Source where
   show Phantom = "<?>"
-  show s       = show (start s) ++ " to " ++ show (end s)
+  show s       = show (start s) -- ++ " to " ++ show (end s)
 
 instance Semigroup Source where
   Phantom <> s = s

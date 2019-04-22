@@ -15,24 +15,23 @@ module Env.TEnv
   )
 where
 
+import           Annotate
 import           Check.Error
 import           Check.System
-import           Check.Type.Annotate
-import           Check.Type.Constraint
+import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import           Env                   (TEnv)
-import           Env.LEnv              (LEnv, fromList)
-import qualified Env.LEnv              as LEnv
-import           Error
-import           Introspect            (sub)
+import           Env                (TEnv)
+import           Env.LEnv           (LEnv, fromList)
+import qualified Env.LEnv           as LEnv
+import           Introspect         (sub)
 import           Praxis
 import           Type
 
-import           Control.Monad         (replicateM)
-import           Prelude               hiding (log, lookup, read)
-import qualified Prelude               (lookup)
+import           Control.Monad      (replicateM)
+import           Prelude            hiding (log, lookup, read)
+import qualified Prelude            (lookup)
 
 
 elim :: Praxis ()
@@ -72,7 +71,7 @@ read s n = do
       requires [ newConstraint (share t) (UnsafeView n) s | not u ]
       requires [ newConstraint (share t) (Captured n) s   | c ]
       return t
-    Nothing     -> throwError (CheckError (NotInScope n s))
+    Nothing     -> throw (NotInScope n s)
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
 mark :: Source -> Name -> Praxis (Typed Type)
@@ -85,7 +84,7 @@ mark s n = do
       requires [ newConstraint (share t) (Shared n)   s | u ]
       requires [ newConstraint (share t) (Captured n) s | c ]
       return t
-    Nothing     -> throwError (CheckError (NotInScope n s))
+    Nothing     -> throw (NotInScope n s)
 
 lookup :: Name -> Praxis (Maybe (Typed QType))
 lookup n = do

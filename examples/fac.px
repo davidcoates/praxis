@@ -6,7 +6,7 @@ fac = cases
 main : () -> ()
 main () = do
   putStrLn "Enter a number:"
-  x = getInt ()
+  let x = getInt ()
   putInt (fac x)
 
 -- Without prompts

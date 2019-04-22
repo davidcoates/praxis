@@ -1,7 +1,7 @@
 module Main where
 
+import           Annotate
 import           AST
-import           Check.Annotate
 import           Common
 import qualified Env.TEnv             as TEnv (lookup)
 import qualified Env.VEnv             as VEnv (lookup)
@@ -19,7 +19,7 @@ import           System.Environment
 import           System.IO
 
 pretty :: Praxis a -> Praxis b -> Praxis b -> Praxis b
-pretty c f g = try c (\e -> liftIO (print e >> putStrLn "^^^ ERRORS OCCURED ^^^") >> f) (const g)
+pretty c f g = try c (\e -> liftIO (putStrLn e >> putStrLn "^^^ ERRORS OCCURED ^^^") >> f) (const g)
 
 forever :: Praxis a -> Praxis a
 forever c = pretty c (forever c) (forever c)
@@ -48,9 +48,8 @@ runMain :: Praxis ()
 runMain = do
   t <- TEnv.lookup "main"
   case t of Nothing -> msg "Missing main function"
-            Just (_ :< Mono (_ :< TyApply (_ :< TyCon "->") (_ :< TyPack a))) | [(Nothing, _ :< r), (Nothing, _ :< r')] <- Record.toList a
-                                                                              , r  == TyRecord Record.unit
-                                                                              , r' == TyRecord Record.unit ->
+            Just (_ :< Mono (_ :< TyFun (_ :< r) (_ :< r'))) | r == TyRecord Record.unit
+                                                             , r' == TyRecord Record.unit ->
               do { Just (F f) <- VEnv.lookup "main"; f (R Record.unit); return () }
             _ -> msg "Ill-typed main function"
 

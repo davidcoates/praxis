@@ -2,13 +2,12 @@ module Check.Type.Error
   ( Error(..)
   ) where
 
-import           Check.Type.Annotate
-import           Check.Type.Constraint
-import           Common
+import           Annotate
+import           Type
 
-data Error = Contradiction (Typed TypeConstraint)
+data Error = Contradiction (Typed Constraint)
            | Stuck
-           | Underdefined (Typed TypeConstraint)
+           | Underdefined (Typed Constraint)
 
 instance Show Error where
   show e = case e of

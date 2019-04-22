@@ -8,16 +8,12 @@ module Check.Type.Solve
   ( solve
   ) where
 
-import           AST
-import           Check.Error
-import           Check.Type.Annotate
-import           Check.Type.Constraint
+import           Annotate
 import           Check.Type.Error
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
 import           Env.TEnv               (ungeneralise)
-import           Error
 import           Introspect
 import           Praxis
 import           Record
@@ -39,8 +35,6 @@ solve = save stage $ save our $ do
   t <- use (our . tsol)
   return t
 
-throwTypeError = throwError . CheckError . TypeError
-
 data State = Cold
            | Warm
            | Done
@@ -55,9 +49,9 @@ solve' = spin progress `chain` stuck
           stuck = do
             cs <- (nub . sort) <$> use (our . constraints)
             logList Debug cs
-            throwTypeError Stuck
+            throw Stuck
 
-spin :: (Typed TypeConstraint -> Praxis Bool) -> Praxis State
+spin :: (Typed Constraint -> Praxis Bool) -> Praxis State
 spin solve = do
   cs <- (nub . sort) <$> use (our . constraints)
   case cs of
@@ -79,16 +73,16 @@ unis = extract (only f)
        f _         = []
 
 -- TODO use sets here?
-classes :: [Name] -> [Typed TypeConstraint] -> Maybe [Typed Type]
+classes :: [Name] -> [Typed Constraint] -> Maybe [Typed Type]
 classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
-  Class t         -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
+  Class t     -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
   Eq t1 t2    -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
 
-progress :: Typed TypeConstraint -> Praxis Bool
+progress :: Typed Constraint -> Praxis Bool
 progress d = case view value d of
 
   Class (k1 :< TyApply (k2 :< TyCon "Share") (a :< p)) -> case p of -- TODO Need instance solver!
-    TyApply (_ :< TyCon "->") _ -> tautology
+    TyFun _ _                   -> tautology
     TyUni _                     -> defer
     TyCon n | n `elem` ["Int", "Char", "Bool"] -> tautology
     TyRecord r                  -> introduce (map ((\t -> Class (k1 :< TyApply (k2 :< TyCon "Share") t)). snd) (Record.toList r))
@@ -108,6 +102,8 @@ progress d = case view value d of
     let values = map snd . Record.toCanonicalList in introduce (zipWith Eq (values r1) (values r2)) -- TODO create zipRecord or some such
 
   Eq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ Eq t1 t2 ]
+
+  Eq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> introduce [ Eq t1 s1, Eq t2 s2 ]
 
   Eq t1@(_ :< TyFlat e1) t2@(_ :< TyFlat e2)
     | e1 > e2 -> swap
@@ -139,7 +135,7 @@ progress d = case view value d of
   where solved = return True
         tautology = solved
         defer = require d >> return False
-        contradiction = throwTypeError (Contradiction d)
+        contradiction = throw (Contradiction d)
         introduce cs = requires (map (d `implies`) cs) >> return True
         swap = case view value d of t1 `Eq` t2 -> progress (set value (t2 `Eq` t1) d)
 

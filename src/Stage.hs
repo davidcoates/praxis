@@ -1,9 +1,6 @@
 module Stage
   ( Stage(..)
   , Check(..)
-  , Parse
-  , TypeCheck
-  , KindCheck
   ) where
 
 data Stage = Unknown
@@ -33,8 +30,3 @@ instance Show Check where
     Warmup   -> ""
     Generate -> "(Constraint Generator)"
     Solve    -> "(Constraint Solver)"
-
--- Annotation stages
-data Parse     = Parse_
-data TypeCheck = TypeCheck_
-data KindCheck = KindCheck_

@@ -7,34 +7,30 @@ module Check.Type.Generate
   ( generate
   ) where
 
+import           Annotate
 import           AST
-import           Check.Type.Annotate
-import           Check.Type.Constraint
+import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import qualified Env.KEnv              as KEnv
+import qualified Env.KEnv            as KEnv
 import           Env.TEnv
-import           Error
 import           Introspect
-import           Parse.Annotate        (Parsed)
 import           Praxis
 import           Record
 import           Stage
 import           Type
 
-import           Control.Applicative   (liftA2)
-import           Data.Foldable         (foldlM)
-import           Data.List             (nub, sort, transpose)
-import qualified Data.Set              as Set
-import           Prelude               hiding (exp, log, read)
+import           Control.Applicative (liftA2)
+import           Data.Foldable       (foldlM)
+import           Data.List           (nub, sort, transpose)
+import qualified Data.Set            as Set
+import           Prelude             hiding (exp, log, read)
 
 -- TODO factor out (Phantom, ()) everywhere?
 
 ty :: Typed a -> Annotation TypeCheck a
 ty = view annotation
-
-throwCheckError r = throwError (CheckError r)
 
 generate :: Recursive a => Parsed a -> Praxis (Typed a)
 generate x = save stage $ do
@@ -66,7 +62,7 @@ parallel (x:xs) = do
 
 -- TODO move this somewhere
 fun :: Typed Type -> Typed Type -> Typed Type
-fun a b = (Phantom, ()) :< TyApply ((Phantom, ()) :< TyCon "->") ((Phantom, ()) :< TyPack (Record.pair a b))
+fun a b = (Phantom, ()) :< TyFun a b
 
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `Eq` t2) r s

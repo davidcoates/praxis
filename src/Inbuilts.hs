@@ -6,28 +6,26 @@ module Inbuilts
   ( initialState
   ) where
 
-import           AST            (Lit (..))
-import           Check.Annotate
+import           Annotate
+import           AST          (Lit (..))
 import           Common
-import           Env.KEnv       (KEnv)
-import qualified Env.KEnv       as KEnv (fromList)
-import           Env.TEnv       (TEnv)
-import qualified Env.TEnv       as TEnv (fromList)
-import           Env.VEnv       (VEnv)
-import qualified Env.VEnv       as VEnv (fromList)
-import           Error
+import           Env.KEnv     (KEnv)
+import qualified Env.KEnv     as KEnv (fromList)
+import           Env.TEnv     (TEnv)
+import qualified Env.TEnv     as TEnv (fromList)
+import           Env.VEnv     (VEnv)
+import qualified Env.VEnv     as VEnv (fromList)
 import           Introspect
-import           Parse          (parse)
-import           Parse.Annotate
+import           Kind
+import           Parse        (parse)
 import           Praxis
 import qualified Record
-import           Stage
-import           Type           hiding (mono)
+import           Type
 import           Value
 
-import           Control.Lens   as Lens (set)
-import           Data.List      (nub, sort)
-import qualified Data.Set       as Set (empty)
+import           Control.Lens as Lens (set)
+import           Data.List    (nub, sort)
+import qualified Data.Set     as Set (empty)
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState

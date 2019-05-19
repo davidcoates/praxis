@@ -16,6 +16,7 @@ import           AST
 import           Common
 import           Introspect
 import           Kind
+import           Print
 import           Type
 
 data Derivation s a = Root String

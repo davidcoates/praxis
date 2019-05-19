@@ -1,7 +1,9 @@
 module Syntax
   ( module Syntax.AST
-  , module Syntax.Syntax
+  , parse
+  , unparse
   ) where
 
 import           Syntax.AST
-import           Syntax.Syntax (Domain (..))
+import           Syntax.Parser   (parse)
+import           Syntax.Unparser (unparse)

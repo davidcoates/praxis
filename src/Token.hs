@@ -14,9 +14,8 @@ data Token = QVarId QString
            | ReservedId String
            | Lit Lit
            | Special Char
-  deriving (Eq, Show)
+  deriving Eq
 
-{-
 instance Show Token where
   show x = case x of
     QVarId q      -> show q
@@ -28,4 +27,3 @@ instance Show Token where
     ReservedId s  -> s
     Lit l         -> show l
     Special c     -> [c]
--}

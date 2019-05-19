@@ -15,6 +15,7 @@ module Syntax.Syntax
   ) where
 
 import           Common
+import           Introspect
 import           Syntax.Prism
 import           Token
 
@@ -42,7 +43,7 @@ class Syntax f where
   unparseable :: f a -> f a
 
 class Domain f s where -- TODO come up with a better name
-  annotated :: f (a s) -> f (Annotated s a)
+  annotated :: Recursive a => f (a s) -> f (Annotated s a)
   combine :: f Void -> ((Annotated s a, Annotated s a) -> (a s)) -> (Annotated s a, Annotated s a) -> Annotated s a -- FIXME this is a hack
 
 cons :: Prism [a] (a, [a])

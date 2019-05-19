@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Parse.Parse
   ( parse
   ) where
@@ -6,16 +8,17 @@ module Parse.Parse
 
 import           Annotate
 import           Common
+import           Introspect
 import           Parse.Parse.Parser
 import           Praxis             hiding (run)
-import           Syntax
+import qualified Syntax             (parse)
 import           Token
 
 import           Prelude            hiding (log)
 
-parse :: Syntactic a => [Sourced Token] -> Praxis (Parsed a)
+parse :: forall a. Recursive a => [Sourced Token] -> Praxis (Parsed a)
 parse ts = save stage $ do
   stage .= Parse
-  p <- run (annotated syntax) ts
+  p <- run Syntax.parse ts
   log Debug p
   return p

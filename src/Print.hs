@@ -29,8 +29,15 @@ instance Unparser Printer where
     Nothing -> g x
     Just xs -> Just xs
   token = Printer $ \x -> Just [x]
-  annotated (Printer f) = Printer $ \(_ :< x) -> f x -- TODO
   mark s = Printer (error s)
+  annotated f = Printer $ \x -> let
+    body  = force f (view value x)
+    constraint = display (view source x) (\s -> "[" ++ show (start s) ++ "]") ++ body ++ display (label x) id
+    display s f = if s == mempty then [] else [Print (f s)]
+      in Just $ case typeof x of
+    ITypeConstraint -> constraint
+    IKindConstraint -> constraint
+    _               -> display (label x) (\l -> "[" ++ l ++ "]") ++ body
 
 unlayout :: [Token] -> String
 unlayout ts = unlayout' (-1) ts where
@@ -39,26 +46,8 @@ unlayout ts = unlayout' (-1) ts where
     Special '{' : ts -> (if n >= 0 then "\n" ++ replicate (n+1) '\t' else "") ++ unlayout' (n+1) ts
     Special ';' : ts -> "\n" ++ replicate n '\t' ++ unlayout' n ts
     Special '}' : ts -> unlayout' (n-1) ts
+    [t]              -> show t
     t : ts           -> show t ++ " " ++ unlayout' n ts
 
 instance (Complete s, Recursive a, x ~ Annotation s a) => Show (Tag (Source, x) (a s)) where
   show = unlayout . force unparse
-
-{-
-instance (Complete s, Recursive a, x ~ Annotation s a) => Show (Tag (Source, x) (a s)) where
-  show t = case (witness :: I a) of
-    ITypeConstraint -> proofShow t
-    IKindConstraint -> proofShow t
-    _               -> flatShow t
-    where
-    proofShow t@((s, a) :< x) = sourceShow s ++ show' x ++ anteShow (label t) where
-      sourceShow Phantom = ""
-      sourceShow s       = "[" ++ show (start s) ++ "] "
-      anteShow l | l == "" = ""
-      anteShow l = " " ++ l
-    flatShow t@((s, a) :< x) = annShow s (label t) ++ show' x where
-      annShow Phantom l | l == "" = ""
-      annShow Phantom l = "[" ++ l ++ "] "
-      annShow s       l | l == "" = "[" ++ show (start s) ++ "] "
-      annShow s       l = "[" ++ l ++ " " ++ show (start s) ++ "] "
--}

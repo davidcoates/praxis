@@ -13,6 +13,7 @@ data Token = QVarId QString
            | ReservedOp String
            | ReservedId String
            | Lit Lit
+           | Print String
            | Special Char
   deriving Eq
 
@@ -26,4 +27,5 @@ instance Show Token where
     ReservedOp s  -> s
     ReservedId s  -> s
     Lit l         -> show l
+    Print s       -> s
     Special c     -> [c]

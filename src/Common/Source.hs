@@ -7,10 +7,11 @@ module Common.Source
 import           Data.Monoid    (Monoid (..))
 import           Data.Semigroup (Semigroup (..))
 
-data Pos = Pos { line :: Int, column :: Int }
+data Pos = Pos { line :: Int, column :: Int } deriving Eq
 
 data Source = Source { start :: Pos, end :: Pos }
             | Phantom -- ^Used for phantom tokens e.g., implicit whitespace tokens
+  deriving Eq
 
 instance Show Pos where
   show p = show (line p) ++ ":" ++ show (column p)

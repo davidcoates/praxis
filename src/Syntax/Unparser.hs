@@ -22,7 +22,7 @@ class Unparser f where
   empty :: f a
   (<|>) :: f a -> f a -> f a
   token :: f Token
-  annotated :: Complete s => f (a s) -> f (Annotated s a)
+  annotated :: (Recursive a, Complete s) => f (a s) -> f (Annotated s a)
   mark :: String -> f a
 
 -- Wrap to avoid overlapping Syntax and Domain instances

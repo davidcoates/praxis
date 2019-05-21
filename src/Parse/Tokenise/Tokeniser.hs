@@ -34,7 +34,7 @@ instance Alternative Tokeniser where
   empty = Tokeniser empty
   Tokeniser a <|> Tokeniser b = Tokeniser (a <|> b)
 
-run :: Show a => Tokeniser (Maybe a) -> String -> Praxis [Sourced a]
+run :: Pretty a => Tokeniser (Maybe a) -> String -> Praxis [Sourced a]
 run (Tokeniser t) cs = all (sourced cs)
   where all [] = pure []
         all cs = case Parser.run t cs of

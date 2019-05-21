@@ -13,20 +13,19 @@ import           Check.Type.Error
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import           Env.TEnv               (ungeneralise)
+import           Env.TEnv            (ungeneralise)
 import           Introspect
 import           Praxis
 import           Record
 import           Stage
 import           Type
 
-import           Control.Applicative    (Const (..), liftA2)
-import           Control.Monad.Identity (Identity (..))
-import           Data.List              (nub, sort)
-import           Data.Maybe             (fromMaybe)
-import           Data.Set               (Set, union)
-import qualified Data.Set               as Set
-import           Prelude                hiding (log)
+import           Control.Applicative (liftA2)
+import           Data.List           (nub, sort)
+import           Data.Maybe          (fromMaybe)
+import           Data.Set            (Set, union)
+import qualified Data.Set            as Set
+import           Prelude             hiding (log)
 
 solve :: Praxis [(Name, Type TypeCheck)]
 solve = save stage $ save our $ do
@@ -48,7 +47,7 @@ solve' = spin progress `chain` stuck
             Done -> return Done
           stuck = do
             cs <- (nub . sort) <$> use (our . constraints)
-            logList Debug cs
+            output $ separate "\n" cs
             throw Stuck
 
 spin :: (Typed Constraint -> Praxis Bool) -> Praxis State

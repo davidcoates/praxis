@@ -6,9 +6,9 @@ module Praxis
   )
   where
 
-import           Control.Monad.Except (ExceptT)
-import           Control.Monad.State  (StateT)
+import           Control.Monad.Trans.Maybe (MaybeT)
+import           Control.Monad.Trans.State (StateT)
 
 data PraxisState
 
-type Praxis = ExceptT String (StateT PraxisState IO)
+type Praxis = MaybeT (StateT PraxisState IO)

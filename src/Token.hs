@@ -13,19 +13,19 @@ data Token = QVarId QString
            | ReservedOp String
            | ReservedId String
            | Lit Lit
-           | Print String
+           | Print (Colored String)
            | Special Char
   deriving Eq
 
-instance Show Token where
-  show x = case x of
-    QVarId q      -> show q
-    QConId q      -> show q
-    QVarSym q     -> show q
-    QConSym q     -> show q
-    ReservedCon s -> s
-    ReservedOp s  -> s
-    ReservedId s  -> s
-    Lit l         -> show l
-    Print s       -> s
-    Special c     -> [c]
+instance Pretty Token where
+  pretty x = case x of
+    QVarId q      -> plain $ show q
+    QConId q      -> Fg Green $ plain $ show q
+    QVarSym q     -> plain $ show q
+    QConSym q     -> plain $ show q
+    ReservedCon s -> Fg Magenta $ plain s
+    ReservedOp s  -> Fg Magenta $ plain s
+    ReservedId s  -> Style Bold $ Fg Yellow $ plain s
+    Lit l         -> Fg Cyan $ plain $ show l
+    Print x       -> Style Italic $ Fg White $ x
+    Special c     -> plain [c]

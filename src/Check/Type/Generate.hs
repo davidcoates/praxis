@@ -36,9 +36,9 @@ generate :: Recursive a => Parsed a -> Praxis (Typed a)
 generate x = save stage $ do
   stage .= TypeCheck Generate
   x' <- introspect gen x
-  log Debug x'
+  output x'
   cs <- use (our . constraints)
-  logList Debug (nub . sort $ cs)
+  output $ separate "\n" (nub . sort $ cs)
   return x'
 
 gen :: Recursive a => Parsed a -> Intro Praxis TypeCheck a

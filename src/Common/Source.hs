@@ -1,8 +1,12 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Common.Source
   ( Pos(..)
   , Source(..)
   , (<>)
   ) where
+
+import           Common.Pretty
 
 import           Data.Monoid    (Monoid (..))
 import           Data.Semigroup (Semigroup (..))
@@ -13,12 +17,12 @@ data Source = Source { start :: Pos, end :: Pos }
             | Phantom -- ^Used for phantom tokens e.g., implicit whitespace tokens
   deriving Eq
 
-instance Show Pos where
-  show p = show (line p) ++ ":" ++ show (column p)
+instance Pretty Pos where
+  pretty p = plain (show (line p)) <> ":" <> plain (show (column p))
 
-instance Show Source where
-  show Phantom = "<?>"
-  show s       = show (start s) -- ++ " to " ++ show (end s)
+instance Pretty Source where
+  pretty Phantom = "<?>"
+  pretty s       = pretty (start s)
 
 instance Semigroup Source where
   Phantom <> s = s

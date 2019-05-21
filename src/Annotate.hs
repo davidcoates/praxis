@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -22,9 +23,9 @@ import           Type
 data Derivation s a = Root String
                     | Antecedent (Annotated s a)
 
-instance Show (Annotated s a) => Show (Derivation s a) where
-  show (Root r)       = "\n|-> (" ++ show r ++ ")"
-  show (Antecedent a) = "\n|-> " ++ show a
+instance Pretty (Annotated s a) => Pretty (Derivation s a) where
+  pretty (Root r)       = "\n|-> (" <> plain r <> ")"
+  pretty (Antecedent a) = "\n|-> " <> pretty a
 
 data Parse
 type Parsed a = Annotated Parse a
@@ -65,10 +66,10 @@ instance Complete TypeCheck where
     ITypeConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
     IKindConstraint -> pure ()
   label t = let a = view annotation t in case typeof t of
-    IExp            -> show a
-    IPat            -> show a
-    ITypeConstraint -> show a
-    _               -> ""
+    IExp            -> pretty a
+    IPat            -> pretty a
+    ITypeConstraint -> pretty a
+    _               -> Nil
 
 data KindCheck
 type Kinded a = Annotated KindCheck a
@@ -102,9 +103,9 @@ instance Complete KindCheck where
     ITypeConstraint -> pure ()
     IKindConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
   label t = let a = view annotation t in case typeof t of
-    IExp            -> show a
-    IPat            -> show a
-    ITyPat          -> show a
-    IType           -> show a
-    IKindConstraint -> show a
-    _               -> ""
+    IExp            -> pretty a
+    IPat            -> pretty a
+    ITyPat          -> pretty a
+    IType           -> pretty a
+    IKindConstraint -> pretty a
+    _               -> Nil

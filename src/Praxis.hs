@@ -20,7 +20,7 @@ module Praxis
   , liftIO
 
   -- |Flag lenses
-  , level
+  , debug
   , interactive
 
   -- |Praxis lenses
@@ -37,47 +37,33 @@ module Praxis
   , freshVar
   , reuse
 
-  , Level(..)
-  , log
-  , logStr
-  , logList
-
- {-
-  , require
-  , requireAll
- -}
+  , output
   )
   where
 
 import           Annotate
-import           AST                  (Lit)
-import qualified Check.System         as Check (System)
+import           AST                       (Lit)
+import qualified Check.System              as Check (System)
 import           Common
-import           Env                  (KEnv, TEnv, VEnv)
+import           Env                       (KEnv, TEnv, VEnv)
 import           Kind
-import           Record               (Record)
+import           Record                    (Record)
 import           Stage
 import           Type
 
-import           Control.Applicative  (liftA2)
-import           Control.Lens         (Lens', makeLenses, traverseOf)
-import           Control.Monad        (when)
-import           Control.Monad.Except (ExceptT, runExceptT, throwError)
-import           Control.Monad.State  (StateT, gets, lift, runStateT)
-import qualified Control.Monad.State  as State (get, modify, put)
-import           Data.Maybe           (fromMaybe)
-import qualified Data.Set             as Set
-import           Prelude              hiding (log)
-import           System.IO.Unsafe     (unsafePerformIO)
-
--- |Logging level
-data Level = Normal
-           | Debug
-           | Trace
-  deriving (Show, Eq, Ord)
+import           Control.Applicative       (empty, liftA2)
+import           Control.Lens              (Lens', makeLenses, traverseOf)
+import           Control.Monad             (when)
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
+import           Control.Monad.Trans.State (StateT, gets, runStateT)
+import qualified Control.Monad.Trans.State as State (get, modify, put)
+import           Data.Maybe                (fromMaybe)
+import qualified Data.Set                  as Set
+import           System.IO.Unsafe          (unsafePerformIO)
 
 data Flags = Flags
-  { _level       :: Level             -- ^Logging level
+  { _debug       :: Bool
   , _interactive :: Bool
   , _static      :: Bool              -- ^Set for internal pure computations evaluated at compile time
   } deriving (Show)
@@ -106,13 +92,10 @@ data PraxisState = PraxisState
 instance Show PraxisState where
   show s = "<praxis state>"
 
-type Praxis = ExceptT String (StateT PraxisState IO)
+type Praxis = MaybeT (StateT PraxisState IO)
 
 defaultFlags :: Flags
-defaultFlags = Flags { _level = Normal, _interactive = False, _static = False }
-
-throw :: Show a => a -> Praxis b
-throw = throwError . show
+defaultFlags = Flags { _debug = False, _interactive = False, _static = False }
 
 defaultFresh = Fresh
   { _freshUniTs   = map (("?t"++) . show) [0..]
@@ -141,6 +124,18 @@ makeLenses ''Flags
 makeLenses ''Fresh
 makeLenses ''PraxisState
 
+throw :: Pretty a => a -> Praxis b
+throw x = display x >> empty
+
+display :: Pretty a => a -> Praxis ()
+display x = try p >> return () where
+  p = do
+    s <- use stage
+    liftIO $ putStrLn ("Output from stage: " ++ show s)
+    t <- liftIO $ getTerm
+    liftIO $ printColoredS t (pretty x)
+    liftIO $ putChar '\n'
+
 save :: Lens' PraxisState a -> Praxis b -> Praxis b
 save l c = do
   x <- use l
@@ -148,19 +143,18 @@ save l c = do
   l .= x
   return r
 
--- TODO think of a better name for this
-try :: Praxis a -> (String -> Praxis b) -> (a -> Praxis b) -> Praxis b
-try c f g = do
+try :: Praxis a -> Praxis (Maybe a)
+try p = do
   s <- lift State.get
-  (x, s') <- liftIO $ run c s
+  (x, t) <- liftIO $ run p s
   case x of
-    Left  e -> lift (State.put s)  >> f e
-    Right x -> lift (State.put s') >> g x
+    Nothing -> lift (State.put s) >> return Nothing
+    Just y  -> lift (State.put t) >> return (Just y)
 
 runStatic :: PraxisState -> Praxis a -> a
 runStatic s c = case fst $ unsafePerformIO (run c' s) of
-  Left e  -> panic (show e)
-  Right x -> x
+  Nothing -> panic "static computation failed"
+  Just x  -> x
   where c' = (flags . static .= True) >> c
 
 assert :: Lens' PraxisState a -> (a -> Bool) -> String -> Praxis b -> Praxis b
@@ -169,36 +163,18 @@ assert l p s c = do
   if p x then c else panic s
 
 liftIO :: IO a -> Praxis a
-liftIO io = assert (flags . static) (== False) "liftIO NOT STATIC" (lift (lift io))
-
-run :: Praxis a -> PraxisState -> IO (Either String a, PraxisState)
-run = runStateT . runExceptT
-
-shouldLog :: Level -> Praxis Bool
-shouldLog l = do
-  l' <- use (flags . level)
+liftIO io = do
   s <- use (flags . static)
-  return (l' == Trace || (not s && l' >= l))
+  -- If the static flag is set, we must not perform IO
+  if s then empty else lift (lift io)
 
-log :: Show a => Level -> a -> Praxis ()
-log l p = logStr l (show p)
+run :: Praxis a -> PraxisState -> IO (Maybe a, PraxisState)
+run = runStateT . runMaybeT
 
-logStr :: Level -> String -> Praxis ()
-logStr l x = do
-  b <- shouldLog l
-  when b $ do
-    s <- use stage
-    -- We don't use liftIO here so we can show static Trace logs
-    lift (lift (putStrLn ("Output from stage: " ++ show s)))
-    lift (lift (putStrLn x))
-
-logList :: Show a => Level -> [a] -> Praxis ()
-logList l xs = do
-  b <- shouldLog l
-  when b $ do
-    s <- use stage
-    lift (lift (putStrLn ("Output from stage: " ++ show s)))
-    mapM_ (lift . lift . print) xs
+output :: Pretty a => a -> Praxis ()
+output x = do
+  d <- use (flags . debug)
+  when d $ display x
 
 freshUniT :: Praxis (Typed Type)
 freshUniT = do

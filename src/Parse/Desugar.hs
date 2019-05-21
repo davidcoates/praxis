@@ -25,7 +25,7 @@ import           Data.List              (intersperse)
 import           Data.Map               (Map)
 import qualified Data.Map               as Map
 import           Data.Monoid            ((<>))
-import           Prelude                hiding (exp, log)
+import           Prelude                hiding (exp)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
@@ -36,7 +36,7 @@ desugar' :: (Recursive a) => ((Parsed a) -> Praxis (Parsed a)) -> (Parsed a) -> 
 desugar' f x = save stage $ do
   stage .= Desugar
   x' <- f x
-  log Debug x'
+  output x'
   return x'
 
 instance Desugarable Program where

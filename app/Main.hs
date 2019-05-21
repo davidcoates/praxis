@@ -18,11 +18,8 @@ import           Data.List            (find, intercalate, stripPrefix)
 import           System.Environment
 import           System.IO
 
-pretty :: Praxis a -> Praxis b -> Praxis b -> Praxis b
-pretty c f g = try c (\e -> liftIO (putStrLn e >> putStrLn "^^^ ERRORS OCCURED ^^^") >> f) (const g)
-
 forever :: Praxis a -> Praxis a
-forever c = pretty c (forever c) (forever c)
+forever p = try p >> forever p
 
 main :: IO ()
 main = hSetBuffering stdin LineBuffering >> do
@@ -31,34 +28,43 @@ main = hSetBuffering stdin LineBuffering >> do
 
 parse :: [String] -> Praxis ()
 parse xs = do
-  xs <- args xs
-  parse' xs
-    where parse' []  = repl
-          parse' [f] = file f
-          parse' _   = msg "Too many arguments"
+  xs <- opts xs
+  case xs of
+    []  -> repl
+    [f] -> file f
+    _   -> liftIO $ putStrLn "Too many arguments"
+
+data Arg = Arg { short :: String, long :: String, action :: Praxis () } -- TODO use long e.g., for help
+
+args :: [Arg]
+args =
+  [ Arg "d" "debug" (flags . debug .= True)
+  , Arg "i" "interactive" (flags . interactive .= True)
+  ]
+
+opts :: [String] -> Praxis [String]
+opts (x:xs)
+  | Just a <- find (\a -> ("-" ++ short a) == x) args = action a >> opts xs
+  | otherwise                                         = (x:) <$> opts xs
+opts []  = return []
 
 file :: String -> Praxis ()
-file f = pretty (interpretFile f :: Praxis (Kinded Program, ())) (return ()) onFileSuccess
+file f = (interpretFile f :: Praxis (Kinded Program, ())) >> onFileSuccess
   where onFileSuccess = use (flags . interactive) >>= (\i -> if i then repl else runMain)
-
-msg :: String -> Praxis ()
-msg s = liftIO (putStrLn s)
 
 runMain :: Praxis ()
 runMain = do
   t <- TEnv.lookup "main"
-  case t of Nothing -> msg "Missing main function"
+  case t of Nothing -> liftIO $ putStrLn "Missing main function"
             Just (_ :< Mono (_ :< TyFun (_ :< r) (_ :< r'))) | r == TyRecord Record.unit
                                                              , r' == TyRecord Record.unit ->
               do { Just (F f) <- VEnv.lookup "main"; f (R Record.unit); return () }
-            _ -> msg "Ill-typed main function"
+            _ -> liftIO $ putStrLn "Ill-typed main function"
 
 repl :: Praxis ()
 repl = forever $ do
-  s <- liftIO (putStr "> " >> hFlush stdout >> getLine )
-  case s of
-    ':' : cs -> meta cs
-    _        -> eval s
+  liftIO (putStr "> " >> hFlush stdout)
+  liftIO getLine >>= eval
 
 eval :: String -> Praxis ()
 eval s = do
@@ -66,33 +72,3 @@ eval s = do
   (_, v) <- interpret s :: Praxis (Kinded Exp, Value)
   liftIO $ print v
 
-meta :: String -> Praxis ()
-meta "?" = msg "help is TODO"
-meta s   = msg ("unknown command ':" ++ s ++ "'\nuse :? for help.")
-
-
--- Argument handling
-data Option = Option [(String, Praxis ())]
-            | Flag (Praxis ())
-
-data Arg = Arg { shortName :: String, longName :: String, option :: Option }
-
-myArgs :: [Arg]
-myArgs = [ Arg { shortName = "l", longName = "level", option = Option [ ("debug", flags . level .= Debug)
-                                                                      , ("trace", flags . level .= Trace)
-                                                                      ] }
-         , Arg { shortName = "i", longName = "interactive", option = Flag (flags . interactive .= True) }
-         ]
-
-args :: [String] -> Praxis [String]
-args (x:xs) | Just a <- find (\a -> ("-" ++ shortName a) == x) myArgs
-  = case option a of
-      Flag p -> p >> args xs
-      Option os -> case xs of
-        (y:ys) | Just o <- find (\o -> fst o == y) os -> snd o >> args ys
-               | otherwise -> err "Unexpected value"
-        [] -> err "Missing value"
-        where err x = msg (x ++ e) >> return []
-              e = " for option '" ++ show (longName a) ++ "' (-" ++ show (shortName a) ++ "). Allowed values are: " ++ intercalate ", " (map fst os)
-args (x:xs) = (x:) <$> args xs
-args []  = return []

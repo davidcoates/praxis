@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 module Common.Annotate
@@ -10,6 +11,7 @@ module Common.Annotate
   ) where
 
 import           Common.Misc
+import           Common.Pretty
 import           Common.Source
 import           Common.Tag
 
@@ -27,6 +29,6 @@ annotation = tag . second
 
 type Sourced a = Tag Source a
 
-instance Show a => Show (Sourced a) where
-  show (Phantom :< x) = show x
-  show (a :< x)       = show (start a) ++ " " ++ show x
+instance Pretty a => Pretty (Sourced a) where
+  pretty (Phantom :< x) = pretty x
+  pretty (a :< x)       = pretty a <> " " <> pretty x

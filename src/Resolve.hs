@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Resolve
   (
   ) where
@@ -8,8 +10,8 @@ import           Parse
 
 data ResolverError = UnknownName String Source
 
-instance Show ResolverError where
-  show (UnknownName s p) = "Unknown name '" ++ s ++ "' at " ++ show p
+instance Pretty ResolverError where
+  pretty (UnknownName s p) = "Unknown name '" <> plain s <> "' at " <> pretty p
 
 
 -- resolve :: Praxis Exp -> Either ResolverError (Praxis Exp)

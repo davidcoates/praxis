@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Check.Error
   ( Error(..)
   ) where
@@ -6,5 +8,5 @@ import           Common
 
 data Error = NotInScope Name Source
 
-instance Show Error where
-  show (NotInScope n s) = "variable '" ++ n ++ "' not in scope at " ++ show s
+instance Pretty Error where
+  pretty (NotInScope n s) = "variable '" <> plain n <> "' not in scope at " <> pretty s

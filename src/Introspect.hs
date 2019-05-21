@@ -38,8 +38,8 @@ class Recursive a where
 
 class Complete s where
   complete :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> f (Annotated s a)) -> I a -> Annotation s a -> f (Annotation s a)
-  label :: Recursive a => Annotated s a -> String
-  label _ = ""
+  label :: Recursive a => Annotated s a -> Colored String
+  label _ = Nil
 
 data I a where
   IDataAlt :: I DataAlt

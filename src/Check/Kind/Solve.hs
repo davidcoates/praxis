@@ -14,20 +14,19 @@ import           Check.Kind.Error
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
-import           Env.TEnv               (ungeneralise)
+import           Env.TEnv            (ungeneralise)
 import           Introspect
 import           Kind
 import           Praxis
 import           Record
 import           Stage
 
-import           Control.Applicative    (Const (..), liftA2)
-import           Control.Monad.Identity (Identity (..))
-import           Data.List              (nub, sort)
-import           Data.Maybe             (fromMaybe)
-import           Data.Set               (Set, union)
-import qualified Data.Set               as Set
-import           Prelude                hiding (log)
+import           Control.Applicative (liftA2)
+import           Data.List           (nub, sort)
+import           Data.Maybe          (fromMaybe)
+import           Data.Set            (Set, union)
+import qualified Data.Set            as Set
+import           Prelude             hiding (log)
 
 solve :: Praxis [(Name, Kind KindCheck)]
 solve = save stage $ save our $ do

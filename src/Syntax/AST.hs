@@ -192,7 +192,7 @@ ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
         _TyCon <$> conid <|>
         _TyRecord <$> record '(' (annotated ty) ')' <|>
         _TyPack <$> record '[' (annotated ty) ']' <|>
-        _TyUni <$> unparseable varid <|>
+        _TyUni <$> unparseable varid <|> -- TODO maybe not varid
         special '(' *> ty <* special ')' <|>
         mark "type(0)"
 

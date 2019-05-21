@@ -18,11 +18,10 @@ tokenise :: Bool -> String -> Praxis [Sourced Token]
 tokenise topLevel s = save stage $ do
   stage .= Tokenise
   ts <- run token s
-  logStr Debug (showTokens ts)
+  output $ separate " " (map (view value) ts)
   let ts' = layout topLevel ts
-  logStr Debug (showTokens ts')
+  output $ separate " " (map (view value) ts')
   return ts'
-    where showTokens = unwords . map (show . view value)
 
 -- Helper functions
 until :: Tokeniser a -> Tokeniser b -> Tokeniser [b]

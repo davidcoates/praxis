@@ -1,5 +1,6 @@
-{-# LANGUAGE RankNTypes      #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Praxis
   ( Praxis
@@ -131,10 +132,9 @@ display :: Pretty a => a -> Praxis ()
 display x = try p >> return () where
   p = do
     s <- use stage
-    liftIO $ putStrLn ("Output from stage: " ++ show s)
     t <- liftIO $ getTerm
-    liftIO $ printColoredS t (pretty x)
-    liftIO $ putChar '\n'
+    liftIO $ printColoredS t $ "> " <> plain (show s) <> "\n"
+    liftIO $ printColoredS t $ pretty x <> "\n"
 
 save :: Lens' PraxisState a -> Praxis b -> Praxis b
 save l c = do

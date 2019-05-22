@@ -27,6 +27,6 @@ instance Show Stage where
 
 instance Show Check where
   show s = case s of
-    Warmup   -> "(Warmup)"
+    Warmup   -> ""
     Generate -> "(Constraint Generator)"
     Solve    -> "(Constraint Solver)"

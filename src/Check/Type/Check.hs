@@ -19,5 +19,7 @@ check a = save stage $ do
   our .= initialSystem
   a' <- generate a
   ts <- solve
-  return $ sub (\t -> case t of { TyUni n -> lookup n ts; _ -> Nothing }) a'
+  let r = sub (\t -> case t of { TyUni n -> lookup n ts; _ -> Nothing }) a'
+  output $ r
+  return r
   -- TODO FIXME add defaulting (need to wait until after kinds?)

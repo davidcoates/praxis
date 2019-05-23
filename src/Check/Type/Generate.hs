@@ -38,7 +38,7 @@ generate x = save stage $ do
   x' <- introspect gen x
   output x'
   cs <- use (our . constraints)
-  output $ separate "\n" (nub . sort $ cs)
+  output $ separate "\n\n" (nub . sort $ cs)
   return x'
 
 gen :: Recursive a => Parsed a -> Intro Praxis TypeCheck a

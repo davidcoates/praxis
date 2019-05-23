@@ -47,7 +47,7 @@ solve' = spin progress `chain` stuck
             Done -> return Done
           stuck = do
             cs <- (nub . sort) <$> use (our . constraints)
-            output $ separate "\n" cs
+            output $ separate "\n\n" cs
             throw Stuck
 
 spin :: (Typed Constraint -> Praxis Bool) -> Praxis State

@@ -5,6 +5,7 @@ module Stage
 
 data Stage = Unknown
            | Tokenise
+           | Layout
            | Parse
            | Desugar
            | TypeCheck Check
@@ -19,8 +20,9 @@ instance Show Stage where
   show s = case s of
     Unknown     -> "Unknown"
     Tokenise    -> "Tokenise"
+    Layout      -> "Tokenise (Layout)"
     Parse       -> "Parse"
-    Desugar     -> "Desugar"
+    Desugar     -> "Parse (Desugar)"
     TypeCheck c -> "Type Check " ++ show c
     KindCheck c -> "Kind Check " ++ show c
     Evaluate    -> "Evaluate"

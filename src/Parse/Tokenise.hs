@@ -19,6 +19,7 @@ tokenise topLevel s = save stage $ do
   stage .= Tokenise
   ts <- run token s
   output $ separate " " (map (view value) ts)
+  stage .= Layout
   let ts' = layout topLevel ts
   output $ separate " " (map (view value) ts')
   return ts'

@@ -76,6 +76,9 @@ varid = match f (\s -> QVarId (QString [] s)) where
     QVarId n -> if null (qualification n) then Just (name n) else Nothing
     _        -> Nothing
 
+uni :: Syntax f => f String
+uni = match (const Nothing) (\s -> Uni s) where
+
 conid :: Syntax f => f String
 conid = match f (\s -> QConId (QString [] s)) where
   f t = case t of
@@ -192,7 +195,7 @@ ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
         _TyCon <$> conid <|>
         _TyRecord <$> record '(' (annotated ty) ')' <|>
         _TyPack <$> record '[' (annotated ty) ']' <|>
-        _TyUni <$> unparseable varid <|> -- TODO maybe not varid
+        _TyUni <$> uni <|>
         special '(' *> ty <* special ')' <|>
         mark "type(0)"
 

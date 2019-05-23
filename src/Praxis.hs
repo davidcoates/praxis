@@ -133,8 +133,8 @@ display x = try p >> return () where
   p = do
     s <- use stage
     t <- liftIO $ getTerm
-    liftIO $ printColoredS t $ "> " <> plain (show s) <> "\n"
-    liftIO $ printColoredS t $ pretty x <> "\n"
+    liftIO $ printColoredS t $ "> " <> plain (show s) <> "\n\n"
+    liftIO $ printColoredS t $ pretty x <> "\n\n"
 
 save :: Lens' PraxisState a -> Praxis b -> Praxis b
 save l c = do

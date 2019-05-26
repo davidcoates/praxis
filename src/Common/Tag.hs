@@ -1,10 +1,14 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Common.Tag
   ( Tag(..)
   , tag
   , value
   ) where
+
+import           Common.Pretty
 
 import           Control.Applicative
 import           Data.Bifunctor
@@ -48,3 +52,7 @@ tag f (a :< x) = (:< x) <$> f a
 
 value :: Functor f => (b -> f c) -> Tag a b -> f (Tag a c)
 value f (a :< x) = (a :<) <$> f x
+
+-- TODO this is a hack
+instance Pretty (Tag a b) => Show (Tag a b) where
+  show x = showColoredS TermDumb (pretty x) ""

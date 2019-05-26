@@ -20,8 +20,10 @@ data Decl a = DeclData Name (Maybe (Annotated a TyPat)) [Annotated a DataAlt]
             | DeclFun Name [Annotated a Pat] (Annotated a Exp) -- ^Parsing only
             | DeclSig Name (Annotated a Type) -- ^Parsing only
             | DeclVar Name (Maybe (Annotated a Type)) (Annotated a Exp)
+  deriving (Eq)
 
 data DataAlt a = DataAlt Name (Annotated a Type)
+  deriving (Eq)
 
 data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
            | Case (Annotated a Exp) [(Annotated a Pat, Annotated a Exp)]
@@ -36,6 +38,7 @@ data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
            | Sig (Annotated a Exp) (Annotated a Type)
            | Var Name
            | VarBang Name -- ^Parsing only
+  deriving (Eq)
 
 -- |Parsing only
 type Op = QString
@@ -43,6 +46,7 @@ type Op = QString
 -- |Parsing only
 data Tok a = TExp (Annotated a Exp)
            | TOp Op
+  deriving (Eq)
 
 -- |AST for Literals
 data Lit = Bool Bool
@@ -56,8 +60,10 @@ data Pat a = PatAt Name (Annotated a Pat)
            | PatLit Lit
            | PatRecord (Record (Annotated a Pat))
            | PatVar Name
+  deriving (Eq)
 
 data Program a = Program [Annotated a Decl]
+  deriving (Eq)
 
 data QString = QString { qualification :: [String], name :: String }
   deriving (Ord, Eq)
@@ -67,6 +73,7 @@ instance Show QString where
 
 data Stmt a = StmtDecl (Annotated a Decl)
             | StmtExp (Annotated a Exp)
+  deriving (Eq)
 
 instance Show Lit where
   show (Bool b)   = show b

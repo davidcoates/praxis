@@ -29,6 +29,7 @@ dependencies:
 - earley-mixfix-extra >= 0.1
 - template-haskell >= 2.2
 - colorful-monoids >= 0.2 && < 0.3
+- hspec >= 2.0
 
 library:
   source-dirs: src
@@ -54,3 +55,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - praxis
+    - hspec

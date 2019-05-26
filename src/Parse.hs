@@ -19,7 +19,7 @@ import           Praxis
 import           Type           (Type)
 
 class Parseable a where
-  parse  :: String -> Praxis (Parsed a)
+  parse :: String -> Praxis (Parsed a)
 
 instance Parseable Program where
   parse s = do

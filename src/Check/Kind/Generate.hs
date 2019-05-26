@@ -32,13 +32,13 @@ generate x = save stage $ do
 
 gen :: Recursive a => Typed a -> Visit Praxis (Annotation KindCheck a) (Kinded a)
 gen x = case typeof x of
-  IDataAlt -> Visit (pure ())
-  IDecl    -> Visit (pure ())
+  IDataAlt -> skip
+  IDecl    -> skip
   IExp     -> Visit (visit gen (view annotation x))
   IPat     -> Visit (visit gen (view annotation x))
-  IProgram -> Visit (pure ())
-  IQType   -> Visit (pure ())
-  IStmt    -> Visit (pure ())
+  IProgram -> skip
+  IQType   -> skip
+  IStmt    -> skip
   IType    -> Resolve (ty x)
   -- TODO TyPat?
 

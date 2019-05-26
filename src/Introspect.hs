@@ -7,6 +7,7 @@
 
 module Introspect
   ( Visit(..)
+  , skip
   , I(..)
   , Recursive(..)
   , Complete(..)
@@ -29,6 +30,9 @@ import           Type
 
 data Visit f a b = Visit (f a)
                  | Resolve (f b)
+
+skip :: Applicative f => Visit f () a
+skip = Visit (pure ())
 
 class Recursive a where
   witness :: I a

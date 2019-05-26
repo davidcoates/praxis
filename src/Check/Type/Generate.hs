@@ -43,12 +43,12 @@ generate x = save stage $ do
 
 gen :: Recursive a => Parsed a -> Visit Praxis (Annotation TypeCheck a) (Typed a)
 gen x = case typeof x of
-  IDataAlt -> Visit (pure ())
+  IDataAlt -> skip
   IDecl    -> Resolve (decl x)
   IExp     -> Resolve (exp x)
-  IProgram -> Visit (pure ())
-  IQType   -> Visit (pure ())
-  IType    -> Visit (pure ())
+  IProgram -> skip
+  IQType   -> skip
+  IType    -> skip
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc

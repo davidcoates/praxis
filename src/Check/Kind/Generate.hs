@@ -27,19 +27,19 @@ kind = view annotation
 generate :: Recursive a => Typed a -> Praxis (Kinded a)
 generate x = save stage $ do
   stage .= KindCheck Generate
-  x' <- introspect gen x
+  x' <- visit gen x
   return x'
 
-gen :: Recursive a => Typed a -> Intro Praxis KindCheck a
+gen :: Recursive a => Typed a -> Visit Praxis (Annotation KindCheck a) (Kinded a)
 gen x = case typeof x of
-  IDataAlt -> Notice (pure ())
-  IDecl    -> Notice (pure ())
-  IExp     -> Notice (introspect gen (view annotation x))
-  IPat     -> Notice (introspect gen (view annotation x))
-  IProgram -> Notice (pure ())
-  IQType   -> Notice (pure ())
-  IStmt    -> Notice (pure ())
-  IType    -> Realise (ty x)
+  IDataAlt -> Visit (pure ())
+  IDecl    -> Visit (pure ())
+  IExp     -> Visit (visit gen (view annotation x))
+  IPat     -> Visit (visit gen (view annotation x))
+  IProgram -> Visit (pure ())
+  IQType   -> Visit (pure ())
+  IStmt    -> Visit (pure ())
+  IType    -> Resolve (ty x)
   -- TODO TyPat?
 
 split :: ((Source, a TypeCheck) -> Praxis (Annotation KindCheck a, a KindCheck)) -> Typed a -> Praxis (Kinded a)

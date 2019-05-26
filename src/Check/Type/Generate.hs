@@ -35,20 +35,20 @@ ty = view annotation
 generate :: Recursive a => Parsed a -> Praxis (Typed a)
 generate x = save stage $ do
   stage .= TypeCheck Generate
-  x' <- introspect gen x
+  x' <- visit gen x
   output x'
   cs <- use (our . constraints)
   output $ separate "\n\n" (nub . sort $ cs)
   return x'
 
-gen :: Recursive a => Parsed a -> Intro Praxis TypeCheck a
+gen :: Recursive a => Parsed a -> Visit Praxis (Annotation TypeCheck a) (Typed a)
 gen x = case typeof x of
-  IDataAlt -> Notice (pure ())
-  IDecl    -> Realise (decl x)
-  IExp     -> Realise (exp x)
-  IProgram -> Notice (pure ())
-  IQType   -> Notice (pure ())
-  IType    -> Notice (pure ())
+  IDataAlt -> Visit (pure ())
+  IDecl    -> Resolve (decl x)
+  IExp     -> Resolve (exp x)
+  IProgram -> Visit (pure ())
+  IQType   -> Visit (pure ())
+  IType    -> Visit (pure ())
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -77,13 +77,12 @@ splitFree f x = do
   (a', x', b) <- f (view source x, view value x)
   return ((view source x, a') :< x', b)
 
--- TODO use retag
 cast :: Recursive a => Parsed a -> Typed a
-cast = runIdentity . introspect f where
-  f :: Recursive a => Parsed a -> Intro Identity TypeCheck a
-  f x = case typeof x of
-    IType  -> Notice (Identity (view annotation x))
-    IQType -> Notice (Identity (view annotation x))
+cast = retag f where
+  f :: Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
+  f i a = case i of
+    IType  -> a
+    IQType -> a
 
 -- TODO call this something else, move it somewhere common, perhaps Type
 empty :: Typed Type

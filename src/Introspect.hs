@@ -6,15 +6,13 @@
 {-# LANGUAGE StandaloneDeriving        #-}
 
 module Introspect
-  ( Analysis(..)
-  , Intro
-  , Omni
+  ( Visit(..)
   , I(..)
   , Recursive(..)
   , Complete(..)
   , typeof
+  , visit
   , introspect
-  , omnispect
   , sub
   , extract
   , only
@@ -29,8 +27,8 @@ import           Common
 import           Kind
 import           Type
 
-data Analysis f a b = Realise (f a)
-                    | Notice (f b)
+data Visit f a b = Visit (f a)
+                 | Resolve (f b)
 
 class Recursive a where
   witness :: I a
@@ -76,19 +74,15 @@ switch a b eq neq = case (a, b) of
   (IKindConstraint, IKindConstraint) -> eq
   _                                  -> neq
 
-type Intro f s a = Analysis f (Annotated s a) (Annotation s a)
+visit :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> Visit f (Annotation t a) (Annotated t a)) -> Annotated s a -> f (Annotated t a)
+visit f x = case f x of
+  Visit c   -> (\a' x' -> (view source x, a') :< x') <$> c <*> recurse (visit f) (view value x)
+  Resolve r -> r
 
-introspect :: forall f s t a. (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> Intro f t a) -> Annotated s a -> f (Annotated t a)
-introspect f x = case f x of
-  Realise r -> r
-  Notice c  -> (\a' x' -> (view source x, a') :< x') <$> c <*> recurse (introspect f) (view value x)
-
-type Omni f s a = Analysis f (a s) ()
-
-omnispect :: forall f s a. (Recursive a, Applicative f, Complete s) => (forall a. Recursive a => Annotated s a -> Omni f s a) -> Annotated s a -> f (Annotated s a)
-omnispect f x = set annotation <$> complete (omnispect f) (typeof x) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
-  Realise r -> r
-  Notice c  -> c *> recurse (omnispect f) (view value x)
+introspect :: (Recursive a, Applicative f, Complete s) => (forall a. Recursive a => Annotated s a -> Visit f () (a s)) -> Annotated s a -> f (Annotated s a)
+introspect f x = set annotation <$> complete (introspect f) (typeof x) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
+  Visit c   -> c *> recurse (introspect f) (view value x)
+  Resolve r -> r
   )
 
 transferA :: forall a b f s. (Recursive a, Recursive b, Applicative f) => (a s -> f (a s)) -> b s -> f (b s)
@@ -98,21 +92,21 @@ transferM :: forall a b f s. (Recursive a, Recursive b) => (a s -> Maybe (a s)) 
 transferM f x = switch (witness :: I a) (witness :: I b) (f x) Nothing
 
 sub :: forall a b s. (Recursive a, Recursive b, Complete s) => (a s -> Maybe (a s)) -> Annotated s b -> Annotated s b
-sub f x = runIdentity $ omnispect f' x where
-  f' :: forall a. Recursive a => Annotated s a -> Omni Identity s a
+sub f x = runIdentity $ introspect f' x where
+  f' :: forall a. Recursive a => Annotated s a -> Visit Identity () (a s)
   f' y = case transferM f (view value y) of
-    Nothing -> Notice (Identity ())
-    Just y' -> Realise (Identity y')
+    Nothing -> Visit (Identity ())
+    Just y' -> Resolve (Identity y')
 
 extract :: forall a b s. (Monoid b, Recursive a, Complete s) => (forall a. Recursive a => Annotated s a -> b) -> Annotated s a -> b
-extract f x = getConst $ omnispect f' x where
-  f' :: forall a. Recursive a => Annotated s a -> Omni (Const b) s a
-  f' y = Notice (Const (f y))
+extract f x = getConst $ introspect f' x where
+  f' :: forall a. Recursive a => Annotated s a -> Visit (Const b) () (a s)
+  f' y = Visit (Const (f y))
 
 only :: forall a b s. (Monoid b, Recursive a) => (a s -> b) -> (forall a. Recursive a => Annotated s a -> b)
 only f x = getConst $ transferA (Const . f) (view value x)
 
--- |Substitue over annotations
+-- | Substitue over annotations
 asub :: forall a b s. (Recursive a, Recursive b, Complete s) => I a -> (Annotation s a -> Maybe (Annotation s a)) -> Annotated s b -> Annotated s b
 asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . asub i f)) x
   where a = view annotation x
@@ -124,11 +118,13 @@ asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . a
         f' = Identity . asub i f
 
 retag :: forall s t b. Recursive b => (forall a. Recursive a => I a -> Annotation s a -> Annotation t a) -> Annotated s b -> Annotated t b
-retag f = runIdentity . introspect f'
-  where f' :: forall a. Recursive a => Annotated s a -> Intro Identity t a
-        f' x = Notice (Identity (f (typeof x) (view annotation x)))
+retag f = runIdentity . visit f'
+  where f' :: forall a. Recursive a => Annotated s a -> Visit Identity (Annotation t a) (Annotated t a)
+        f' x = Visit (Identity (f (typeof x) (view annotation x)))
 
 -- Implementations below here
+
+-- TODO use template haskell to generate recurse
 
 instance Recursive DataAlt where
   witness = IDataAlt

@@ -24,7 +24,7 @@ forever p = try p >> forever p
 main :: IO ()
 main = hSetBuffering stdin LineBuffering >> do
   args <- getArgs
-  void $ run (parse args) initialState
+  void $ runPraxis (parse args) initialState
 
 parse :: [String] -> Praxis ()
 parse xs = do

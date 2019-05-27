@@ -1,12 +1,13 @@
 module Parse.Tokenise
-  ( tokenise
+  ( run
   ) where
 
 import           AST                      (Lit (..), QString (..))
 import           Common                   hiding (asum)
 import           Parse.Tokenise.Layout
-import           Parse.Tokenise.Tokeniser
-import           Praxis                   hiding (run, throw)
+import           Parse.Tokenise.Tokeniser hiding (run)
+import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
+import           Praxis                   hiding (throw)
 import           Token
 
 import           Control.Applicative      (Alternative (..), Applicative (..))
@@ -14,13 +15,13 @@ import           Data.Foldable            (asum)
 import           Data.List                (intercalate)
 import           Prelude                  hiding (until)
 
-tokenise :: Bool -> String -> Praxis [Sourced Token]
-tokenise topLevel s = save stage $ do
+run :: Bool -> String -> Praxis [Sourced Token]
+run top s = save stage $ do
   stage .= Tokenise
-  ts <- run token s
+  ts <- Tokeniser.run token s
   output $ separate " " (map (view value) ts)
   stage .= Layout
-  let ts' = layout topLevel ts
+  let ts' = layout top ts
   output $ separate " " (map (view value) ts')
   return ts'
 

@@ -14,8 +14,8 @@ module Praxis
   , save
   , try
 
-  , run
-  , runStatic -- TODO Think of a better name for this
+  , runPraxis
+  , runInternal
 
   -- |Lift an IO computation to the Praxis monad
   , liftIO
@@ -146,13 +146,13 @@ save l c = do
 try :: Praxis a -> Praxis (Maybe a)
 try p = do
   s <- lift State.get
-  (x, t) <- liftIO $ run p s
+  (x, t) <- liftIO $ runPraxis p s
   case x of
     Nothing -> lift (State.put s) >> return Nothing
     Just y  -> lift (State.put t) >> return (Just y)
 
-runStatic :: PraxisState -> Praxis a -> a
-runStatic s c = case fst $ unsafePerformIO (run c' s) of
+runInternal :: PraxisState -> Praxis a -> a
+runInternal s c = case fst $ unsafePerformIO (runPraxis c' s) of
   Nothing -> panic "static computation failed"
   Just x  -> x
   where c' = (flags . static .= True) >> c
@@ -168,8 +168,8 @@ liftIO io = do
   -- If the static flag is set, we must not perform IO
   if s then empty else lift (lift io)
 
-run :: Praxis a -> PraxisState -> IO (Maybe a, PraxisState)
-run = runStateT . runMaybeT
+runPraxis :: Praxis a -> PraxisState -> IO (Maybe a, PraxisState)
+runPraxis = runStateT . runMaybeT
 
 output :: Pretty a => a -> Praxis ()
 output x = do

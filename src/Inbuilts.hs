@@ -33,7 +33,7 @@ initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEn
 
 -- TODO this actually introduces source information, but we ideally want it to be Phantom
 mono :: String -> Typed QType
-mono s = let (a :< t) = runStatic initialState m in (view source (a :< t), ()) :< Mono (a :< t)
+mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), ()) :< Mono (a :< t)
   where m :: Praxis (Typed Type)
         m = retag f <$> (parse s :: Praxis (Parsed Type))
         f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
@@ -48,7 +48,7 @@ poly :: [(Name, Typed Kind)] -> String -> Typed QType
 poly ks s = let (a :< Mono t) = mono s in a :< Forall ks trivial t
 
 kind :: String -> Typed Kind
-kind s = runStatic initialState m
+kind s = runInternal initialState m
   where m :: Praxis (Typed Kind)
         m = retag f <$> (parse s :: Praxis (Parsed Kind))
         f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a

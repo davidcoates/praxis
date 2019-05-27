@@ -1,22 +1,23 @@
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Parse.Desugar
-  ( Desugarable(..)
+  ( run
   ) where
 
 import           Annotate
 import           AST
 import           Common
-import           Introspect             (Recursive)
-import           Kind                   (Kind)
+import           Introspect
+import           Kind
 import           Parse.Desugar.Error
 import           Praxis
 import           Record                 (Record, pair)
 import qualified Record                 (toList)
-import           Type                   (Type)
+import           Type
 
 import           Control.Applicative    (Const, liftA2, liftA3)
 import           Control.Arrow          (left)
@@ -29,27 +30,20 @@ import           Prelude                hiding (exp)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
-class Desugarable a where
-  desugar :: (Parsed a) -> Praxis (Parsed a)
-
-desugar' :: (Recursive a) => ((Parsed a) -> Praxis (Parsed a)) -> (Parsed a) -> Praxis (Parsed a)
-desugar' f x = save stage $ do
+run :: Recursive a => Parsed a -> Praxis (Parsed a)
+run x = save stage $ do
   stage .= Desugar
-  x' <- f x
+  x' <- desugar x
   output x'
   return x'
 
-instance Desugarable Program where
-  desugar = desugar' program
-
-instance Desugarable Exp where
-  desugar = desugar' exp
-
-instance Desugarable Type where
-  desugar = pure
-
-instance Desugarable Kind where
-  desugar = pure
+desugar :: Recursive a => Parsed a -> Praxis (Parsed a)
+desugar x = ($ x) $ case typeof x of
+  IProgram -> program
+  IExp     -> exp
+  IPat     -> pat
+  IType    -> ty
+  IKind    -> pure
 
 program :: Parsed Program -> Praxis (Parsed Program)
 program (a :< Program ds) = do
@@ -84,50 +78,17 @@ exp (a :< x) = case x of
   Apply x (a' :< VarBang s) ->
     exp (a :< Apply x (a' :< Var s))
 
-  Apply x y   -> do
-    x' <- exp x
-    y' <- exp y
-    return (a :< Apply x' y')
-
-  -- exp (a :< Apply (a :< Cases alts) e)
-  Case e alts  -> do
-    e' <- exp e
-    alts' <- sequence $ map alt alts
-    return (a :< Case e' alts')
-      where alt (p, e) = liftA2 (,) (pat p) (exp e)
-
-  Cases alts -> do
-    alts' <- sequence $ map alt alts
-    return (a :< Cases alts')
-      where alt (p, e) = liftA2 (,) (pat p) (exp e)
-
   Do ss       -> do
     ss' <- stmts ss
     return (a :< Do ss')
 
-  If e1 e2 e3 -> do
-    e1' <- exp e1
-    e2' <- exp e2
-    e3' <- exp e3
-    return (a :< If e1' e2' e3')
-
   Mixfix ts   -> mixfix ts
-
-  Lit lit     -> pure (a :< Lit lit)
-
-  Read n e    -> do
-    e' <- exp e
-    return (a :< Read n e')
 
   Record r    -> record (fst a) (\r' -> a :< Record r') exp r
 
-  Sig e t     -> do
-    e' <- exp e
-    return (a :< Sig e' t)
-
-  Var s       -> pure (a :< Var s)
-
   VarBang s   -> throw (BangError s (fst a))
+
+  _           -> (a :<) <$> recurse desugar x
 
 
 decls :: [Parsed Decl] -> Praxis [Parsed Decl]
@@ -157,9 +118,15 @@ pat (a :< x) = case x of
 
   PatRecord r -> record (fst a) (\r' -> a :< PatRecord r') pat r
 
-  PatVar x    -> pure (a :< PatVar x)
+  _           -> (a :<) <$> recurse desugar x
 
-  PatLit l    -> pure (a :< PatLit l)
+
+ty :: Parsed Type -> Praxis (Parsed Type)
+ty (a :< x) = case x of
+
+  TyRecord r -> record (fst a) (\r' -> a :< TyRecord r') ty r
+
+  _          -> (a :<) <$> recurse desugar x
 
 
 type MTok = DAG.Tok (Tag (Source, ()) Op) (Parsed Exp)

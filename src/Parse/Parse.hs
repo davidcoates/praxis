@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Parse.Parse
-  ( parse
+  ( run
   ) where
 
 -- TODO this is a lot of imports for one function...
@@ -9,14 +9,14 @@ module Parse.Parse
 import           Annotate
 import           Common
 import           Introspect
-import           Parse.Parse.Parser
-import           Praxis             hiding (run)
-import qualified Syntax             (parse)
+import qualified Parse.Parse.Parser as Parser (run)
+import           Praxis
+import           Syntax
 import           Token
 
-parse :: forall a. Recursive a => [Sourced Token] -> Praxis (Parsed a)
-parse ts = save stage $ do
+run :: forall a. Recursive a => [Sourced Token] -> Praxis (Parsed a)
+run ts = save stage $ do
   stage .= Parse
-  p <- run Syntax.parse ts
+  p <- Parser.run parse ts
   output p
   return p

@@ -41,11 +41,8 @@ mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), ())
           IType  -> ()
           IQType -> ()
 
-trivial :: Typed Type
-trivial = (Phantom, ()) :< TyFlat Set.empty
-
-poly :: [(Name, Typed Kind)] -> String -> Typed QType
-poly ks s = let (a :< Mono t) = mono s in a :< Forall ks trivial t
+poly :: [Name] -> String -> Typed QType
+poly vs s = let (a :< Mono t) = mono s in a :< Forall vs t
 
 kind :: String -> Typed Kind
 kind s = runInternal initialState m
@@ -65,12 +62,7 @@ prelude =
   , ("getInt",   mono "() -> Int",         F (\(R _) -> liftIO ((L . Int) <$> readLn)))
   , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
   , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
-  , ("dot",      poly
-      [ ("a", kind "Type")
-      , ("b", kind "Type")
-      , ("c", kind "Type")
-      ] "(b -> c, a -> b) -> a -> c", -- TODO shouldn't need kinds here in forall
-        F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
+  , ("dot",      poly [ "a", "b", "c" ] "(b -> c, a -> b) -> a -> c", F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
   ]
   where
         lift :: (Int -> Int -> Int) -> Value

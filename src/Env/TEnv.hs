@@ -108,10 +108,7 @@ OR don't allow this, and don't allow explicit forall.
 -- TODO move this somewhere else
 ungeneralise :: Source -> Typed QType -> Praxis (Typed Type)
 ungeneralise _ (_ :< Mono t) = return t
-ungeneralise _ (_ :< Forall vs cs t) = do
+ungeneralise _ (_ :< Forall vs t) = do
   -- TODO need to stores kinds somewhere?
-  l <- zipWith (\(n, _) (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshUniT
-  let t'   = sub (\t -> case t of { TyVar n -> n `Prelude.lookup` l; _ -> Nothing }) t
-      cs' = [] -- FIXME TODO derivations derived from cs
-  system . typeSystem . axioms %= (++ cs')
-  return t'
+  l <- zipWith (\n (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshUniT
+  return $ sub (\t -> case t of { TyVar n -> n `Prelude.lookup` l; _ -> Nothing }) t

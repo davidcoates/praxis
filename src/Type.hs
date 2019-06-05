@@ -12,7 +12,7 @@ import           Record
 import           Data.Set (Set)
 
 data QType a = Mono (Annotated a Type)
-             | Forall [(Name, Annotated a Kind)] (Annotated a Type) (Annotated a Type) -- ^First type is constraint
+             | Forall [Name] (Annotated a Type)
   deriving (Eq, Ord)
 
 data TyPat a = TyPatVar Name

@@ -192,8 +192,8 @@ instance Recursive Stmt where
 instance Recursive QType where
   witness = IQType
   recurse f x = case x of
-    Mono t        -> Mono <$> f t
-    Forall ks a b -> Forall <$> traverse (second f) ks <*> f a <*> f b
+    Mono t      -> Mono <$> f t
+    Forall vs t -> Forall <$> pure vs <*> f t
 
 instance Recursive Tok where
   witness = ITok

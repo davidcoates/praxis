@@ -100,8 +100,6 @@ progress d = case view value d of
   Eq (_ :< TyRecord r1) (_ :< TyRecord r2) | sort (keys r1) == sort (keys r2) ->
     let values = map snd . Record.toCanonicalList in introduce (zipWith Eq (values r1) (values r2)) -- TODO create zipRecord or some such
 
-  Eq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ Eq t1 t2 ]
-
   Eq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> introduce [ Eq t1 s1, Eq t2 s2 ]
 
   Eq t1@(_ :< TyFlat e1) t2@(_ :< TyFlat e2)

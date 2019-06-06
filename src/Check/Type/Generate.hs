@@ -100,11 +100,13 @@ decl = split $ \(s, d) -> case d of
   -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n sig e -> do
-    dt <- case sig of Nothing -> freshUniT
-                      Just t  -> pure (cast t)
-    intro n (view tag dt :< Mono dt)
+    t <- case sig of Nothing -> (\t -> (Phantom, ()) :< Mono t) <$> freshUniT
+                     Just t  -> pure (cast t)
+    intro n t
     e' <- exp e
-    equal dt (ty e') (UserSignature (Just n)) s
+    -- TODO this won't work if we allow nested polymorphic definitions
+    let t' = case view value t of { Mono t -> t; Forall _ t -> t }
+    equal t' (ty e') (UserSignature (Just n)) s
     return ((), DeclVar n Nothing e')
 
 stmt :: Parsed Stmt -> Praxis (Typed Stmt)

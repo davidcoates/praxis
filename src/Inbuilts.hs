@@ -41,6 +41,7 @@ mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), ())
           IType  -> ()
           IQType -> ()
 
+-- TODO parse qty
 poly :: [Name] -> String -> Typed QType
 poly vs s = let (a :< Mono t) = mono s in a :< Forall vs t
 

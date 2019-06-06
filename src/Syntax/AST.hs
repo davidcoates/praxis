@@ -46,6 +46,9 @@ token t = match (\t' -> if t' == t then Just () else Nothing) (const t)
 special :: Syntax f => Char -> f ()
 special c = token (Special c) <|> mark ("special '" ++ [c] ++ "'")
 
+dot :: Syntax f => f ()
+dot = token (QVarSym (QString [] ".")) <|> mark "contextually-reserved '.'"
+
 lbrace :: Syntax f => f ()
 lbrace = special '{'
 
@@ -111,6 +114,7 @@ definePrisms ''Program
 definePrisms ''Exp
 definePrisms ''Pat
 definePrisms ''Type
+definePrisms ''QType
 definePrisms ''Kind
 definePrisms ''Tok
 definePrisms ''Stmt
@@ -145,9 +149,9 @@ program = _Program <$> block (annotated top) where -- TODO module
 
 fun :: (Syntax f, Domain f s) => f (Decl s)
 fun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
-  sig = reservedOp ":" *> annotated ty -- TODO qty
+  sig = reservedOp ":" *> annotated qty
   def = annotated pat `until` reservedOp "=" <*> annotated exp
-  var = _DeclVar <$> varid <*> (maybe <$> reservedOp ":" *> annotated ty) <*> reservedOp "=" *> annotated exp
+  var = _DeclVar <$> varid <*> (maybe <$> reservedOp ":" *> annotated qty) <*> reservedOp "=" *> annotated exp
 
 decl :: (Syntax f, Domain f s) => f (Decl s)
 decl = fun
@@ -187,6 +191,10 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
           _KindRecord <$> record '[' (annotated kind) ']' <|>
           special '(' *> kind <* special ')' <|>
           mark "kind(0)"
+
+qty :: (Syntax f, Domain f s) => f (QType s)
+qty = _Forall <$> reservedId "forall" *> varid `until` dot <*> annotated ty <|>
+      _Mono <$> annotated ty
 
 ty :: (Syntax f, Domain f s) => f (Type s)
 ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where

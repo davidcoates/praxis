@@ -100,7 +100,7 @@ decl = split $ \(s, d) -> case d of
   -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n sig e -> do
-    t <- case sig of Nothing -> (\t -> (Phantom, ()) :< Mono t) <$> freshUniT
+    t <- case sig of Nothing -> (\t -> (view source t, ()) :< Mono t) <$> freshUniT
                      Just t  -> pure (cast t)
     intro n t
     e' <- exp e

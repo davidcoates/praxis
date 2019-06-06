@@ -30,6 +30,7 @@ dependencies:
 - template-haskell >= 2.2
 - colorful-monoids >= 0.2 && < 0.3
 - hspec >= 2.0
+- terminal-size
 
 library:
   source-dirs: src

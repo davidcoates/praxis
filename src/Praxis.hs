@@ -38,30 +38,33 @@ module Praxis
   , freshVar
   , reuse
 
+  , clear
   , output
   )
   where
 
 import           Annotate
-import           AST                       (Lit)
-import qualified Check.System              as Check (System)
+import           AST                          (Lit)
+import qualified Check.System                 as Check (System)
 import           Common
-import           Env                       (KEnv, TEnv, VEnv)
+import           Env                          (KEnv, TEnv, VEnv)
 import           Kind
-import           Record                    (Record)
+import           Record                       (Record)
 import           Stage
 import           Type
 
-import           Control.Applicative       (empty, liftA2)
-import           Control.Lens              (Lens', makeLenses, traverseOf)
-import           Control.Monad             (when)
-import           Control.Monad.Trans.Class (lift)
-import           Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
-import           Control.Monad.Trans.State (StateT, gets, runStateT)
-import qualified Control.Monad.Trans.State as State (get, modify, put)
-import           Data.Maybe                (fromMaybe)
-import qualified Data.Set                  as Set
-import           System.IO.Unsafe          (unsafePerformIO)
+import           Control.Applicative          (empty, liftA2)
+import           Control.Concurrent
+import           Control.Lens                 (Lens', makeLenses, traverseOf)
+import           Control.Monad                (when)
+import           Control.Monad.Trans.Class    (lift)
+import           Control.Monad.Trans.Maybe    (MaybeT, runMaybeT)
+import           Control.Monad.Trans.State    (StateT, gets, runStateT)
+import qualified Control.Monad.Trans.State    as State (get, modify, put)
+import           Data.Maybe                   (fromMaybe)
+import qualified Data.Set                     as Set
+import qualified System.Console.Terminal.Size as Terminal
+import           System.IO.Unsafe             (unsafePerformIO)
 
 data Flags = Flags
   { _debug       :: Bool
@@ -133,8 +136,8 @@ display x = try p >> return () where
   p = do
     s <- use stage
     t <- liftIO $ getTerm
-    liftIO $ printColoredS t $ "> " <> plain (show s) <> "\n\n"
-    liftIO $ printColoredS t $ pretty x <> "\n\n"
+    liftIO $ printColoredS t $ "\n{- " <> Style Italic (plain (show s)) <> " -}\n\n"
+    liftIO $ printColoredS t $ pretty x <> "\n"
 
 save :: Lens' PraxisState a -> Praxis b -> Praxis b
 save l c = do
@@ -170,6 +173,16 @@ liftIO io = do
 
 runPraxis :: Praxis a -> PraxisState -> IO (Maybe a, PraxisState)
 runPraxis = runStateT . runMaybeT
+
+clear :: Praxis ()
+clear = do
+  d <- use (flags . debug)
+  when d $ liftIO $ do
+    putStrLn ""
+    w <- Terminal.size -- FIXME
+    case w of
+      Just (Terminal.Window _ w) -> putStrLn $ replicate w '='
+      Nothing                    -> pure ()
 
 output :: Pretty a => a -> Praxis ()
 output x = do

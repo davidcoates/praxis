@@ -23,7 +23,7 @@ class Evaluable a b | a -> b where
   eval  :: Kinded a -> Praxis b
   eval e = save stage $ do
     stage .= Evaluate
-    output $ Style Italic $ plain "Evaluating..."
+    clear
     eval' e
 
 instance Evaluable Program () where

@@ -6,7 +6,7 @@ module Check.Error
 
 import           Common
 
-data Error = NotInScope Name Source
+data Error = NotInScope Name
 
 instance Pretty Error where
-  pretty (NotInScope n s) = "variable '" <> plain n <> "' not in scope at " <> pretty s
+  pretty (NotInScope n) = "variable " <> quote (plain n) <> " is not in scope"

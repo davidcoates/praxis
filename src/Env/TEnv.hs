@@ -71,7 +71,7 @@ read s n = do
       requires [ newConstraint (share t) (UnsafeView n) s | not u ]
       requires [ newConstraint (share t) (Captured n) s   | c ]
       return t
-    Nothing     -> throw (NotInScope n s)
+    Nothing     -> throwAt s (NotInScope n)
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
 mark :: Source -> Name -> Praxis (Typed Type)
@@ -84,7 +84,7 @@ mark s n = do
       requires [ newConstraint (share t) (Shared n)   s | u ]
       requires [ newConstraint (share t) (Captured n) s | c ]
       return t
-    Nothing     -> throw (NotInScope n s)
+    Nothing     -> throwAt s (NotInScope n)
 
 lookup :: Name -> Praxis (Maybe (Typed QType))
 lookup n = do

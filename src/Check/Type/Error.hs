@@ -14,6 +14,6 @@ data Error = Contradiction (Typed Constraint)
 
 instance Pretty Error where
   pretty e = case e of
-    Contradiction c -> "Contradiction: " <> pretty c
-    Stuck           -> "Infinite loop detected :("
-    Underdefined c  -> "Failed to completely deduce the unification variable(s) present in: " <> pretty c
+    Contradiction c -> "found contradiction " <> pretty c
+    Stuck           -> "infinite loop detected :("
+    Underdefined c  -> "failed to completely deduce the unification variable(s) present in " <> pretty c

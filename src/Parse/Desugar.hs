@@ -3,6 +3,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE OverloadedStrings      #-}
 
 module Parse.Desugar
   ( run
@@ -13,7 +14,6 @@ import           AST
 import           Common
 import           Introspect
 import           Kind
-import           Parse.Desugar.Error
 import           Praxis
 import           Record                 (Record, pair)
 import qualified Record                 (toList)
@@ -69,7 +69,7 @@ record s build f r = do
   r' <- traverse f r
   case Record.toList r' of
     [(Nothing, x)] -> return $ x
-    [(Just _, _)]  -> throw $ RecordError s
+    [(Just _, _)]  -> throwAt s $ plain "illegal single-field record"
     _              -> return $ build r'
 
 exp :: Parsed Exp -> Praxis (Parsed Exp)
@@ -86,7 +86,7 @@ exp (a :< x) = case x of
 
   Record r    -> record (fst a) (\r' -> a :< Record r') exp r
 
-  VarBang s   -> throw (BangError s (fst a))
+  VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (plain s) <> " is not the argument of a function"
 
   _           -> (a :<) <$> recurse desugar x
 
@@ -98,7 +98,7 @@ decls (a :< d : ds) = case d of
   DeclSig n t -> do
     ds <- decls ds
     case ds of (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
-               _                                         -> throw (LacksBinding n (fst a))
+               _                                         -> throwAt (fst a) $ "declaration of " <> quote (plain n) <> " lacks an accompanying binding"
 
   DeclFun n ps e -> do
     ps <- mapM pat ps

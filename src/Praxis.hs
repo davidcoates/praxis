@@ -9,6 +9,7 @@ module Praxis
   , emptyState
 
   , throw
+  , throwAt
   , panic -- Prefer this over Prelude.error
 
   , save
@@ -129,7 +130,10 @@ makeLenses ''Fresh
 makeLenses ''PraxisState
 
 throw :: Pretty a => a -> Praxis b
-throw x = display x >> empty
+throw x = display (Style Bold (Fg DullRed "error: ") <> pretty x) >> empty
+
+throwAt :: Pretty a => Source -> a -> Praxis b
+throwAt s x = display (Style Bold (pretty s) <> " " <> Style Bold (Fg DullRed "error: ") <> pretty x) >> empty
 
 display :: Pretty a => a -> Praxis ()
 display x = try p >> return () where

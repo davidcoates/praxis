@@ -13,5 +13,5 @@ data Error = Contradiction (Kinded Constraint)
 
 instance Pretty Error where
   pretty e = case e of
-    Contradiction c -> "Contradiction: " <> pretty c
-    Stuck           -> "Infinite loop detected :("
+    Contradiction c -> "found contradiction " <> pretty c
+    Stuck           -> "infinite loop detected :("

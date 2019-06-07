@@ -71,7 +71,7 @@ ty = split $ \(s, t) -> case t of
 
     TyCon n -> do
       e <- KEnv.lookup n
-      case e of Nothing -> throw (NotInScope n s)
+      case e of Nothing -> throwAt s (NotInScope n)
                 Just k  -> return (k, TyCon n)
 
     TyPack r -> do -- This one is easy

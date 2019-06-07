@@ -4,6 +4,7 @@
 module Common.Pretty
   ( Pretty(..)
   , plain
+  , quote
   , separate
   , module Data.Monoid.Colorful
   ) where
@@ -21,6 +22,9 @@ instance Pretty (Colored String) where
 
 instance Pretty Char where -- TODO remove this
   pretty = plain . show
+
+quote :: Colored String -> Colored String
+quote x = Style Bold ("'" <> x <> "'")
 
 separate :: Pretty a => String -> [a] -> Colored String
 separate _ []     = Nil

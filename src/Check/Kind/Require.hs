@@ -11,6 +11,7 @@ import           Check.Kind.Reason
 import           Check.Kind.System
 import           Check.System      hiding (System)
 import           Common
+import           Introspect
 import           Kind
 import           Praxis
 

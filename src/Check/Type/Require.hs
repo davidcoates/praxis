@@ -12,6 +12,7 @@ import           Check.System      hiding (System)
 import           Check.Type.Reason
 import           Check.Type.System
 import           Common
+import           Introspect
 import           Praxis
 import           Type
 

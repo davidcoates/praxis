@@ -6,7 +6,9 @@
 {-# LANGUAGE StandaloneDeriving        #-}
 
 module Introspect
-  ( Visit(..)
+  ( source -- TODO should this be here
+  , annotation -- TODO should this be here
+  , Visit(..)
   , skip
   , I(..)
   , Recursive(..)
@@ -21,12 +23,21 @@ module Introspect
   , retag
   ) where
 
-import qualified Data.Set as Set (fromList, toList)
-
+import {-# SOURCE #-} Annotate
 import           AST
 import           Common
 import           Kind
 import           Type
+
+import qualified Data.Set as Set (fromList, toList)
+
+-- These lenses are a bit more general so we can use them in a piecewise way
+-- (where the intermedite value has an annotation and value which don't commute)
+source :: Functor f => (Source -> f Source) -> Tag (Source, a) b -> f (Tag (Source, a) b)
+source = tag . first
+
+annotation :: Functor f => (a -> f b) -> Tag (Source, a) c -> f (Tag (Source, b) c)
+annotation = tag . second
 
 data Visit f a b = Visit (f a)
                  | Resolve (f b)

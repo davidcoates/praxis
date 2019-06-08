@@ -11,6 +11,7 @@ module AST
   , Stmt(..)
   ) where
 
+import {-# SOURCE #-} Annotate (Annotated)
 import           Common
 import           Kind
 import           Record

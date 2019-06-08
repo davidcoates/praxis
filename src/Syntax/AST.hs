@@ -9,6 +9,7 @@ module Syntax.AST
   ( syntax
   ) where
 
+import {-# SOURCE #-} Annotate
 import           AST
 import           Common
 import           Introspect

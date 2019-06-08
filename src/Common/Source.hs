@@ -1,12 +1,15 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Common.Source
   ( Pos(..)
   , Source(..)
   , (<>)
+  , Sourced
   ) where
 
 import           Common.Pretty
+import           Common.Tag
 
 import           Data.Monoid    (Monoid (..))
 import           Data.Semigroup (Semigroup (..))
@@ -31,3 +34,9 @@ instance Semigroup Source where
 
 instance Monoid Source where
   mempty = Phantom
+
+type Sourced a = Tag Source a
+
+instance Pretty a => Pretty (Sourced a) where
+  pretty (Phantom :< x) = pretty x
+  pretty (a :< x)       = pretty a <> " " <> pretty x

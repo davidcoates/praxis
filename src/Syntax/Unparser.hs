@@ -7,6 +7,7 @@ module Syntax.Unparser
   , unparse
   ) where
 
+import {-# SOURCE #-} Annotate
 import           Common
 import           Introspect
 import           Syntax.AST

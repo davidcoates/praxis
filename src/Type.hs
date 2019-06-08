@@ -5,6 +5,7 @@ module Type
   , Constraint(..)
   ) where
 
+import {-# SOURCE #-} Annotate (Annotated)
 import           Common
 import           Kind     (Kind)
 import           Record

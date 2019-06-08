@@ -6,6 +6,7 @@ module Print
   (
   ) where
 
+import {-# SOURCE #-} Annotate
 import           Common
 import           Introspect
 import           Syntax.Unparser

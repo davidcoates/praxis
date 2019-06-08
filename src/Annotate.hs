@@ -4,13 +4,15 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Annotate
-  ( Derivation(..)
-  , Parse
-  , Parsed
+  ( Parse
   , TypeCheck
-  , Typed
   , KindCheck
+  , Annotation
+  , Annotated
+  , Parsed
+  , Typed
   , Kinded
+  , Derivation(..)
   ) where
 
 import           AST
@@ -20,6 +22,33 @@ import           Kind
 import           Print
 import           Type
 
+data Parse
+data TypeCheck
+data KindCheck
+
+type family Annotation a (b :: * -> *) where
+  -- | Parse
+  Annotation Parse     a               = ()
+  -- | TypeCheck
+  Annotation TypeCheck Exp             = Typed Type
+  Annotation TypeCheck Pat             = Typed Type
+  Annotation TypeCheck Type.Constraint = Derivation TypeCheck Type.Constraint
+  Annotation TypeCheck a               = ()
+  -- | KindCheck
+  Annotation KindCheck Exp             = Kinded Type
+  Annotation KindCheck Pat             = Kinded Type
+  Annotation KindCheck TyPat           = Kinded Kind
+  Annotation KindCheck Type            = Kinded Kind
+  Annotation KindCheck Kind.Constraint = Derivation KindCheck Kind.Constraint
+  Annotation KindCheck a               = ()
+
+type Annotated a b = Tag (Source, Annotation a b) (b a)
+
+type Parsed a = Annotated Parse     a
+type Typed  a = Annotated TypeCheck a
+type Kinded a = Annotated KindCheck a
+
+-- TODO should this be somewhere else?
 data Derivation s a = Root String
                     | Antecedent (Annotated s a)
 
@@ -27,29 +56,8 @@ instance Pretty (Annotated s a) => Pretty (Derivation s a) where
   pretty (Root r)       = "\n|-> (" <> plain r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
 
-data Parse
-type Parsed a = Annotated Parse a
-
-type instance Annotation Parse a = ()
-
 instance Complete Parse where
   complete _ _ _ = pure ()
-
-data TypeCheck
-type Typed a = Annotated TypeCheck a
-
-type instance Annotation TypeCheck DataAlt = ()
-type instance Annotation TypeCheck Decl = ()
-type instance Annotation TypeCheck Exp = Typed Type
-type instance Annotation TypeCheck Kind = ()
-type instance Annotation TypeCheck Pat = Typed Type
-type instance Annotation TypeCheck Program = ()
-type instance Annotation TypeCheck QType = ()
-type instance Annotation TypeCheck Stmt = ()
-type instance Annotation TypeCheck TyPat = ()
-type instance Annotation TypeCheck Type = ()
-type instance Annotation TypeCheck Type.Constraint = Derivation TypeCheck Type.Constraint
-type instance Annotation TypeCheck Kind.Constraint = ()
 
 instance Complete TypeCheck where
   complete f i a = case i of
@@ -70,23 +78,6 @@ instance Complete TypeCheck where
     IPat            -> pretty a
     ITypeConstraint -> pretty a
     _               -> Nil
-
-data KindCheck
-type Kinded a = Annotated KindCheck a
-
-type instance Annotation KindCheck DataAlt = ()
-type instance Annotation KindCheck Decl = ()
-type instance Annotation KindCheck Exp = Kinded Type
-type instance Annotation KindCheck Kind = ()
-type instance Annotation KindCheck Pat = Kinded Type
-type instance Annotation KindCheck Program = ()
-type instance Annotation KindCheck QType = () -- TODO Perhaps this should be Kind
-type instance Annotation KindCheck Stmt = ()
-type instance Annotation KindCheck TyPat = Kinded Kind
-type instance Annotation KindCheck Type = Kinded Kind
-type instance Annotation KindCheck Type.Constraint = ()
-type instance Annotation KindCheck Kind.Constraint = Derivation KindCheck Kind.Constraint
--- TODO can we use a default instance here? default as ()
 
 instance Complete KindCheck where
   complete f i a = case i of
@@ -109,3 +100,4 @@ instance Complete KindCheck where
     IType           -> pretty a
     IKindConstraint -> pretty a
     _               -> Nil
+

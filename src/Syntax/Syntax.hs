@@ -14,10 +14,10 @@ module Syntax.Syntax
   , optional
   ) where
 
-import {-# SOURCE #-} Annotate
 import           Common
 import           Introspect
 import           Syntax.Prism
+import           Term
 import           Token
 
 import           GHC.Exts     (Constraint)

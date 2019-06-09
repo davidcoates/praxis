@@ -9,15 +9,13 @@ module Parse.Desugar
   ( run
   ) where
 
-import           Annotate
-import           AST
 import           Common
 import           Introspect
-import           Kind
 import           Praxis
+import           Print
 import           Record                 (Record, pair)
 import qualified Record                 (toList)
-import           Type
+import           Term
 
 import           Control.Applicative    (Const, liftA2, liftA3)
 import           Control.Arrow          (left)

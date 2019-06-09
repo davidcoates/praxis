@@ -7,14 +7,14 @@ module Syntax.Unparser
   , unparse
   ) where
 
-import {-# SOURCE #-} Annotate
 import           Common
 import           Introspect
-import           Syntax.AST
 import           Syntax.Prism
 import           Syntax.Syntax (Domain, Syntax)
 import qualified Syntax.Syntax as Syntax
 import qualified Syntax.Syntax
+import           Syntax.Term
+import           Term
 import           Token
 
 class Unparser f where

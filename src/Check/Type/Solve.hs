@@ -8,7 +8,6 @@ module Check.Type.Solve
   ( solve
   ) where
 
-import           Annotate
 import           Check.Type.Error
 import           Check.Type.Require
 import           Check.Type.System
@@ -18,14 +17,13 @@ import           Introspect
 import           Praxis
 import           Record
 import           Stage
-import           Type
+import           Term
 
 import           Control.Applicative (liftA2)
 import           Data.List           (nub, sort)
 import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
-import           Prelude             hiding (log)
 
 solve :: Praxis [(Name, Type TypeCheck)]
 solve = save stage $ save our $ do
@@ -50,7 +48,7 @@ solve' = spin progress `chain` stuck
             output $ separate "\n\n" cs
             throw Stuck
 
-spin :: (Typed Constraint -> Praxis Bool) -> Praxis State
+spin :: (Typed TypeConstraint -> Praxis Bool) -> Praxis State
 spin solve = do
   cs <- (nub . sort) <$> use (our . constraints)
   case cs of
@@ -72,12 +70,12 @@ unis = extract (only f)
        f _         = []
 
 -- TODO use sets here?
-classes :: [Name] -> [Typed Constraint] -> Maybe [Typed Type]
+classes :: [Name] -> [Typed TypeConstraint] -> Maybe [Typed Type]
 classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
   Class t     -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
-  Eq t1 t2    -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
+  TEq t1 t2    -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
 
-progress :: Typed Constraint -> Praxis Bool
+progress :: Typed TypeConstraint -> Praxis Bool
 progress d = case view value d of
 
   Class (k1 :< TyApply (k2 :< TyCon "Share") (a :< p)) -> case p of -- TODO Need instance solver!
@@ -87,22 +85,22 @@ progress d = case view value d of
     TyRecord r                  -> introduce (map ((\t -> Class (k1 :< TyApply (k2 :< TyCon "Share") t)). snd) (Record.toList r))
     _                           -> contradiction
 
-  Eq t1 t2 | t1 == t2 -> tautology
+  TEq t1 t2 | t1 == t2 -> tautology
 
-  Eq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else tsolve x (view value t)
-  Eq _ (_ :< TyUni _) -> swap
+  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else tsolve x (view value t)
+  TEq _ (_ :< TyUni _) -> swap
 
-  Eq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ Eq t1 t2 ]
+  TEq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ TEq t1 t2 ]
 
-  Eq (_ :< TyPack r1) (_ :< TyPack r2) | sort (keys r1) == sort (keys r2) ->
-    let values = map snd . Record.toCanonicalList in introduce (zipWith Eq (values r1) (values r2)) -- TODO create zipRecord or some such
+  TEq (_ :< TyPack r1) (_ :< TyPack r2) | sort (keys r1) == sort (keys r2) ->
+    let values = map snd . Record.toCanonicalList in introduce (zipWith TEq (values r1) (values r2)) -- TODO create zipRecord or some such
 
-  Eq (_ :< TyRecord r1) (_ :< TyRecord r2) | sort (keys r1) == sort (keys r2) ->
-    let values = map snd . Record.toCanonicalList in introduce (zipWith Eq (values r1) (values r2)) -- TODO create zipRecord or some such
+  TEq (_ :< TyRecord r1) (_ :< TyRecord r2) | sort (keys r1) == sort (keys r2) ->
+    let values = map snd . Record.toCanonicalList in introduce (zipWith TEq (values r1) (values r2)) -- TODO create zipRecord or some such
 
-  Eq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> introduce [ Eq t1 s1, Eq t2 s2 ]
+  TEq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> introduce [ TEq t1 s1, TEq t2 s2 ]
 
-  Eq t1@(_ :< TyFlat e1) t2@(_ :< TyFlat e2)
+  TEq t1@(_ :< TyFlat e1) t2@(_ :< TyFlat e2)
     | e1 > e2 -> swap
     | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` unis t2 then defer else tsolve n (view value t2)
     | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = tsolve n (TyFlat Set.empty)
@@ -134,7 +132,7 @@ progress d = case view value d of
         defer = require d >> return False
         contradiction = throw (Contradiction d)
         introduce cs = requires (map (d `implies`) cs) >> return True
-        swap = case view value d of t1 `Eq` t2 -> progress (set value (t2 `Eq` t1) d)
+        swap = case view value d of t1 `TEq` t2 -> progress (set value (t2 `TEq` t1) d)
 
         snake :: Set (Typed Type) -> Maybe (Name, Set (Typed Type))
         snake es = case Set.toList es of

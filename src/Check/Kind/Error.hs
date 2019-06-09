@@ -4,11 +4,11 @@ module Check.Kind.Error
   ( Error(..)
   ) where
 
-import           Annotate
 import           Common
-import           Kind
+import           Print
+import           Term
 
-data Error = Contradiction (Kinded Constraint)
+data Error = Contradiction (Kinded KindConstraint)
            | Stuck
 
 instance Pretty Error where

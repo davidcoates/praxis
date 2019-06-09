@@ -7,28 +7,27 @@ module Check.Type.Require
   , our
   ) where
 
-import           Annotate
 import           Check.System      hiding (System)
 import           Check.Type.Reason
 import           Check.Type.System
 import           Common
 import           Introspect
 import           Praxis
-import           Type
+import           Term
 
-require :: Typed Constraint -> Praxis ()
+require :: Typed TypeConstraint -> Praxis ()
 require c = our . constraints %= (c:)
 
-requires :: [Typed Constraint] -> Praxis ()
+requires :: [Typed TypeConstraint] -> Praxis ()
 requires = mapM_ require
 
-newConstraint :: Constraint TypeCheck -> Reason -> Source -> Typed Constraint
+newConstraint :: TypeConstraint TypeCheck -> Reason -> Source -> Typed TypeConstraint
 newConstraint c r s = (s, Root (show r)) :< c
 
-implies :: Typed Constraint -> Constraint TypeCheck -> Typed Constraint
+implies :: Typed TypeConstraint -> TypeConstraint TypeCheck -> Typed TypeConstraint
 implies d c = let s = view source d in (s, Antecedent d) :< c
 
-share :: Typed Type -> Constraint TypeCheck
+share :: Typed Type -> TypeConstraint TypeCheck
 share t = Class $ (Phantom, ()) :< TyApply ((Phantom, ()) :< TyCon "Share") t
 
 our :: Lens' PraxisState System

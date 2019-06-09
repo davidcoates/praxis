@@ -2,9 +2,9 @@ module Value
   ( Value(..)
   ) where
 
-import           AST    (Lit)
 import {-# SOURCE #-} Praxis (Praxis)
 import           Record
+import           Term   (Lit)
 
 data Value = L Lit
            | R (Record Value)

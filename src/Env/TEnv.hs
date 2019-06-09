@@ -15,7 +15,6 @@ module Env.TEnv
   )
 where
 
-import           Annotate
 import           Check.Error
 import           Check.System
 import           Check.Type.Reason
@@ -27,10 +26,11 @@ import           Env.LEnv           (LEnv, fromList)
 import qualified Env.LEnv           as LEnv
 import           Introspect         (sub)
 import           Praxis
-import           Type
+import           Print
+import           Term
 
 import           Control.Monad      (replicateM)
-import           Prelude            hiding (log, lookup, read)
+import           Prelude            hiding (lookup, read)
 import qualified Prelude            (lookup)
 
 

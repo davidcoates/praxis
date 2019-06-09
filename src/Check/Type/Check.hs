@@ -2,7 +2,6 @@ module Check.Type.Check
   ( check
   ) where
 
-import           Annotate
 import           Check.Type.Generate
 import           Check.Type.Require
 import           Check.Type.Solve
@@ -11,7 +10,7 @@ import           Common
 import           Introspect
 import           Praxis
 import           Stage
-import           Type
+import           Term
 
 check :: Recursive a => Parsed a -> Praxis (Typed a)
 check a = save stage $ do

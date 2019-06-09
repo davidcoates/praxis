@@ -9,14 +9,13 @@ module Parse
   ( parse
   ) where
 
-import           Annotate
-import           AST
 import           Common
 import           Introspect
 import qualified Parse.Desugar  as Desugar
 import qualified Parse.Parse    as Parse
 import qualified Parse.Tokenise as Tokenise
 import           Praxis
+import           Term
 
 parse :: forall a. Recursive a => String -> Praxis (Parsed a)
 parse s = do

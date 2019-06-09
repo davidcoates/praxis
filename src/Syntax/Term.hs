@@ -5,27 +5,22 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Syntax.AST
+module Syntax.Term
   ( syntax
   ) where
 
-import {-# SOURCE #-} Annotate
-import           AST
 import           Common
 import           Introspect
-import           Kind
 import           Record        (Record)
 import qualified Record
-import qualified Syntax.Kind   as Kind
 import           Syntax.Prism
 import           Syntax.Syntax
 import           Syntax.TH
-import qualified Syntax.Type   as Type
+import           Term
 import           Token
-import           Type
 
-import           Prelude       hiding (exp, log, maybe, pure, until, (*>),
-                                (<$>), (<*), (<*>))
+import           Prelude       hiding (exp, maybe, pure, until, (*>), (<$>),
+                                (<*), (<*>))
 
 -- TODO move this elsewhere?
 definePrisms ''Either
@@ -119,6 +114,8 @@ definePrisms ''QType
 definePrisms ''Kind
 definePrisms ''Tok
 definePrisms ''Stmt
+definePrisms ''TypeConstraint
+definePrisms ''KindConstraint
 
 syntax :: (Recursive a, Syntax f, Domain f s) => I a -> f (a s)
 syntax x = case x of
@@ -136,13 +133,14 @@ syntax x = case x of
   ITypeConstraint -> tyConstraint
   IKindConstraint -> kindConstraint
 
-tyConstraint :: (Syntax f, Domain f s) => f (Type.Constraint s)
-tyConstraint = Type._Class <$> annotated ty <|>
-               Type._Eq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
+tyConstraint :: (Syntax f, Domain f s) => f (TypeConstraint s)
+tyConstraint = _Class <$> annotated ty <|>
+               _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
                mark "type constraint"
 
-kindConstraint :: (Syntax f, Domain f s) => f (Kind.Constraint s)
-kindConstraint = undefined
+kindConstraint :: (Syntax f, Domain f s) => f (KindConstraint s)
+kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|>
+                mark "kind constraint"
 
 program :: (Syntax f, Domain f s) => f (Program s)
 program = _Program <$> block (annotated top) where -- TODO module

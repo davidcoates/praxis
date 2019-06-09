@@ -8,25 +8,22 @@ module Check.Kind.Solve
   ( solve
   ) where
 
-import           Annotate
-import           AST
 import           Check.Kind.Error
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
 import           Env.TEnv            (ungeneralise)
 import           Introspect
-import           Kind
 import           Praxis
 import           Record
 import           Stage
+import           Term
 
 import           Control.Applicative (liftA2)
 import           Data.List           (nub, sort)
 import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
-import           Prelude             hiding (log)
 
 solve :: Praxis [(Name, Kind KindCheck)]
 solve = save stage $ save our $ do
@@ -52,7 +49,7 @@ solve' = spin progress `chain` stuck
             throw Stuck
 
 -- TODO reduce duplication with Type Solve spin
-spin :: (Kinded Constraint -> Praxis Bool) -> Praxis State
+spin :: (Kinded KindConstraint -> Praxis Bool) -> Praxis State
 spin solve = do
   cs <- (nub . sort) <$> use (our . constraints)
   case cs of
@@ -78,18 +75,18 @@ unis = extract (only f) where
     KindType       -> []
 -- TODO find some way of combining traverseM and traverseA and use that here
 
-progress :: Kinded Constraint -> Praxis Bool
+progress :: Kinded KindConstraint -> Praxis Bool
 progress d = case view value d of
 
-  Eq k1 k2 | k1 == k2  -> tautology
+  KEq k1 k2 | k1 == k2  -> tautology
 
-  Eq (_ :< KindUni x) k -> if x `elem` unis k then contradiction else x ~> (view value k)
-  Eq _ (_ :< KindUni _) -> swap
+  KEq (_ :< KindUni x) k -> if x `elem` unis k then contradiction else x ~> (view value k)
+  KEq _ (_ :< KindUni _) -> swap
 
-  Eq (_ :< KindRecord r1) (_ :< KindRecord r2) | sort (keys r1) == sort (keys r2) ->
-    let values = map snd . Record.toCanonicalList in introduce (zipWith Eq (values r1) (values r2)) -- TODO create zipRecord or some such
+  KEq (_ :< KindRecord r1) (_ :< KindRecord r2) | sort (keys r1) == sort (keys r2) ->
+    let values = map snd . Record.toCanonicalList in introduce (zipWith KEq (values r1) (values r2)) -- TODO create zipRecord or some such
 
-  Eq (_ :< KindFun t1 t2) (_ :< KindFun t3 t4) -> introduce [ Eq t1 t3, Eq t2 t4 ]
+  KEq (_ :< KindFun t1 t2) (_ :< KindFun t3 t4) -> introduce [ KEq t1 t3, KEq t2 t4 ]
 
   _ -> contradiction
 
@@ -98,7 +95,7 @@ progress d = case view value d of
         defer = require d >> return False
         contradiction = throw (Contradiction d)
         introduce cs = requires (map (d `implies`) cs) >> return True
-        swap = case view value d of t1 `Eq` t2 -> progress (set value (t2 `Eq` t1) d)
+        swap = case view value d of t1 `KEq` t2 -> progress (set value (t2 `KEq` t1) d)
 
 smap :: (forall a. Recursive a => Kinded a -> Kinded a) -> Praxis ()
 smap f = do

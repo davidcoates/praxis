@@ -6,8 +6,6 @@ module Inbuilts
   ( initialState
   ) where
 
-import           Annotate
-import           AST          (Lit (..))
 import           Common
 import           Env.KEnv     (KEnv)
 import qualified Env.KEnv     as KEnv (fromList)
@@ -16,11 +14,10 @@ import qualified Env.TEnv     as TEnv (fromList)
 import           Env.VEnv     (VEnv)
 import qualified Env.VEnv     as VEnv (fromList)
 import           Introspect
-import           Kind
 import           Parse        (parse)
 import           Praxis
 import qualified Record
-import           Type
+import           Term
 import           Value
 
 import           Control.Lens as Lens (set)

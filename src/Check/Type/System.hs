@@ -10,15 +10,14 @@ module Check.Type.System
   , initialSystem
   ) where
 
-import           Annotate
 import           Common
-import           Type
+import           Term
 
 data System = System
   { _tsol        :: [(Name, Type TypeCheck)]
-  , _constraints :: [Typed Constraint]
-  , _staging     :: [Typed Constraint]
-  , _axioms      :: [Typed Constraint]
+  , _constraints :: [Typed TypeConstraint]
+  , _staging     :: [Typed TypeConstraint]
+  , _axioms      :: [Typed TypeConstraint]
   }
 
 makeLenses ''System

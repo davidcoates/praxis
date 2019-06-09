@@ -9,15 +9,14 @@ module Env.KEnv
   )
 where
 
-import           Annotate
 import           Common
-import           Env      (KEnv)
-import           Env.Env  (Env, fromList)
-import qualified Env.Env  as Env
-import           Kind
+import           Env     (KEnv)
+import           Env.Env (Env, fromList)
+import qualified Env.Env as Env
 import           Praxis
+import           Term
 
-import           Prelude  hiding (lookup)
+import           Prelude hiding (lookup)
 
 elim :: Praxis ()
 elim = do

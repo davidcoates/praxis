@@ -2,8 +2,8 @@ module Token
   ( Token(..)
   ) where
 
-import           AST    (Lit (..), QString (..))
 import           Common
+import           Term   (Lit (..), QString (..))
 
 data Token = QVarId QString
            | QConId QString

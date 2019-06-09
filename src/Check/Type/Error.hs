@@ -4,13 +4,13 @@ module Check.Type.Error
   ( Error(..)
   ) where
 
-import           Annotate
 import           Common
-import           Type
+import           Print
+import           Term
 
-data Error = Contradiction (Typed Constraint)
+data Error = Contradiction (Typed TypeConstraint)
            | Stuck
-           | Underdefined (Typed Constraint)
+           | Underdefined (Typed TypeConstraint)
 
 instance Pretty Error where
   pretty e = case e of

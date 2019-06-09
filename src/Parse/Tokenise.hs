@@ -2,12 +2,12 @@ module Parse.Tokenise
   ( run
   ) where
 
-import           AST                      (Lit (..), QString (..))
 import           Common                   hiding (asum)
 import           Parse.Tokenise.Layout
 import           Parse.Tokenise.Tokeniser hiding (run)
 import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Praxis                   hiding (throw)
+import           Term                     (Lit (..), QString (..))
 import           Token
 
 import           Control.Applicative      (Alternative (..), Applicative (..))

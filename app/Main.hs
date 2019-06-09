@@ -1,7 +1,5 @@
 module Main where
 
-import           Annotate
-import           AST
 import           Common
 import qualified Env.TEnv             as TEnv (lookup)
 import qualified Env.VEnv             as VEnv (lookup)
@@ -9,7 +7,7 @@ import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
 import           Record
-import           Type
+import           Term
 import           Value
 
 import           Control.Lens.Reified (ReifiedLens (..), ReifiedLens')

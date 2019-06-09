@@ -6,14 +6,13 @@ module Interpret
   ( Interpretable(..)
   ) where
 
-import           Annotate
-import           AST
-import           Check    (check)
+import           Check  (check)
 import           Common
 import           Eval
-import           Parse    (parse)
+import           Parse  (parse)
 import           Praxis
-import           Value    (Value)
+import           Term
+import           Value  (Value)
 
 class Evaluable a b => Interpretable a b where
   interpret :: String -> Praxis (Kinded a, b)

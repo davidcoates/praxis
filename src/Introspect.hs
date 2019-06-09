@@ -23,11 +23,8 @@ module Introspect
   , retag
   ) where
 
-import {-# SOURCE #-} Annotate
-import           AST
 import           Common
-import           Kind
-import           Type
+import           Term
 
 import qualified Data.Set as Set (fromList, toList)
 
@@ -66,8 +63,8 @@ data I a where
   ITok     :: I Tok
   ITyPat   :: I TyPat
   IType    :: I Type
-  ITypeConstraint :: I Type.Constraint
-  IKindConstraint :: I Kind.Constraint
+  ITypeConstraint :: I TypeConstraint
+  IKindConstraint :: I KindConstraint
 
 typeof :: forall a s. Recursive a => Annotated s a -> I a
 typeof _ = witness :: I a
@@ -231,13 +228,13 @@ instance Recursive Type where
     TyRecord r  -> TyRecord <$> traverse f r
     TyVar n     -> pure (TyVar n)
 
-instance Recursive Type.Constraint where
+instance Recursive TypeConstraint where
   witness = ITypeConstraint
   recurse f x = case x of
-    Class t     -> Class <$> f t
-    Type.Eq a b -> Type.Eq <$> f a <*> f b
+    Class t -> Class <$> f t
+    TEq a b -> TEq <$> f a <*> f b
 
-instance Recursive Kind.Constraint where
+instance Recursive KindConstraint where
   witness = IKindConstraint
   recurse f x = case x of
-    Kind.Eq a b -> Kind.Eq <$> f a <*> f b
+    KEq a b -> KEq <$> f a <*> f b

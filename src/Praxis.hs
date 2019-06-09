@@ -44,15 +44,12 @@ module Praxis
   )
   where
 
-import           Annotate
-import           AST                          (Lit)
 import qualified Check.System                 as Check (System)
 import           Common
 import           Env                          (KEnv, TEnv, VEnv)
-import           Kind
 import           Record                       (Record)
 import           Stage
-import           Type
+import           Term
 
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent

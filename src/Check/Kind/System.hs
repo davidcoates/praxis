@@ -10,15 +10,14 @@ module Check.Kind.System
   , initialSystem
   ) where
 
-import           Annotate
 import           Common
-import           Kind
+import           Term
 
 data System = System
   { _sol         :: [(Name, Kind KindCheck)]
-  , _constraints :: [Kinded Constraint]
-  , _staging     :: [Kinded Constraint]
-  , _axioms      :: [Kinded Constraint]
+  , _constraints :: [Kinded KindConstraint]
+  , _staging     :: [Kinded KindConstraint]
+  , _axioms      :: [Kinded KindConstraint]
   }
 
 makeLenses ''System

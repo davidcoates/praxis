@@ -6,13 +6,12 @@ module Eval
   ( Evaluable(..)
   ) where
 
-import           Annotate
-import           AST
 import           Common
 import           Env.VEnv    (VEnv, elim, elimN, intro)
 import qualified Env.VEnv    as VEnv (fromList, lookup)
 import           Praxis
 import           Record
+import           Term
 import           Value
 
 import           Data.Monoid (Sum (..))

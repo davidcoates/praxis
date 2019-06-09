@@ -7,8 +7,6 @@ module Check.Type.Generate
   ( generate
   ) where
 
-import           Annotate
-import           AST
 import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
@@ -19,7 +17,7 @@ import           Introspect
 import           Praxis
 import           Record
 import           Stage
-import           Type
+import           Term
 
 import           Control.Applicative (liftA2)
 import           Data.Foldable       (foldlM)
@@ -65,7 +63,7 @@ fun :: Typed Type -> Typed Type -> Typed Type
 fun a b = (Phantom, ()) :< TyFun a b
 
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
-equal t1 t2 r s = require $ newConstraint (t1 `Eq` t2) r s
+equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 
 split :: ((Source, a Parse) -> Praxis (Annotation TypeCheck a, a TypeCheck)) -> Parsed a -> Praxis (Typed a)
 split f x = do
@@ -134,7 +132,7 @@ exp = split $ \(s, e) -> case e of
     x' <- exp x
     let ft = ty f'
     let xt = ty x'
-    require $ newConstraint (ft `Eq` fun xt yt) AppFun s
+    require $ newConstraint (ft `TEq` fun xt yt) AppFun s
     return (yt, Apply f' x')
 
   Case x alts -> do
@@ -143,7 +141,7 @@ exp = split $ \(s, e) -> case e of
     alts' <- parallel (map bind alts)
     t1 <- equals (map (view tag . fst) alts') CaseCongruence
     t2 <- equals (map (view tag . snd) alts') CaseCongruence
-    require $ newConstraint (xt `Eq` t1) CaseCongruence s -- TODO probably should pick a better name for this
+    require $ newConstraint (xt `TEq` t1) CaseCongruence s -- TODO probably should pick a better name for this
     return (xt, Case x' alts')
 
   Cases alts -> closure $ do
@@ -163,8 +161,8 @@ exp = split $ \(s, e) -> case e of
   If a b c -> do
     a' <- exp a
     (b', c') <- join (exp b) (exp c)
-    require $ newConstraint (ty a' `Eq` ((Phantom, ()) :< TyCon "Bool")) IfCondition s
-    require $ newConstraint (ty b' `Eq` ty c') IfCongruence s
+    require $ newConstraint (ty a' `TEq` ((Phantom, ()) :< TyCon "Bool")) IfCondition s
+    require $ newConstraint (ty b' `TEq` ty c') IfCongruence s
     return (ty b', If a' b' c')
 
   Lambda p e -> closure $ do

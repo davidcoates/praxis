@@ -5,11 +5,11 @@ module Parse.Parse.Parser
   , run
   ) where
 
-import           Annotate
 import           Common
 import qualified Parse.Parser        as Parser
 import           Praxis              (Praxis, panic, throw)
 import qualified Syntax.Parser       as Syntax
+import           Term
 import           Token
 
 import           Control.Applicative (Alternative (..))

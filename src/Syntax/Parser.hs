@@ -6,13 +6,13 @@ module Syntax.Parser
   , parse
   ) where
 
-import           Annotate
 import           Common
 import           Introspect
-import           Syntax.AST
 import           Syntax.Prism
 import           Syntax.Syntax       (Domain (..), Syntax)
 import qualified Syntax.Syntax
+import           Syntax.Term
+import           Term
 import           Token
 
 import           Control.Applicative (Alternative (..))

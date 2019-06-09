@@ -4,9 +4,7 @@ module Resolve
   (
   ) where
 
-import           AST
 import           Common
-import           Parse
 
 data ResolverError = UnknownName String Source
 

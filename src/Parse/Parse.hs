@@ -6,12 +6,13 @@ module Parse.Parse
 
 -- TODO this is a lot of imports for one function...
 
-import           Annotate
 import           Common
 import           Introspect
 import qualified Parse.Parse.Parser as Parser (run)
 import           Praxis
+import           Print
 import           Syntax
+import           Term
 import           Token
 
 run :: forall a. Recursive a => [Sourced Token] -> Praxis (Parsed a)

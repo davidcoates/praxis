@@ -48,8 +48,6 @@ class Recursive a where
 
 class Complete s where
   complete :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> f (Annotated s a)) -> I a -> Annotation s a -> f (Annotation s a)
-  label :: Recursive a => Annotated s a -> Colored String
-  label _ = Nil
 
 data I a where
   IDataAlt :: I DataAlt
@@ -238,3 +236,36 @@ instance Recursive KindConstraint where
   witness = IKindConstraint
   recurse f x = case x of
     KEq a b -> KEq <$> f a <*> f b
+
+instance Complete Parse where
+  complete _ _ _ = pure ()
+
+instance Complete TypeCheck where
+  complete f i a = case i of
+    IDataAlt        -> pure ()
+    IDecl           -> pure ()
+    IExp            -> f a
+    IKind           -> pure ()
+    IPat            -> f a
+    IProgram        -> pure ()
+    IQType          -> pure ()
+    IStmt           -> pure ()
+    ITyPat          -> pure ()
+    IType           -> pure ()
+    ITypeConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
+    IKindConstraint -> pure ()
+
+instance Complete KindCheck where
+  complete f i a = case i of
+    IDataAlt        -> pure ()
+    IDecl           -> pure ()
+    IExp            -> f a
+    IKind           -> pure ()
+    IPat            -> f a
+    IProgram        -> pure ()
+    IQType          -> pure ()
+    IStmt           -> pure ()
+    ITyPat          -> pure a
+    IType           -> pure a
+    ITypeConstraint -> pure ()
+    IKindConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }

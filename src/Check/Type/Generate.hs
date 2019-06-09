@@ -15,6 +15,7 @@ import qualified Env.KEnv            as KEnv
 import           Env.TEnv
 import           Introspect
 import           Praxis
+import           Print
 import           Record
 import           Stage
 import           Term

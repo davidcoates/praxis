@@ -55,46 +55,20 @@ unlayout ts = unlayout' (-1) ts where
     [t]    -> pretty t
     t : ts -> pretty t <> " " <> unlayout' n ts
 
-instance (Complete s, Recursive a, x ~ Annotation s a) => Pretty (Tag (Source, x) (a s)) where
+instance (Label s, Recursive a, x ~ Annotation s a) => Pretty (Tag (Source, x) (a s)) where
   pretty = unlayout . force unparse
 
-instance Complete Parse where
-  complete _ _ _ = pure ()
+instance Label Parse where
+  label t = Nil
 
-instance Complete TypeCheck where
-  complete f i a = case i of
-    IDataAlt        -> pure ()
-    IDecl           -> pure ()
-    IExp            -> f a
-    IKind           -> pure ()
-    IPat            -> f a
-    IProgram        -> pure ()
-    IQType          -> pure ()
-    IStmt           -> pure ()
-    ITyPat          -> pure ()
-    IType           -> pure ()
-    ITypeConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
-    IKindConstraint -> pure ()
+instance Label TypeCheck where
   label t = let a = view annotation t in case typeof t of
     IExp            -> pretty a
     IPat            -> pretty a
     ITypeConstraint -> pretty a
     _               -> Nil
 
-instance Complete KindCheck where
-  complete f i a = case i of
-    IDataAlt        -> pure ()
-    IDecl           -> pure ()
-    IExp            -> f a
-    IKind           -> pure ()
-    IPat            -> f a
-    IProgram        -> pure ()
-    IQType          -> pure ()
-    IStmt           -> pure ()
-    ITyPat          -> pure a
-    IType           -> pure a
-    ITypeConstraint -> pure ()
-    IKindConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
+instance Label KindCheck where
   label t = let a = view annotation t in case typeof t of
     IExp            -> pretty a
     IPat            -> pretty a

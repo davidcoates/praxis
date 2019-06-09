@@ -26,7 +26,6 @@ import           Env.LEnv           (LEnv, fromList)
 import qualified Env.LEnv           as LEnv
 import           Introspect         (sub)
 import           Praxis
-import           Print
 import           Term
 
 import           Control.Monad      (replicateM)

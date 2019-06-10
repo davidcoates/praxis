@@ -1,4 +1,5 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Parse.Parse.Parser
   ( Parser
@@ -7,7 +8,7 @@ module Parse.Parse.Parser
 
 import           Common
 import qualified Parse.Parser        as Parser
-import           Praxis              (Praxis, panic, throw)
+import           Praxis
 import qualified Syntax.Parser       as Syntax
 import           Term
 import           Token
@@ -32,9 +33,12 @@ instance Syntax.Parser Parser where
   mark = Parser . Parser.mark
   sourced (Parser p) = Parser ((\(s :< x) -> (s :< (s :< x))) <$> p)
 
-run :: Parser a -> [Sourced Token] -> Praxis a
-run (Parser p) ts = makeError $ Parser.run (view value <$> p) ts where
-  makeError x = case x of
-    Left e        -> Praxis.throw e
-    Right (x, []) -> return x
-    Right _       -> Praxis.panic "expected EOF" -- TODO should we return remainder instead?
+run :: Pretty a => Parser a -> [Sourced Token] -> Praxis a
+run (Parser p) ts = case Parser.run (view value <$> p) ts of
+  (Left e,  ts) -> throwAt (pos ts) e
+  (Right x, []) -> return x
+  (Right x, ts) -> throwAt (pos ts) $ "unexpected " <> (quote . pretty . view value . head $ ts)
+  where
+  pos :: [Sourced a] -> Source
+  pos           [] = EndOfFile
+  pos (s :< _ : _) = s

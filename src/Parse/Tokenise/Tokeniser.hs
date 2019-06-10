@@ -15,8 +15,7 @@ module Parse.Tokenise.Tokeniser
 import           Common
 import           Parse.Parser        (Parser (..))
 import qualified Parse.Parser        as Parser (match, run, satisfies, throw)
-import           Praxis              (Praxis)
-import qualified Praxis              (throw)
+import           Praxis              (Praxis, throwAt)
 import           Token
 
 import           Control.Applicative (Alternative (..), Applicative (..))
@@ -38,9 +37,10 @@ run :: Pretty a => Tokeniser (Maybe a) -> String -> Praxis [Sourced a]
 run (Tokeniser t) cs = all (sourced cs) where
   all [] = pure []
   all cs = case Parser.run t cs of
-    Left e                  -> Praxis.throw $ e
-    Right (s :< Just x, cs) -> ((:) <$> pure (s :< x) <*> all cs)
-    Right (_, cs)           -> all cs
+    (Left e, [])              -> throwAt EndOfFile e
+    (Left e, s :< _ : _)      -> throwAt s e
+    (Right (s :< Just x), cs) -> ((:) <$> pure (s :< x) <*> all cs)
+    (Right _, cs)             -> all cs
 
 sourced :: String -> [Sourced Char]
 sourced = sourced' Pos { line = 1, column = 1 } where

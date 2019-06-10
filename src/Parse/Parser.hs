@@ -6,7 +6,6 @@ module Parse.Parser
   ( Parser
   , Alternative(..)
   , Error(..)
-  , Failure(..)
   , eof
   , mark
   , match
@@ -22,21 +21,14 @@ import           Control.Arrow       (right)
 import           Control.Lens        (makeLenses)
 import           Data.Maybe          (fromMaybe)
 
-data Error = Error Failure (Maybe (Colored String))
+data Error = Error (Colored String)
+           | Skip
 
 instance Pretty Error where
-  pretty (Error f s) = pretty f <> " at " <> case s of
-    Just s  -> s
-    Nothing -> "end of file"
+  pretty (Error s) = s
+  pretty Skip      = "<unknown>"
 
-data Failure = Failure (Colored String)
-             | Skip
-
-instance Pretty Failure where
-  pretty (Failure s) = s
-  pretty Skip        = "<unknown>"
-
-data Result t a = Result { _result :: Either Failure a, _remaining :: [t], _consumed :: Bool }
+data Result t a = Result { _result :: Either Error a, _remaining :: [t], _consumed :: Bool }
 makeLenses ''Result
 
 newtype Parser t a = Parser { runParser :: [t] -> Result t a }
@@ -62,17 +54,13 @@ match p = Parser $ \ts -> case ts of
   (t:ts) -> if p t then Result (Right t) ts True else Result (Left Skip) (t:ts) False
 
 mark :: String -> Parser t a
-mark s = Parser $ \ts -> Result (Left (Failure ("expected " <> plain s))) ts False
+mark s = Parser $ \ts -> Result (Left (Error ("expected " <> plain s))) ts False
 
 eof :: Parser t ()
 eof = Parser $ \ts -> Result (if null ts then Right () else Left Skip) ts False
 
-run :: Pretty t => Parser t a -> [t] -> Either Error (a, [t])
-run p ts = let r = runParser p ts in case view result r of
-  Left e  -> Left . Error e $ case view remaining r of
-    []     -> Nothing
-    (t:ts) -> Just (pretty t)
-  Right x -> Right (x, view remaining r)
+run :: Parser t a -> [t] -> (Either Error a, [t])
+run p ts = let r = runParser p ts in (view result r, view remaining r)
 
 satisfies :: Int -> ([t] -> Bool) -> Parser t ()
 satisfies n p = Parser $ \cs -> case takeExact n cs of
@@ -85,4 +73,4 @@ takeExact n     [] = Nothing
 takeExact n (x:xs) = fmap (x:) (takeExact (n - 1) xs)
 
 throw :: String -> Parser t a
-throw s = Parser $ \ts -> Result (Left (Failure (plain s))) ts True
+throw s = Parser $ \ts -> Result (Left (Error (plain s))) ts True

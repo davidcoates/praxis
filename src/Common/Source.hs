@@ -16,17 +16,21 @@ import           Data.Semigroup (Semigroup (..))
 
 data Pos = Pos { line :: Int, column :: Int } deriving Eq
 
-data Source = Source { start :: Pos, end :: Pos }
+data Source = EndOfFile
             | Phantom -- ^Used for phantom tokens e.g., implicit whitespace tokens
+            | Source { start :: Pos, end :: Pos }
   deriving Eq
 
 instance Pretty Pos where
   pretty p = plain (show (line p)) <> ":" <> plain (show (column p))
 
 instance Pretty Source where
-  pretty Phantom = "<?>"
-  pretty s       = pretty (start s)
+  pretty s = case s of
+    EndOfFile  -> "eof"
+    Phantom    -> "<?>"
+    Source s _ -> pretty s
 
+-- TODO this is partial
 instance Semigroup Source where
   Phantom <> s = s
   s <> Phantom = s

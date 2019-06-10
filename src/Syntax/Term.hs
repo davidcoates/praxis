@@ -207,23 +207,23 @@ ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
         mark "type(0)"
 
 exp :: (Syntax f, Domain f s) => f (Exp s)
-exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "exp" where
-  exp3 = _Mixfix <$> some (annotated (_TOp <$> qvarsym <|> _TExp <$> annotated exp2)) <|> unparseable exp2 <|> mark "exp(3)" -- FIXME unparseable is a hack here
+exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where
+  exp3 = _Mixfix <$> some (annotated (_TOp <$> qvarsym <|> _TExp <$> annotated exp2)) <|> unparseable exp2 <|> mark "expression(3)" -- FIXME unparseable is a hack here
   exp2 = _Read <$> reservedId "read" *> varid <*> reservedId "in" *> annotated exp <|>
          _Do <$> reservedId "do" *> block (annotated stmt) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _Lambda <$> reservedOp "\\" *> annotated pat <*> reservedOp "->" *> annotated exp <|>
-         exp1 <|> mark "exp(2)"
-  exp1 = left _Apply exp0 <|> mark "exp(1)"
+         exp1 <|> mark "expression(2)"
+  exp1 = left _Apply exp0 <|> mark "expression(1)"
   exp0 = _Record <$> record '(' (annotated exp) ')' <|>
          _Var <$> varid <|>
          _Lit <$> lit <|>
          special '(' *> exp <* special ')' <|>
-         mark "exp(0)"
+         mark "expression(0)"
 
 stmt :: (Syntax f, Domain f s) => f (Stmt s)
-stmt = _StmtDecl <$> reservedId "let" *> annotated decl <|> _StmtExp <$> annotated exp <|> mark "stmt"
+stmt = _StmtDecl <$> reservedId "let" *> annotated decl <|> _StmtExp <$> annotated exp <|> mark "statement"
 
 alt :: (Syntax f, Domain f s) => f (Annotated s Pat, Annotated s Exp)
-alt = annotated pat <*> reservedOp "->" *> annotated exp <|> mark "alt"
+alt = annotated pat <*> reservedOp "->" *> annotated exp <|> mark "case alternative"

@@ -138,17 +138,11 @@ retag f = runIdentity . visit f'
 class Castable a s t where
   cast :: Annotated s a -> Annotated t a
 
-instance Castable Kind Parse KindCheck where
+instance (Annotation s Kind ~ Annotation t Kind) => Castable Kind s t where
   cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation KindCheck a
-    f i _ = case i of
-      IKind -> ()
-
-instance Castable Kind KindCheck TypeCheck where
-  cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation KindCheck a -> Annotation TypeCheck a
-    f i _ = case i of
-      IKind -> ()
+    f :: forall a. Recursive a => I a -> Annotation s a -> Annotation t a
+    f i x = case i of
+      IKind -> x
 
 instance Castable Type KindCheck TypeCheck where
   cast = retag f where

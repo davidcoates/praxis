@@ -45,10 +45,7 @@ poly vs s = let (a :< Mono t) = mono s in a :< Forall vs t
 kind :: String -> Typed Kind
 kind s = runInternal initialState m
   where m :: Praxis (Typed Kind)
-        m = retag f <$> (parse s :: Praxis (Parsed Kind))
-        f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
-        f i x = case i of
-          IKind  -> ()
+        m = cast <$> (parse s :: Praxis (Parsed Kind))
 
 -- TODO reduce duplication with retag
 

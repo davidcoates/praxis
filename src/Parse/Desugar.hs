@@ -28,14 +28,14 @@ import           Prelude                hiding (exp)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
-run :: Recursive a => Parsed a -> Praxis (Parsed a)
+run :: Recursive a => Simple a -> Praxis (Simple a)
 run x = save stage $ do
   stage .= Desugar
   x' <- desugar x
   output x'
   return x'
 
-desugar :: Recursive a => Parsed a -> Praxis (Parsed a)
+desugar :: Recursive a => Simple a -> Praxis (Simple a)
 desugar x = ($ x) $ case typeof x of
   IProgram -> program
   IExp     -> exp
@@ -43,12 +43,12 @@ desugar x = ($ x) $ case typeof x of
   IType    -> ty
   IKind    -> pure
 
-program :: Parsed Program -> Praxis (Parsed Program)
+program :: Simple Program -> Praxis (Simple Program)
 program (a :< Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-stmts :: [Parsed Stmt] -> Praxis [Parsed Stmt]
+stmts :: [Simple Stmt] -> Praxis [Simple Stmt]
 stmts     [] = pure []
 stmts (s:ss) | a :< StmtExp e <- s = do
                 e' <- exp e
@@ -70,7 +70,7 @@ record s build f r = do
     [(Just _, _)]  -> throwAt s $ plain "illegal single-field record"
     _              -> return $ build r'
 
-exp :: Parsed Exp -> Praxis (Parsed Exp)
+exp :: Simple Exp -> Praxis (Simple Exp)
 exp (a :< x) = case x of
 
   Apply x (a' :< VarBang s) ->
@@ -89,7 +89,7 @@ exp (a :< x) = case x of
   _           -> (a :<) <$> recurse desugar x
 
 
-decls :: [Parsed Decl] -> Praxis [Parsed Decl]
+decls :: [Simple Decl] -> Praxis [Simple Decl]
 decls []              = pure []
 decls (a :< d : ds) = case d of
 
@@ -102,7 +102,7 @@ decls (a :< d : ds) = case d of
     ps <- mapM pat ps
     e  <- exp e
     let d = a :< DeclVar n Nothing (lambda ps e)
-        lambda :: [Parsed Pat] -> Parsed Exp -> Parsed Exp
+        lambda :: [Simple Pat] -> Simple Exp -> Simple Exp
         lambda     [] e = e
         lambda (p:ps) e = a :< Lambda p (lambda ps e)
     ds <- decls ds
@@ -111,7 +111,7 @@ decls (a :< d : ds) = case d of
                                             | otherwise -> return $ d:ds
 
 -- TODO check for overlapping patterns?
-pat :: Parsed Pat -> Praxis (Parsed Pat)
+pat :: Simple Pat -> Praxis (Simple Pat)
 pat (a :< x) = case x of
 
   PatRecord r -> record (fst a) (\r' -> a :< PatRecord r') pat r
@@ -119,7 +119,7 @@ pat (a :< x) = case x of
   _           -> (a :<) <$> recurse desugar x
 
 
-ty :: Parsed Type -> Praxis (Parsed Type)
+ty :: Simple Type -> Praxis (Simple Type)
 ty (a :< x) = case x of
 
   TyRecord r -> record (fst a) (\r' -> a :< TyRecord r') ty r
@@ -127,13 +127,13 @@ ty (a :< x) = case x of
   _          -> (a :<) <$> recurse desugar x
 
 
-type MTok = DAG.Tok (Tag (Source, ()) Op) (Parsed Exp)
+type MTok = DAG.Tok (Tag (Source, ()) Op) (Simple Exp)
 
-tok :: Parsed Tok -> Praxis MTok
+tok :: Simple Tok -> Praxis MTok
 tok (a :< TOp op) = pure (DAG.TOp (a :< op))
 tok (a :< TExp e) = DAG.TExpr <$> exp e
 
-mixfix :: [Parsed Tok] -> Praxis (Parsed Exp)
+mixfix :: [Simple Tok] -> Praxis (Simple Exp)
 mixfix ts = do
   ts' <- mapM tok ts
   -- TODO do something with report?
@@ -141,7 +141,7 @@ mixfix ts = do
   case parses of [e] -> return e
                  _   -> error "TODO resolve error make a proper error for this (ambiguous mixfix parse)"
 
-type OpTable = DAG.DAG Int [DAG.Op (Tag (Source, ()) Op) (Parsed Exp)]
+type OpTable = DAG.DAG Int [DAG.Op (Tag (Source, ()) Op) (Simple Exp)]
 
 raw :: a -> Tag (Source, ()) a
 raw x = (Phantom, ()) :< x
@@ -160,7 +160,7 @@ opTable = DAG.DAG
       9 -> [ dot ]
   }
   where build a s n = DAG.Op { DAG.fixity = DAG.Infix a, DAG.parts = [raw $ QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
-        build' n e1 e2 = raw $ Apply (raw $ Var n) (raw $ Record (pair e1 e2)) :: Parsed Exp -- TODO annotations?
+        build' n e1 e2 = raw $ Apply (raw $ Var n) (raw $ Record (pair e1 e2)) :: Simple Exp -- TODO annotations?
         add = build DAG.LeftAssoc "+" "add"
         sub = build DAG.LeftAssoc "-" "sub"
         mul = build DAG.LeftAssoc "*" "mul"

@@ -17,7 +17,7 @@ import qualified Parse.Tokenise as Tokenise
 import           Praxis
 import           Term
 
-parse :: forall a. Recursive a => String -> Praxis (Parsed a)
+parse :: forall a. Recursive a => String -> Praxis (Simple a)
 parse s = do
   let top = case witness :: I a of { IProgram -> True; _ -> False }
   ts <- Tokenise.run top s

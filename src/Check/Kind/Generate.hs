@@ -22,13 +22,13 @@ import qualified Data.Set           as Set
 
 kind = view annotation
 
-generate :: Recursive a => Parsed a -> Praxis (Kinded a)
+generate :: Recursive a => Simple a -> Praxis (Kinded a)
 generate x = save stage $ do
   stage .= KindCheck Generate
   x' <- visit gen x
   return x'
 
-gen :: Recursive a => Parsed a -> Visit Praxis (Annotation KindCheck a) (Kinded a)
+gen :: Recursive a => Simple a -> Visit Praxis (Annotation KindAnn a) (Kinded a)
 gen x = case typeof x of
   IDataAlt -> skip
   IDecl    -> skip
@@ -40,12 +40,12 @@ gen x = case typeof x of
   IType    -> Resolve (ty x)
   -- TODO TyPat
 
-split :: ((Source, a Parse) -> Praxis (Annotation KindCheck a, a KindCheck)) -> Parsed a -> Praxis (Kinded a)
+split :: ((Source, a SimpleAnn) -> Praxis (Annotation KindAnn a, a KindAnn)) -> Simple a -> Praxis (Kinded a)
 split f x = do
   (a', x') <- f (view source x, view value x)
   return ((view source x, a') :< x')
 
-ty :: Parsed Type -> Praxis (Kinded Type)
+ty :: Simple Type -> Praxis (Kinded Type)
 ty = split $ \(s, t) -> case t of
 
     TyApply f a -> do

@@ -14,7 +14,7 @@ import           Common
 import           Term
 
 data System = System
-  { _sol         :: [(Name, Kind KindCheck)]
+  { _sol         :: [(Name, Kind KindAnn)]
   , _constraints :: [Kinded KindConstraint]
   , _staging     :: [Kinded KindConstraint]
   , _axioms      :: [Kinded KindConstraint]

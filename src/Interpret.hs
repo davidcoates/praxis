@@ -24,14 +24,14 @@ class Evaluable a b => Interpretable a b where
 
 instance Interpretable Program () where
   interpret s = do
-    x <- parse s :: Praxis (Parsed Program)
+    x <- parse s :: Praxis (Simple Program)
     y <- check x :: Praxis (Typed Program)
     v <- eval y
     return (y, v)
 
 instance Interpretable Exp Value where
   interpret s = do
-    x <- parse s :: Praxis (Parsed Exp)
+    x <- parse s :: Praxis (Simple Exp)
     y <- check x :: Praxis (Typed Exp)
     v <- eval y
     return (y, v)

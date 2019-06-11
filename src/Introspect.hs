@@ -144,15 +144,15 @@ instance (Annotation s Kind ~ Annotation t Kind) => Castable Kind s t where
     f i x = case i of
       IKind -> x
 
-instance Castable Type KindCheck TypeCheck where
+instance Castable Type KindAnn TypeAnn where
   cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation KindCheck a -> Annotation TypeCheck a
+    f :: forall a. Recursive a => I a -> Annotation KindAnn a -> Annotation TypeAnn a
     f i k = case i of
       IType -> cast k
 
-instance Castable QType KindCheck TypeCheck where
+instance Castable QType KindAnn TypeAnn where
   cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation KindCheck a -> Annotation TypeCheck a
+    f :: forall a. Recursive a => I a -> Annotation KindAnn a -> Annotation TypeAnn a
     f i k = case i of
       IQType -> ()
       IType  -> cast k
@@ -262,10 +262,10 @@ instance Recursive KindConstraint where
   recurse f x = case x of
     KEq a b -> KEq <$> f a <*> f b
 
-instance Complete Parse where
+instance Complete SimpleAnn where
   complete _ _ _ = pure ()
 
-instance Complete KindCheck where
+instance Complete KindAnn where
   complete f i a = case i of
     IDataAlt        -> pure ()
     IDecl           -> pure ()
@@ -280,7 +280,7 @@ instance Complete KindCheck where
     ITypeConstraint -> pure ()
     IKindConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
 
-instance Complete TypeCheck where
+instance Complete TypeAnn where
   complete f i a = case i of
     IDataAlt        -> pure ()
     IDecl           -> pure ()

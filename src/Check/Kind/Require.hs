@@ -20,10 +20,10 @@ require c = our . constraints %= (c:)
 requires :: [Kinded KindConstraint] -> Praxis ()
 requires = mapM_ require
 
-newConstraint :: KindConstraint KindCheck -> Reason -> Source -> Kinded KindConstraint
+newConstraint :: KindConstraint KindAnn -> Reason -> Source -> Kinded KindConstraint
 newConstraint c r s = (s, Root (show r)) :< c
 
-implies :: Kinded KindConstraint -> KindConstraint KindCheck -> Kinded KindConstraint
+implies :: Kinded KindConstraint -> KindConstraint KindAnn -> Kinded KindConstraint
 implies d c = let s = view source d in (s, Antecedent d) :< c
 
 our :: Lens' PraxisState System

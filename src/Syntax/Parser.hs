@@ -36,9 +36,9 @@ instance Parser f => Syntax (T f) where
   mark = T . mark
   unparseable = const (T empty)
 
-instance Parser f => Domain (T f) Parse where
+instance Parser f => Domain (T f) SimpleAnn where
   annotated (T p) = T $ (\(s :< p) -> (s, ()) :< p) <$> sourced p
   combine _ f (p, q) = (view source p <> view source q, ()) :< f (p, q)
 
-parse :: forall a f. (Recursive a, Parser f) => f (Annotated Parse a)
+parse :: forall a f. (Recursive a, Parser f) => f (Simple a)
 parse = unT (annotated (syntax (witness :: I a)))

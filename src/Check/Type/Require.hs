@@ -21,14 +21,14 @@ require c = our . constraints %= (c:)
 requires :: [Typed TypeConstraint] -> Praxis ()
 requires = mapM_ require
 
-newConstraint :: TypeConstraint TypeCheck -> Reason -> Source -> Typed TypeConstraint
+newConstraint :: TypeConstraint TypeAnn -> Reason -> Source -> Typed TypeConstraint
 newConstraint c r s = (s, Root (show r)) :< c
 
-implies :: Typed TypeConstraint -> TypeConstraint TypeCheck -> Typed TypeConstraint
+implies :: Typed TypeConstraint -> TypeConstraint TypeAnn -> Typed TypeConstraint
 implies d c = let s = view source d in (s, Antecedent d) :< c
 
 -- TODO Share should be taken out of the environment so we don't have to kind it
-share :: Typed Type -> TypeConstraint TypeCheck
+share :: Typed Type -> TypeConstraint TypeAnn
 share t = Class $ TyApply (TyCon "Share" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindConstraint
 
 our :: Lens' PraxisState System

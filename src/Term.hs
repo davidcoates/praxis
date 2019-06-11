@@ -29,13 +29,13 @@ module Term
   , KindConstraint(..)
   , TypeConstraint(..)
 
-  , Parse
-  , KindCheck
-  , TypeCheck
+  , SimpleAnn
+  , KindAnn
+  , TypeAnn
 
   , Annotation
   , Annotated
-  , Parsed
+  , Simple
   , Kinded
   , Typed
   , phantom
@@ -149,31 +149,31 @@ data TypeConstraint a = Class (Annotated a Type)
 data KindConstraint a = KEq (Annotated a Kind) (Annotated a Kind)
   deriving (Eq, Ord)
 
-data Parse
-data KindCheck
-data TypeCheck
+data SimpleAnn
+data KindAnn
+data TypeAnn
 
 type family Annotation a (b :: * -> *) where
-  -- |Parse
-  Annotation Parse     a              = ()
-  -- |KindCheck
-  Annotation KindCheck TyPat          = Kinded Kind
-  Annotation KindCheck Type           = Kinded Kind
-  Annotation KindCheck KindConstraint = Derivation KindCheck KindConstraint
-  Annotation KindCheck a              = ()
-  -- |TypeCheck
-  Annotation TypeCheck Exp            = Typed Type
-  Annotation TypeCheck Pat            = Typed Type
-  Annotation TypeCheck TyPat          = Typed Kind
-  Annotation TypeCheck Type           = Typed Kind
-  Annotation TypeCheck TypeConstraint = Derivation TypeCheck TypeConstraint
-  Annotation TypeCheck a              = ()
+  -- |SimpleAnn
+  Annotation SimpleAnn a            = ()
+  -- |KindAnn
+  Annotation KindAnn TyPat          = Kinded Kind
+  Annotation KindAnn Type           = Kinded Kind
+  Annotation KindAnn KindConstraint = Derivation KindAnn KindConstraint
+  Annotation KindAnn a              = ()
+  -- |TypeAnn
+  Annotation TypeAnn Exp            = Typed Type
+  Annotation TypeAnn Pat            = Typed Type
+  Annotation TypeAnn TyPat          = Typed Kind
+  Annotation TypeAnn Type           = Typed Kind
+  Annotation TypeAnn TypeConstraint = Derivation TypeAnn TypeConstraint
+  Annotation TypeAnn a              = ()
 
 type Annotated a b = Tag (Source, Annotation a b) (b a)
 
-type Parsed a = Annotated Parse     a
-type Kinded a = Annotated KindCheck a
-type Typed  a = Annotated TypeCheck a
+type Simple a = Annotated SimpleAnn a
+type Kinded a = Annotated KindAnn a
+type Typed  a = Annotated TypeAnn a
 
 phantom :: (Annotation a b ~ ()) => b a -> Annotated a b
 phantom x = x `as` ()

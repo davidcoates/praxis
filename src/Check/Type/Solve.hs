@@ -25,7 +25,7 @@ import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
 
-solve :: Praxis [(Name, Type TypeCheck)]
+solve :: Praxis [(Name, Type TypeAnn)]
 solve = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve'
@@ -144,7 +144,7 @@ progress d = case view value d of
 
 smap :: (forall a. Recursive a => Typed a -> Typed a) -> Praxis ()
 smap f = do
-  let lower :: (Typed Type -> Typed Type) -> Type TypeCheck -> Type TypeCheck
+  let lower :: (Typed Type -> Typed Type) -> Type TypeAnn -> Type TypeAnn
       lower f = view value . f . (`as` phantom KindType)
   our . tsol %= fmap (over second (lower f))
   our . constraints %= fmap f
@@ -152,7 +152,7 @@ smap f = do
   our . axioms %= fmap f
   tEnv %= over traverse f
 
-tsolve :: Name -> Type TypeCheck -> Praxis Bool
+tsolve :: Name -> Type TypeAnn -> Praxis Bool
 tsolve n t = do
   smap $ sub (\t' -> case t' of { TyUni n' | n == n' -> Just t; _ -> Nothing })
   our . tsol %= ((n, t):)

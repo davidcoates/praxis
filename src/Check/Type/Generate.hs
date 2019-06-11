@@ -26,7 +26,7 @@ import           Data.List           (nub, sort, transpose)
 import qualified Data.Set            as Set
 import           Prelude             hiding (exp, log, read)
 
-ty :: Typed a -> Annotation TypeCheck a
+ty :: Typed a -> Annotation TypeAnn a
 ty = view annotation
 
 generate :: Recursive a => Kinded a -> Praxis (Typed a)
@@ -38,7 +38,7 @@ generate x = save stage $ do
   output $ separate "\n\n" (nub . sort $ cs)
   return x'
 
-gen :: Recursive a => Kinded a -> Visit Praxis (Annotation TypeCheck a) (Typed a)
+gen :: Recursive a => Kinded a -> Visit Praxis (Annotation TypeAnn a) (Typed a)
 gen x = case typeof x of
   IDataAlt -> skip
   IDecl    -> Resolve (decl x)
@@ -64,12 +64,12 @@ fun a b = TyFun a b `as` phantom KindType
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 
-split :: ((Source, a KindCheck) -> Praxis (Annotation TypeCheck a, a TypeCheck)) -> Kinded a -> Praxis (Typed a)
+split :: ((Source, a KindAnn) -> Praxis (Annotation TypeAnn a, a TypeAnn)) -> Kinded a -> Praxis (Typed a)
 split f x = do
   (a', x') <- f (view source x, view value x)
   return ((view source x, a') :< x')
 
-splitFree :: ((Source, a KindCheck) -> Praxis (Annotation TypeCheck a, a TypeCheck, b)) -> Kinded a -> Praxis (Typed a, b)
+splitFree :: ((Source, a KindAnn) -> Praxis (Annotation TypeAnn a, a TypeAnn, b)) -> Kinded a -> Praxis (Typed a, b)
 splitFree f x = do
   (a', x', b) <- f (view source x, view value x)
   return ((view source x, a') :< x', b)

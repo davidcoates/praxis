@@ -15,7 +15,7 @@ import           Syntax
 import           Term
 import           Token
 
-run :: forall a. Recursive a => [Sourced Token] -> Praxis (Parsed a)
+run :: forall a. Recursive a => [Sourced Token] -> Praxis (Simple a)
 run ts = save stage $ do
   stage .= Parse
   p <- Parser.run parse ts

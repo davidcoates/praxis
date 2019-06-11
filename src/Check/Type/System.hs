@@ -14,7 +14,7 @@ import           Common
 import           Term
 
 data System = System
-  { _tsol        :: [(Name, Type TypeCheck)]
+  { _tsol        :: [(Name, Type TypeAnn)]
   , _constraints :: [Typed TypeConstraint]
   , _staging     :: [Typed TypeConstraint]
   , _axioms      :: [Typed TypeConstraint]

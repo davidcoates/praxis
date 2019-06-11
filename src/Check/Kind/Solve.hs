@@ -25,7 +25,7 @@ import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
 
-solve :: Praxis [(Name, Kind KindCheck)]
+solve :: Praxis [(Name, Kind KindAnn)]
 solve = save stage $ save our $ do
   stage .= KindCheck Solve
   solve'
@@ -99,7 +99,7 @@ progress d = case view value d of
 
 smap :: (forall a. Recursive a => Kinded a -> Kinded a) -> Praxis ()
 smap f = do
-  let lower :: (Kinded Kind -> Kinded Kind) -> Kind KindCheck -> Kind KindCheck
+  let lower :: (Kinded Kind -> Kinded Kind) -> Kind KindAnn -> Kind KindAnn
       lower f = view value . f . phantom
   our . sol %= fmap (over second (lower f))
   our . constraints %= fmap f
@@ -107,7 +107,7 @@ smap f = do
   our . axioms %= fmap f
   kEnv %= over traverse f
 
-(~>) :: Name -> Kind KindCheck -> Praxis Bool
+(~>) :: Name -> Kind KindAnn -> Praxis Bool
 (~>) n k = do
   smap $ sub (\k' -> case k' of { KindUni n' | n == n' -> Just k; _ -> Nothing })
   our . sol %= ((n, k):)

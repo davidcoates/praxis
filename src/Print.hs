@@ -58,17 +58,17 @@ unlayout ts = unlayout' (-1) ts where
 instance (Label s, Recursive a, x ~ Annotation s a) => Pretty (Tag (Source, x) (a s)) where
   pretty = unlayout . force unparse
 
-instance Label Parse where
+instance Label SimpleAnn where
   label t = Nil
 
-instance Label KindCheck where
+instance Label KindAnn where
   label t = let a = view annotation t in case typeof t of
     ITyPat          -> pretty a
     IType           -> pretty a
     IKindConstraint -> pretty a
     _               -> Nil
 
-instance Label TypeCheck where
+instance Label TypeAnn where
   label t = let a = view annotation t in case typeof t of
     IExp            -> pretty a
     IPat            -> pretty a

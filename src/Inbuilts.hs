@@ -32,8 +32,8 @@ initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEn
 mono :: String -> Typed QType
 mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), ()) :< Mono (a :< t)
   where m :: Praxis (Typed Type)
-        m = retag f <$> (parse s :: Praxis (Parsed Type))
-        f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
+        m = retag f <$> (parse s :: Praxis (Simple Type))
+        f :: forall a. Recursive a => I a -> Annotation SimpleAnn a -> Annotation TypeAnn a
         f i x = case i of
           IType  -> phantom KindType
           IQType -> ()
@@ -45,7 +45,7 @@ poly vs s = let (a :< Mono t) = mono s in a :< Forall vs t
 kind :: String -> Typed Kind
 kind s = runInternal initialState m
   where m :: Praxis (Typed Kind)
-        m = cast <$> (parse s :: Praxis (Parsed Kind))
+        m = cast <$> (parse s :: Praxis (Simple Kind))
 
 -- TODO reduce duplication with retag
 
@@ -82,7 +82,7 @@ initialTEnv = TEnv.fromList (map (\(n, t, _) -> (n, t)) prelude)
 
 initialKEnv :: KEnv
 initialKEnv = KEnv.fromList (map (\(a,b) -> (a, retag f b)) preludeKinds) where
-  f :: forall a. Recursive a => I a -> Annotation TypeCheck a -> Annotation KindCheck a
+  f :: forall a. Recursive a => I a -> Annotation TypeAnn a -> Annotation KindAnn a
   f i x = case i of
     IKind  -> ()
 

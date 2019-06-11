@@ -2,7 +2,7 @@
 
 module Check.Type.System
   ( System
-  , tsol
+  , sol
   , constraints
   , staging
   , axioms
@@ -14,7 +14,7 @@ import           Common
 import           Term
 
 data System = System
-  { _tsol        :: [(Name, Type TypeAnn)]
+  { _sol         :: [(Name, Type TypeAnn)]
   , _constraints :: [Typed TypeConstraint]
   , _staging     :: [Typed TypeConstraint]
   , _axioms      :: [Typed TypeConstraint]
@@ -24,7 +24,7 @@ makeLenses ''System
 
 initialSystem :: System
 initialSystem = System
-  { _tsol        = []
+  { _sol        = []
   , _constraints = []
   , _staging     = []
   , _axioms      = []

@@ -29,7 +29,7 @@ solve :: Praxis [(Name, Type TypeAnn)]
 solve = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve'
-  t <- use (our . tsol)
+  t <- use (our . sol)
   return t
 
 data State = Cold
@@ -87,7 +87,7 @@ progress d = case view value d of
 
   TEq t1 t2 | t1 == t2 -> tautology
 
-  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else tsolve x (view value t)
+  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else x ~> view value t
   TEq _ (_ :< TyUni _) -> swap
 
   TEq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ TEq t1 t2 ]
@@ -102,22 +102,22 @@ progress d = case view value d of
 
   TEq t1@(_ :< TyFlat e1) t2@(_ :< TyFlat e2)
     | e1 > e2 -> swap
-    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` unis t2 then defer else tsolve n (view value t2)
-    | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = tsolve n (TyFlat Set.empty)
+    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` unis t2 then defer else n ~> view value t2
+    | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = n ~> TyFlat Set.empty
                                              empty _              = contradiction
                                          in foldr (\a b -> empty a >> b) solved e2
     | Just ((n1, l1), (n2, l2)) <- liftA2 (,) (snake e1) (snake e2) ->
         if n1 == n2 then do
           a <- freshUniT
-          tsolve n1 (TyFlat (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2]))
+          n1 ~> TyFlat (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2])
         else
-          tsolve n1 (TyFlat (Set.union (Set.difference l2 l1) (Set.singleton (TyUni n2 `as` phantom KindType))))
+          n1 ~> TyFlat (Set.union (Set.difference l2 l1) (Set.singleton (TyUni n2 `as` phantom KindType)))
     | Just (n1, l1) <- snake e1 ->
         if literals e2 then
           if Set.isSubsetOf l1 e2 then
             defer
             -- FIXME This isn't correct! We could add any subset of l1 to n1
-            -- tsolve n1 (TyFlat (Set.difference e2 l1)) -- TODO for all these differences, need to flatten?
+            -- solve n1 (TyFlat (Set.difference e2 l1)) -- TODO for all these differences, need to flatten?
           else
             contradiction
         else
@@ -146,16 +146,16 @@ smap :: (forall a. Recursive a => Typed a -> Typed a) -> Praxis ()
 smap f = do
   let lower :: (Typed Type -> Typed Type) -> Type TypeAnn -> Type TypeAnn
       lower f = view value . f . (`as` phantom KindType)
-  our . tsol %= fmap (over second (lower f))
+  our . sol %= fmap (over second (lower f))
   our . constraints %= fmap f
   our . staging %= fmap f
   our . axioms %= fmap f
   tEnv %= over traverse f
 
-tsolve :: Name -> Type TypeAnn -> Praxis Bool
-tsolve n t = do
+(~>) :: Name -> Type TypeAnn -> Praxis Bool
+(~>) n t = do
   smap $ sub (\t' -> case t' of { TyUni n' | n == n' -> Just t; _ -> Nothing })
-  our . tsol %= ((n, t):)
+  our . sol %= ((n, t):)
   reuse n
   return True
 

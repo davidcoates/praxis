@@ -47,8 +47,6 @@ kind s = runInternal initialState m
   where m :: Praxis (Typed Kind)
         m = cast <$> (parse s :: Praxis (Simple Kind))
 
--- TODO reduce duplication with retag
-
 prelude :: [(Name, Typed QType, Value)]
 prelude =
   [ ("add",      mono "(Int, Int) -> Int", lift (+))
@@ -63,7 +61,6 @@ prelude =
         lift :: (Int -> Int -> Int) -> Value
         lift f = F (\(R r) -> case Record.unpair r of (L (Int a), L (Int b)) -> pure (L (Int (f a b))))
 
--- TODO use parser for this
 preludeKinds :: [(Name, Typed Kind)]
 preludeKinds =
   [ ("Int",    kind "Type")

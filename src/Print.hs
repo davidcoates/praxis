@@ -73,6 +73,5 @@ instance Label TypeCheck where
     IExp            -> pretty a
     IPat            -> pretty a
     ITyPat          -> pretty a
-    IType           -> pretty a
     ITypeConstraint -> pretty a
     _               -> Nil

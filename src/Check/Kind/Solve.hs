@@ -99,8 +99,8 @@ progress d = case view value d of
 
 smap :: (forall a. Recursive a => Kinded a -> Kinded a) -> Praxis ()
 smap f = do
-  let lower :: forall a. (Recursive a, Annotation KindCheck a ~ ()) => (Kinded a -> Kinded a) -> a KindCheck -> a KindCheck
-      lower f = view value . f . ((Phantom, ()) :<)
+  let lower :: (Kinded Kind -> Kinded Kind) -> Kind KindCheck -> Kind KindCheck
+      lower f = view value . f . phantom
   our . sol %= fmap (over second (lower f))
   our . constraints %= fmap f
   our . staging %= fmap f

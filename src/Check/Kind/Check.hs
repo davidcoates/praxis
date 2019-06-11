@@ -12,7 +12,7 @@ import           Praxis
 import           Stage
 import           Term
 
-check :: Recursive a => Typed a -> Praxis (Kinded a)
+check :: Recursive a => Parsed a -> Praxis (Kinded a)
 check a = save stage $ do
   stage .= KindCheck Warmup
   our .= initialSystem

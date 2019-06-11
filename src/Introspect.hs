@@ -1,6 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE Rank2Types                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE StandaloneDeriving        #-}
@@ -21,12 +22,14 @@ module Introspect
   , only
   , asub
   , retag
+  , cast
   ) where
 
 import           Common
 import           Term
 
 import qualified Data.Set as Set (fromList, toList)
+import           GHC.Exts (Constraint)
 
 -- These lenses are a bit more general so we can use them in a piecewise way
 -- (where the intermedite value has an annotation and value which don't commute)
@@ -131,6 +134,34 @@ retag :: forall s t b. Recursive b => (forall a. Recursive a => I a -> Annotatio
 retag f = runIdentity . visit f'
   where f' :: forall a. Recursive a => Annotated s a -> Visit Identity (Annotation t a) (Annotated t a)
         f' x = Visit (Identity (f (typeof x) (view annotation x)))
+
+class Castable a s t where
+  cast :: Annotated s a -> Annotated t a
+
+instance Castable Kind Parse KindCheck where
+  cast = retag f where
+    f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation KindCheck a
+    f i _ = case i of
+      IKind -> ()
+
+instance Castable Kind KindCheck TypeCheck where
+  cast = retag f where
+    f :: forall a. Recursive a => I a -> Annotation KindCheck a -> Annotation TypeCheck a
+    f i _ = case i of
+      IKind -> ()
+
+instance Castable Type KindCheck TypeCheck where
+  cast = retag f where
+    f :: forall a. Recursive a => I a -> Annotation KindCheck a -> Annotation TypeCheck a
+    f i k = case i of
+      IType -> cast k
+
+instance Castable QType KindCheck TypeCheck where
+  cast = retag f where
+    f :: forall a. Recursive a => I a -> Annotation KindCheck a -> Annotation TypeCheck a
+    f i k = case i of
+      IQType -> ()
+      IType  -> cast k
 
 -- Implementations below here
 
@@ -240,22 +271,22 @@ instance Recursive KindConstraint where
 instance Complete Parse where
   complete _ _ _ = pure ()
 
-instance Complete TypeCheck where
+instance Complete KindCheck where
   complete f i a = case i of
     IDataAlt        -> pure ()
     IDecl           -> pure ()
-    IExp            -> f a
+    IExp            -> pure ()
     IKind           -> pure ()
-    IPat            -> f a
+    IPat            -> pure ()
     IProgram        -> pure ()
     IQType          -> pure ()
     IStmt           -> pure ()
-    ITyPat          -> pure ()
-    IType           -> pure ()
-    ITypeConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
-    IKindConstraint -> pure ()
+    ITyPat          -> f a
+    IType           -> f a
+    ITypeConstraint -> pure ()
+    IKindConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
 
-instance Complete KindCheck where
+instance Complete TypeCheck where
   complete f i a = case i of
     IDataAlt        -> pure ()
     IDecl           -> pure ()
@@ -267,5 +298,5 @@ instance Complete KindCheck where
     IStmt           -> pure ()
     ITyPat          -> pure a
     IType           -> pure a
-    ITypeConstraint -> pure ()
-    IKindConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
+    ITypeConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
+    IKindConstraint -> pure ()

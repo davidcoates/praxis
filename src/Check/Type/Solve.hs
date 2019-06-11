@@ -111,7 +111,7 @@ progress d = case view value d of
           a <- freshUniT
           tsolve n1 (TyFlat (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2]))
         else
-          tsolve n1 (TyFlat (Set.union (Set.difference l2 l1) (Set.singleton ((Phantom, ()) :< TyUni n2))))
+          tsolve n1 (TyFlat (Set.union (Set.difference l2 l1) (Set.singleton (TyUni n2 `as` phantom KindType))))
     | Just (n1, l1) <- snake e1 ->
         if literals e2 then
           if Set.isSubsetOf l1 e2 then
@@ -144,8 +144,8 @@ progress d = case view value d of
 
 smap :: (forall a. Recursive a => Typed a -> Typed a) -> Praxis ()
 smap f = do
-  let lower :: forall a. (Recursive a, Annotation TypeCheck a ~ ()) => (Typed a -> Typed a) -> a TypeCheck -> a TypeCheck
-      lower f = view value . f . ((Phantom, ()) :<)
+  let lower :: (Typed Type -> Typed Type) -> Type TypeCheck -> Type TypeCheck
+      lower f = view value . f . (`as` phantom KindType)
   our . tsol %= fmap (over second (lower f))
   our . constraints %= fmap f
   our . staging %= fmap f

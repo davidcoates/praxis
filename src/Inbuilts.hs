@@ -35,7 +35,7 @@ mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), ())
         m = retag f <$> (parse s :: Praxis (Parsed Type))
         f :: forall a. Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
         f i x = case i of
-          IType  -> ()
+          IType  -> phantom KindType
           IQType -> ()
 
 -- TODO parse qty

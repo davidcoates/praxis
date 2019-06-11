@@ -10,8 +10,7 @@ import           Introspect
 import           Praxis
 import           Term
 
-check :: Recursive a => Parsed a -> Praxis (Kinded a)
+check :: Recursive a => Parsed a -> Praxis (Typed a)
 check x = do
   system .= initialSystem
-  x' <- Type.check x
-  Kind.check x'
+  Kind.check x >>= Type.check

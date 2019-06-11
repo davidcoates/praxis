@@ -15,8 +15,8 @@ import           Term
 import           Value  (Value)
 
 class Evaluable a b => Interpretable a b where
-  interpret :: String -> Praxis (Kinded a, b)
-  interpretFile :: FilePath -> Praxis (Kinded a, b)
+  interpret :: String -> Praxis (Typed a, b)
+  interpretFile :: FilePath -> Praxis (Typed a, b)
   interpretFile f = do
     filename .= f
     s <- liftIO (readFile f)
@@ -25,13 +25,13 @@ class Evaluable a b => Interpretable a b where
 instance Interpretable Program () where
   interpret s = do
     x <- parse s :: Praxis (Parsed Program)
-    y <- check x :: Praxis (Kinded Program)
+    y <- check x :: Praxis (Typed Program)
     v <- eval y
     return (y, v)
 
 instance Interpretable Exp Value where
   interpret s = do
     x <- parse s :: Praxis (Parsed Exp)
-    y <- check x :: Praxis (Kinded Exp)
+    y <- check x :: Praxis (Typed Exp)
     v <- eval y
     return (y, v)

@@ -61,19 +61,18 @@ instance (Label s, Recursive a, x ~ Annotation s a) => Pretty (Tag (Source, x) (
 instance Label Parse where
   label t = Nil
 
-instance Label TypeCheck where
-  label t = let a = view annotation t in case typeof t of
-    IExp            -> pretty a
-    IPat            -> pretty a
-    ITypeConstraint -> pretty a
-    _               -> Nil
-
 instance Label KindCheck where
   label t = let a = view annotation t in case typeof t of
-    IExp            -> pretty a
-    IPat            -> pretty a
     ITyPat          -> pretty a
     IType           -> pretty a
     IKindConstraint -> pretty a
     _               -> Nil
 
+instance Label TypeCheck where
+  label t = let a = view annotation t in case typeof t of
+    IExp            -> pretty a
+    IPat            -> pretty a
+    ITyPat          -> pretty a
+    IType           -> pretty a
+    ITypeConstraint -> pretty a
+    _               -> Nil

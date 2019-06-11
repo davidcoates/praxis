@@ -27,8 +27,9 @@ newConstraint c r s = (s, Root (show r)) :< c
 implies :: Typed TypeConstraint -> TypeConstraint TypeCheck -> Typed TypeConstraint
 implies d c = let s = view source d in (s, Antecedent d) :< c
 
+-- TODO Share should be taken out of the environment so we don't have to kind it
 share :: Typed Type -> TypeConstraint TypeCheck
-share t = Class $ (Phantom, ()) :< TyApply ((Phantom, ()) :< TyCon "Share") t
+share t = Class $ TyApply (TyCon "Share" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindConstraint
 
 our :: Lens' PraxisState System
 our = system . typeSystem

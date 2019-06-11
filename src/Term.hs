@@ -25,19 +25,21 @@ module Term
   -- | T2
   , Kind(..)
 
-  -- | Solver (TODO move elsewhere?)
-  , TypeConstraint(..)
+  -- | Solver
   , KindConstraint(..)
+  , TypeConstraint(..)
 
   , Parse
-  , TypeCheck
   , KindCheck
+  , TypeCheck
 
   , Annotation
   , Annotated
   , Parsed
-  , Typed
   , Kinded
+  , Typed
+  , phantom
+  , as
 
   , Derivation(..)
   ) where
@@ -139,6 +141,7 @@ data Kind a = KindUni Name
             | KindType
   deriving (Eq, Ord)
 
+infixl 8 `TEq`
 data TypeConstraint a = Class (Annotated a Type)
                       | TEq (Annotated a Type) (Annotated a Type)
   deriving (Eq, Ord)
@@ -147,30 +150,36 @@ data KindConstraint a = KEq (Annotated a Kind) (Annotated a Kind)
   deriving (Eq, Ord)
 
 data Parse
-data TypeCheck
 data KindCheck
+data TypeCheck
 
 type family Annotation a (b :: * -> *) where
   -- |Parse
   Annotation Parse     a              = ()
-  -- |TypeCheck
-  Annotation TypeCheck Exp            = Typed Type
-  Annotation TypeCheck Pat            = Typed Type
-  Annotation TypeCheck TypeConstraint = Derivation TypeCheck TypeConstraint
-  Annotation TypeCheck a              = ()
   -- |KindCheck
-  Annotation KindCheck Exp            = Kinded Type
-  Annotation KindCheck Pat            = Kinded Type
   Annotation KindCheck TyPat          = Kinded Kind
   Annotation KindCheck Type           = Kinded Kind
   Annotation KindCheck KindConstraint = Derivation KindCheck KindConstraint
   Annotation KindCheck a              = ()
+  -- |TypeCheck
+  Annotation TypeCheck Exp            = Typed Type
+  Annotation TypeCheck Pat            = Typed Type
+  Annotation TypeCheck TyPat          = Typed Kind
+  Annotation TypeCheck Type           = Typed Kind
+  Annotation TypeCheck TypeConstraint = Derivation TypeCheck TypeConstraint
+  Annotation TypeCheck a              = ()
 
 type Annotated a b = Tag (Source, Annotation a b) (b a)
 
 type Parsed a = Annotated Parse     a
-type Typed  a = Annotated TypeCheck a
 type Kinded a = Annotated KindCheck a
+type Typed  a = Annotated TypeCheck a
+
+phantom :: (Annotation a b ~ ()) => b a -> Annotated a b
+phantom x = x `as` ()
+
+as :: b a -> Annotation a b -> Annotated a b
+as x a = (Phantom, a) :< x
 
 -- TODO should this be somewhere else?
 data Derivation s a = Root String

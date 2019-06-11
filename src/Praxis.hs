@@ -194,7 +194,7 @@ freshUniT :: Praxis (Typed Type)
 freshUniT = do
   (x:xs) <- use (fresh . freshUniTs)
   fresh . freshUniTs .= xs
-  return ((Phantom, ()) :< TyUni x)
+  return ((Phantom, (Phantom, ()) :< KindType) :< TyUni x)
 
 freshUniK :: Praxis (Kinded Kind)
 freshUniK = do

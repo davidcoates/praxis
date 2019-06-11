@@ -26,12 +26,10 @@ import           Data.List           (nub, sort, transpose)
 import qualified Data.Set            as Set
 import           Prelude             hiding (exp, log, read)
 
--- TODO factor out (Phantom, ()) everywhere?
-
 ty :: Typed a -> Annotation TypeCheck a
 ty = view annotation
 
-generate :: Recursive a => Parsed a -> Praxis (Typed a)
+generate :: Recursive a => Kinded a -> Praxis (Typed a)
 generate x = save stage $ do
   stage .= TypeCheck Generate
   x' <- visit gen x
@@ -40,14 +38,14 @@ generate x = save stage $ do
   output $ separate "\n\n" (nub . sort $ cs)
   return x'
 
-gen :: Recursive a => Parsed a -> Visit Praxis (Annotation TypeCheck a) (Typed a)
+gen :: Recursive a => Kinded a -> Visit Praxis (Annotation TypeCheck a) (Typed a)
 gen x = case typeof x of
   IDataAlt -> skip
   IDecl    -> Resolve (decl x)
   IExp     -> Resolve (exp x)
   IProgram -> skip
-  IQType   -> skip
-  IType    -> skip
+  IQType   -> Resolve (pure (cast x))
+  IType    -> Resolve (pure (cast x))
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -61,39 +59,22 @@ parallel (x:xs) = do
 
 -- TODO move this somewhere
 fun :: Typed Type -> Typed Type -> Typed Type
-fun a b = (Phantom, ()) :< TyFun a b
+fun a b = TyFun a b `as` phantom KindType
 
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 
-split :: ((Source, a Parse) -> Praxis (Annotation TypeCheck a, a TypeCheck)) -> Parsed a -> Praxis (Typed a)
+split :: ((Source, a KindCheck) -> Praxis (Annotation TypeCheck a, a TypeCheck)) -> Kinded a -> Praxis (Typed a)
 split f x = do
   (a', x') <- f (view source x, view value x)
   return ((view source x, a') :< x')
 
-splitFree :: ((Source, a Parse) -> Praxis (Annotation TypeCheck a, a TypeCheck, b)) -> Parsed a -> Praxis (Typed a, b)
+splitFree :: ((Source, a KindCheck) -> Praxis (Annotation TypeCheck a, a TypeCheck, b)) -> Kinded a -> Praxis (Typed a, b)
 splitFree f x = do
   (a', x', b) <- f (view source x, view value x)
   return ((view source x, a') :< x', b)
 
-cast :: Recursive a => Parsed a -> Typed a
-cast = retag f where
-  f :: Recursive a => I a -> Annotation Parse a -> Annotation TypeCheck a
-  f i a = case i of
-    IType  -> a
-    IQType -> a
-
--- TODO call this something else, move it somewhere common, perhaps Type
-empty :: Typed Type
-empty = (Phantom, ()) :< TyFlat Set.empty
-
--- TODO Source
-flat :: [Typed Type] -> Typed Type
-flat ts = (Phantom, ()) :< TyFlat (Set.unions (map f ts)) where
-  f (_ :< TyFlat ts) = ts
-  f t                = Set.singleton t
-
-decl :: Parsed Decl -> Praxis (Typed Decl)
+decl :: Kinded Decl -> Praxis (Typed Decl)
 decl = split $ \(s, d) -> case d of
 
   -- TODO safe recursion check
@@ -108,7 +89,7 @@ decl = split $ \(s, d) -> case d of
     equal t' (ty e') (UserSignature (Just n)) s
     return ((), DeclVar n Nothing e')
 
-stmt :: Parsed Stmt -> Praxis (Typed Stmt)
+stmt :: Kinded Stmt -> Praxis (Typed Stmt)
 stmt = split $ \(s, x) -> case x of
 
   StmtDecl d -> do
@@ -121,9 +102,9 @@ stmt = split $ \(s, x) -> case x of
 
 
 mono :: Typed Type -> Typed QType
-mono t = view tag t :< Mono t
+mono t = (view source t, ()) :< Mono t
 
-exp :: Parsed Exp -> Praxis (Typed Exp)
+exp :: Kinded Exp -> Praxis (Typed Exp)
 exp = split $ \(s, e) -> case e of
 
   Apply f x -> do
@@ -162,7 +143,7 @@ exp = split $ \(s, e) -> case e of
   If a b c -> do
     a' <- exp a
     (b', c') <- join (exp b) (exp c)
-    require $ newConstraint (ty a' `TEq` ((Phantom, ()) :< TyCon "Bool")) IfCondition s
+    require $ newConstraint (ty a' `TEq` TyCon "Bool" `as` phantom KindType) IfCondition s
     require $ newConstraint (ty b' `TEq` ty c') IfCongruence s
     return (ty b', If a' b' c')
 
@@ -174,7 +155,7 @@ exp = split $ \(s, e) -> case e of
 
   Lit x -> do
     let t = case x of { Int _ -> TyCon "Int" ; Bool _ -> TyCon "Bool" ; String _ -> TyCon "String" ; Char _ -> TyCon "Char" }
-    return ((Phantom, ()) :< t, Lit x)
+    return (t `as` phantom KindType, Lit x)
 
   Read n e -> do
     t <- read s n
@@ -185,7 +166,7 @@ exp = split $ \(s, e) -> case e of
 
   Record r -> do
     r' <- traverse exp r
-    let t = (Phantom, ()) :< TyRecord (fmap ty r')
+    let t = TyRecord (fmap ty r') `as` phantom KindType
     return (t, Record r')
 
 {-
@@ -203,14 +184,14 @@ exp = split $ \(s, e) -> case e of
 equals :: [(Source, Typed Type)] -> Reason -> Praxis (Typed Type)
 equals ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
 
-bind :: (Parsed Pat, Parsed Exp) -> Praxis (Typed Pat, Typed Exp)
+bind :: (Kinded Pat, Kinded Exp) -> Praxis (Typed Pat, Typed Exp)
 bind (s :< p, e) = do
   (p', i) <- pat (s :< p)
   e' <- exp e
   elimN i
   return (p', e')
 
-pat :: Parsed Pat -> Praxis (Typed Pat, Int)
+pat :: Kinded Pat -> Praxis (Typed Pat, Int)
 pat = splitFree $ \(s, p) -> case p of
 
   PatAt v p -> do
@@ -223,7 +204,7 @@ pat = splitFree $ \(s, p) -> case p of
     t <- freshUniT
     return (t, PatHole, 0)
 
-  PatLit l -> return (((Phantom, ()) :< TyCon (lit l)), PatLit l, 0)
+  PatLit l -> return (TyCon (lit l) `as` phantom KindType, PatLit l, 0)
     where lit (Bool _)   = "Bool"
           lit (Char _)   = "Char"
           lit (Int _)    = "Int"
@@ -231,7 +212,7 @@ pat = splitFree $ \(s, p) -> case p of
 
   PatRecord r -> do
     (r', i) <- traverseSum pat r
-    let t = (Phantom, ()) :< TyRecord (fmap ty r')
+    let t = TyRecord (fmap ty r') `as` phantom KindType
     return (t, PatRecord r', i)
 
   PatVar v -> do

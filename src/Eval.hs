@@ -18,8 +18,8 @@ import           Data.Monoid (Sum (..))
 import           Prelude     hiding (exp)
 
 class Evaluable a b | a -> b where
-  eval' :: Kinded a -> Praxis b
-  eval  :: Kinded a -> Praxis b
+  eval' :: Typed a -> Praxis b
+  eval  :: Typed a -> Praxis b
   eval e = save stage $ do
     stage .= Evaluate
     clear
@@ -31,17 +31,17 @@ instance Evaluable Program () where
 instance Evaluable Exp Value where
   eval' = exp
 
-program :: Kinded Program -> Praxis ()
+program :: Typed Program -> Praxis ()
 program (_ :< Program ds) = mapM_ decl ds
 
-decl :: Kinded Decl -> Praxis ()
+decl :: Typed Decl -> Praxis ()
 decl (a :< e) = case e of
 
   DeclVar n t e -> do
     e' <- exp e
     intro n e'
 
-stmt :: Kinded Stmt -> Praxis (Sum Int)
+stmt :: Typed Stmt -> Praxis (Sum Int)
 stmt (_ :< s) = case s of
 
   StmtDecl d -> decl d >> return (Sum 0)
@@ -49,7 +49,7 @@ stmt (_ :< s) = case s of
   StmtExp e  -> exp e >> return (Sum 1)
 
 
-exp :: Kinded Exp -> Praxis Value
+exp :: Typed Exp -> Praxis Value
 exp (_ :< e) = case e of
 
   Apply f x -> do
@@ -95,7 +95,7 @@ exp (_ :< e) = case e of
     return v
 
 
-cases :: Value -> [(Kinded Pat, Kinded Exp)] -> Praxis Value
+cases :: Value -> [(Typed Pat, Typed Exp)] -> Praxis Value
 cases x [] = error ("no matching pattern" ++ show x)
 cases x ((p,e):ps) = case bind x p of
   Just c  -> do
@@ -106,11 +106,11 @@ cases x ((p,e):ps) = case bind x p of
   Nothing ->
     cases x ps
 
-forceBind :: Value -> Kinded Pat -> Praxis Int
+forceBind :: Value -> Typed Pat -> Praxis Int
 forceBind v p = case bind v p of Just i  -> i
                                  Nothing -> error "no matching pattern" -- TODO
 
-bind :: Value -> Kinded Pat -> Maybe (Praxis Int)
+bind :: Value -> Typed Pat -> Maybe (Praxis Int)
 bind v (_ :< p) = case p of
 
   PatAt n p

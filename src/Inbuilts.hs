@@ -81,8 +81,5 @@ initialTEnv :: TEnv
 initialTEnv = TEnv.fromList (map (\(n, t, _) -> (n, t)) prelude)
 
 initialKEnv :: KEnv
-initialKEnv = KEnv.fromList (map (\(a,b) -> (a, retag f b)) preludeKinds) where
-  f :: forall a. Recursive a => I a -> Annotation TypeAnn a -> Annotation KindAnn a
-  f i x = case i of
-    IKind  -> ()
+initialKEnv = KEnv.fromList (map (\(a,b) -> (a, cast b)) preludeKinds) where
 

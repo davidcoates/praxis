@@ -1,60 +1,15 @@
-- Checking poly signatures
-
 - Data
 
-- Classes, instances
+- Instance solver
+
+- Synonyms
+
+- Classes
+
+- Remove impurity
 
 - XTypes
 
-- Lenses, 'in' constraints
+- Record lenses, 'in' constraints
 
 - Modules
-- module imports should be side effect free. So top level terms should be pure. They should also be shareable.
-- Polymorphic types shouldn't be affine?
-
-- Abstract types
-
-For the sake of simplicity, may want to avoid view operators.
-
-This means we need to disginstuish between value and view patterns.
-
-f = cases
-  !Cons (x, xs) -> ...
-  !Nil -> ...
-
-But then we have duplication...
-Perhaps default to value?
-
-or separate construct
-
-f = !cases
-  Cons (x, xs) -> ...
-  Nil -> ...
-
-
-Restricted type lambdas, e.g.,
-instance Functor (\a -> Either [a, b]) where ...
-
-Perhaps we should instead use the more restrictive syntax, 
-instance Functor (Either [_, b])
-
-This would be too restrictive, e.g., if we have
-
-class Functor (f : * -> *, c : * -> C) where
-  map : c b => (a -> b # e) -> f a -> f b # e
-
-instance Functor (\a -> Either [a, b], Trivial)
-
-instance Functor (Set, Ord)
-
-Explicit forall for poly types? Otherwise it refers to tyvar in scope?
-Need to add a map somewhere from TyVar to TyUni. Could fit entirely in KEnv, perhaps.
-
-Rename KindRecord -> KindPack ?
-
-Kind of QType doesn't really make sense?
-
-Should QType's really be kinded? Seems unnecessary.
-
-Consistent use of TypeCheck/KindCheck vs Annotated TypeCheck blah
-

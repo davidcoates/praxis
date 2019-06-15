@@ -164,7 +164,7 @@ instance Castable QType KindAnn TypeAnn where
 instance Recursive DataAlt where
   witness = IDataAlt
   recurse f x = case x of
-    DataAlt n t -> DataAlt n <$> f t
+    DataAlt n t -> DataAlt n <$> traverse f t
 
 instance Recursive Decl where
   witness = IDecl

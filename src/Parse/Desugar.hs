@@ -62,6 +62,14 @@ stmts (s:ss) | a :< StmtExp e <- s = do
                   where isStmtDecl (_ :< StmtDecl _) = True
                         isStmtDecl _                 = False
 
+pack :: Source -> (Record b -> b) -> (a -> Praxis b) -> Record a -> Praxis b
+pack s build f r = do
+  r' <- traverse f r
+  case Record.toList r' of
+    []  -> throwAt s $ plain "illegal empty pack"
+    [_] -> throwAt s $ plain "illegal single-field pack"
+    _   -> return $ build r'
+
 record :: Source -> (Record b -> b) -> (a -> Praxis b) -> Record a -> Praxis b
 record s build f r = do
   r' <- traverse f r
@@ -90,7 +98,7 @@ exp (a :< x) = case x of
 
 
 decls :: [Simple Decl] -> Praxis [Simple Decl]
-decls []              = pure []
+decls []            = pure []
 decls (a :< d : ds) = case d of
 
   DeclSig n t -> do
@@ -110,6 +118,19 @@ decls (a :< d : ds) = case d of
                (a' :< DeclVar m t as) : ds' | m == n    -> error "TODO multiple definitions"
                                             | otherwise -> return $ d:ds
 
+  DeclData n t as -> do
+    t' <- traverse tyPat t
+    as' <- traverse dataAlt as
+    ds' <- decls ds
+    return (a :< DeclData n t' as' : ds')
+
+
+dataAlt :: Simple DataAlt -> Praxis (Simple DataAlt)
+dataAlt (a :< x) = (a :<) <$> case x of
+
+  DataAlt n ts ->  DataAlt n <$> traverse ty ts
+
+
 -- TODO check for overlapping patterns?
 pat :: Simple Pat -> Praxis (Simple Pat)
 pat (a :< x) = case x of
@@ -124,7 +145,17 @@ ty (a :< x) = case x of
 
   TyRecord r -> record (fst a) (\r' -> a :< TyRecord r') ty r
 
+  TyPack r   -> pack (fst a) (\r' -> a :< TyPack r') ty r
+
   _          -> (a :<) <$> recurse desugar x
+
+
+tyPat :: Simple TyPat -> Praxis (Simple TyPat)
+tyPat (a :< x) = case x of
+
+  TyPatPack r -> pack (fst a) (\r' -> a :< TyPatPack r') tyPat r
+
+  _           -> (a :<) <$> recurse desugar x
 
 
 type MTok = DAG.Tok (Tag (Source, ()) Op) (Simple Exp)

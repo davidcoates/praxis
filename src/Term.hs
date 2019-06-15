@@ -72,7 +72,7 @@ data Decl a = DeclData Name (Maybe (Annotated a TyPat)) [Annotated a DataAlt]
             | DeclVar Name (Maybe (Annotated a QType)) (Annotated a Exp)
   deriving (Eq)
 
-data DataAlt a = DataAlt Name (Annotated a Type)
+data DataAlt a = DataAlt Name [Annotated a Type]
   deriving (Eq)
 
 data Exp a = Apply (Annotated a Exp) (Annotated a Exp)

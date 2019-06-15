@@ -80,7 +80,7 @@ string = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminat
 
 reservedids = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall", "let"]
 reservedcons = ["Type", "Constraint"]
-reservedops = [":", "=>", "=", "\\", "->", "#", "@", "|"]
+reservedops = [":", "=>", "=", "\\", "->", "@"]
 
 -- Possibly qualified, possibly reserved conid / varid / consym / varsym
 stuff :: Tokeniser Token

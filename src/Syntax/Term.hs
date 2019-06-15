@@ -105,21 +105,26 @@ reservedCon s = token (ReservedCon s) <|> mark ("reserved name '" ++ s ++ "'")
 reservedId :: Syntax f => String -> f ()
 reservedId s = token (ReservedId s) <|> mark ("reserved name '" ++ s ++ "'")
 
+definePrisms ''DataAlt
 definePrisms ''Decl
-definePrisms ''Program
 definePrisms ''Exp
 definePrisms ''Pat
+definePrisms ''Program
+definePrisms ''Stmt
+definePrisms ''Tok
+
+definePrisms ''TyPat
 definePrisms ''Type
 definePrisms ''QType
+
 definePrisms ''Kind
-definePrisms ''Tok
-definePrisms ''Stmt
-definePrisms ''TypeConstraint
+
 definePrisms ''KindConstraint
+definePrisms ''TypeConstraint
 
 syntax :: (Recursive a, Syntax f, Domain f s) => I a -> f (a s)
 syntax x = case x of
-  IDataAlt        -> undefined
+  IDataAlt        -> dataAlt
   IDecl           -> decl
   IExp            -> exp
   IKind           -> kind
@@ -144,7 +149,19 @@ kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|
 
 program :: (Syntax f, Domain f s) => f (Program s)
 program = _Program <$> block (annotated top) where -- TODO module
-  top = fun -- TODO fixity declarations, imports
+  top = declData <|> decl -- TODO fixity declarations, imports
+
+declData :: (Syntax f, Domain f s) => f (Decl s)
+declData = _DeclData <$> reservedId "data" *> conid <*> optional (annotated tyPat) <*> alts where
+  alts = cons <$> reservedId "where" *> lbrace *> annotated dataAlt <*> (semi *> annotated dataAlt) `until` rbrace <|> -- TODO clean this up
+         nil <$> pure ()
+
+dataAlt :: (Syntax f, Domain f s) => f (DataAlt s)
+dataAlt = _DataAlt <$> conid <*> many (annotated ty)
+
+tyPat :: (Syntax f, Domain f s) => f (TyPat s)
+tyPat = _TyPatVar <$> varid <|>
+        _TyPatPack <$> record '[' (annotated tyPat) ']'
 
 fun :: (Syntax f, Domain f s) => f (Decl s)
 fun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
@@ -217,7 +234,7 @@ exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          exp1 <|> mark "expression(2)"
   exp1 = left _Apply exp0 <|> mark "expression(1)"
   exp0 = _Record <$> record '(' (annotated exp) ')' <|>
-         _Var <$> varid <|>
+         _Var <$> (conid <|> varid) <|> -- TODO qualified
          _Lit <$> lit <|>
          special '(' *> exp <* special ')' <|>
          mark "expression(0)"

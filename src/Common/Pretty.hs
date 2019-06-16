@@ -9,7 +9,7 @@ module Common.Pretty
   , module Data.Monoid.Colorful
   ) where
 
-import           Data.Monoid.Colorful
+import           Data.Monoid.Colorful hiding (Pair)
 
 class Pretty a where
   pretty :: a -> Colored String

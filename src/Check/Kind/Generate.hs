@@ -40,53 +40,48 @@ gen x = case typeof x of
   IType    -> Resolve (ty x)
   ITyPat   -> undefined -- TODO
 
-split :: ((Source, a SimpleAnn) -> Praxis (Annotation KindAnn a, a KindAnn)) -> Simple a -> Praxis (Kinded a)
-split f x = do
-  (a', x') <- f (view source x, view value x)
-  return ((view source x, a') :< x')
-
 ty :: Simple Type -> Praxis (Kinded Type)
-ty = split $ \(s, t) -> case t of
+ty = split $ \s -> \case
 
     TyApply f a -> do
       k <- freshUniK
       f' <- ty f
       a' <- ty a
       require $ newConstraint (kind f' `KEq` phantom (KindFun (kind a') k)) AppType s
-      return (k, TyApply f' a')
+      return (k :< TyApply f' a')
 
     TyFun a b -> do
       a' <- ty a
       b' <- ty b
       require $ newConstraint (kind a' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
       require $ newConstraint (kind b' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
-      return (phantom KindType, TyFun a' b')
+      return (phantom KindType :< TyFun a' b')
 
     TyFlat ts -> do
       ts' <- traverse ty (Set.toList ts)
       requires $ map (\t -> newConstraint (kind t `KEq` (phantom KindConstraint)) (Custom "typ: TyFlat TODO") s) ts'
-      return (phantom KindConstraint, TyFlat (Set.fromList ts'))
+      return (phantom KindConstraint :< TyFlat (Set.fromList ts'))
 
     TyCon n -> do
       e <- KEnv.lookup n
       case e of Nothing -> throwAt s (NotInScope n)
-                Just k  -> return (k, TyCon n)
+                Just k  -> return (k :< TyCon n)
 
     TyPack r -> do -- This one is easy
       r' <- traverse ty r
-      return (phantom $ KindRecord (fmap kind r'), TyPack r')
+      return (phantom (KindRecord (fmap kind r')) :< TyPack r')
 
     TyRecord r -> do
       r' <- traverse ty r
       requires $ map (\t -> newConstraint (kind t `KEq` phantom KindType) (Custom "typ: TyRecord TODO") s) (map snd (Record.toList r'))
-      return (phantom KindType, TyRecord r')
+      return (phantom KindType :< TyRecord r')
 
     TyVar v -> do
       e <- KEnv.lookup v
       case e of
-        Just k -> return (k, TyVar v)
+        Just k -> return (k :< TyVar v)
         Nothing -> do
           k <- freshUniK
           KEnv.intro v k
-          return (k, TyVar v)
+          return (k :< TyVar v)
 

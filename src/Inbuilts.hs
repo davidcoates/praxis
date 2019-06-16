@@ -7,22 +7,21 @@ module Inbuilts
   ) where
 
 import           Common
-import           Env.KEnv     (KEnv)
-import qualified Env.KEnv     as KEnv (fromList)
-import           Env.TEnv     (TEnv)
-import qualified Env.TEnv     as TEnv (fromList)
-import           Env.VEnv     (VEnv)
-import qualified Env.VEnv     as VEnv (fromList)
+import           Env.KEnv   (KEnv)
+import qualified Env.KEnv   as KEnv (fromList)
+import           Env.TEnv   (TEnv)
+import qualified Env.TEnv   as TEnv (fromList)
+import           Env.VEnv   (VEnv)
+import qualified Env.VEnv   as VEnv (fromList)
 import           Introspect
-import           Parse        (parse)
+import           Parse      (parse)
 import           Praxis
 import qualified Record
 import           Term
 import           Value
 
-import           Control.Lens as Lens (set)
-import           Data.List    (nub, sort)
-import qualified Data.Set     as Set (empty)
+import           Data.List  (nub, sort)
+import qualified Data.Set   as Set (empty)
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState

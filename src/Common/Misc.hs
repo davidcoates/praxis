@@ -1,22 +1,30 @@
 module Common.Misc
   ( Name
+
   , asum
   , series
+  , intercalate
+
+  -- |Lenses
+  , Lens'
+  , makeLenses
   , set
   , view
   , over
   , (.=)
   , (%=)
-  , makeLenses
-  , Lens'
   , use
   , first
   , second
+
   , Const(..)
   , Identity(..)
   , Sum(..)
-  , intercalate
+
   , (<&>)
+
+  , PairT(..)
+
   , Void
   ) where
 
@@ -47,4 +55,11 @@ second = _2
 (<&>) :: Functor f => f a -> (a -> b) -> f b
 (<&>) = flip (<$>)
 
+-- |Transformer version of ((,) a)
+data PairT f b a = PairT { runPairT :: f (b, a) }
+
+instance Functor f => Functor (PairT f b) where
+  fmap f (PairT x) = PairT (fmap (over second f) x)
+
 data Void
+

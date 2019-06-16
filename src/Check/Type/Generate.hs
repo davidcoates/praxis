@@ -64,16 +64,8 @@ fun a b = TyFun a b `as` phantom KindType
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 
-split :: (Source -> a s -> Praxis (Tag (Annotation t a) (a t))) -> Annotated s a -> Praxis (Annotated t a)
-split f x = (\y -> set cosource y x) <$> f (view source x) (view value x)
-
-splitFree :: ((Source, a KindAnn) -> Praxis (b, Annotation TypeAnn a, a TypeAnn)) -> Kinded a -> Praxis (b, Typed a)
-splitFree f x = do
-  (b, a', x') <- f (view source x, view value x)
-  return (b, (view source x, a') :< x')
-
 decl :: Kinded Decl -> Praxis (Typed Decl)
-decl = split $ \s d -> case d of
+decl = split $ \s -> \case
 
   -- TODO safe recursion check
   -- TODO check no duplicate variables
@@ -89,7 +81,7 @@ decl = split $ \s d -> case d of
 
 
 stmt :: Kinded Stmt -> Praxis (Typed Stmt)
-stmt = split $ \s x -> case x of
+stmt = split $ \s -> \case
 
   StmtDecl d -> do
     d' <- decl d
@@ -104,7 +96,7 @@ mono :: Typed Type -> Typed QType
 mono t = (view source t, ()) :< Mono t
 
 exp :: Kinded Exp -> Praxis (Typed Exp)
-exp = split $ \s x -> case x of
+exp = split $ \s -> \case
 
   Apply f x -> do
     yt <- freshUniT
@@ -192,19 +184,19 @@ bind (s :< p, e) = do
 
 
 pat :: Kinded Pat -> Praxis (Int, Typed Pat)
-pat = splitFree $ \(s, p) -> case p of
+pat = splitPair $ \s -> \case
 
   PatAt v p -> do
     (i, p') <- pat p
     let t = ty p'
     intro v (mono t)
-    return (i + 1, t, PatAt v p')
+    return (i + 1, t :< PatAt v p')
 
   PatHole -> do
     t <- freshUniT
-    return (0, t, PatHole)
+    return (0, t :< PatHole)
 
-  PatLit l -> return (0, TyCon (lit l) `as` phantom KindType, PatLit l)
+  PatLit l -> return (0, TyCon (lit l) `as` phantom KindType :< PatLit l)
     where lit (Bool _)   = "Bool"
           lit (Char _)   = "Char"
           lit (Int _)    = "Int"
@@ -213,9 +205,9 @@ pat = splitFree $ \(s, p) -> case p of
   PatRecord r -> do
     (Sum i, r') <- traverse (over first Sum) <$> traverse pat r
     let t = TyRecord (fmap ty r') `as` phantom KindType
-    return (i, t, PatRecord r')
+    return (i, t :< PatRecord r')
 
   PatVar v -> do
     t <- freshUniT
     intro v (mono t)
-    return (1, t, PatVar v)
+    return (1, t :< PatVar v)

@@ -37,7 +37,8 @@ module Term
   , Annotated
   , source
   , annotation
-  , cosource
+  , split
+  , splitPair
   , phantom
   , as
 
@@ -183,6 +184,12 @@ annotation = tag . second
 
 cosource :: Functor f => (Tag (Annotation s a) (a s) -> f (Tag (Annotation t a) (a t))) -> Annotated s a -> f (Annotated t a)
 cosource f ((s, a) :< x) = (\(a :< x) -> (s, a) :< x) <$> f (a :< x)
+
+split :: Functor f => (Source -> a s -> f (Tag (Annotation t a) (a t))) -> Annotated s a -> f (Annotated t a)
+split f x = (\y -> set cosource y x) <$> f (view source x) (view value x)
+
+splitPair :: Functor f => (Source -> a s -> f (b, Tag (Annotation t a) (a t))) -> Annotated s a -> f (b, Annotated t a)
+splitPair f = runPairT . split (\s a -> PairT (f s a))
 
 phantom :: (Annotation a b ~ ()) => b a -> Annotated a b
 phantom x = x `as` ()

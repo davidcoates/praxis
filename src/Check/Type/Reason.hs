@@ -17,7 +17,7 @@ data Reason = AppFun
             | UserSignature (Maybe Name)
 
 instance Show Reason where
-  show r = case r of
+  show = \case
     AppFun           -> "Function application"
     Captured n       -> "Variable '" ++ n ++ "' captured"
     CaseCongruence   -> "Alternatives of <case> expression must have the same type"

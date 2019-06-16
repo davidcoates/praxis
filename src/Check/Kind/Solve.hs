@@ -36,38 +36,34 @@ data State = Cold
            | Done
 
 solve' :: Praxis State
-solve' = spin progress `chain` stuck
-    where chain :: Praxis State -> Praxis State -> Praxis State
-          chain p1 p2 = p1 >>= \s -> case s of
-            Cold -> p2
-            Warm -> solve'
-            Done -> return Done
-          stuck = do
-            -- FIXME
-            -- cs <- get (our . constraints)
-            -- logList Normal cs
-            throw Stuck
+solve' = spin progress `chain` stuck where
+  chain :: Praxis State -> Praxis State -> Praxis State
+  chain p1 p2 = p1 >>= \case
+    Cold -> p2
+    Warm -> solve'
+    Done -> return Done
+  stuck = do
+    cs <- (nub . sort) <$> use (our . constraints)
+    output $ separate "\n\n" cs
+    throw Stuck
 
 -- TODO reduce duplication with Type Solve spin
 spin :: (Kinded KindConstraint -> Praxis Bool) -> Praxis State
-spin solve = do
-  cs <- (nub . sort) <$> use (our . constraints)
-  case cs of
-    [] -> return Done
-    _  -> do
-      our . constraints .= []
-      our . staging .= cs
-      warm <- loop
-      return $ if warm then Warm else Cold
+spin solve = use (our . constraints) <&> (nub . sort) >>= \case
+  [] -> return Done
+  cs -> do
+    our . constraints .= []
+    our . staging .= cs
+    warm <- loop
+    return $ if warm then Warm else Cold
   where
     loop = do
-      cs <- use (our . staging)
-      case cs of
+      use (our . staging) >>= \case
         []     -> return False
         (c:cs) -> (our . staging .= cs) >> liftA2 (||) (solve c) loop
 
 unis = extract (only f) where
-  f k = case k of
+  f = \case
     KindUni n      -> [n]
     KindConstraint -> []
     KindFun a b    -> unis a ++ unis b
@@ -109,7 +105,7 @@ smap f = do
 
 (~>) :: Name -> Kind KindAnn -> Praxis Bool
 (~>) n k = do
-  smap $ sub (\k' -> case k' of { KindUni n' | n == n' -> Just k; _ -> Nothing })
+  smap $ sub (\case { KindUni n' | n == n' -> Just k; _ -> Nothing })
   our . sol %= ((n, k):)
   reuse n
   return True

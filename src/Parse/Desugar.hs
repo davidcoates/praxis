@@ -102,9 +102,9 @@ decls []            = pure []
 decls (a :< d : ds) = case d of
 
   DeclSig n t -> do
-    ds <- decls ds
-    case ds of (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
-               _                                         -> throwAt (fst a) $ "declaration of " <> quote (plain n) <> " lacks an accompanying binding"
+    decls ds >>= \case
+      (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
+      _                                         -> throwAt (fst a) $ "declaration of " <> quote (plain n) <> " lacks an accompanying binding"
 
   DeclFun n ps e -> do
     ps <- mapM pat ps
@@ -113,10 +113,10 @@ decls (a :< d : ds) = case d of
         lambda :: [Simple Pat] -> Simple Exp -> Simple Exp
         lambda     [] e = e
         lambda (p:ps) e = a :< Lambda p (lambda ps e)
-    ds <- decls ds
-    case ds of []                                       -> return $ [d]
-               (a' :< DeclVar m t as) : ds' | m == n    -> error "TODO multiple definitions"
-                                            | otherwise -> return $ d:ds
+    decls ds >>= \case
+      []                                       -> return $ [d]
+      (a' :< DeclVar m t as) : ds' | m == n    -> error "TODO multiple definitions"
+      ds                                       -> return $ d:ds
 
   DeclData n t as -> do
     t' <- traverse tyPat t
@@ -181,11 +181,11 @@ raw x = (Phantom, ()) :< x
 opTable :: OpTable
 opTable = DAG.DAG
   { DAG.nodes = [6, 7, 9]
-  , DAG.neighbors = \x -> case x of
+  , DAG.neighbors = \case
       6 -> [7,9]
       7 -> [9]
       9 -> []
-  , DAG.value = \x -> case x of
+  , DAG.value = \case
       6 -> [ add, sub ]
       7 -> [ mul ]
       9 -> [ dot ]

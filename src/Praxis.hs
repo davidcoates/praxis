@@ -180,8 +180,7 @@ clear = do
   d <- use (flags . debug)
   when d $ liftIO $ do
     putStrLn ""
-    w <- Terminal.size -- FIXME
-    case w of
+    Terminal.size >>= \case
       Just (Terminal.Window _ w) -> putStrLn $ replicate w '='
       Nothing                    -> pure ()
 

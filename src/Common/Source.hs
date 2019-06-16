@@ -25,7 +25,7 @@ instance Pretty Pos where
   pretty p = plain (show (line p)) <> ":" <> plain (show (column p))
 
 instance Pretty Source where
-  pretty s = case s of
+  pretty = \case
     EndOfFile  -> "eof"
     Phantom    -> "<?>"
     Source s _ -> pretty s

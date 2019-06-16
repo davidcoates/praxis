@@ -48,16 +48,16 @@ class Domain f s where -- TODO come up with a better name
   combine :: f Void -> ((Annotated s a, Annotated s a) -> (a s)) -> (Annotated s a, Annotated s a) -> Annotated s a -- FIXME this is a hack
 
 cons :: Prism [a] (a, [a])
-cons = Prism (\(x, xs) -> x:xs) (\xs -> case xs of { [] -> Nothing; x:xs -> Just (x, xs)})
+cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})
 
 nil :: Prism [a] ()
-nil = Prism (const []) (\xs -> case xs of { [] -> Just (); _ -> Nothing })
+nil = Prism (const []) (\case { [] -> Just (); _ -> Nothing })
 
 maybe :: Prism (Maybe a) a
 maybe = Prism Just id
 
 nothing :: Prism (Maybe a) ()
-nothing = Prism (const Nothing) (\xs -> case xs of { Nothing -> Just (); _ -> Nothing })
+nothing = Prism (const Nothing) (\case { Nothing -> Just (); _ -> Nothing })
 
 many :: Syntax f => f a -> f [a]
 many p = cons <$> p <*> many p <|>

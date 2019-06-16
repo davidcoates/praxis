@@ -110,4 +110,4 @@ ungeneralise _ (_ :< Mono t) = return t
 ungeneralise _ (_ :< Forall vs t) = do
   -- TODO need to stores kinds somewhere?
   l <- zipWith (\n (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshUniT
-  return $ sub (\t -> case t of { TyVar n -> n `Prelude.lookup` l; _ -> Nothing }) t
+  return $ sub (\case { TyVar n -> n `Prelude.lookup` l; _ -> Nothing }) t

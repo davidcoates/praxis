@@ -13,7 +13,7 @@ data Error = Contradiction (Typed TypeConstraint)
            | Underdefined (Typed TypeConstraint)
 
 instance Pretty Error where
-  pretty e = case e of
+  pretty = \case
     Contradiction c -> "found contradiction " <> pretty c
     Stuck           -> "infinite loop detected :("
     Underdefined c  -> "failed to completely deduce the unification variable(s) present in " <> pretty c

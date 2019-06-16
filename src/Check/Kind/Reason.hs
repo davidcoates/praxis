@@ -7,7 +7,7 @@ data Reason = AppType
             | Unknown
 
 instance Show Reason where
-  show r = case r of
+  show = \case
     AppType  -> "Type application"
     Custom s -> s
     Unknown  -> "<Unknown>"

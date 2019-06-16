@@ -49,7 +49,7 @@ instance Alternative (Parser t) where
     Right _ -> r
 
 match :: (t -> Bool) -> Parser t t
-match p = Parser $ \ts -> case ts of
+match p = Parser $ \case
   []     -> Result (Left Skip) [] False
   (t:ts) -> if p t then Result (Right t) ts True else Result (Left Skip) (t:ts) False
 

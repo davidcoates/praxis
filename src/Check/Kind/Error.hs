@@ -12,6 +12,6 @@ data Error = Contradiction (Kinded KindConstraint)
            | Stuck
 
 instance Pretty Error where
-  pretty e = case e of
+  pretty = \case
     Contradiction c -> "found contradiction " <> pretty c
     Stuck           -> "infinite loop detected :("

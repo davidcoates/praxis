@@ -29,39 +29,34 @@ solve :: Praxis [(Name, Type TypeAnn)]
 solve = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve'
-  t <- use (our . sol)
-  return t
+  use (our . sol)
 
 data State = Cold
            | Warm
            | Done
 
 solve' :: Praxis State
-solve' = spin progress `chain` stuck
-    where chain :: Praxis State -> Praxis State -> Praxis State
-          chain p1 p2 = p1 >>= \s -> case s of
-            Cold -> p2
-            Warm -> solve'
-            Done -> return Done
-          stuck = do
-            cs <- (nub . sort) <$> use (our . constraints)
-            output $ separate "\n\n" cs
-            throw Stuck
+solve' = spin progress `chain` stuck where
+  chain :: Praxis State -> Praxis State -> Praxis State
+  chain p1 p2 = p1 >>= \case
+    Cold -> p2
+    Warm -> solve'
+    Done -> return Done
+  stuck = do
+    cs <- (nub . sort) <$> use (our . constraints)
+    output $ separate "\n\n" cs
+    throw Stuck
 
 spin :: (Typed TypeConstraint -> Praxis Bool) -> Praxis State
-spin solve = do
-  cs <- (nub . sort) <$> use (our . constraints)
-  case cs of
-    [] -> return Done
-    _  -> do
-      our . constraints .= []
-      our . staging .= cs
-      warm <- loop
-      return $ if warm then Warm else Cold
+spin solve = use (our . constraints) <&> (nub . sort) >>= \case
+  [] -> return Done
+  cs -> do
+    our . constraints .= []
+    our . staging .= cs
+    warm <- loop
+    return $ if warm then Warm else Cold
   where
-    loop = do
-      cs <- use (our . staging)
-      case cs of
+    loop = use (our . staging) >>= \case
         []     -> return False
         (c:cs) -> (our . staging .= cs) >> liftA2 (||) (solve c) loop
 
@@ -73,7 +68,7 @@ unis = extract (only f)
 classes :: [Name] -> [Typed TypeConstraint] -> Maybe [Typed Type]
 classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
   Class t     -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
-  TEq t1 t2    -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
+  TEq t1 t2   -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
 
 progress :: Typed TypeConstraint -> Praxis Bool
 progress d = case view value d of
@@ -154,7 +149,7 @@ smap f = do
 
 (~>) :: Name -> Type TypeAnn -> Praxis Bool
 (~>) n t = do
-  smap $ sub (\t' -> case t' of { TyUni n' | n == n' -> Just t; _ -> Nothing })
+  smap $ sub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing })
   our . sol %= ((n, t):)
   reuse n
   return True

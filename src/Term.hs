@@ -64,7 +64,7 @@ instance Show QString where
   show s = intercalate "." (qualification s ++ [name s])
 
 instance Show Lit where
-  show l = case l of
+  show = \case
     Bool b   -> show b
     Char c   -> show c
     Int i    -> show i

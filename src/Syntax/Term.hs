@@ -71,7 +71,7 @@ record l p r = f <$> list l p' r where
 
 varid :: Syntax f => f String
 varid = match f (\s -> QVarId (QString [] s)) where
-  f t = case t of
+  f = \case
     QVarId n -> if null (qualification n) then Just (name n) else Nothing
     _        -> Nothing
 
@@ -80,19 +80,19 @@ uni = match (const Nothing) (\s -> Uni s) where
 
 conid :: Syntax f => f String
 conid = match f (\s -> QConId (QString [] s)) where
-  f t = case t of
+  f = \case
     QConId n -> if null (qualification n) then Just (name n) else Nothing
     _        -> Nothing
 
 qvarsym :: Syntax f => f QString
 qvarsym = match f QVarSym where
-  f t = case t of
+  f = \case
     QVarSym n -> Just n
     _         -> Nothing
 
 lit :: Syntax f => f Lit
 lit = match f (\l -> Token.Lit l) where
-  f t = case t of
+  f = \case
     Token.Lit l -> Just l
     _           -> Nothing
 
@@ -123,7 +123,7 @@ definePrisms ''KindConstraint
 definePrisms ''TypeConstraint
 
 syntax :: (Recursive a, Syntax f, Domain f s) => I a -> f (a s)
-syntax x = case x of
+syntax = \case
   IDataAlt        -> dataAlt
   IDecl           -> decl
   IExp            -> exp

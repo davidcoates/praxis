@@ -17,7 +17,7 @@ data Check = Warmup
            | Solve
 
 instance Show Stage where
-  show s = case s of
+  show = \case
     Unknown     -> "Unknown"
     Tokenise    -> "Tokenise"
     Layout      -> "Tokenise (Layout)"
@@ -28,7 +28,7 @@ instance Show Stage where
     Evaluate    -> "Evaluate"
 
 instance Show Check where
-  show s = case s of
+  show = \case
     Warmup   -> ""
     Generate -> " (Constraint Generator)"
     Solve    -> " (Constraint Solver)"

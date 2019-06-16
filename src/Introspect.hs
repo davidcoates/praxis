@@ -153,12 +153,12 @@ instance Castable QType KindAnn TypeAnn where
 
 instance Recursive DataAlt where
   witness = IDataAlt
-  recurse f x = case x of
+  recurse f = \case
     DataAlt n t -> DataAlt n <$> traverse f t
 
 instance Recursive Decl where
   witness = IDecl
-  recurse f x = case x of
+  recurse f = \case
     DeclData n t ts -> DeclData n <$> series (f <$> t) <*> traverse f ts
     DeclFun n ps e  -> DeclFun n <$> traverse f ps <*> f e
     DeclSig n t     -> DeclSig n <$> f t
@@ -166,7 +166,7 @@ instance Recursive Decl where
 
 instance Recursive Exp where
   witness = IExp
-  recurse f x = case x of
+  recurse f = \case
     Apply a b    -> Apply <$> f a <*> f b
     Case a as    -> Case <$> f a <*> traverse (\(a, b) -> (,) <$> f a <*> f b) as
     Cases as     -> Cases <$> traverse (\(a, b) -> (,) <$> f a <*> f b) as
@@ -183,7 +183,7 @@ instance Recursive Exp where
 
 instance Recursive Kind where
   witness = IKind
-  recurse f x = case x of
+  recurse f = \case
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
     KindFun a b    -> KindFun <$> f a <*> f b
@@ -192,7 +192,7 @@ instance Recursive Kind where
 
 instance Recursive Pat where
   witness = IPat
-  recurse f x = case x of
+  recurse f = \case
     PatAt n a   -> PatAt n <$> f a
     PatHole     -> pure PatHole
     PatLit l    -> pure (PatLit l)
@@ -201,36 +201,36 @@ instance Recursive Pat where
 
 instance Recursive Program where
   witness = IProgram
-  recurse f x = case x of
+  recurse f = \case
     Program ds -> Program <$> traverse f ds
 
 instance Recursive Stmt where
   witness = IStmt
-  recurse f x = case x of
+  recurse f = \case
     StmtDecl d -> StmtDecl <$> f d
     StmtExp e  -> StmtExp <$> f e
 
 instance Recursive QType where
   witness = IQType
-  recurse f x = case x of
+  recurse f = \case
     Mono t      -> Mono <$> f t
     Forall vs t -> Forall <$> pure vs <*> f t
 
 instance Recursive Tok where
   witness = ITok
-  recurse f x = case x of
+  recurse f = \case
     TExp e -> TExp <$> f e
     TOp o  -> pure (TOp o)
 
 instance Recursive TyPat where
   witness = ITyPat
-  recurse f x = case x of
+  recurse f = \case
     TyPatVar n  -> pure (TyPatVar n)
     TyPatPack r -> TyPatPack <$> traverse f r
 
 instance Recursive Type where
   witness = IType
-  recurse f x = case x of
+  recurse f = \case
     TyUni n     -> pure (TyUni n)
     TyApply a b -> TyApply <$> f a <*> f b
     TyBang a    -> TyBang <$> f a
@@ -243,13 +243,13 @@ instance Recursive Type where
 
 instance Recursive TypeConstraint where
   witness = ITypeConstraint
-  recurse f x = case x of
+  recurse f = \case
     Class t -> Class <$> f t
     TEq a b -> TEq <$> f a <*> f b
 
 instance Recursive KindConstraint where
   witness = IKindConstraint
-  recurse f x = case x of
+  recurse f = \case
     KEq a b -> KEq <$> f a <*> f b
 
 instance Complete SimpleAnn where

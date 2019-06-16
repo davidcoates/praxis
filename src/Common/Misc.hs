@@ -16,6 +16,7 @@ module Common.Misc
   , Identity(..)
   , Sum(..)
   , intercalate
+  , (<&>)
   , Void
   ) where
 
@@ -42,5 +43,8 @@ first = _1
 
 second :: Functor f => (a -> f b) -> (n, a) -> f (n, b)
 second = _2
+
+(<&>) :: Functor f => f a -> (a -> b) -> f b
+(<&>) = flip (<$>)
 
 data Void

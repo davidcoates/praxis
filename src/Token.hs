@@ -29,7 +29,7 @@ grey   = RGB 242 242 242
 white  = RGB 255 255 255
 
 instance Pretty Token where
-  pretty x = case x of
+  pretty = \case
     QVarId q      -> Fg white $ plain $ show q
     QConId q      -> Fg yellow $ plain $ show q
     QVarSym q     -> Fg red $ plain $ show q

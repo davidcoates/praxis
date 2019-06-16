@@ -35,11 +35,15 @@ module Term
 
   , Annotation
   , Annotated
+  , source
+  , annotation
+  , cosource
+  , phantom
+  , as
+
   , Simple
   , Kinded
   , Typed
-  , phantom
-  , as
 
   , Derivation(..)
   ) where
@@ -171,15 +175,24 @@ type family Annotation a (b :: * -> *) where
 
 type Annotated a b = Tag (Source, Annotation a b) (b a)
 
-type Simple a = Annotated SimpleAnn a
-type Kinded a = Annotated KindAnn a
-type Typed  a = Annotated TypeAnn a
+source :: Functor f => (Source -> f Source) -> Annotated s a -> f (Annotated s a)
+source = tag . first
+
+annotation :: Functor f => (Annotation s a -> f (Annotation s a)) -> Annotated s a -> f (Annotated s a)
+annotation = tag . second
+
+cosource :: Functor f => (Tag (Annotation s a) (a s) -> f (Tag (Annotation t a) (a t))) -> Annotated s a -> f (Annotated t a)
+cosource f ((s, a) :< x) = (\(a :< x) -> (s, a) :< x) <$> f (a :< x)
 
 phantom :: (Annotation a b ~ ()) => b a -> Annotated a b
 phantom x = x `as` ()
 
 as :: b a -> Annotation a b -> Annotated a b
 as x a = (Phantom, a) :< x
+
+type Simple a = Annotated SimpleAnn a
+type Kinded a = Annotated KindAnn a
+type Typed  a = Annotated TypeAnn a
 
 -- TODO should this be somewhere else?
 data Derivation s a = Root String
@@ -188,3 +201,4 @@ data Derivation s a = Root String
 instance Pretty (Annotated s a) => Pretty (Derivation s a) where
   pretty (Root r)       = "\n|-> (" <> plain r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
+

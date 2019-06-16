@@ -1,7 +1,6 @@
 module Common.Misc
   ( Name
   , asum
-  , both
   , series
   , set
   , view
@@ -15,18 +14,19 @@ module Common.Misc
   , second
   , Const(..)
   , Identity(..)
+  , Sum(..)
   , intercalate
   , Void
   ) where
 
-import           Control.Applicative    (Const (..))
-import           Control.Lens           (Lens', makeLenses, over, set, use,
-                                         view, (%=), (.=), _1, _2)
-import           Control.Lens.Traversal (both)
-import           Data.Foldable          (fold)
-import           Data.Functor.Identity  (Identity (..))
-import           Data.List              (intercalate)
-import           Data.Traversable       (sequenceA)
+import           Control.Applicative   (Const (..))
+import           Control.Lens          (Lens', makeLenses, over, set, use, view,
+                                        (%=), (.=), _1, _2)
+import           Data.Foldable         (fold)
+import           Data.Functor.Identity (Identity (..))
+import           Data.List             (intercalate)
+import           Data.Monoid           (Sum (..))
+import           Data.Traversable      (sequenceA)
 
 type Name = String
 

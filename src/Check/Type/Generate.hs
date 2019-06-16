@@ -64,18 +64,16 @@ fun a b = TyFun a b `as` phantom KindType
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 
-split :: ((Source, a KindAnn) -> Praxis (Annotation TypeAnn a, a TypeAnn)) -> Kinded a -> Praxis (Typed a)
-split f x = do
-  (a', x') <- f (view source x, view value x)
-  return ((view source x, a') :< x')
+split :: (Source -> a s -> Praxis (Tag (Annotation t a) (a t))) -> Annotated s a -> Praxis (Annotated t a)
+split f x = (\y -> set cosource y x) <$> f (view source x) (view value x)
 
-splitFree :: ((Source, a KindAnn) -> Praxis (Annotation TypeAnn a, a TypeAnn, b)) -> Kinded a -> Praxis (Typed a, b)
+splitFree :: ((Source, a KindAnn) -> Praxis (b, Annotation TypeAnn a, a TypeAnn)) -> Kinded a -> Praxis (b, Typed a)
 splitFree f x = do
-  (a', x', b) <- f (view source x, view value x)
-  return ((view source x, a') :< x', b)
+  (b, a', x') <- f (view source x, view value x)
+  return (b, (view source x, a') :< x')
 
 decl :: Kinded Decl -> Praxis (Typed Decl)
-decl = split $ \(s, d) -> case d of
+decl = split $ \s d -> case d of
 
   -- TODO safe recursion check
   -- TODO check no duplicate variables
@@ -87,25 +85,26 @@ decl = split $ \(s, d) -> case d of
     -- TODO this won't work if we allow nested polymorphic definitions
     let t' = case view value t of { Mono t -> t; Forall _ t -> t }
     equal t' (ty e') (UserSignature (Just n)) s
-    return ((), DeclVar n Nothing e')
+    return (() :< DeclVar n Nothing e')
+
 
 stmt :: Kinded Stmt -> Praxis (Typed Stmt)
-stmt = split $ \(s, x) -> case x of
+stmt = split $ \s x -> case x of
 
   StmtDecl d -> do
     d' <- decl d
-    return ((), StmtDecl d')
+    return (() :< StmtDecl d')
 
   StmtExp e -> do
     e' <- exp e
-    return ((), StmtExp e')
+    return (() :< StmtExp e')
 
 
 mono :: Typed Type -> Typed QType
 mono t = (view source t, ()) :< Mono t
 
 exp :: Kinded Exp -> Praxis (Typed Exp)
-exp = split $ \(s, e) -> case e of
+exp = split $ \s x -> case x of
 
   Apply f x -> do
     yt <- freshUniT
@@ -115,7 +114,7 @@ exp = split $ \(s, e) -> case e of
     let ft = ty f'
     let xt = ty x'
     require $ newConstraint (ft `TEq` fun xt yt) AppFun s
-    return (yt, Apply f' x')
+    return (yt :< Apply f' x')
 
   Case x alts -> do
     x' <- exp x
@@ -124,13 +123,13 @@ exp = split $ \(s, e) -> case e of
     t1 <- equals (map (view tag . fst) alts') CaseCongruence
     t2 <- equals (map (view tag . snd) alts') CaseCongruence
     require $ newConstraint (xt `TEq` t1) CaseCongruence s -- TODO probably should pick a better name for this
-    return (xt, Case x' alts')
+    return (xt :< Case x' alts')
 
   Cases alts -> closure $ do
     alts' <- parallel (map bind alts)
     t1 <- equals (map (view tag . fst) alts') CaseCongruence
     t2 <- equals (map (view tag . snd) alts') CaseCongruence
-    return (fun t1 t2, Cases alts')
+    return (fun t1 t2 :< Cases alts')
 
   Do ss -> do
     ss' <- traverse stmt ss
@@ -138,36 +137,36 @@ exp = split $ \(s, e) -> case e of
         f (StmtExp _)  = 0
     elimN (sum (map (f . view value) ss'))
     let t = (\(_ :< StmtExp ((_, t) :< _)) -> t) (last ss')
-    return (t, Do ss')
+    return (t :< Do ss')
 
   If a b c -> do
     a' <- exp a
     (b', c') <- join (exp b) (exp c)
     require $ newConstraint (ty a' `TEq` TyCon "Bool" `as` phantom KindType) IfCondition s
     require $ newConstraint (ty b' `TEq` ty c') IfCongruence s
-    return (ty b', If a' b' c')
+    return (ty b' :< If a' b' c')
 
   Lambda p e -> closure $ do
-    (p', i) <- pat p
+    (i, p') <- pat p
     e' <- exp e
     elimN i
-    return (fun (ty p') (ty e'), Lambda p' e')
+    return (fun (ty p') (ty e') :< Lambda p' e')
 
   Lit x -> do
     let t = case x of { Int _ -> TyCon "Int" ; Bool _ -> TyCon "Bool" ; String _ -> TyCon "String" ; Char _ -> TyCon "Char" }
-    return (t `as` phantom KindType, Lit x)
+    return (t `as` phantom KindType :< Lit x)
 
   Read n e -> do
     t <- read s n
     intro n (mono t)
     e' <- exp e
     elim
-    return (ty e', view value e')
+    return (ty e' :< view value e')
 
   Record r -> do
     r' <- traverse exp r
     let t = TyRecord (fmap ty r') `as` phantom KindType
-    return (t, Record r')
+    return (t :< Record r')
 
 {-
   Sig e t -> do
@@ -179,48 +178,44 @@ exp = split $ \(s, e) -> case e of
 
   Var n -> do
     t <- mark s n
-    return (t, Var n)
+    return (t :< Var n)
 
 equals :: [(Source, Typed Type)] -> Reason -> Praxis (Typed Type)
 equals ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
 
 bind :: (Kinded Pat, Kinded Exp) -> Praxis (Typed Pat, Typed Exp)
 bind (s :< p, e) = do
-  (p', i) <- pat (s :< p)
+  (i, p') <- pat (s :< p)
   e' <- exp e
   elimN i
   return (p', e')
 
-pat :: Kinded Pat -> Praxis (Typed Pat, Int)
+
+pat :: Kinded Pat -> Praxis (Int, Typed Pat)
 pat = splitFree $ \(s, p) -> case p of
 
   PatAt v p -> do
-    (p', i) <- pat p
+    (i, p') <- pat p
     let t = ty p'
     intro v (mono t)
-    return (t, PatAt v p', i + 1)
+    return (i + 1, t, PatAt v p')
 
   PatHole -> do
     t <- freshUniT
-    return (t, PatHole, 0)
+    return (0, t, PatHole)
 
-  PatLit l -> return (TyCon (lit l) `as` phantom KindType, PatLit l, 0)
+  PatLit l -> return (0, TyCon (lit l) `as` phantom KindType, PatLit l)
     where lit (Bool _)   = "Bool"
           lit (Char _)   = "Char"
           lit (Int _)    = "Int"
           lit (String _) = "String"
 
   PatRecord r -> do
-    (r', i) <- traverseSum pat r
+    (Sum i, r') <- traverse (over first Sum) <$> traverse pat r
     let t = TyRecord (fmap ty r') `as` phantom KindType
-    return (t, PatRecord r', i)
+    return (i, t, PatRecord r')
 
   PatVar v -> do
     t <- freshUniT
     intro v (mono t)
-    return (t, PatVar v, 1)
-
-
-traverseSum :: (Applicative f, Traversable t) => (a -> f (b, Int)) -> t a -> f (t b, Int)
-traverseSum f xs = (\x -> (fmap fst x, sum $ fmap snd x)) <$> traverse f xs
-
+    return (1, t, PatVar v)

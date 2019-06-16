@@ -31,14 +31,14 @@ generate x = save stage $ do
 gen :: Recursive a => Simple a -> Visit Praxis (Annotation KindAnn a) (Kinded a)
 gen x = case typeof x of
   IDataAlt -> skip
-  IDecl    -> skip
+  IDecl    -> skip -- TODO (data alt)
   IExp     -> skip
   IPat     -> skip
   IProgram -> skip
   IQType   -> skip
   IStmt    -> skip
   IType    -> Resolve (ty x)
-  -- TODO TyPat
+  ITyPat   -> undefined -- TODO
 
 split :: ((Source, a SimpleAnn) -> Praxis (Annotation KindAnn a, a KindAnn)) -> Simple a -> Praxis (Kinded a)
 split f x = do

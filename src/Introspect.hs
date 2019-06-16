@@ -40,7 +40,7 @@ class Recursive a where
   recurse :: Applicative f => (forall a. Recursive a => Annotated s a -> f (Annotated t a)) -> a s -> f (a t)
 
 class Complete s where
-  complete :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> f (Annotated s a)) -> I a -> Annotation s a -> f (Annotation s a)
+  complete :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> f (Annotated s a)) -> Annotation s a -> I a -> f (Annotation s a)
 
 data I a where
   IDataAlt :: I DataAlt
@@ -83,7 +83,7 @@ visit f x = case f x of
   Resolve r -> r
 
 introspect :: (Recursive a, Applicative f, Complete s) => (forall a. Recursive a => Annotated s a -> Visit f () (a s)) -> Annotated s a -> f (Annotated s a)
-introspect f x = set annotation <$> complete (introspect f) (typeof x) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
+introspect f x = set annotation <$> complete (introspect f) (view annotation x) (typeof x) <*> ((\r -> set value r x) <$> case f x of
   Visit c   -> c *> recurse (introspect f) (view value x)
   Resolve r -> r
   )
@@ -116,7 +116,7 @@ asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . a
         a' :: Annotation s b
         a' = switch i (typeof x) (case f a of { Nothing -> a''; Just a' -> a' }) a''
         a'' :: Annotation s b
-        a'' = runIdentity . complete f' (typeof x) $ a
+        a'' = runIdentity $ complete f' a (typeof x)
         f' :: forall a. Recursive a => Annotated s a -> Identity (Annotated s a)
         f' = Identity . asub i f
 
@@ -256,7 +256,7 @@ instance Complete SimpleAnn where
   complete _ _ _ = pure ()
 
 instance Complete KindAnn where
-  complete f i a = case i of
+  complete f a = \case
     IDataAlt        -> pure ()
     IDecl           -> pure ()
     IExp            -> pure ()
@@ -271,7 +271,7 @@ instance Complete KindAnn where
     IKindConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
 
 instance Complete TypeAnn where
-  complete f i a = case i of
+  complete f a = \case
     IDataAlt        -> pure ()
     IDecl           -> pure ()
     IExp            -> f a

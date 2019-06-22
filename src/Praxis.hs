@@ -4,6 +4,7 @@
 
 module Praxis
   ( Praxis
+  , PraxisT(..)
   , PraxisState
   , Stage(..)
   , emptyState
@@ -29,8 +30,9 @@ module Praxis
   , filename
   , flags
   , stage
-  , tEnv
   , kEnv
+  , tEnv
+  , daEnv
   , vEnv
   , system
 
@@ -46,7 +48,7 @@ module Praxis
 
 import qualified Check.System                 as Check (System)
 import           Common
-import           Env                          (KEnv, TEnv, VEnv)
+import           Env                          (DAEnv, KEnv, TEnv, VEnv)
 import           Record                       (Record)
 import           Stage
 import           Term
@@ -54,10 +56,7 @@ import           Term
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent
 import           Control.Lens                 (Lens', makeLenses, traverseOf)
-import           Control.Monad                (when)
-import           Control.Monad.Trans.Class    (lift)
-import           Control.Monad.Trans.Maybe    (MaybeT, runMaybeT)
-import           Control.Monad.Trans.State    (StateT, gets, runStateT)
+import           Control.Monad.Trans.Class    (MonadTrans (..))
 import qualified Control.Monad.Trans.State    as State (get, modify, put)
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
@@ -85,8 +84,9 @@ data PraxisState = PraxisState
   , _flags    :: Flags               -- ^Flags
   , _fresh    :: Fresh
   , _stage    :: Stage               -- ^Current stage of compilation
-  , _tEnv     :: TEnv                -- ^Type environment
   , _kEnv     :: KEnv                -- ^Kind environment
+  , _tEnv     :: TEnv                -- ^Type environment
+  , _daEnv    :: DAEnv               -- ^Data alternative environment
   , _vEnv     :: VEnv                -- ^Value environment for interpreter
   , _system   :: Check.System        -- ^ TODO rename?
   }
@@ -95,6 +95,14 @@ instance Show PraxisState where
   show s = "<praxis state>"
 
 type Praxis = MaybeT (StateT PraxisState IO)
+
+newtype PraxisT f a = PraxisT { runPraxisT :: f (Praxis a) }
+
+instance MonadTrans PraxisT where
+  lift x = PraxisT (pure <$> x)
+
+instance Functor f => Functor (PraxisT f) where
+  fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
 
 defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _interactive = False, _static = False }
@@ -112,8 +120,9 @@ emptyState = PraxisState
   , _flags        = defaultFlags
   , _fresh        = defaultFresh
   , _stage        = Unknown
-  , _tEnv         = unset "tenv"
-  , _kEnv         = unset "kenv"
+  , _kEnv         = unset "kEnv"
+  , _tEnv         = unset "tEnv"
+  , _daEnv        = unset "daEnv"
   , _vEnv         = unset "vEnv"
   , _system       = unset "system"
   }

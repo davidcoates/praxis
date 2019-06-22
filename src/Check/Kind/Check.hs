@@ -18,4 +18,6 @@ check a = save stage $ do
   our .= initialSystem
   a' <- generate a
   ks <- solve
-  return $ sub (\k -> case k of { KindUni n -> lookup n ks; _ -> Nothing }) a'
+  let r = sub (\k -> case k of { KindUni n -> lookup n ks; _ -> Nothing }) a'
+  output r
+  return r

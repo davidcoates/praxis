@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE TypeFamilies           #-}
 
 module Check.Type.Generate
@@ -11,6 +12,7 @@ import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
+import qualified Env.DAEnv           as DAEnv
 import qualified Env.KEnv            as KEnv
 import           Env.TEnv
 import           Introspect
@@ -22,9 +24,9 @@ import           Term
 
 import           Control.Applicative (liftA2)
 import           Data.Foldable       (foldlM)
-import           Data.List           (nub, sort, transpose)
+import           Data.List           (nub, sort)
 import qualified Data.Set            as Set
-import           Prelude             hiding (exp, log, read)
+import           Prelude             hiding (exp, log, lookup, read)
 
 ty :: Typed a -> Annotation TypeAnn a
 ty = view annotation
@@ -36,11 +38,14 @@ generate x = save stage $ do
   output x'
   cs <- use (our . constraints)
   output $ separate "\n\n" (nub . sort $ cs)
+  te <- use tEnv
+  output (plain (show te))
+  dae <- use daEnv
+  output (plain (show dae))
   return x'
 
 gen :: Recursive a => Kinded a -> Visit Praxis (Annotation TypeAnn a) (Typed a)
 gen x = case typeof x of
-  IDataAlt -> skip
   IDecl    -> Resolve (decl x)
   IExp     -> Resolve (exp x)
   IProgram -> skip
@@ -61,11 +66,34 @@ parallel (x:xs) = do
 fun :: Typed Type -> Typed Type -> Typed Type
 fun a b = TyFun a b `as` phantom KindType
 
+apply :: Typed Type -> [Typed Type] -> Typed Type
+apply t []     = t
+apply s (t:ts) = let KindFun k1 k2 = view value (ty s) in apply (TyApply s t `as` k2) ts -- To be kind-correct it must be KindFun
+
 equal :: Typed Type -> Typed Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 
 decl :: Kinded Decl -> Praxis (Typed Decl)
 decl = split $ \s -> \case
+
+  -- TODO Share constraints needed!
+  DeclData n ps alts -> do
+    let ps' = map cast ps
+    -- TODO could be kind annotated to avoid this lookup
+    Just k <- KEnv.lookup n
+    let c = TyCon n `as` cast k
+        f ((s, ()) :< DataAlt n args) = do
+          let args' = map cast args
+              rt = apply c $ map (over value (\(TyPatVar n) -> TyVar n)) ps'
+              ns = map ((\(TyPatVar n) -> n) . view value) ps'
+              ct = phantom $ case ps' of
+                [] -> Mono rt
+                _  -> Forall (map ((\(TyPatVar n) -> n) . view value) ps') (foldr fun rt args')
+              da = ((s, DataAltInfo ns ct args' rt) :< DataAlt n args')
+          DAEnv.intro n da
+          return da
+    alts' <- traverse f alts
+    return (() :< DeclData n ps' alts')
 
   -- TODO safe recursion check
   -- TODO check no duplicate variables
@@ -122,6 +150,11 @@ exp = split $ \s -> \case
     t1 <- equals (map (view tag . fst) alts') CaseCongruence
     t2 <- equals (map (view tag . snd) alts') CaseCongruence
     return (fun t1 t2 :< Cases alts')
+
+  Con n -> do
+    DataAltInfo _ q _ _ <- view annotation <$> DAEnv.get s n
+    t <- ungeneraliseQType q
+    return (t :< Con n)
 
   Do ss -> do
     ss' <- traverse stmt ss
@@ -211,3 +244,14 @@ pat = splitPair $ \s -> \case
     t <- freshUniT
     intro v (mono t)
     return (1, t :< PatVar v)
+
+  PatCon n ps -> do
+    -- Lookup the data alternative with this name
+    DataAltInfo ns ct args rt <- view annotation <$> DAEnv.get s n
+    unless (length args == length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (plain n)
+    (Sum i, ps') <- traverse (over first Sum) <$> traverse pat ps
+    f <- ungeneralise ns
+    let rt'   = f rt
+        args' = map f args
+    requires [ newConstraint (ty p' `TEq` arg') (Custom "TODO: PatCon") s | (p', arg') <- zip ps' args' ]
+    return (i, rt' :< PatCon n ps')

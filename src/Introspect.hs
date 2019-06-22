@@ -125,6 +125,7 @@ retag f = runIdentity . visit f'
   where f' :: forall a. Recursive a => Annotated s a -> Visit Identity (Annotation t a) (Annotated t a)
         f' x = Visit (Identity (f (typeof x) (view annotation x)))
 
+-- TODO this cast stuff is gross
 class Castable a s t where
   cast :: Annotated s a -> Annotated t a
 
@@ -146,6 +147,12 @@ instance Castable QType KindAnn TypeAnn where
     f i k = case i of
       IQType -> ()
       IType  -> cast k
+
+instance Castable TyPat KindAnn TypeAnn where
+  cast = retag f where
+    f :: forall a. Recursive a => I a -> Annotation KindAnn a -> Annotation TypeAnn a
+    f i k = case i of
+      ITyPat -> cast k
 
 -- Implementations below here
 
@@ -170,6 +177,7 @@ instance Recursive Exp where
     Apply a b    -> Apply <$> f a <*> f b
     Case a as    -> Case <$> f a <*> traverse (\(a, b) -> (,) <$> f a <*> f b) as
     Cases as     -> Cases <$> traverse (\(a, b) -> (,) <$> f a <*> f b) as
+    Con n        -> pure (Con n)
     Do ss        -> Do <$> traverse f ss
     If a b c     -> If <$> f a <*> f b <*> f c
     Lambda a b   -> Lambda <$> f a <*> f b
@@ -179,7 +187,7 @@ instance Recursive Exp where
     Record r     -> Record <$> traverse f r
     Sig e t      -> Sig <$> f e <*> f t
     Var n        -> pure (Var n)
-    VarBang n    -> pure (Var n)
+    VarBang n    -> pure (VarBang n)
 
 instance Recursive Kind where
   witness = IKind
@@ -187,7 +195,6 @@ instance Recursive Kind where
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
     KindFun a b    -> KindFun <$> f a <*> f b
-    KindRecord r   -> KindRecord <$> traverse f r
     KindType       -> pure KindType
 
 instance Recursive Pat where
@@ -198,6 +205,7 @@ instance Recursive Pat where
     PatLit l    -> pure (PatLit l)
     PatRecord r -> PatRecord <$> traverse f r
     PatVar n    -> pure (PatVar n)
+    PatCon n ps -> PatCon n <$> traverse f ps
 
 instance Recursive Program where
   witness = IProgram
@@ -226,7 +234,6 @@ instance Recursive TyPat where
   witness = ITyPat
   recurse f = \case
     TyPatVar n  -> pure (TyPatVar n)
-    TyPatPack r -> TyPatPack <$> traverse f r
 
 instance Recursive Type where
   witness = IType
@@ -237,7 +244,6 @@ instance Recursive Type where
     TyCon n     -> pure (TyCon n)
     TyFlat ts   -> TyFlat <$> (Set.fromList <$> traverse f (Set.toList ts))
     TyFun a b   -> TyFun <$> f a <*> f b
-    TyPack r    -> TyPack <$> traverse f r
     TyRecord r  -> TyRecord <$> traverse f r
     TyVar n     -> pure (TyVar n)
 
@@ -272,7 +278,7 @@ instance Complete KindAnn where
 
 instance Complete TypeAnn where
   complete f a = \case
-    IDataAlt        -> pure ()
+    IDataAlt        -> case a of { DataAltInfo ns ct args rt -> DataAltInfo ns <$> f ct <*> traverse f args <*> f rt }
     IDecl           -> pure ()
     IExp            -> f a
     IKind           -> pure ()

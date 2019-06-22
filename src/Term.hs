@@ -47,6 +47,7 @@ module Term
   , Typed
 
   , Derivation(..)
+  , DataAltInfo(..)
   ) where
 
 import           Common
@@ -71,7 +72,7 @@ instance Show Lit where
     Int i    -> show i
     String s -> show s
 
-data Decl a = DeclData Name (Maybe (Annotated a TyPat)) [Annotated a DataAlt]
+data Decl a = DeclData Name [Annotated a TyPat] [Annotated a DataAlt]
             | DeclFun Name [Annotated a Pat] (Annotated a Exp) -- ^Parsing only
             | DeclSig Name (Annotated a QType) -- ^Parsing only
             | DeclVar Name (Maybe (Annotated a QType)) (Annotated a Exp)
@@ -83,6 +84,7 @@ data DataAlt a = DataAlt Name [Annotated a Type]
 data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
            | Case (Annotated a Exp) [(Annotated a Pat, Annotated a Exp)]
            | Cases [(Annotated a Pat, Annotated a Exp)]
+           | Con Name
            | Do [Annotated a Stmt]
            | If (Annotated a Exp) (Annotated a Exp) (Annotated a Exp)
            | Lambda (Annotated a Pat) (Annotated a Exp)
@@ -106,6 +108,7 @@ data Pat a = PatAt Name (Annotated a Pat)
            | PatLit Lit
            | PatRecord (Record (Annotated a Pat))
            | PatVar Name
+           | PatCon Name [Annotated a Pat]
   deriving (Eq)
 
 data Program a = Program [Annotated a Decl]
@@ -121,7 +124,6 @@ data Tok a = TExp (Annotated a Exp)
   deriving (Eq)
 
 data TyPat a = TyPatVar Name
-             | TyPatPack (Record (Annotated a TyPat))
   deriving (Eq, Ord)
 
 data Type a = TyUni Name                                      -- Compares less than all other types
@@ -130,7 +132,6 @@ data Type a = TyUni Name                                      -- Compares less t
             | TyCon Name
             | TyFlat (Set (Annotated a Type))                 -- Used for constraints
             | TyFun (Annotated a Type) (Annotated a Type)
-            | TyPack   (Record (Annotated a Type))            -- ^A type pack with a record kind
             | TyRecord (Record (Annotated a Type))            -- ^A type record : T
             | TyVar Name
   deriving (Eq, Ord)
@@ -142,7 +143,6 @@ data QType a = Mono (Annotated a Type)
 data Kind a = KindUni Name
             | KindConstraint
             | KindFun (Annotated a Kind) (Annotated a Kind)
-            | KindRecord (Record (Annotated a Kind))
             | KindType
   deriving (Eq, Ord)
 
@@ -172,6 +172,7 @@ type family Annotation a (b :: * -> *) where
   Annotation TypeAnn TyPat          = Typed Kind
   Annotation TypeAnn Type           = Typed Kind
   Annotation TypeAnn TypeConstraint = Derivation TypeAnn TypeConstraint
+  Annotation TypeAnn DataAlt        = DataAltInfo
   Annotation TypeAnn a              = ()
 
 type Annotated a b = Tag (Source, Annotation a b) (b a)
@@ -209,3 +210,11 @@ instance Pretty (Annotated s a) => Pretty (Derivation s a) where
   pretty (Root r)       = "\n|-> (" <> plain r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
 
+data DataAltInfo = DataAltInfo [Name] (Typed QType) [Typed Type] (Typed Type)
+
+instance (Pretty (Typed Type), Pretty (Typed QType)) => Pretty DataAltInfo where
+  pretty (DataAltInfo ns ct args rt) =
+    pretty ct <> " i.e., " <>
+    (if null ns then "" else "forall " <> separate " " (map plain ns) <> ". ") <>
+    (if null args then "" else separate ", " args <> " ~> ") <>
+    pretty rt

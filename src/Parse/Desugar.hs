@@ -62,14 +62,6 @@ stmts (s:ss) | a :< StmtExp e <- s = do
                   where isStmtDecl (_ :< StmtDecl _) = True
                         isStmtDecl _                 = False
 
-pack :: Source -> (Record b -> b) -> (a -> Praxis b) -> Record a -> Praxis b
-pack s build f r = do
-  r' <- traverse f r
-  case Record.toList r' of
-    []  -> throwAt s $ plain "illegal empty pack"
-    [_] -> throwAt s $ plain "illegal single-field pack"
-    _   -> return $ build r'
-
 record :: Source -> (Record b -> b) -> (a -> Praxis b) -> Record a -> Praxis b
 record s build f r = do
   r' <- traverse f r
@@ -102,6 +94,7 @@ decls []            = pure []
 decls (a :< d : ds) = case d of
 
   DeclSig n t -> do
+    t <- qty t
     decls ds >>= \case
       (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
       _                                         -> throwAt (fst a) $ "declaration of " <> quote (plain n) <> " lacks an accompanying binding"
@@ -145,17 +138,19 @@ ty (a :< x) = case x of
 
   TyRecord r -> record (fst a) (\r' -> a :< TyRecord r') ty r
 
-  TyPack r   -> pack (fst a) (\r' -> a :< TyPack r') ty r
-
   _          -> (a :<) <$> recurse desugar x
 
 
+qty :: Simple QType -> Praxis (Simple QType)
+qty (a :< x) = (a :<) <$> case x of
+
+  Mono t      -> Mono <$> ty t
+
+  Forall vs t -> Forall vs <$> ty t
+
+
 tyPat :: Simple TyPat -> Praxis (Simple TyPat)
-tyPat (a :< x) = case x of
-
-  TyPatPack r -> pack (fst a) (\r' -> a :< TyPatPack r') tyPat r
-
-  _           -> (a :<) <$> recurse desugar x
+tyPat (a :< x) = (a :<) <$> recurse desugar x
 
 
 type MTok = DAG.Tok (Tag (Source, ()) Op) (Simple Exp)

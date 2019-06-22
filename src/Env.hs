@@ -2,6 +2,7 @@ module Env
   ( VEnv
   , TEnv
   , KEnv
+  , DAEnv
   ) where
 
 import           Common
@@ -15,3 +16,5 @@ type VEnv = Env Name Value
 type TEnv = LEnv Name (Typed QType)
 
 type KEnv = Env Name (Kinded Kind)
+
+type DAEnv = Env Name (Typed DataAlt)

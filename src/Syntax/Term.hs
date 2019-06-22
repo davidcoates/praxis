@@ -60,12 +60,12 @@ comma = special ','
 block :: Syntax f => f a -> f [a]
 block p = lbrace *> cons <$> p <*> (semi *> p) `until` rbrace
 
-list :: Syntax f => Char -> f a -> Char -> f [a]
-list l p r = special l *> (nil <$> special r *> pure () <|> cons <$> p <*> (comma *> p) `until` special r)
+list :: Syntax f => f a -> f [a]
+list p = special '(' *> (nil <$> special ')' *> pure () <|> cons <$> p <*> (comma *> p) `until` special ')')
 
 -- This also captures parenthesised p's (which is corrected by desugaring)
-record :: Syntax f => Char -> f a -> Char -> f (Record a)
-record l p r = f <$> list l p' r where
+record :: Syntax f => f a -> f (Record a)
+record p = f <$> list p' where
   p' = Prism (\v -> (Nothing, v)) (Just . snd) <$> p -- TODO named fields
   f = Prism (\r -> Record.fromList r) (\kvs -> Just (map (\(_, v) -> (Nothing, v)) (Record.toList kvs)))
 
@@ -130,10 +130,10 @@ syntax = \case
   IKind           -> kind
   IPat            -> pat
   IProgram        -> program
-  IQType          -> undefined
+  IQType          -> qty
   IStmt           -> stmt
   ITok            -> undefined
-  ITyPat          -> undefined
+  ITyPat          -> tyPat
   IType           -> ty
   ITypeConstraint -> tyConstraint
   IKindConstraint -> kindConstraint
@@ -152,7 +152,7 @@ program = _Program <$> block (annotated top) where -- TODO module
   top = declData <|> decl -- TODO fixity declarations, imports
 
 declData :: (Syntax f, Domain f s) => f (Decl s)
-declData = _DeclData <$> reservedId "data" *> conid <*> optional (annotated tyPat) <*> alts where
+declData = _DeclData <$> reservedId "data" *> conid <*> many (annotated tyPat) <*> alts where
   alts = cons <$> reservedId "where" *> lbrace *> annotated dataAlt <*> (semi *> annotated dataAlt) `until` rbrace <|> -- TODO clean this up
          nil <$> pure ()
 
@@ -160,8 +160,7 @@ dataAlt :: (Syntax f, Domain f s) => f (DataAlt s)
 dataAlt = _DataAlt <$> conid <*> many (annotated ty)
 
 tyPat :: (Syntax f, Domain f s) => f (TyPat s)
-tyPat = _TyPatVar <$> varid <|>
-        _TyPatPack <$> record '[' (annotated tyPat) ']'
+tyPat = _TyPatVar <$> varid
 
 fun :: (Syntax f, Domain f s) => f (Decl s)
 fun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
@@ -173,11 +172,13 @@ decl :: (Syntax f, Domain f s) => f (Decl s)
 decl = fun
 
 pat :: (Syntax f, Domain f s) => f (Pat s)
-pat = _PatHole <$> special '_' <|>
-      _PatRecord <$> record '(' (annotated pat) ')' <|>
-      _PatLit <$> lit <|>
-      _PatVar <$> varid <|>
-      mark "pattern"
+pat = _PatCon <$> conid <*> many (annotated pat0) <|> pat0 <|> mark "pattern" where
+  pat0 = _PatHole <$> special '_' <|>
+         _PatRecord <$> record (annotated pat) <|>
+         _PatLit <$> lit <|>
+         _PatVar <$> varid <|>
+         special '(' *> pat <* special ')' <|>
+         mark "pattern(0)"
 
 join :: (Syntax f, Domain f s, Recursive a) => f (a s) -> (Prism (a s) (Annotated s a, b), f b) -> f (a s)
 join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p where
@@ -203,8 +204,8 @@ left _P p = Prism f g <$> annotated p <*> many (annotated p) <|> unparseable p w
 kind :: (Syntax f, Domain f s) => f (Kind s)
 kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind" where
   kind0 = _KindType <$> reservedCon "Type" <|>
+          _KindUni <$> uni <|>
           _KindConstraint <$> reservedCon "Constraint" <|>
-          _KindRecord <$> record '[' (annotated kind) ']' <|>
           special '(' *> kind <* special ')' <|>
           mark "kind(0)"
 
@@ -217,8 +218,7 @@ ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
   ty1 = left _TyApply ty0 <|> mark "type(1)"
   ty0 = _TyVar <$> varid <|>
         _TyCon <$> conid <|>
-        _TyRecord <$> record '(' (annotated ty) ')' <|>
-        _TyPack <$> record '[' (annotated ty) ']' <|>
+        _TyRecord <$> record (annotated ty) <|>
         _TyUni <$> uni <|>
         special '(' *> ty <* special ')' <|>
         mark "type(0)"
@@ -233,8 +233,9 @@ exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Lambda <$> reservedOp "\\" *> annotated pat <*> reservedOp "->" *> annotated exp <|>
          exp1 <|> mark "expression(2)"
   exp1 = left _Apply exp0 <|> mark "expression(1)"
-  exp0 = _Record <$> record '(' (annotated exp) ')' <|>
-         _Var <$> (conid <|> varid) <|> -- TODO qualified
+  exp0 = _Record <$> record (annotated exp) <|>
+         _Var <$> varid <|> -- TODO qualified
+         _Con <$> conid <|>
          _Lit <$> lit <|>
          special '(' *> exp <* special ')' <|>
          mark "expression(0)"

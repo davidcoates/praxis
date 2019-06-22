@@ -19,6 +19,6 @@ check a = save stage $ do
   a' <- generate a
   ts <- solve
   let r = sub (\t -> case t of { TyUni n -> lookup n ts; _ -> Nothing }) a'
-  output $ r
+  output r
   return r
-  -- TODO FIXME add defaulting (need to wait until after kinds?)
+  -- TODO type defaulting

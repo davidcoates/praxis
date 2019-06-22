@@ -67,7 +67,6 @@ unis = extract (only f) where
     KindUni n      -> [n]
     KindConstraint -> []
     KindFun a b    -> unis a ++ unis b
-    KindRecord a   -> concatMap (unis . snd) (toList a)
     KindType       -> []
 -- TODO find some way of combining traverseM and traverseA and use that here
 
@@ -78,9 +77,6 @@ progress d = case view value d of
 
   KEq (_ :< KindUni x) k -> if x `elem` unis k then contradiction else x ~> (view value k)
   KEq _ (_ :< KindUni _) -> swap
-
-  KEq (_ :< KindRecord r1) (_ :< KindRecord r2) | sort (keys r1) == sort (keys r2) ->
-    let values = map snd . Record.toCanonicalList in introduce (zipWith KEq (values r1) (values r2)) -- TODO create zipRecord or some such
 
   KEq (_ :< KindFun t1 t2) (_ :< KindFun t3 t4) -> introduce [ KEq t1 t3, KEq t2 t4 ]
 

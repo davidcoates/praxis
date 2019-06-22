@@ -24,6 +24,11 @@ module Common
   , Const(..)
   , Identity(..)
   , Sum(..)
+  , MaybeT(..)
+  , StateT(..)
+  , MonadTrans(..)
+  , when
+  , unless
 
   , (<&>)
 
@@ -36,14 +41,18 @@ import           Common.Pretty
 import           Common.Source
 import           Common.Tag
 
-import           Control.Applicative   (Const (..))
-import           Control.Lens          (Lens', makeLenses, over, set, use, view,
-                                        (%=), (.=), _1, _2)
-import           Data.Foldable         (fold)
-import           Data.Functor.Identity (Identity (..))
-import           Data.List             (intercalate)
-import           Data.Monoid           (Sum (..))
-import           Data.Traversable      (sequenceA)
+import           Control.Applicative       (Const (..))
+import           Control.Lens              (Lens', makeLenses, over, set, use,
+                                            view, (%=), (.=), _1, _2)
+import           Control.Monad             (unless, when)
+import           Control.Monad.Trans.Class (MonadTrans (..))
+import           Control.Monad.Trans.Maybe (MaybeT (..))
+import           Control.Monad.Trans.State (StateT (..))
+import           Data.Foldable             (fold)
+import           Data.Functor.Identity     (Identity (..))
+import           Data.List                 (intercalate)
+import           Data.Monoid               (Sum (..))
+import           Data.Traversable          (sequenceA)
 
 type Name = String
 
@@ -64,7 +73,7 @@ second = _2
 (<&>) = flip (<$>)
 
 -- |Transformer version of ((,) a)
-data PairT f b a = PairT { runPairT :: f (b, a) }
+newtype PairT f b a = PairT { runPairT :: f (b, a) }
 
 instance Functor f => Functor (PairT f b) where
   fmap f (PairT x) = PairT (fmap (over second f) x)

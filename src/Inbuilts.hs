@@ -7,6 +7,8 @@ module Inbuilts
   ) where
 
 import           Common
+import           Env.DAEnv  (DAEnv)
+import qualified Env.DAEnv  as DAEnv (fromList)
 import           Env.KEnv   (KEnv)
 import qualified Env.KEnv   as KEnv (fromList)
 import           Env.TEnv   (TEnv)
@@ -25,7 +27,7 @@ import qualified Data.Set   as Set (empty)
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
-initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ emptyState
+initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ set daEnv initialDAEnv $ emptyState
 
 -- TODO this actually introduces source information, but we ideally want it to be Phantom
 mono :: String -> Typed QType
@@ -79,3 +81,5 @@ initialTEnv = TEnv.fromList (map (\(n, t, _) -> (n, t)) prelude)
 initialKEnv :: KEnv
 initialKEnv = KEnv.fromList (map (\(a,b) -> (a, cast b)) preludeKinds) where
 
+initialDAEnv :: DAEnv
+initialDAEnv = DAEnv.fromList []

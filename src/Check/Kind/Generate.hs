@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE TypeFamilies           #-}
 
 module Check.Kind.Generate
@@ -10,35 +11,41 @@ module Check.Kind.Generate
 import           Check.Error
 import           Check.Kind.Reason
 import           Check.Kind.Require
+import           Check.Kind.System
 import           Common
-import qualified Env.KEnv           as KEnv
+import           Env.KEnv
 import           Introspect
 import           Praxis
+import           Print
 import qualified Record
 import           Stage
 import           Term
 
+import           Data.List          (nub, sort)
 import qualified Data.Set           as Set
+import           Prelude            hiding (lookup)
 
+kind :: Annotated a b -> Annotation a b
 kind = view annotation
 
 generate :: Recursive a => Simple a -> Praxis (Kinded a)
 generate x = save stage $ do
   stage .= KindCheck Generate
   x' <- visit gen x
+  output x'
+  cs <- use (our . constraints)
+  output $ separate "\n\n" (nub . sort $ cs)
   return x'
 
 gen :: Recursive a => Simple a -> Visit Praxis (Annotation KindAnn a) (Kinded a)
 gen x = case typeof x of
-  IDataAlt -> skip
-  IDecl    -> skip -- TODO (data alt)
+  IDecl    -> case runPraxisT (decl x) of { Nothing -> skip; Just r -> Resolve r }
   IExp     -> skip
   IPat     -> skip
   IProgram -> skip
   IQType   -> skip
   IStmt    -> skip
   IType    -> Resolve (ty x)
-  ITyPat   -> undefined -- TODO
 
 ty :: Simple Type -> Praxis (Kinded Type)
 ty = split $ \s -> \case
@@ -63,13 +70,9 @@ ty = split $ \s -> \case
       return (phantom KindConstraint :< TyFlat (Set.fromList ts'))
 
     TyCon n -> do
-      e <- KEnv.lookup n
+      e <- lookup n
       case e of Nothing -> throwAt s (NotInScope n)
                 Just k  -> return (k :< TyCon n)
-
-    TyPack r -> do -- This one is easy
-      r' <- traverse ty r
-      return (phantom (KindRecord (fmap kind r')) :< TyPack r')
 
     TyRecord r -> do
       r' <- traverse ty r
@@ -77,11 +80,52 @@ ty = split $ \s -> \case
       return (phantom KindType :< TyRecord r')
 
     TyVar v -> do
-      e <- KEnv.lookup v
+      e <- lookup v
       case e of
         Just k -> return (k :< TyVar v)
         Nothing -> do
           k <- freshUniK
-          KEnv.intro v k
+          intro v k
           return (k :< TyVar v)
 
+tyPat :: Simple TyPat -> Praxis (Int, Kinded TyPat)
+tyPat = splitPair $ \s -> \case
+
+  TyPatVar v -> do
+    e <- lookup v
+    case e of
+      Just k  -> return (1, k :< TyPatVar v)
+      Nothing -> do
+        k <- freshUniK
+        intro v k
+        return (1, k :< TyPatVar v)
+
+dataAlt :: Simple DataAlt -> Praxis (Kinded DataAlt)
+dataAlt = split $ \s -> \case
+
+  DataAlt n ts -> do
+    ts' <- traverse ty ts
+    requires $ map (\t -> newConstraint (kind t `KEq` phantom KindType) (Custom "dataAlt: TODO") s) ts'
+    return (() :< DataAlt n ts')
+
+fun :: Kinded Kind -> Kinded Kind -> Kinded Kind
+fun a b = phantom (KindFun a b)
+
+decl :: Simple Decl -> PraxisT Maybe (Kinded Decl)
+decl = split $ \s -> \case
+
+  -- TODO check no duplicated patterns
+  DeclData n ps as -> PraxisT . Just $ do
+    e <- lookup n
+    case e of
+      Just _  -> throwAt s $ "data declaration " <> quote (plain n) <> " redefined"
+      Nothing -> pure ()
+    k <- freshUniK
+    intro n k
+    (Sum i, ps') <- traverse (over first Sum) <$> traverse tyPat ps
+    as' <- traverse dataAlt as
+    elimN i
+    require $ newConstraint (k `KEq` foldr fun (phantom KindType) (map kind ps')) (Custom "decl: TODO") s
+    return (() :< DeclData n ps' as')
+
+  _ -> lift Nothing

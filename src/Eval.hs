@@ -41,6 +41,8 @@ decl (a :< e) = case e of
     e' <- exp e
     intro n e'
 
+  _ -> return ()
+
 stmt :: Typed Stmt -> Praxis (Sum Int)
 stmt (_ :< s) = case s of
 

@@ -74,4 +74,5 @@ instance Label TypeAnn where
     IPat            -> pretty a
     ITyPat          -> pretty a
     ITypeConstraint -> pretty a
+    IDataAlt        -> pretty a
     _               -> Nil

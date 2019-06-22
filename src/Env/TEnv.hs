@@ -12,6 +12,7 @@ module Env.TEnv
   , closure
 
   , ungeneralise
+  , ungeneraliseQType
   )
 where
 
@@ -66,7 +67,7 @@ read s n = do
   l <- use tEnv
   case LEnv.lookup n l of
     Just (c, u, t) -> do
-      t <- ungeneralise s t
+      t <- ungeneraliseQType t
       requires [ newConstraint (share t) (UnsafeView n) s | not u ]
       requires [ newConstraint (share t) (Captured n) s   | c ]
       return t
@@ -79,7 +80,7 @@ mark s n = do
   case LEnv.lookup n l of
     Just (c, u, t) -> do
       tEnv .= LEnv.mark n l
-      t <- ungeneralise s t
+      t <- ungeneraliseQType t
       requires [ newConstraint (share t) (Shared n)   s | u ]
       requires [ newConstraint (share t) (Captured n) s | c ]
       return t
@@ -105,9 +106,12 @@ Alternative is to transform the source which would mess up error messages
 OR don't allow this, and don't allow explicit forall.
 -}
 -- TODO move this somewhere else
-ungeneralise :: Source -> Typed QType -> Praxis (Typed Type)
-ungeneralise _ (_ :< Mono t) = return t
-ungeneralise _ (_ :< Forall vs t) = do
-  -- TODO need to stores kinds somewhere?
+ungeneralise :: [Name] -> Praxis (Typed Type -> Typed Type)
+ungeneralise vs = do
   l <- zipWith (\n (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshUniT
-  return $ sub (\case { TyVar n -> n `Prelude.lookup` l; _ -> Nothing }) t
+  return $ sub (\case { TyVar n -> n `Prelude.lookup` l; _ -> Nothing})
+
+ungeneraliseQType :: Typed QType -> Praxis (Typed Type)
+ungeneraliseQType (_ :< t) = case t of
+  Mono t      -> return t
+  Forall vs t -> ($ t) <$> ungeneralise vs

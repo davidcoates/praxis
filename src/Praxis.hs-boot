@@ -6,8 +6,7 @@ module Praxis
   )
   where
 
-import           Control.Monad.Trans.Maybe (MaybeT)
-import           Control.Monad.Trans.State (StateT)
+import           Common
 
 data PraxisState
 

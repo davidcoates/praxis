@@ -1,0 +1,16 @@
+
+data List a where
+  Nil
+  Cons (a, List a)
+
+xs : List Int
+xs = Cons (1, Cons (2, Cons (3, Nil)))
+
+map : forall a b. (a -> b) -> List a -> List b
+map f = cases
+  Nil          -> Nil
+  Cons (x, xs) -> Cons (f x, map f xs)
+
+ys : List Int
+ys = map (\x -> x + 1) xs
+

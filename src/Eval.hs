@@ -9,6 +9,7 @@ module Eval
 import           Common
 import           Env.VEnv    (VEnv, elim, elimN, intro)
 import qualified Env.VEnv    as VEnv (fromList, lookup)
+import qualified Env.DAEnv as DAEnv
 import           Praxis
 import           Record
 import           Term
@@ -65,6 +66,12 @@ exp (_ :< e) = case e of
 
   Cases ps -> return $ F $ \v -> cases v ps
 
+  Con n -> do
+    DataAltInfo _ _ args _ <- view annotation <$> DAEnv.get Phantom n
+    let f 0 = C n []
+        f i = let C n vs = f (i-1) in F (\v -> return (C n (v:vs)))
+    return (f (length args))
+
   Do ss -> do
     Sum i <- asum (map stmt (init ss))
     let _ :< StmtExp e = last ss
@@ -112,11 +119,19 @@ forceBind :: Value -> Typed Pat -> Praxis Int
 forceBind v p = case bind v p of Just i  -> i
                                  Nothing -> error "no matching pattern" -- TODO
 
+binds :: [Value] -> [Typed Pat] -> Maybe (Praxis Int)
+binds vs ps = do
+  cs <- sequence $ zipWith bind vs ps
+  return (sum <$> sequence cs)
+
 bind :: Value -> Typed Pat -> Maybe (Praxis Int)
 bind v (_ :< p) = case p of
 
   PatAt n p
     -> (\c -> do { intro n v; i <- c; return (i+1) }) <$> bind v p
+
+  PatCon n ps | C m vs <- v
+    -> if n == m then binds vs ps else Nothing
 
   PatHole
     -> Just (return 0)
@@ -128,8 +143,7 @@ bind v (_ :< p) = case p of
     -> do
     let vs = map snd $ Record.toCanonicalList r'
         ps = map snd $ Record.toCanonicalList r
-    cs <- sequence $ map (\(a, b) -> bind a b) (zip vs ps)
-    return (sum <$> sequence cs)
+    binds vs ps
 
   PatVar n
     -> Just $ intro n v >> return 1

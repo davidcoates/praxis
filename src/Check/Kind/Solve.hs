@@ -12,7 +12,6 @@ import           Check.Kind.Error
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
-import           Env.TEnv            (ungeneralise)
 import           Introspect
 import           Praxis
 import           Record

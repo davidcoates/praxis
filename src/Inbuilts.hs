@@ -57,7 +57,7 @@ prelude =
   , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
   , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
   , ("dot",      poly [ "a", "b", "c" ] "(b -> c, a -> b) -> a -> c", F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
-  , ("print",    poly [ "a" ]  "a -> ()",  F (\x -> liftIO (putStrLn (show x) >> pure (R Record.unit)))) -- TODO should have Show constraint
+  , ("print",    poly [ "a" ]  "a -> ()",  F (\x -> liftIO (print x >> pure (R Record.unit)))) -- TODO should have Show constraint
   ]
   where
         lift :: (Int -> Int -> Int) -> Value
@@ -70,7 +70,7 @@ preludeKinds =
   , ("String", kind "Type")
   , ("Char",   kind "Type")
   , ("Share",  kind "Type -> Constraint")
-  , ("->",     kind "[Type, Type] -> Type")
+  , ("->",     kind "Type -> Type -> Type")
   ]
 
 initialVEnv :: VEnv

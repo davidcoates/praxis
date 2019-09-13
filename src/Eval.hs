@@ -7,8 +7,7 @@ module Eval
   ) where
 
 import           Common
-import           Env.VEnv    (VEnv, elim, elimN, intro)
-import qualified Env.VEnv    as VEnv (fromList, lookup)
+import           Env.Env
 import qualified Env.DAEnv as DAEnv
 import           Praxis
 import           Record
@@ -16,7 +15,7 @@ import           Term
 import           Value
 
 import           Data.Monoid (Sum (..))
-import           Prelude     hiding (exp)
+import           Prelude     hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
   eval' :: Typed a -> Praxis b
@@ -40,7 +39,7 @@ decl (a :< e) = case e of
 
   DeclVar n t e -> do
     e' <- exp e
-    intro n e'
+    vEnv %= intro n e'
 
   _ -> return ()
 
@@ -76,7 +75,7 @@ exp (_ :< e) = case e of
     Sum i <- asum (map stmt (init ss))
     let _ :< StmtExp e = last ss
     v <- exp e
-    elimN i
+    vEnv %= elimN i
     return v
 
   If a b c -> do
@@ -86,7 +85,7 @@ exp (_ :< e) = case e of
   Lambda p e -> return $ F $ \v -> do
     i <- forceBind v p
     e' <- exp e
-    elimN i
+    vEnv %= elimN i
     return e'
 
   Lit l -> return (L l)
@@ -100,7 +99,7 @@ exp (_ :< e) = case e of
   Sig e _ -> exp e
 
   Var n -> do
-    Just v <- VEnv.lookup n
+    Just v <- vEnv `uses` lookup n
     return v
 
 
@@ -110,7 +109,7 @@ cases x ((p,e):ps) = case bind x p of
   Just c  -> do
     i <- c
     e' <- exp e
-    elimN i
+    vEnv %= elimN i
     return e'
   Nothing ->
     cases x ps
@@ -128,7 +127,7 @@ bind :: Value -> Typed Pat -> Maybe (Praxis Int)
 bind v (_ :< p) = case p of
 
   PatAt n p
-    -> (\c -> do { intro n v; i <- c; return (i+1) }) <$> bind v p
+    -> (\c -> do { vEnv %= intro n v; i <- c; return (i+1) }) <$> bind v p
 
   PatCon n ps | C m vs <- v
     -> if n == m then binds vs ps else Nothing
@@ -146,7 +145,7 @@ bind v (_ :< p) = case p of
     binds vs ps
 
   PatVar n
-    -> Just $ intro n v >> return 1
+    -> Just $ vEnv %= intro n v >> return 1
 
   _
     -> Nothing

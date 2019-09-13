@@ -7,14 +7,10 @@ module Inbuilts
   ) where
 
 import           Common
-import           Env.DAEnv  (DAEnv)
 import qualified Env.DAEnv  as DAEnv (fromList)
-import           Env.KEnv   (KEnv)
 import qualified Env.KEnv   as KEnv (fromList)
-import           Env.TEnv   (TEnv)
 import qualified Env.TEnv   as TEnv (fromList)
-import           Env.VEnv   (VEnv)
-import qualified Env.VEnv   as VEnv (fromList)
+import qualified Env.Env    as Env (fromList)
 import           Introspect
 import           Parse      (parse)
 import           Praxis
@@ -74,7 +70,7 @@ preludeKinds =
   ]
 
 initialVEnv :: VEnv
-initialVEnv = VEnv.fromList (map (\(n, _, v) -> (n, v)) prelude)
+initialVEnv = Env.fromList (map (\(n, _, v) -> (n, v)) prelude)
 
 initialTEnv :: TEnv
 initialTEnv = TEnv.fromList (map (\(n, t, _) -> (n, t)) prelude)

@@ -2,7 +2,7 @@ module Main where
 
 import           Common
 import qualified Env.TEnv             as TEnv (lookup)
-import qualified Env.VEnv             as VEnv (lookup)
+import qualified Env.Env             as Env (lookup)
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
@@ -56,7 +56,7 @@ runMain = do
   case t of Nothing -> liftIO $ putStrLn "Missing main function"
             Just (_ :< Mono (_ :< TyFun (_ :< r) (_ :< r'))) | r == TyRecord Record.unit
                                                              , r' == TyRecord Record.unit ->
-              do { Just (F f) <- VEnv.lookup "main"; f (R Record.unit); return () }
+              do { Just (F f) <- vEnv `uses` Env.lookup "main"; f (R Record.unit); return () }
             _ -> liftIO $ putStrLn "Ill-typed main function"
 
 repl :: Praxis ()

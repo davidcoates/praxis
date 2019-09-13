@@ -2,9 +2,6 @@ module Env.TEnv
   ( TEnv
   , fromList
 
-  , elim
-  , elimN
-  , intro
   , join
   , lookup
   , read
@@ -31,16 +28,6 @@ import           Term
 import           Control.Monad      (replicateM)
 import           Prelude            hiding (lookup, read)
 import qualified Prelude            (lookup)
-
-
-elim :: Praxis ()
-elim = tEnv %= LEnv.elim
-
-elimN :: Int -> Praxis ()
-elimN n = tEnv %= LEnv.elimN n
-
-intro :: Name -> Typed QType -> Praxis ()
-intro n p = tEnv %= LEnv.intro n p
 
 join :: Praxis a -> Praxis b -> Praxis (a, b)
 join f1 f2 = do

@@ -15,6 +15,7 @@ import           Common
 import qualified Env.DAEnv           as DAEnv
 import qualified Env.Env            as Env (lookup)
 import           Env.TEnv
+import           Env.LEnv hiding (join, mark)
 import           Introspect
 import           Praxis
 import           Print
@@ -100,7 +101,7 @@ decl = split $ \s -> \case
   DeclVar n sig e -> do
     t <- case sig of Nothing -> (\t -> (view source t, ()) :< Mono t) <$> freshUniT
                      Just t  -> pure (cast t)
-    intro n t
+    tEnv %= intro n t
     e' <- exp e
     -- TODO this won't work if we allow nested polymorphic definitions
     let t' = case view value t of { Mono t -> t; Forall _ t -> t }
@@ -160,7 +161,7 @@ exp = split $ \s -> \case
     ss' <- traverse stmt ss
     let f (StmtDecl _) = 1
         f (StmtExp _)  = 0
-    elimN (sum (map (f . view value) ss'))
+    tEnv %= elimN (sum (map (f . view value) ss'))
     let t = (\(_ :< StmtExp ((_, t) :< _)) -> t) (last ss')
     return (t :< Do ss')
 
@@ -174,7 +175,7 @@ exp = split $ \s -> \case
   Lambda p e -> closure $ do
     (i, p') <- pat p
     e' <- exp e
-    elimN i
+    tEnv %= elimN i
     return (fun (ty p') (ty e') :< Lambda p' e')
 
   Lit x -> do
@@ -183,9 +184,9 @@ exp = split $ \s -> \case
 
   Read n e -> do
     t <- read s n
-    intro n (mono t)
+    tEnv %= intro n (mono t)
     e' <- exp e
-    elim
+    tEnv %= elim
     return (ty e' :< view value e')
 
   Record r -> do
@@ -212,7 +213,7 @@ bind :: (Kinded Pat, Kinded Exp) -> Praxis (Typed Pat, Typed Exp)
 bind (s :< p, e) = do
   (i, p') <- pat (s :< p)
   e' <- exp e
-  elimN i
+  tEnv %= elimN i
   return (p', e')
 
 
@@ -222,7 +223,7 @@ pat = splitPair $ \s -> \case
   PatAt v p -> do
     (i, p') <- pat p
     let t = ty p'
-    intro v (mono t)
+    tEnv %= intro v (mono t)
     return (i + 1, t :< PatAt v p')
 
   PatHole -> do
@@ -242,7 +243,7 @@ pat = splitPair $ \s -> \case
 
   PatVar v -> do
     t <- freshUniT
-    intro v (mono t)
+    tEnv %= intro v (mono t)
     return (1, t :< PatVar v)
 
   PatCon n ps -> do

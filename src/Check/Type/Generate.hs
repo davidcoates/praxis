@@ -13,7 +13,7 @@ import           Check.Type.Require
 import           Check.Type.System
 import           Common
 import qualified Env.DAEnv           as DAEnv
-import qualified Env.Env            as Env (lookup)
+import qualified Env.Env            as Env (lookup, intro)
 import           Env.TEnv
 import           Env.LEnv hiding (join, mark)
 import           Introspect
@@ -91,7 +91,7 @@ decl = split $ \s -> \case
                 [] -> Mono rt
                 _  -> Forall (map ((\(TyPatVar n) -> n) . view value) ps') (foldr fun rt args')
               da = ((s, DataAltInfo ns ct args' rt) :< DataAlt n args')
-          DAEnv.intro n da
+          daEnv %= Env.intro n da
           return da
     alts' <- traverse f alts
     return (() :< DeclData n ps' alts')

@@ -4,7 +4,6 @@ module Env.DAEnv
   ( DAEnv
   , fromList
 
-  , intro
   , get
   )
 where
@@ -14,9 +13,6 @@ import           Env.Env (fromList)
 import qualified Env.Env as Env
 import           Praxis
 import           Term
-
-intro :: Name -> Typed DataAlt -> Praxis ()
-intro n v = daEnv %= Env.intro n v
 
 get :: Source -> Name -> Praxis (Typed DataAlt)
 get s n = do

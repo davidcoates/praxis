@@ -1,3 +1,6 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+
 module Common
   ( module Common.Pretty
   , module Common.Source
@@ -18,6 +21,7 @@ module Common
   , (.=)
   , (%=)
   , use
+  , uses
   , first
   , second
 
@@ -43,7 +47,7 @@ import           Common.Tag
 
 import           Control.Applicative       (Const (..))
 import           Control.Lens              (Lens', makeLenses, over, set, use,
-                                            view, (%=), (.=), _1, _2)
+                                            view, (%=), uses, (.=), _1, _2)
 import           Control.Monad             (unless, when)
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Maybe (MaybeT (..))

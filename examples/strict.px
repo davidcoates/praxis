@@ -1,0 +1,6 @@
+
+first : forall a b. (a, b) -> a
+first (x,_) = x
+
+main : () -> ()
+main () = first ((), putStrLn "Praxis uses eager evaluation!")

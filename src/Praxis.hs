@@ -9,6 +9,11 @@ module Praxis
   , Stage(..)
   , emptyState
 
+  , KEnv(..)
+  , TEnv(..)
+  , DAEnv(..)
+  , VEnv(..)
+
   , throw
   , throwAt
   , panic -- Prefer this over Prelude.error
@@ -48,11 +53,13 @@ module Praxis
 
 import qualified Check.System                 as Check (System)
 import           Common
-import           Env                          (DAEnv, KEnv, TEnv, VEnv)
 import           Record                       (Record)
 import           Stage
 import           Term
 
+import Env.Env
+import Env.LEnv
+import Value
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent
 import           Control.Lens                 (Lens', makeLenses, traverseOf)
@@ -78,6 +85,14 @@ data Fresh = Fresh
 
 instance Show Fresh where
   show _ = "<fresh>"
+
+type VEnv = Env Name Value
+
+type TEnv = LEnv Name (Typed QType)
+
+type KEnv = Env Name (Kinded Kind)
+
+type DAEnv = Env Name (Typed DataAlt)
 
 data PraxisState = PraxisState
   { _filename :: String              -- ^File path (for error messages)

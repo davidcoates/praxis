@@ -10,7 +10,6 @@ module Env.VEnv
 where
 
 import           Common
-import           Env     (VEnv)
 import           Env.Env (Env, fromList)
 import qualified Env.Env as Env
 import           Praxis

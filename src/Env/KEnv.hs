@@ -10,7 +10,6 @@ module Env.KEnv
 where
 
 import           Common
-import           Env     (KEnv)
 import           Env.Env (Env, fromList)
 import qualified Env.Env as Env
 import           Praxis

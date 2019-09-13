@@ -10,7 +10,6 @@ module Env.DAEnv
 where
 
 import           Common
-import           Env     (DAEnv)
 import           Env.Env (fromList)
 import qualified Env.Env as Env
 import           Praxis

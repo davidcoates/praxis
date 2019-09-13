@@ -22,7 +22,6 @@ import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import           Env                (TEnv)
 import           Env.LEnv           (LEnv, fromList)
 import qualified Env.LEnv           as LEnv
 import           Introspect         (sub)

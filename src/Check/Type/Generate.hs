@@ -13,9 +13,8 @@ import           Check.Type.Require
 import           Check.Type.System
 import           Common
 import qualified Env.DAEnv           as DAEnv
-import qualified Env.Env            as Env (lookup, intro)
 import           Env.TEnv
-import           Env.LEnv hiding (join, mark)
+import           Env
 import           Introspect
 import           Praxis
 import           Print

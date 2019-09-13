@@ -7,7 +7,7 @@ module Eval
   ) where
 
 import           Common
-import           Env.Env
+import           Env
 import qualified Env.DAEnv as DAEnv
 import           Praxis
 import           Record

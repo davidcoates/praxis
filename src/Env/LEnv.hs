@@ -4,21 +4,17 @@
 
 module Env.LEnv
   ( LEnv
-  , fromList
 
-  , elim
-  , elimN
-  , intro
   , join
-  , lookup
+  , lookupFull
   , mark
   , push
   , pop
   )
 where
 
-import           Env.Env      (Env (..))
-import qualified Env.Env      as Env
+import           Env
+import           Env.Env
 
 import           Control.Arrow (second)
 import           Data.List     (intercalate)
@@ -34,30 +30,26 @@ instance Functor (LEnv a) where
   fmap f (LEnv l ls) = LEnv (fmap f' l) (map (fmap f') ls) where
     f' (u, x) = (u, f x)
 
-fromList :: [(a, b)] -> LEnv a b
-fromList vs = LEnv (Env.fromList (map (\(a, b) -> (a, (False, b))) vs)) []
-
 instance (Show a, Show b) => Show (LEnv a b) where
   show (LEnv l ls) = intercalate "|" (map show' (l:ls)) where
     show' (Env l) = "[" ++ intercalate ", " (map (\(a,(u,b)) -> show a ++ (if u then " :* " else " :o ") ++ show b) l) ++ " ]"
 
-elim :: LEnv a b -> LEnv a b
-elim (LEnv l ls) = LEnv (Env.elim l) ls
-
-elimN :: Int -> LEnv a b -> LEnv a b
-elimN n (LEnv l ls) = LEnv (Env.elimN n l) ls
-
-intro :: a -> b -> LEnv a b -> LEnv a b
-intro a b (LEnv l ls) = LEnv (Env.intro a (False, b) l) ls
+instance Environment LEnv where
+  intro a b (LEnv l ls) = LEnv (intro a (False, b) l) ls
+  elim (LEnv l ls) = LEnv (elim l) ls
+  empty = LEnv empty []
+  lookup a l = case lookupFull a l of
+    Nothing        -> Nothing
+    Just (_, _, b) -> Just b
 
 mark :: Eq a => a -> LEnv a b -> LEnv a b
 mark x (LEnv l ls) = let (m:ms) = f (l:ls) in LEnv m ms
   where f (l:ls) = case Env.lookup x l of
-          Just _  -> Env.adjust (\(_, b) -> (True, b)) x l : ls
+          Just _  -> adjust (\(_, b) -> (True, b)) x l : ls
           Nothing -> l : f ls
 
-lookup :: Eq a => a -> LEnv a b -> Maybe (Bool, Bool, b)
-lookup x (LEnv l ls) = f (l:ls) False
+lookupFull :: Eq a => a -> LEnv a b -> Maybe (Bool, Bool, b)
+lookupFull x (LEnv l ls) = f (l:ls) False
   where f     [] _ = Nothing
         f (l:ls) c = case Env.lookup x l of
           Just (u, v) -> Just (c, u, v)

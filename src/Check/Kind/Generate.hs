@@ -13,7 +13,7 @@ import           Check.Kind.Reason
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
-import           Env.Env
+import           Env
 import           Introspect
 import           Praxis
 import           Print

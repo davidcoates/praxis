@@ -1,8 +1,7 @@
 module Main where
 
 import           Common
-import qualified Env.TEnv             as TEnv (lookup)
-import qualified Env.Env             as Env (lookup)
+import           Env
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
@@ -15,6 +14,7 @@ import           Control.Monad        (void, when)
 import           Data.List            (find, intercalate, stripPrefix)
 import           System.Environment
 import           System.IO
+import Prelude hiding (lookup)
 
 forever :: Praxis a -> Praxis a
 forever p = try p >> forever p
@@ -52,11 +52,11 @@ file f = (interpretFile f :: Praxis (Typed Program, ())) >> onFileSuccess
 
 runMain :: Praxis ()
 runMain = do
-  t <- TEnv.lookup "main"
+  t <- tEnv `uses` lookup "main"
   case t of Nothing -> liftIO $ putStrLn "Missing main function"
             Just (_ :< Mono (_ :< TyFun (_ :< r) (_ :< r'))) | r == TyRecord Record.unit
                                                              , r' == TyRecord Record.unit ->
-              do { Just (F f) <- vEnv `uses` Env.lookup "main"; f (R Record.unit); return () }
+              do { Just (F f) <- vEnv `uses` lookup "main"; f (R Record.unit); return () }
             _ -> liftIO $ putStrLn "Ill-typed main function"
 
 repl :: Praxis ()

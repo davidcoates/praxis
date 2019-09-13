@@ -1,9 +1,7 @@
 module Env.TEnv
   ( TEnv
-  , fromList
 
   , join
-  , lookup
   , read
   , mark
   , closure
@@ -19,7 +17,6 @@ import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import           Env.LEnv           (LEnv, fromList)
 import qualified Env.LEnv           as LEnv
 import           Introspect         (sub)
 import           Praxis
@@ -51,7 +48,7 @@ closure x = do
 read :: Source -> Name -> Praxis (Typed Type)
 read s n = do
   l <- use tEnv
-  case LEnv.lookup n l of
+  case LEnv.lookupFull n l of
     Just (c, u, t) -> do
       t <- ungeneraliseQType t
       requires [ newConstraint (share t) (UnsafeView n) s | not u ]
@@ -63,7 +60,7 @@ read s n = do
 mark :: Source -> Name -> Praxis (Typed Type)
 mark s n = do
   l <- use tEnv
-  case LEnv.lookup n l of
+  case LEnv.lookupFull n l of
     Just (c, u, t) -> do
       tEnv .= LEnv.mark n l
       t <- ungeneraliseQType t
@@ -71,13 +68,6 @@ mark s n = do
       requires [ newConstraint (share t) (Captured n) s | c ]
       return t
     Nothing     -> throwAt s (NotInScope n)
-
-lookup :: Name -> Praxis (Maybe (Typed QType))
-lookup n = do
-  l <- use tEnv
-  case LEnv.lookup n l of
-    Just (_, _, t) -> return (Just t)
-    Nothing        -> return Nothing
 
 {-
 TODO, want to allow things like:

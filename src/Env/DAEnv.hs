@@ -2,21 +2,20 @@
 
 module Env.DAEnv
   ( DAEnv
-  , fromList
 
   , get
   )
 where
 
 import           Common
-import           Env.Env (fromList)
-import qualified Env.Env as Env
+import           Env
 import           Praxis
 import           Term
+import Prelude hiding (lookup)
 
 get :: Source -> Name -> Praxis (Typed DataAlt)
 get s n = do
   l <- use daEnv
-  case Env.lookup n l of
+  case lookup n l of
     Just v  -> return v
     Nothing -> throwAt s $ "data constructor " <> quote (plain n) <> " is not in scope"

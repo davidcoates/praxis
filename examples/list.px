@@ -17,4 +17,5 @@ sum = cases
 main : () -> ()
 main () = do
   let xs = Cons (1, Cons (2, Cons (3, Nil)))
-  print (sum xs)
+  let ys = map (\x -> x + 1) xs
+  print (sum ys)

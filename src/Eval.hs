@@ -37,7 +37,7 @@ decl :: Typed Decl -> Praxis ()
 decl (a :< e) = case e of
 
   DeclVar n t e -> do
-    e' <- exp e
+    e' <- expRec (Just n) e
     vEnv %= intro n e'
 
   _ -> return ()
@@ -49,9 +49,13 @@ stmt (_ :< s) = case s of
 
   StmtExp e  -> exp e >> return (Sum 1)
 
+rec :: Maybe Name -> Value -> Praxis ()
+rec n v = case n of
+  Just n  -> vEnv %= intro n v
+  Nothing -> return ()
 
-exp :: Typed Exp -> Praxis Value
-exp (_ :< e) = case e of
+expRec :: Maybe Name -> Typed Exp -> Praxis Value
+expRec n (_ :< e) = case e of
 
   Apply f x -> do
     F f' <- exp f
@@ -62,7 +66,10 @@ exp (_ :< e) = case e of
     v <- exp e
     cases v ps
 
-  Cases ps -> return $ F $ \v -> cases v ps
+  Cases ps -> do
+    l <- use vEnv
+    let e = F $ \v -> save vEnv $ do { vEnv .= l; rec n e; cases v ps }
+    return e
 
   Con n -> do
     Just da <- daEnv `uses` lookup n
@@ -82,11 +89,10 @@ exp (_ :< e) = case e of
     L (Bool a') <- exp a
     if a' then exp b else exp c
 
-  Lambda p e -> return $ F $ \v -> do
-    i <- forceBind v p
-    e' <- exp e
-    vEnv %= elimN i
-    return e'
+  Lambda p e -> do
+    l <- use vEnv
+    let f = F $ \v -> save vEnv $ do { vEnv .= l; rec n f; i <- forceBind v p; exp e }
+    return f
 
   Lit l -> return (L l)
 
@@ -102,6 +108,8 @@ exp (_ :< e) = case e of
     Just v <- vEnv `uses` lookup n
     return v
 
+exp :: Typed Exp -> Praxis Value
+exp = expRec Nothing
 
 cases :: Value -> [(Typed Pat, Typed Exp)] -> Praxis Value
 cases x [] = error ("no matching pattern" ++ show x)

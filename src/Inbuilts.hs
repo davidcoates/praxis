@@ -54,7 +54,7 @@ prelude =
   ]
   where
         lift :: (Int -> Int -> Int) -> Value
-        lift f = F (\(R r) -> case Record.unpair r of (L (Int a), L (Int b)) -> pure (L (Int (f a b))))
+        lift f = F (\(R r) -> case Record.unpair r of { (L (Int a), L (Int b)) -> pure (L (Int (f a b))); _ -> error (show r) })
 
 preludeKinds :: [(Name, Typed Kind)]
 preludeKinds =

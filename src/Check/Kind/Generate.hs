@@ -13,7 +13,7 @@ import           Check.Kind.Reason
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
-import           Env.KEnv
+import           Env.Env
 import           Introspect
 import           Praxis
 import           Print
@@ -70,7 +70,7 @@ ty = split $ \s -> \case
       return (phantom KindConstraint :< TyFlat (Set.fromList ts'))
 
     TyCon n -> do
-      e <- lookup n
+      e <- kEnv `uses` lookup n
       case e of Nothing -> throwAt s (NotInScope n)
                 Just k  -> return (k :< TyCon n)
 
@@ -80,24 +80,24 @@ ty = split $ \s -> \case
       return (phantom KindType :< TyRecord r')
 
     TyVar v -> do
-      e <- lookup v
+      e <- kEnv `uses` lookup v
       case e of
         Just k -> return (k :< TyVar v)
         Nothing -> do
           k <- freshUniK
-          intro v k
+          kEnv %= intro v k
           return (k :< TyVar v)
 
 tyPat :: Simple TyPat -> Praxis (Int, Kinded TyPat)
 tyPat = splitPair $ \s -> \case
 
   TyPatVar v -> do
-    e <- lookup v
+    e <- kEnv `uses` lookup v
     case e of
       Just k  -> return (1, k :< TyPatVar v)
       Nothing -> do
         k <- freshUniK
-        intro v k
+        kEnv %= intro v k
         return (1, k :< TyPatVar v)
 
 dataAlt :: Simple DataAlt -> Praxis (Kinded DataAlt)
@@ -116,15 +116,15 @@ decl = split $ \s -> \case
 
   -- TODO check no duplicated patterns
   DeclData n ps as -> PraxisT . Just $ do
-    e <- lookup n
+    e <- kEnv `uses` lookup n
     case e of
       Just _  -> throwAt s $ "data declaration " <> quote (plain n) <> " redefined"
       Nothing -> pure ()
     k <- freshUniK
-    intro n k
+    kEnv %= intro n k
     (Sum i, ps') <- traverse (over first Sum) <$> traverse tyPat ps
     as' <- traverse dataAlt as
-    elimN i
+    kEnv %= elimN i
     require $ newConstraint (k `KEq` foldr fun (phantom KindType) (map kind ps')) (Custom "decl: TODO") s
     return (() :< DeclData n ps' as')
 

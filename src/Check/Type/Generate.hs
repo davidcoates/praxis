@@ -13,7 +13,7 @@ import           Check.Type.Require
 import           Check.Type.System
 import           Common
 import qualified Env.DAEnv           as DAEnv
-import qualified Env.KEnv            as KEnv
+import qualified Env.Env            as Env (lookup)
 import           Env.TEnv
 import           Introspect
 import           Praxis
@@ -80,7 +80,7 @@ decl = split $ \s -> \case
   DeclData n ps alts -> do
     let ps' = map cast ps
     -- TODO could be kind annotated to avoid this lookup
-    Just k <- KEnv.lookup n
+    Just k <- kEnv `uses` Env.lookup n
     let c = TyCon n `as` cast k
         f ((s, ()) :< DataAlt n args) = do
           let args' = map cast args

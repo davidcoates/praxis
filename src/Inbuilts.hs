@@ -8,7 +8,6 @@ module Inbuilts
 
 import           Common
 import qualified Env.DAEnv  as DAEnv (fromList)
-import qualified Env.KEnv   as KEnv (fromList)
 import qualified Env.TEnv   as TEnv (fromList)
 import qualified Env.Env    as Env (fromList)
 import           Introspect
@@ -76,7 +75,7 @@ initialTEnv :: TEnv
 initialTEnv = TEnv.fromList (map (\(n, t, _) -> (n, t)) prelude)
 
 initialKEnv :: KEnv
-initialKEnv = KEnv.fromList (map (\(a,b) -> (a, cast b)) preludeKinds) where
+initialKEnv = Env.fromList (map (\(a,b) -> (a, cast b)) preludeKinds) where
 
 initialDAEnv :: DAEnv
 initialDAEnv = DAEnv.fromList []

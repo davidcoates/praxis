@@ -8,7 +8,6 @@ module Eval
 
 import           Common
 import           Env
-import qualified Env.DAEnv as DAEnv
 import           Praxis
 import           Record
 import           Term
@@ -66,7 +65,8 @@ exp (_ :< e) = case e of
   Cases ps -> return $ F $ \v -> cases v ps
 
   Con n -> do
-    DataAltInfo _ _ args _ <- view annotation <$> DAEnv.get Phantom n
+    Just da <- daEnv `uses` lookup n
+    let DataAltInfo _ _ args _ = view annotation da
     let f 0 = C n []
         f i = let C n vs = f (i-1) in F (\v -> return (C n (v:vs)))
     return (f (length args))

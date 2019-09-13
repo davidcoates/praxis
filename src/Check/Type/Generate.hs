@@ -12,7 +12,6 @@ import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import qualified Env.DAEnv           as DAEnv
 import           Env.TEnv
 import           Env
 import           Introspect
@@ -30,6 +29,13 @@ import           Prelude             hiding (exp, log, lookup, read)
 
 ty :: Typed a -> Annotation TypeAnn a
 ty = view annotation
+
+getData :: Source -> Name -> Praxis DataAltInfo
+getData s n = do
+  l <- use daEnv
+  case lookup n l of
+    Just v  -> return (view annotation v)
+    Nothing -> throwAt s $ "data constructor " <> quote (plain n) <> " is not in scope"
 
 generate :: Recursive a => Kinded a -> Praxis (Typed a)
 generate x = save stage $ do
@@ -152,7 +158,7 @@ exp = split $ \s -> \case
     return (fun t1 t2 :< Cases alts')
 
   Con n -> do
-    DataAltInfo _ q _ _ <- view annotation <$> DAEnv.get s n
+    DataAltInfo _ q _ _ <- getData s n
     t <- ungeneraliseQType q
     return (t :< Con n)
 
@@ -247,7 +253,7 @@ pat = splitPair $ \s -> \case
 
   PatCon n ps -> do
     -- Lookup the data alternative with this name
-    DataAltInfo ns ct args rt <- view annotation <$> DAEnv.get s n
+    DataAltInfo ns ct args rt <- getData s n
     unless (length args == length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (plain n)
     (Sum i, ps') <- traverse (over first Sum) <$> traverse pat ps
     f <- ungeneralise ns

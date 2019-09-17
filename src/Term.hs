@@ -18,6 +18,7 @@ module Term
   , Tok(..)
 
   -- | T1
+  , TyOp(..)
   , TyPat(..)
   , Type(..)
   , QType(..)
@@ -123,16 +124,22 @@ data Tok a = TExp (Annotated a Exp)
            | TOp Op
   deriving (Eq)
 
+data TyOp a = TyOpUni Name
+            | TyOpBang
+            | TyOpId
+            | TyOpVar Name
+  deriving (Eq, Ord)
+
 data TyPat a = TyPatVar Name
   deriving (Eq, Ord)
 
 data Type a = TyUni Name                                      -- Compares less than all other types
             | TyApply (Annotated a Type) (Annotated a Type)
-            | TyBang (Annotated a Type)
             | TyCon Name
             | TyFlat (Set (Annotated a Type))                 -- Used for constraints
             | TyFun (Annotated a Type) (Annotated a Type)
-            | TyRecord (Record (Annotated a Type))            -- ^A type record : T
+            | TyRecord (Record (Annotated a Type))            -- A type record : T
+            | TyOp (Annotated a TyOp) (Annotated a Type)
             | TyVar Name
   deriving (Eq, Ord)
 
@@ -146,10 +153,13 @@ data Kind a = KindUni Name
             | KindType
   deriving (Eq, Ord)
 
-infixl 8 `TEq`
 data TypeConstraint a = Class (Annotated a Type)
                       | TEq (Annotated a Type) (Annotated a Type)
+                      | TOpEq Name Name
   deriving (Eq, Ord)
+
+infixl 8 `TEq`
+infixl 8 `TOpEq`
 
 data KindConstraint a = KEq (Annotated a Kind) (Annotated a Kind)
   deriving (Eq, Ord)

@@ -6,7 +6,6 @@ module Praxis
   ( Praxis
   , PraxisT(..)
   , PraxisState
-  , Stage(..)
   , emptyState
 
   , KEnv(..)
@@ -40,13 +39,16 @@ module Praxis
   , vEnv
   , system
 
-  , freshUniT
-  , freshUniK
+  , freshTyUni
+  , freshKindUni
+  , freshTyOpUni
   , freshVar
   , reuse
 
   , clear
   , output
+
+  , (%%=)
   )
   where
 
@@ -56,9 +58,6 @@ import           Record                       (Record)
 import           Stage
 import           Term
 
-import Env.Env
-import Env.LEnv
-import Value
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent
 import           Control.Lens                 (Lens', makeLenses, traverseOf)
@@ -66,8 +65,11 @@ import           Control.Monad.Trans.Class    (MonadTrans (..))
 import qualified Control.Monad.Trans.State    as State (get, modify, put)
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
+import           Env.Env
+import           Env.LEnv
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
+import           Value
 
 data Flags = Flags
   { _debug       :: Bool
@@ -76,10 +78,10 @@ data Flags = Flags
   } deriving (Show)
 
 data Fresh = Fresh
-  { _freshUniTs :: [String]
-  , _freshUniEs :: [String]
-  , _freshUniKs :: [String]
-  , _freshVars  :: [String]
+  { _freshTyUnis   :: [String]
+  , _freshTyOpUnis :: [String]
+  , _freshKindUnis :: [String]
+  , _freshVars     :: [String]
   }
 
 instance Show Fresh where
@@ -122,10 +124,10 @@ defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _interactive = False, _static = False }
 
 defaultFresh = Fresh
-  { _freshUniTs   = map (("?t"++) . show) [0..]
-  , _freshUniEs   = map (("?e"++) . show) [0..]
-  , _freshUniKs   = map (("?k"++) . show) [0..]
-  , _freshVars    = map (("?x"++) . show) [0..]
+  { _freshTyUnis   = map (("?t"++) . show) [0..]
+  , _freshTyOpUnis = map (("?v"++) . show) [0..]
+  , _freshKindUnis = map (("?k"++) . show) [0..]
+  , _freshVars     = map (("?x"++) . show) [0..]
   }
 
 emptyState :: PraxisState
@@ -209,17 +211,23 @@ output x = do
   d <- use (flags . debug)
   when d $ display x
 
-freshUniT :: Praxis (Typed Type)
-freshUniT = do
-  (x:xs) <- use (fresh . freshUniTs)
-  fresh . freshUniTs .= xs
-  return ((Phantom, (Phantom, ()) :< KindType) :< TyUni x)
+freshTyUni :: Praxis (Typed Type)
+freshTyUni = do
+  (x:xs) <- use (fresh . freshTyUnis)
+  fresh . freshTyUnis .= xs
+  return (TyUni x `as` phantom KindType)
 
-freshUniK :: Praxis (Kinded Kind)
-freshUniK = do
-  (k:ks) <- use (fresh . freshUniKs)
-  fresh . freshUniKs .= ks
-  return ((Phantom, ()) :< KindUni k)
+freshTyOpUni :: Praxis (Typed TyOp)
+freshTyOpUni = do
+  (o:os) <- use (fresh . freshTyOpUnis)
+  fresh . freshTyOpUnis .= os
+  return (phantom (TyOpUni o))
+
+freshKindUni :: Praxis (Kinded Kind)
+freshKindUni = do
+  (k:ks) <- use (fresh . freshKindUnis)
+  fresh . freshKindUnis .= ks
+  return (phantom (KindUni k))
 
 freshVar :: Praxis Name
 freshVar = do
@@ -232,8 +240,16 @@ reuse :: Name -> Praxis ()
 reuse _ = pure ()
 {-
 reuse n@('?':c:_) = over (fresh . f c) (n:)
-  where f 'a' = freshUniTs
-        f 'e' = freshUniEs
-        f 'k' = freshUniKs
+  where f 'a' = freshTyUnis
+        f 'e' = freshTyOpUnis
+        f 'k' = freshKindUnis
 -}
 
+-- TODO this should be more general, in Common, and with a better name
+(%%=) :: Lens' PraxisState a -> (a -> Praxis a) -> Praxis ()
+(%%=) l f = do
+  x <- use l
+  x' <- f x
+  l .= x'
+
+infix 4 %%=

@@ -29,7 +29,7 @@ instance Environment Env where
   elim (Env (_:l)) = Env l
   empty = Env []
   lookup a (Env l) = Prelude.lookup a l
- 
+
 instance (Show a, Show b) => Show (Env a b) where
   show (Env l) = "[" ++ intercalate ", " (map (\(a,b) -> show a ++ " : " ++ show b) l) ++ " ]"
 

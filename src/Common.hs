@@ -1,5 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Common
   ( module Common.Pretty
@@ -39,15 +39,17 @@ module Common
   , PairT(..)
 
   , Void
+
+  , foldMapA
   ) where
 
 import           Common.Pretty
 import           Common.Source
 import           Common.Tag
 
-import           Control.Applicative       (Const (..))
+import           Control.Applicative       (Const (..), liftA2)
 import           Control.Lens              (Lens', makeLenses, over, set, use,
-                                            view, (%=), uses, (.=), _1, _2)
+                                            uses, view, (%=), (.=), _1, _2)
 import           Control.Monad             (unless, when)
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Maybe (MaybeT (..))
@@ -83,3 +85,6 @@ instance Functor f => Functor (PairT f b) where
   fmap f (PairT x) = PairT (fmap (over second f) x)
 
 data Void
+
+foldMapA :: (Foldable t, Applicative f, Monoid m) => (a -> f m) -> t a -> f m
+foldMapA f = foldr (liftA2 mappend . f) (pure mempty)

@@ -15,6 +15,7 @@ module Introspect
   , typeof
   , visit
   , introspect
+  , just
   , sub
   , extract
   , only
@@ -51,6 +52,7 @@ data I a where
   IQType   :: I QType
   IStmt    :: I Stmt
   ITok     :: I Tok
+  ITyOp    :: I TyOp
   ITyPat   :: I TyPat
   IType    :: I Type
   ITypeConstraint :: I TypeConstraint
@@ -70,6 +72,7 @@ switch a b eq neq = case (a, b) of
   (IQType, IQType)                   -> eq
   (IStmt, IStmt)                     -> eq
   (ITok, ITok)                       -> eq
+  (ITyOp, ITyOp)                     -> eq
   (ITyPat, ITyPat)                   -> eq
   (IType, IType)                     -> eq
   (ITypeConstraint, ITypeConstraint) -> eq
@@ -86,6 +89,11 @@ introspect f x = set annotation <$> complete (introspect f) (view annotation x) 
   Visit c   -> c *> recurse (introspect f) (view value x)
   Resolve r -> r
   )
+
+just :: forall a s f. (Recursive a, Applicative f) => (Annotated s a -> Visit f () (a s)) -> (forall b. Recursive b => Annotated s b -> Visit f () (b s))
+just f = g where
+  g :: forall b. Recursive b => Annotated s b -> Visit f () (b s)
+  g x = switch (witness :: I a) (witness :: I b) (f x) skip
 
 transferA :: forall a b f s. (Recursive a, Recursive b, Applicative f) => (a s -> f (a s)) -> b s -> f (b s)
 transferA f x = switch (witness :: I a) (witness :: I b) (f x) (pure x)
@@ -113,9 +121,15 @@ retag f = runIdentity . visit f'
   where f' :: forall a. Recursive a => Annotated s a -> Visit Identity (Annotation t a) (Annotated t a)
         f' x = Visit (Identity (f (typeof x) (view annotation x)))
 
--- TODO this cast stuff is gross
+-- TODO this cast stuff is gross REALLY FUCKING GROSS PLEASE FIX THANK
 class Castable a s t where
   cast :: Annotated s a -> Annotated t a
+
+instance (Annotation s TyOp ~ Annotation t TyOp) => Castable TyOp s t where
+  cast = retag f where
+    f :: forall a. Recursive a => I a -> Annotation s a -> Annotation t a
+    f i x = case i of
+      ITyOp -> x
 
 instance (Annotation s Kind ~ Annotation t Kind) => Castable Kind s t where
   cast = retag f where
@@ -218,6 +232,14 @@ instance Recursive Tok where
     TExp e -> TExp <$> f e
     TOp o  -> pure (TOp o)
 
+instance Recursive TyOp where
+  witness = ITyOp
+  recurse f = \case
+    TyOpUni n -> pure (TyOpUni n)
+    TyOpBang  -> pure TyOpBang
+    TyOpId    -> pure TyOpId
+    TyOpVar n -> pure (TyOpVar n)
+
 instance Recursive TyPat where
   witness = ITyPat
   recurse f = \case
@@ -228,11 +250,11 @@ instance Recursive Type where
   recurse f = \case
     TyUni n     -> pure (TyUni n)
     TyApply a b -> TyApply <$> f a <*> f b
-    TyBang a    -> TyBang <$> f a
     TyCon n     -> pure (TyCon n)
     TyFlat ts   -> TyFlat <$> (Set.fromList <$> traverse f (Set.toList ts))
     TyFun a b   -> TyFun <$> f a <*> f b
     TyRecord r  -> TyRecord <$> traverse f r
+    TyOp op t   -> TyOp <$> f op <*> f t
     TyVar n     -> pure (TyVar n)
 
 instance Recursive TypeConstraint where
@@ -240,6 +262,7 @@ instance Recursive TypeConstraint where
   recurse f = \case
     Class t -> Class <$> f t
     TEq a b -> TEq <$> f a <*> f b
+    TOpEq a b -> pure (TOpEq a b)
 
 instance Recursive KindConstraint where
   witness = IKindConstraint
@@ -259,6 +282,7 @@ instance Complete KindAnn where
     IProgram        -> pure ()
     IQType          -> pure ()
     IStmt           -> pure ()
+    ITyOp           -> pure ()
     ITyPat          -> f a
     IType           -> f a
     ITypeConstraint -> pure ()
@@ -274,6 +298,7 @@ instance Complete TypeAnn where
     IProgram        -> pure ()
     IQType          -> pure ()
     IStmt           -> pure ()
+    ITyOp           -> pure ()
     ITyPat          -> pure a
     IType           -> pure a
     ITypeConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }

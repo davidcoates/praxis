@@ -11,6 +11,7 @@ import           Introspect
 import qualified Parse.Parse.Parser as Parser (run)
 import           Praxis
 import           Print
+import           Stage
 import           Syntax
 import           Term
 import           Token

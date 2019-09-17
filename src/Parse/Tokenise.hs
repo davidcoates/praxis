@@ -7,6 +7,7 @@ import           Parse.Tokenise.Layout
 import           Parse.Tokenise.Tokeniser hiding (run)
 import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Praxis                   hiding (throw)
+import           Stage
 import           Term                     (Lit (..), QString (..))
 import           Token
 
@@ -80,7 +81,7 @@ string = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminat
 
 reservedids = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall", "let"]
 reservedcons = ["Type", "Constraint"]
-reservedops = [":", "=>", "=", "\\", "->", "@"]
+reservedops = [":", "=>", "=", "\\", "->", "@", "!"]
 
 -- Possibly qualified, possibly reserved conid / varid / consym / varsym
 stuff :: Tokeniser Token

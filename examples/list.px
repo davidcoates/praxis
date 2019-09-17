@@ -8,8 +8,7 @@ map f = cases
   Nil          -> Nil
   Cons (x, xs) -> Cons (f x, map f xs)
 
--- TODO should be !List Int -> Int
-sum : List Int -> Int
+sum : !List Int -> Int
 sum = cases
   Nil          -> 0
   Cons (x, xs) -> x + sum xs
@@ -18,4 +17,4 @@ main : () -> ()
 main () = do
   let xs = Cons (1, Cons (2, Cons (3, Nil)))
   let ys = map (\x -> x + 1) xs
-  print (sum ys)
+  print (sum !ys)

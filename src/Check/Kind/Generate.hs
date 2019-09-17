@@ -51,11 +51,17 @@ ty :: Simple Type -> Praxis (Kinded Type)
 ty = split $ \s -> \case
 
     TyApply f a -> do
-      k <- freshUniK
+      k <- freshKindUni
       f' <- ty f
       a' <- ty a
       require $ newConstraint (kind f' `KEq` phantom (KindFun (kind a') k)) AppType s
       return (k :< TyApply f' a')
+
+    TyOp op t -> do
+      t' <- ty t
+      let op' = cast op
+      require $ newConstraint (kind t' `KEq` phantom KindType) (Custom "typ: TyOp TODO") s
+      return (phantom KindType :< TyOp op' t')
 
     TyFun a b -> do
       a' <- ty a
@@ -84,7 +90,7 @@ ty = split $ \s -> \case
       case e of
         Just k -> return (k :< TyVar v)
         Nothing -> do
-          k <- freshUniK
+          k <- freshKindUni
           kEnv %= intro v k
           return (k :< TyVar v)
 
@@ -96,7 +102,7 @@ tyPat = splitPair $ \s -> \case
     case e of
       Just k  -> return (1, k :< TyPatVar v)
       Nothing -> do
-        k <- freshUniK
+        k <- freshKindUni
         kEnv %= intro v k
         return (1, k :< TyPatVar v)
 
@@ -120,7 +126,7 @@ decl = split $ \s -> \case
     case e of
       Just _  -> throwAt s $ "data declaration " <> quote (plain n) <> " redefined"
       Nothing -> pure ()
-    k <- freshUniK
+    k <- freshKindUni
     kEnv %= intro n k
     (Sum i, ps') <- traverse (over first Sum) <$> traverse tyPat ps
     as' <- traverse dataAlt as

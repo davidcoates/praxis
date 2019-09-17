@@ -4,6 +4,7 @@ module Check.Type.Require
   , newConstraint
   , implies
   , share
+  , affine
   , our
   ) where
 
@@ -30,6 +31,10 @@ implies d c = let s = view source d in (s, Antecedent d) :< c
 -- TODO Share should be taken out of the environment so we don't have to kind it
 share :: Typed Type -> TypeConstraint TypeAnn
 share t = Class $ TyApply (TyCon "Share" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindConstraint
+
+-- TODO Affine should be taken out of the environment so we don't have to kind it
+affine :: Typed Type -> TypeConstraint TypeAnn
+affine t = Class $ TyApply (TyCon "Affine" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindConstraint
 
 our :: Lens' PraxisState System
 our = system . typeSystem

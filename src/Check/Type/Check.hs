@@ -17,8 +17,10 @@ check a = save stage $ do
   stage .= TypeCheck Warmup
   our .= initialSystem
   a' <- generate a
-  ts <- solve
-  let r = sub (\t -> case t of { TyUni n -> lookup n ts; _ -> Nothing }) a'
+  (ts, ops) <- solve
+  let solveTy   = \case { TyUni n   -> lookup n ts;  _ -> Nothing }
+  let solveTyOp = \case { TyOpUni n -> lookup n ops; _ -> Nothing }
+  r <- eval (sub solveTyOp (sub solveTy a'))
   output r
   return r
   -- TODO type defaulting

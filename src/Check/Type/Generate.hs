@@ -8,13 +8,13 @@ module Check.Type.Generate
   ( generate
   ) where
 
+import           Check.Error
 import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
-import           Check.Error
 import           Common
 import           Env
-import qualified Env.LEnv as LEnv
+import qualified Env.LEnv            as LEnv
 import           Introspect
 import           Praxis
 import           Print
@@ -22,13 +22,13 @@ import           Record
 import           Stage
 import           Term
 
-import Control.Monad (replicateM)
 import           Control.Applicative (liftA2)
+import           Control.Monad       (replicateM)
 import           Data.Foldable       (foldlM)
 import           Data.List           (nub, sort)
 import qualified Data.Set            as Set
 import           Prelude             hiding (exp, log, lookup, read)
-import qualified Prelude (lookup)
+import qualified Prelude             (lookup)
 
 ty :: Typed a -> Annotation TypeAnn a
 ty = view annotation
@@ -47,7 +47,7 @@ OR don't allow this, and don't allow explicit forall.
 -}
 ungeneralise :: [Name] -> Praxis (Typed Type -> Typed Type)
 ungeneralise vs = do
-  l <- zipWith (\n (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshUniT
+  l <- zipWith (\n (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshTyUni
   return $ sub (\case { TyVar n -> n `Prelude.lookup` l; _ -> Nothing})
 
 ungeneraliseQType :: Typed QType -> Praxis (Typed Type)
@@ -80,7 +80,7 @@ read s n = do
   case LEnv.lookupFull n l of
     Just (c, u, t) -> do
       t <- ungeneraliseQType t
-      requires [ newConstraint (share t) (UnsafeView n) s | not u ]
+      requires [ newConstraint (share t) (UnsafeView n) s | u ]
       requires [ newConstraint (share t) (Captured n) s   | c ]
       return t
     Nothing     -> throwAt s (NotInScope n)
@@ -172,7 +172,7 @@ decl = split $ \s -> \case
   -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n sig e -> do
-    t <- case sig of Nothing -> (\t -> (view source t, ()) :< Mono t) <$> freshUniT
+    t <- case sig of Nothing -> (\t -> (view source t, ()) :< Mono t) <$> freshTyUni
                      Just t  -> pure (cast t)
     tEnv %= intro n t
     e' <- exp e
@@ -201,8 +201,8 @@ exp :: Kinded Exp -> Praxis (Typed Exp)
 exp = split $ \s -> \case
 
   Apply f x -> do
-    yt <- freshUniT
-    ye <- freshUniT
+    yt <- freshTyUni
+    ye <- freshTyUni
     f' <- exp f
     x' <- exp x
     let ft = ty f'
@@ -213,14 +213,16 @@ exp = split $ \s -> \case
   Case x alts -> do
     x' <- exp x
     let xt = ty x'
-    alts' <- parallel (map bind alts)
+    op <- freshTyOpUni
+    alts' <- parallel (map (bind op) alts)
     t1 <- equals (map (view tag . fst) alts') CaseCongruence
     t2 <- equals (map (view tag . snd) alts') CaseCongruence
-    require $ newConstraint (xt `TEq` t1) CaseCongruence s -- TODO probably should pick a better name for this
-    return (xt :< Case x' alts')
+    require $ newConstraint (TyOp op xt `as` phantom KindType `TEq` t1) CaseCongruence s -- TODO probably should pick a better name for this
+    return (t2 :< Case x' alts')
 
   Cases alts -> closure $ do
-    alts' <- parallel (map bind alts)
+    op <- freshTyOpUni
+    alts' <- parallel (map (bind op) alts)
     t1 <- equals (map (view tag . fst) alts') CaseCongruence
     t2 <- equals (map (view tag . snd) alts') CaseCongruence
     return (fun t1 t2 :< Cases alts')
@@ -246,9 +248,8 @@ exp = split $ \s -> \case
     return (ty b' :< If a' b' c')
 
   Lambda p e -> closure $ do
-    (i, p') <- pat p
-    e' <- exp e
-    tEnv %= elimN i
+    op <- freshTyOpUni
+    (p', e') <- bind op (p, e)
     return (fun (ty p') (ty e') :< Lambda p' e')
 
   Lit x -> do
@@ -282,25 +283,24 @@ exp = split $ \s -> \case
 equals :: [(Source, Typed Type)] -> Reason -> Praxis (Typed Type)
 equals ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
 
-bind :: (Kinded Pat, Kinded Exp) -> Praxis (Typed Pat, Typed Exp)
-bind (s :< p, e) = do
-  (i, p') <- pat (s :< p)
+bind :: Typed TyOp -> (Kinded Pat, Kinded Exp) -> Praxis (Typed Pat, Typed Exp)
+bind op (p, e) = do
+  (i, p') <- pat op p
   e' <- exp e
   tEnv %= elimN i
-  return (p', e')
+  return (over annotation (\t -> TyOp op t `as` phantom KindType) p', e')
 
-
-pat :: Kinded Pat -> Praxis (Int, Typed Pat)
-pat = splitPair $ \s -> \case
+pat :: Typed TyOp -> Kinded Pat -> Praxis (Int, Typed Pat)
+pat op = splitPair $ \s -> \case
 
   PatAt v p -> do
-    (i, p') <- pat p
+    (i, p') <- pat op p
     let t = ty p'
     tEnv %= intro v (mono t)
     return (i + 1, t :< PatAt v p')
 
   PatHole -> do
-    t <- freshUniT
+    t <- freshTyUni
     return (0, t :< PatHole)
 
   PatLit l -> return (0, TyCon (lit l) `as` phantom KindType :< PatLit l)
@@ -310,20 +310,20 @@ pat = splitPair $ \s -> \case
           lit (String _) = "String"
 
   PatRecord r -> do
-    (Sum i, r') <- traverse (over first Sum) <$> traverse pat r
+    (Sum i, r') <- traverse (over first Sum) <$> traverse (pat op) r
     let t = TyRecord (fmap ty r') `as` phantom KindType
     return (i, t :< PatRecord r')
 
   PatVar v -> do
-    t <- freshUniT
-    tEnv %= intro v (mono t)
+    t <- freshTyUni
+    tEnv %= intro v (mono (TyOp op t `as` phantom KindType))
     return (1, t :< PatVar v)
 
   PatCon n ps -> do
     -- Lookup the data alternative with this name
     DataAltInfo ns ct args rt <- getData s n
     unless (length args == length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (plain n)
-    (Sum i, ps') <- traverse (over first Sum) <$> traverse pat ps
+    (Sum i, ps') <- traverse (over first Sum) <$> traverse (pat op) ps
     f <- ungeneralise ns
     let rt'   = f rt
         args' = map f args

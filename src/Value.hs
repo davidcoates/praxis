@@ -2,8 +2,8 @@ module Value
   ( Value(..)
   ) where
 
-import {-# SOURCE #-} Praxis (Praxis)
 import           Common
+import {-# SOURCE #-} Praxis (Praxis)
 import           Record
 import           Term   (Lit)
 

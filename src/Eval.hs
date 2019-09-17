@@ -10,6 +10,7 @@ import           Common
 import           Env
 import           Praxis
 import           Record
+import           Stage
 import           Term
 import           Value
 

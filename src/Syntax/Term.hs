@@ -1,6 +1,7 @@
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -113,6 +114,7 @@ definePrisms ''Program
 definePrisms ''Stmt
 definePrisms ''Tok
 
+definePrisms ''TyOp
 definePrisms ''TyPat
 definePrisms ''Type
 definePrisms ''QType
@@ -133,6 +135,7 @@ syntax = \case
   IQType          -> qty
   IStmt           -> stmt
   ITok            -> undefined
+  ITyOp           -> tyOp
   ITyPat          -> tyPat
   IType           -> ty
   ITypeConstraint -> tyConstraint
@@ -214,7 +217,8 @@ qty = _Forall <$> reservedId "forall" *> varid `until` dot <*> annotated ty <|>
       _Mono <$> annotated ty
 
 ty :: (Syntax f, Domain f s) => f (Type s)
-ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
+ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
+  ty2 = _TyOp <$> annotated tyOp <*> annotated ty <|> ty1 <|> mark "type(2)"
   ty1 = left _TyApply ty0 <|> mark "type(1)"
   ty0 = _TyVar <$> varid <|>
         _TyCon <$> conid <|>
@@ -222,6 +226,12 @@ ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
         _TyUni <$> uni <|>
         special '(' *> ty <* special ')' <|>
         mark "type(0)"
+
+tyOp :: (Syntax f, Domain f s) => f (TyOp s)
+tyOp = _TyOpBang <$> reservedOp "!" <|>
+       unparseable (_TyOpUni <$> uni) <|>
+       unparseable (_TyOpId <$> token (Print "id")) <|> -- keep track of where we have (TyOp TyOpId t) instead of (t)
+       mark "tyOp" -- TODO TyOpVar
 
 exp :: (Syntax f, Domain f s) => f (Exp s)
 exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where
@@ -234,6 +244,7 @@ exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          exp1 <|> mark "expression(2)"
   exp1 = left _Apply exp0 <|> mark "expression(1)"
   exp0 = _Record <$> record (annotated exp) <|>
+         _VarBang <$> reservedOp "!" *> varid <|>
          _Var <$> varid <|> -- TODO qualified
          _Con <$> conid <|>
          _Lit <$> lit <|>

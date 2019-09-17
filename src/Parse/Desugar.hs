@@ -15,6 +15,7 @@ import           Praxis
 import           Print
 import           Record                 (Record, pair)
 import qualified Record                 (toList)
+import           Stage
 import           Term
 
 import           Control.Applicative    (Const, liftA2, liftA3)
@@ -42,6 +43,7 @@ desugar x = ($ x) $ case typeof x of
   IPat     -> pat
   IType    -> ty
   IKind    -> pure
+  ITyOp    -> pure
 
 program :: Simple Program -> Praxis (Simple Program)
 program (a :< Program ds) = do
@@ -74,7 +76,7 @@ exp :: Simple Exp -> Praxis (Simple Exp)
 exp (a :< x) = case x of
 
   Apply x (a' :< VarBang s) ->
-    exp (a :< Apply x (a' :< Var s))
+    exp (a :< Read s (a :< Apply x (a' :< Var s))) -- TODO sources
 
   Do ss       -> do
     ss' <- stmts ss
@@ -173,6 +175,7 @@ raw :: a -> Tag (Source, ()) a
 raw x = (Phantom, ()) :< x
 
 -- TODO build this dynamically from bindings
+-- FIXME source annotations not preserved!!!
 opTable :: OpTable
 opTable = DAG.DAG
   { DAG.nodes = [6, 7, 9]

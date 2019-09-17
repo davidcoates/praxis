@@ -12,9 +12,9 @@ import           Value
 import           Control.Lens.Reified (ReifiedLens (..), ReifiedLens')
 import           Control.Monad        (void, when)
 import           Data.List            (find, intercalate, stripPrefix)
+import           Prelude              hiding (lookup)
 import           System.Environment
 import           System.IO
-import Prelude hiding (lookup)
 
 forever :: Praxis a -> Praxis a
 forever p = try p >> forever p

@@ -62,6 +62,7 @@ preludeKinds =
   , ("Bool",   kind "Type")
   , ("String", kind "Type")
   , ("Char",   kind "Type")
+  , ("Affine", kind "Type -> Constraint")
   , ("Share",  kind "Type -> Constraint")
   , ("->",     kind "Type -> Type -> Type")
   ]

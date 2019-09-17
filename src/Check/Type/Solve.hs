@@ -6,36 +6,40 @@
 
 module Check.Type.Solve
   ( solve
+  , eval
   ) where
 
 import           Check.Type.Error
-import           Check.Type.Require
+import           Check.Type.Require  hiding (affine, share)
+import qualified Check.Type.Require  as Require (affine, share)
 import           Check.Type.System
 import           Common
 import           Introspect
 import           Praxis
 import           Record
-import           Stage
+import           Stage               hiding (Unknown)
 import           Term
 
 import           Control.Applicative (liftA2)
-import           Data.List           (nub, sort)
+import           Data.List           (foldl', nub, sort)
 import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
 
-solve :: Praxis [(Name, Type TypeAnn)]
+solve :: Praxis ([(Name, Type TypeAnn)], [(Name, TyOp TypeAnn)])
 solve = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve'
-  use (our . sol)
+  ts <- use (our . sol)
+  ops <- use (our . ops)
+  return (ts, ops)
 
 data State = Cold
            | Warm
            | Done
 
 solve' :: Praxis State
-solve' = spin progress `chain` stuck where
+solve' = spin `chain` stuck where
   chain :: Praxis State -> Praxis State -> Praxis State
   chain p1 p2 = p1 >>= \case
     Cold -> p2
@@ -46,8 +50,8 @@ solve' = spin progress `chain` stuck where
     output $ separate "\n\n" cs
     throw Stuck
 
-spin :: (Typed TypeConstraint -> Praxis Bool) -> Praxis State
-spin solve = use (our . constraints) <&> (nub . sort) >>= \case
+spin :: Praxis State
+spin = use (our . constraints) <&> (nub . sort) >>= \case
   [] -> return Done
   cs -> do
     our . constraints .= []
@@ -57,7 +61,7 @@ spin solve = use (our . constraints) <&> (nub . sort) >>= \case
   where
     loop = use (our . staging) >>= \case
         []     -> return False
-        (c:cs) -> (our . staging .= cs) >> liftA2 (||) (solve c) loop
+        (c:cs) -> (our . staging .= cs) >> liftA2 (||) (smap eval >> progress c) loop
 
 unis = extract (only f)
  where f (TyUni n) = [n]
@@ -69,19 +73,103 @@ classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
   Class t     -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
   TEq t1 t2   -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
 
+data Resolution = Known Bool -- In general we can't deduce Known False because of the open world assumption. The exception is Share / Affine (and their consequents)
+                | Unknown
+                | Unknowable
+                | ImpliedBy [TypeConstraint TypeAnn]
+  deriving (Eq, Ord)
+
+-- TODO need proper instance solver
+resolve :: Typed Type -> Praxis Resolution
+resolve t = case view value t of
+
+  TyApply (_ :< TyCon "Share") t  -> share t
+
+  TyApply (_ :< TyCon "Affine") t -> affine t
+
+
+resolves :: Traversable t => Bool -> (Typed Type -> Praxis Resolution) -> (Typed Type -> TypeConstraint TypeAnn) -> t (Typed Type) -> Praxis Resolution
+resolves p f c ts = foldl' (<>) (Known p) <$> series (fmap weaken ts) where
+  weaken t = do
+    r <- f t
+    case r of
+      Unknown -> return (ImpliedBy [c t])
+      _       -> return r
+  (<>) x y = case if x <= y then (x, y) else (y, x) of
+    (Known p', r)                -> if p == p' then r else Known p'
+    (Unknowable, _)              -> Unknowable
+    (ImpliedBy xs, ImpliedBy ys) -> ImpliedBy (xs ++ ys)
+
+
+-- TODO might want to provide a function excluded_middle :: (Share a => b) -> (Affine a => b) -> b
+
+affine :: Typed Type -> Praxis Resolution
+affine t = do
+  s <- (shareImpl True t)
+  a <- (shareImpl False t)
+  case (s, a) of
+    (Known p, Known q)       -> if p == q then error "share == affine" else return (Known q)
+    (Unknowable, Unknowable) -> return (Known False) -- Open world assumption does NOT apply to Share / Affine
+    (Unknown, Unknown)       -> return Unknown
+
+share :: Typed Type -> Praxis Resolution
+share t = do
+  s <- (shareImpl True t)
+  a <- (shareImpl False t)
+  case (s, a) of
+    (Known p, Known q)       -> if p == q then error "share == affine" else return (Known p)
+    (Unknowable, Unknowable) -> return (Known False) -- Open world assumption does NOT apply to Share / Affine
+    (Unknown, Unknown)       -> return Unknown
+
+shareImpl :: Bool -> Typed Type -> Praxis Resolution
+shareImpl p t = case view value t of
+
+  TyOp (_ :< op) t'
+    | TyOpBang  <- op -> return (Known p)
+    | TyOpUni _ <- op -> do
+      r <- shareImpl p t'
+      return $ case r of
+        Known p' | p == p' -> Known p'
+        _                  -> Unknown
+
+  TyFun _ _  -> return (Known p)
+
+  TyRecord r -> resolves p (shareImpl p) (if p then Require.share else Require.affine) r
+
+  TyCon n
+    | n `elem` ["Int", "Char", "Bool"] -> return (Known p)
+
+  -- FIXME make this general!
+  TyApply (_ :< TyCon "List") _ -> return (Known (not p))
+
+  -- TODO derivations??
+  TyVar n -> do
+    axs <- fmap (view value) <$> use (our . axioms)
+    let s = Require.share t `elem` axs
+    let a = Require.affine t `elem` axs
+    case (s, a) of
+      (True, False)  -> return (Known True)
+      (False, True)  -> return (Known False)
+      (False, False) -> return Unknowable
+      (True, True)   -> throw (ShareAffine t)
+
+  _ -> return Unknown
+
+
 progress :: Typed TypeConstraint -> Praxis Bool
 progress d = case view value d of
 
-  Class (k1 :< TyApply (k2 :< TyCon "Share") (a :< p)) -> case p of -- TODO Need instance solver!
-    TyFun _ _                   -> tautology
-    TyUni _                     -> defer
-    TyCon n | n `elem` ["Int", "Char", "Bool"] -> tautology
-    TyRecord r                  -> introduce (map ((\t -> Class (k1 :< TyApply (k2 :< TyCon "Share") t)). snd) (Record.toList r))
-    _                           -> contradiction
+  Class t -> do
+    r <- resolve t
+    case r of
+      Known False  -> contradiction
+      Known True   -> tautology
+      Unknown      -> defer
+      ImpliedBy ts -> introduce ts
 
   TEq t1 t2 | t1 == t2 -> tautology
 
-  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else x ~> view value t
+  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else x `is` view value t
   TEq _ (_ :< TyUni _) -> swap
 
   TEq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ TEq t1 t2 ]
@@ -93,16 +181,16 @@ progress d = case view value d of
 
   TEq t1@(_ :< TyFlat e1) t2@(_ :< TyFlat e2)
     | e1 > e2 -> swap
-    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` unis t2 then defer else n ~> view value t2
-    | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = n ~> TyFlat Set.empty
+    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` unis t2 then defer else n `is` view value t2
+    | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = n `is` TyFlat Set.empty
                                              empty _              = contradiction
                                          in foldr (\a b -> empty a >> b) solved e2
     | Just ((n1, l1), (n2, l2)) <- liftA2 (,) (snake e1) (snake e2) ->
         if n1 == n2 then do
-          a <- freshUniT
-          n1 ~> TyFlat (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2])
+          a <- freshTyUni
+          n1 `is` TyFlat (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2])
         else
-          n1 ~> TyFlat (Set.union (Set.difference l2 l1) (Set.singleton (TyUni n2 `as` phantom KindType)))
+          n1 `is` TyFlat (Set.union (Set.difference l2 l1) (Set.singleton (TyUni n2 `as` phantom KindType)))
     | Just (n1, l1) <- snake e1 ->
         if literals e2 then
           if Set.isSubsetOf l1 e2 then
@@ -115,6 +203,19 @@ progress d = case view value d of
           defer
     | null (unis t1 ++ unis t2) -> contradiction
     | otherwise                     -> defer
+
+  TEq (_ :< TyOp (_ :< TyOpUni n1) t1) (_ :< TyOp (_ :< TyOpUni n2) t2) | n1 == n2 -> introduce [ TEq t1 t2 ]
+
+  TEq (_ :< TyOp (_ :< op) t1) t2 -> do
+    s1 <- share t1
+    s2 <- share t2
+    case (op, s1, s2, viewFree t2) of
+      (TyOpUni _, _, Known True, True)         -> introduce [ TEq t1 t2 ]
+      (TyOpUni n, Known False, Known False, _) -> n `isView` False >> introduce [ TEq t1 t2 ]
+      (TyOpUni n, Known False, Known True, _)  -> n `isView` True
+      _ -> defer
+
+  TEq _ (_ :< TyOp _ _) -> swap
 
   _ -> contradiction
 
@@ -133,20 +234,50 @@ progress d = case view value d of
         literals :: Set (Typed Type) -> Bool
         literals es = null (concatMap unis (Set.toList es))
 
-smap :: (forall a. Recursive a => Typed a -> Typed a) -> Praxis ()
-smap f = do
-  let lower :: (Typed Type -> Typed Type) -> Type TypeAnn -> Type TypeAnn
-      lower f = view value . f . (`as` phantom KindType)
-  our . sol %= fmap (over second (lower f))
-  our . constraints %= fmap f
-  our . staging %= fmap f
-  our . axioms %= fmap f
-  tEnv %= over traverse f
+        viewFree :: Typed Type -> Bool
+        viewFree t = case view value t of
+          TyUni _ -> False
+          TyOp (_ :< op) t -> case op of
+            TyOpBang  -> False
+            TyOpUni _ -> False
+            TyOpId    -> viewFree t
+          _ -> True
 
-(~>) :: Name -> Type TypeAnn -> Praxis Bool
-(~>) n t = do
-  smap $ sub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing })
+
+smap :: (forall a. Recursive a => Typed a -> Praxis (Typed a)) -> Praxis ()
+smap f = do
+  let lower :: (Typed Type -> Praxis (Typed Type)) -> Type TypeAnn -> Praxis (Type TypeAnn)
+      lower f x = view value <$> f (x `as` phantom KindType)
+  our . sol %%= traverse (second (lower f))
+  our . constraints %%= traverse f
+  our . staging %%= traverse f
+  our . axioms %%= traverse f
+  tEnv %%= traverse f
+  return ()
+
+isView :: Name -> Bool -> Praxis Bool
+isView n b = do
+  let op = if b then TyOpBang else TyOpId
+  smap $ pure . sub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing })
+  our . ops %= ((n, op):)
+  return True
+
+is :: Name -> Type TypeAnn -> Praxis Bool
+is n t = do
+  smap $ pure . sub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing })
   our . sol %= ((n, t):)
   reuse n
   return True
 
+eval :: forall a. Recursive a => Typed a -> Praxis (Typed a)
+eval x = introspect (just f) x where
+  f :: Typed Type -> Visit Praxis () (Type TypeAnn)
+  f (a :< t) = case t of
+    TyOp (_ :< TyOpId) t -> Resolve (view value <$> eval t)
+    TyOp (a :< op) t -> Resolve $ do
+      t' <- eval t
+      r <- share t'
+      return $ case r of
+        Known True -> view value t'
+        _          -> TyOp (a :< op) t'
+    _ -> skip

@@ -18,7 +18,6 @@ module Introspect
   , sub
   , extract
   , only
-  , asub
   , retag
   , cast
   ) where
@@ -108,17 +107,6 @@ extract f x = getConst $ introspect f' x where
 
 only :: forall a b s. (Monoid b, Recursive a) => (a s -> b) -> (forall a. Recursive a => Annotated s a -> b)
 only f x = getConst $ transferA (Const . f) (view value x)
-
--- | Substitue over annotations
-asub :: forall a b s. (Recursive a, Recursive b, Complete s) => I a -> (Annotation s a -> Maybe (Annotation s a)) -> Annotated s b -> Annotated s b
-asub i f x = set annotation a' $ over value (runIdentity . recurse (Identity . asub i f)) x
-  where a = view annotation x
-        a' :: Annotation s b
-        a' = switch i (typeof x) (case f a of { Nothing -> a''; Just a' -> a' }) a''
-        a'' :: Annotation s b
-        a'' = runIdentity $ complete f' a (typeof x)
-        f' :: forall a. Recursive a => Annotated s a -> Identity (Annotated s a)
-        f' = Identity . asub i f
 
 retag :: forall s t b. Recursive b => (forall a. Recursive a => I a -> Annotation s a -> Annotation t a) -> Annotated s b -> Annotated t b
 retag f = runIdentity . visit f'

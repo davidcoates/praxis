@@ -1,10 +1,8 @@
 module ParseSpec where
 
-import           Annotate      (Parsed)
-import           AST
 import           Parse         (parse)
 import           Praxis
-import           Type
+import           Term
 
 import           Control.Monad (forM_)
 import           Prelude       hiding (exp)
@@ -22,7 +20,6 @@ tys =
   [ "Int -> Int -> Int" `matches` "Int -> (Int -> Int)"
   , "A B C" `matches` "(A B) C"
   , "Maybe (Maybe a) -> Maybe b" `matches` "(Maybe (Maybe a)) -> (Maybe b)"
-  , "[A, B] -> C [D, E]" `matches` "[A, B] -> (C [D, E])"
   ]
 
 programs =
@@ -33,13 +30,13 @@ programs =
     `matches` "{ fac : Int -> Int; fac = cases { 0 -> 1; n -> n * (fac (n - 1)) } }"
   ]
 
-exp :: String -> Parsed Exp
+exp :: String -> Simple Exp
 exp s = runInternal emptyState (parse s)
 
-ty :: String -> Parsed Type
+ty :: String -> Simple Type
 ty s = runInternal emptyState (parse s)
 
-program :: String -> Parsed Program
+program :: String -> Simple Program
 program s = runInternal emptyState (parse s)
 
 spec :: Spec

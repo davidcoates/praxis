@@ -16,7 +16,6 @@ module Praxis
 
   , throw
   , throwAt
-  , panic -- Prefer this over Prelude.error
 
   , save
   , try
@@ -141,10 +140,7 @@ emptyState = PraxisState
   , _vEnv         = unset "vEnv"
   , _system       = unset "system"
   }
-  where unset s = panic ("unset " ++ s)
-
-panic :: String -> a
-panic s = error ("<<<INTERNAL ERROR>>> " ++ s)
+  where unset s = error ("unset " ++ s)
 
 makeLenses ''Flags
 makeLenses ''Fresh
@@ -181,14 +177,14 @@ try p = do
 
 runInternal :: PraxisState -> Praxis a -> a
 runInternal s c = case fst $ unsafePerformIO (runPraxis c' s) of
-  Nothing -> panic "static computation failed"
+  Nothing -> error "static computation failed"
   Just x  -> x
   where c' = (flags . static .= True) >> c
 
 assert :: Lens' PraxisState a -> (a -> Bool) -> String -> Praxis b -> Praxis b
 assert l p s c = do
   x <- use l
-  if p x then c else panic s
+  if p x then c else error s
 
 liftIO :: IO a -> Praxis a
 liftIO io = do

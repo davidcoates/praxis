@@ -45,7 +45,7 @@ instance Applicative (Parser t) where
 instance Alternative (Parser t) where
   empty = Parser $ \ts -> Result (Left Skip) ts False
   (<|>) a b = Parser $ \ts -> let r = runParser a ts in case view result r of
-    Left  e -> if view consumed r then set result (Left e) r else runParser b (view remaining r)
+    Left  e -> if view consumed r then set result (Left e) r else runParser b ts
     Right _ -> r
 
 match :: (t -> Bool) -> Parser t t

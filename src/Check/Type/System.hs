@@ -15,11 +15,11 @@ import           Common
 import           Term
 
 data System = System
-  { _sol         :: [(Name, Type TypeAnn)]
-  , _ops         :: [(Name, TyOp TypeAnn)]
-  , _constraints :: [Typed TypeConstraint]
-  , _staging     :: [Typed TypeConstraint]
-  , _axioms      :: [Typed TypeConstraint]
+  { _sol         :: [(Name, Type)]
+  , _ops         :: [(Name, TyOp)]
+  , _constraints :: [Annotated TypeConstraint]
+  , _staging     :: [Annotated TypeConstraint]
+  , _axioms      :: [Annotated TypeConstraint]
   }
 
 makeLenses ''System

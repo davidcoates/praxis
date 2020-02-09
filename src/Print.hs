@@ -1,6 +1,7 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Print
   (
@@ -32,12 +33,12 @@ instance Unparser Printer where
   mark s = Printer (error s)
   annotated f = Printer $ \x -> let
     body  = force f (view value x)
-    constraint = display (view source x) (\s -> "[" <> pretty s <> "]") ++ body ++ display (label x) id
+    constraint = display (view source x) (\s -> "[" <> pretty s <> "]") ++ body ++ display (label (typeof x) (view annotation x)) id
     display s f = if s == mempty then [] else [Print (f s)]
       in Just $ case typeof x of
     ITypeConstraint -> constraint
     IKindConstraint -> constraint
-    _               -> display (label x) (\l -> "[" <> pretty l <> "]") ++ body
+    _               -> display (label (typeof x) (view annotation x)) (\l -> "[" <> pretty l <> "]") ++ body
 
 indent :: Int -> Colored String
 indent n
@@ -55,24 +56,17 @@ unlayout ts = unlayout' (-1) ts where
     [t]    -> pretty t
     t : ts -> pretty t <> " " <> unlayout' n ts
 
-instance (Label s, Recursive a, x ~ Annotation s a) => Pretty (Tag (Source, x) (a s)) where
+instance (Recursive a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
   pretty = unlayout . force unparse
 
-instance Label SimpleAnn where
-  label t = Nil
-
-instance Label KindAnn where
-  label t = let a = view annotation t in case typeof t of
-    ITyPat          -> pretty a
-    IType           -> pretty a
-    IKindConstraint -> pretty a
-    _               -> Nil
-
-instance Label TypeAnn where
-  label t = let a = view annotation t in case typeof t of
-    IExp            -> pretty a
-    IPat            -> pretty a
-    ITyPat          -> pretty a
-    ITypeConstraint -> pretty a
-    IDataAlt        -> pretty a
-    _               -> Nil
+label :: Recursive a => I a -> Maybe (Annotation a) -> Colored String
+label i Nothing  = Nil
+label i (Just a) = case i of
+  IExp            -> pretty a
+  IPat            -> pretty a
+  ITyPat          -> pretty a
+  IType           -> pretty a
+  ITypeConstraint -> pretty a
+  IKindConstraint -> pretty a
+  IDataAlt        -> pretty a
+  _               -> Nil

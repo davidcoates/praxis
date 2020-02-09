@@ -29,14 +29,14 @@ import           Prelude                hiding (exp)
 import           Text.Earley
 import qualified Text.Earley.Mixfix.DAG as DAG
 
-run :: Recursive a => Simple a -> Praxis (Simple a)
+run :: Recursive a => Annotated a -> Praxis (Annotated a)
 run x = save stage $ do
   stage .= Desugar
   x' <- desugar x
   output x'
   return x'
 
-desugar :: Recursive a => Simple a -> Praxis (Simple a)
+desugar :: Recursive a => Annotated a -> Praxis (Annotated a)
 desugar x = ($ x) $ case typeof x of
   IProgram -> program
   IExp     -> exp
@@ -45,12 +45,12 @@ desugar x = ($ x) $ case typeof x of
   IKind    -> pure
   ITyOp    -> pure
 
-program :: Simple Program -> Praxis (Simple Program)
+program :: Annotated Program -> Praxis (Annotated Program)
 program (a :< Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-stmts :: [Simple Stmt] -> Praxis [Simple Stmt]
+stmts :: [Annotated Stmt] -> Praxis [Annotated Stmt]
 stmts     [] = pure []
 stmts (s:ss) | a :< StmtExp e <- s = do
                 e' <- exp e
@@ -72,7 +72,7 @@ record s build f r = do
     [(Just _, _)]  -> throwAt s $ plain "illegal single-field record"
     _              -> return $ build r'
 
-exp :: Simple Exp -> Praxis (Simple Exp)
+exp :: Annotated Exp -> Praxis (Annotated Exp)
 exp (a :< x) = case x of
 
   Apply x (a' :< VarBang s) ->
@@ -91,7 +91,7 @@ exp (a :< x) = case x of
   _           -> (a :<) <$> recurse desugar x
 
 
-decls :: [Simple Decl] -> Praxis [Simple Decl]
+decls :: [Annotated Decl] -> Praxis [Annotated Decl]
 decls []            = pure []
 decls (a :< d : ds) = case d of
 
@@ -105,9 +105,9 @@ decls (a :< d : ds) = case d of
     ps <- mapM pat ps
     e  <- exp e
     let d = a :< DeclVar n Nothing (lambda ps e)
-        lambda :: [Simple Pat] -> Simple Exp -> Simple Exp
+        lambda :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
         lambda     [] e = e
-        lambda (p:ps) e = a :< Lambda p (lambda ps e)
+        lambda (p:ps) e = (fst a, Nothing) :< Lambda p (lambda ps e)
     decls ds >>= \case
       []                                       -> return $ [d]
       (a' :< DeclVar m t as) : ds' | m == n    -> error "TODO multiple definitions"
@@ -120,14 +120,14 @@ decls (a :< d : ds) = case d of
     return (a :< DeclData n t' as' : ds')
 
 
-dataAlt :: Simple DataAlt -> Praxis (Simple DataAlt)
+dataAlt :: Annotated DataAlt -> Praxis (Annotated DataAlt)
 dataAlt (a :< x) = (a :<) <$> case x of
 
   DataAlt n ts ->  DataAlt n <$> traverse ty ts
 
 
 -- TODO check for overlapping patterns?
-pat :: Simple Pat -> Praxis (Simple Pat)
+pat :: Annotated Pat -> Praxis (Annotated Pat)
 pat (a :< x) = case x of
 
   PatRecord r -> record (fst a) (\r' -> a :< PatRecord r') pat r
@@ -135,7 +135,7 @@ pat (a :< x) = case x of
   _           -> (a :<) <$> recurse desugar x
 
 
-ty :: Simple Type -> Praxis (Simple Type)
+ty :: Annotated Type -> Praxis (Annotated Type)
 ty (a :< x) = case x of
 
   TyRecord r -> record (fst a) (\r' -> a :< TyRecord r') ty r
@@ -143,7 +143,7 @@ ty (a :< x) = case x of
   _          -> (a :<) <$> recurse desugar x
 
 
-qty :: Simple QType -> Praxis (Simple QType)
+qty :: Annotated QType -> Praxis (Annotated QType)
 qty (a :< x) = (a :<) <$> case x of
 
   Mono t      -> Mono <$> ty t
@@ -151,17 +151,17 @@ qty (a :< x) = (a :<) <$> case x of
   Forall vs t -> Forall vs <$> ty t
 
 
-tyPat :: Simple TyPat -> Praxis (Simple TyPat)
+tyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
 tyPat (a :< x) = (a :<) <$> recurse desugar x
 
 
-type MTok = DAG.Tok (Tag (Source, ()) Op) (Simple Exp)
+type MTok = DAG.Tok (Tag (Source, Maybe Void) Op) (Annotated Exp)
 
-tok :: Simple Tok -> Praxis MTok
+tok :: Annotated Tok -> Praxis MTok
 tok (a :< TOp op) = pure (DAG.TOp (a :< op))
 tok (a :< TExp e) = DAG.TExpr <$> exp e
 
-mixfix :: [Simple Tok] -> Praxis (Simple Exp)
+mixfix :: [Annotated Tok] -> Praxis (Annotated Exp)
 mixfix ts = do
   ts' <- mapM tok ts
   -- TODO do something with report?
@@ -169,10 +169,7 @@ mixfix ts = do
   case parses of [e] -> return e
                  _   -> error "TODO resolve error make a proper error for this (ambiguous mixfix parse)"
 
-type OpTable = DAG.DAG Int [DAG.Op (Tag (Source, ()) Op) (Simple Exp)]
-
-raw :: a -> Tag (Source, ()) a
-raw x = (Phantom, ()) :< x
+type OpTable = DAG.DAG Int [DAG.Op (Tag (Source, Maybe Void) Op) (Annotated Exp)]
 
 -- TODO build this dynamically from bindings
 -- FIXME source annotations not preserved!!!
@@ -188,8 +185,8 @@ opTable = DAG.DAG
       7 -> [ mul ]
       9 -> [ dot ]
   }
-  where build a s n = DAG.Op { DAG.fixity = DAG.Infix a, DAG.parts = [raw $ QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
-        build' n e1 e2 = raw $ Apply (raw $ Var n) (raw $ Record (pair e1 e2)) :: Simple Exp -- TODO annotations?
+  where build a s n = DAG.Op { DAG.fixity = DAG.Infix a, DAG.parts = [phantom $ QString { qualification = [], name = s }], DAG.build = \[e1, e2] -> build' n e1 e2 }
+        build' n e1 e2 = phantom $ Apply (phantom $ Var n) (phantom $ Record (pair e1 e2)) :: Annotated Exp -- TODO annotations?
         add = build DAG.LeftAssoc "+" "add"
         sub = build DAG.LeftAssoc "-" "sub"
         mul = build DAG.LeftAssoc "*" "mul"

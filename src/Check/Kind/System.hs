@@ -14,10 +14,10 @@ import           Common
 import           Term
 
 data System = System
-  { _sol         :: [(Name, Kind KindAnn)]
-  , _constraints :: [Kinded KindConstraint]
-  , _staging     :: [Kinded KindConstraint]
-  , _axioms      :: [Kinded KindConstraint]
+  { _sol         :: [(Name, Kind)]
+  , _constraints :: [Annotated KindConstraint]
+  , _staging     :: [Annotated KindConstraint]
+  , _axioms      :: [Annotated KindConstraint]
   }
 
 makeLenses ''System

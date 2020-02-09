@@ -33,12 +33,14 @@ module Common
   , MonadTrans(..)
   , when
   , unless
+  , just
 
   , (<&>)
 
   , PairT(..)
 
   , Void
+  , absurd
 
   , foldMapA
   ) where
@@ -59,6 +61,7 @@ import           Data.Functor.Identity     (Identity (..))
 import           Data.List                 (intercalate)
 import           Data.Monoid               (Sum (..))
 import           Data.Traversable          (sequenceA)
+import           Data.Void                 (Void, absurd)
 
 type Name = String
 
@@ -84,7 +87,8 @@ newtype PairT f b a = PairT { runPairT :: f (b, a) }
 instance Functor f => Functor (PairT f b) where
   fmap f (PairT x) = PairT (fmap (over second f) x)
 
-data Void
-
 foldMapA :: (Foldable t, Applicative f, Monoid m) => (a -> f m) -> t a -> f m
 foldMapA f = foldr (liftA2 mappend . f) (pure mempty)
+
+just :: Functor f => (a -> f b) -> Maybe a -> f (Maybe b)
+just f (Just x) = Just <$> f x

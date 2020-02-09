@@ -16,24 +16,24 @@ import           Introspect
 import           Praxis
 import           Term
 
-require :: Typed TypeConstraint -> Praxis ()
+require :: Annotated TypeConstraint -> Praxis ()
 require c = our . constraints %= (c:)
 
-requires :: [Typed TypeConstraint] -> Praxis ()
+requires :: [Annotated TypeConstraint] -> Praxis ()
 requires = mapM_ require
 
-newConstraint :: TypeConstraint TypeAnn -> Reason -> Source -> Typed TypeConstraint
-newConstraint c r s = (s, Root (show r)) :< c
+newConstraint :: TypeConstraint -> Reason -> Source -> Annotated TypeConstraint
+newConstraint c r s = (s, Just (Root (show r))) :< c
 
-implies :: Typed TypeConstraint -> TypeConstraint TypeAnn -> Typed TypeConstraint
-implies d c = let s = view source d in (s, Antecedent d) :< c
+implies :: Annotated TypeConstraint -> TypeConstraint -> Annotated TypeConstraint
+implies d c = let s = view source d in (s, Just (Antecedent d)) :< c
 
 -- TODO Share should be taken out of the environment so we don't have to kind it
-share :: Typed Type -> TypeConstraint TypeAnn
+share :: Annotated Type -> TypeConstraint
 share t = Class $ TyApply (TyCon "Share" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindConstraint
 
 -- TODO Affine should be taken out of the environment so we don't have to kind it
-affine :: Typed Type -> TypeConstraint TypeAnn
+affine :: Annotated Type -> TypeConstraint
 affine t = Class $ TyApply (TyCon "Affine" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindConstraint
 
 our :: Lens' PraxisState System

@@ -26,7 +26,7 @@ import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
 
-solve :: Praxis ([(Name, Type TypeAnn)], [(Name, TyOp TypeAnn)])
+solve :: Praxis ([(Name, Type)], [(Name, TyOp)])
 solve = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve'
@@ -63,12 +63,12 @@ spin = use (our . constraints) <&> (nub . sort) >>= \case
         []     -> return False
         (c:cs) -> (our . staging .= cs) >> liftA2 (||) (smap eval >> progress c) loop
 
-unis = extract (only f)
+unis = extract (embedMonoid f)
  where f (TyUni n) = [n]
        f _         = []
 
 -- TODO use sets here?
-classes :: [Name] -> [Typed TypeConstraint] -> Maybe [Typed Type]
+classes :: [Name] -> [Annotated TypeConstraint] -> Maybe [Annotated Type]
 classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
   Class t     -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
   TEq t1 t2   -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
@@ -76,11 +76,11 @@ classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
 data Resolution = Known Bool -- In general we can't deduce Known False because of the open world assumption. The exception is Share / Affine (and their consequents)
                 | Unknown
                 | Unknowable
-                | ImpliedBy [TypeConstraint TypeAnn]
+                | ImpliedBy [TypeConstraint]
   deriving (Eq, Ord)
 
 -- TODO need proper instance solver
-resolve :: Typed Type -> Praxis Resolution
+resolve :: Annotated Type -> Praxis Resolution
 resolve t = case view value t of
 
   TyApply (_ :< TyCon "Share") t  -> share t
@@ -88,7 +88,7 @@ resolve t = case view value t of
   TyApply (_ :< TyCon "Affine") t -> affine t
 
 
-resolves :: Traversable t => Bool -> (Typed Type -> Praxis Resolution) -> (Typed Type -> TypeConstraint TypeAnn) -> t (Typed Type) -> Praxis Resolution
+resolves :: Traversable t => Bool -> (Annotated Type -> Praxis Resolution) -> (Annotated Type -> TypeConstraint) -> t (Annotated Type) -> Praxis Resolution
 resolves p f c ts = foldl' (<>) (Known p) <$> series (fmap weaken ts) where
   weaken t = do
     r <- f t
@@ -103,7 +103,7 @@ resolves p f c ts = foldl' (<>) (Known p) <$> series (fmap weaken ts) where
 
 -- TODO might want to provide a function excluded_middle :: (Share a => b) -> (Affine a => b) -> b
 
-affine :: Typed Type -> Praxis Resolution
+affine :: Annotated Type -> Praxis Resolution
 affine t = do
   s <- (shareImpl True t)
   a <- (shareImpl False t)
@@ -112,7 +112,7 @@ affine t = do
     (Unknowable, Unknowable) -> return (Known False) -- Open world assumption does NOT apply to Share / Affine
     (Unknown, Unknown)       -> return Unknown
 
-share :: Typed Type -> Praxis Resolution
+share :: Annotated Type -> Praxis Resolution
 share t = do
   s <- (shareImpl True t)
   a <- (shareImpl False t)
@@ -121,7 +121,7 @@ share t = do
     (Unknowable, Unknowable) -> return (Known False) -- Open world assumption does NOT apply to Share / Affine
     (Unknown, Unknown)       -> return Unknown
 
-shareImpl :: Bool -> Typed Type -> Praxis Resolution
+shareImpl :: Bool -> Annotated Type -> Praxis Resolution
 shareImpl p t = case view value t of
 
   TyOp (_ :< op) t'
@@ -156,7 +156,7 @@ shareImpl p t = case view value t of
   _ -> return Unknown
 
 
-progress :: Typed TypeConstraint -> Praxis Bool
+progress :: Annotated TypeConstraint -> Praxis Bool
 progress d = case view value d of
 
   Class t -> do
@@ -226,15 +226,15 @@ progress d = case view value d of
         introduce cs = requires (map (d `implies`) cs) >> return True
         swap = case view value d of t1 `TEq` t2 -> progress (set value (t2 `TEq` t1) d)
 
-        snake :: Set (Typed Type) -> Maybe (Name, Set (Typed Type))
+        snake :: Set (Annotated Type) -> Maybe (Name, Set (Annotated Type))
         snake es = case Set.toList es of
           ((_ :< TyUni n):es) -> if null (concatMap unis es) then Just (n, Set.fromList es) else Nothing
           _                   -> Nothing
 
-        literals :: Set (Typed Type) -> Bool
+        literals :: Set (Annotated Type) -> Bool
         literals es = null (concatMap unis (Set.toList es))
 
-        viewFree :: Typed Type -> Bool
+        viewFree :: Annotated Type -> Bool
         viewFree t = case view value t of
           TyUni _ -> False
           TyOp (_ :< op) t -> case op of
@@ -244,9 +244,9 @@ progress d = case view value d of
           _ -> True
 
 
-smap :: (forall a. Recursive a => Typed a -> Praxis (Typed a)) -> Praxis ()
+smap :: (forall a. Recursive a => Annotated a -> Praxis (Annotated a)) -> Praxis ()
 smap f = do
-  let lower :: (Typed Type -> Praxis (Typed Type)) -> Type TypeAnn -> Praxis (Type TypeAnn)
+  let lower :: (Annotated Type -> Praxis (Annotated Type)) -> Type -> Praxis Type
       lower f x = view value <$> f (x `as` phantom KindType)
   our . sol %%= traverse (second (lower f))
   our . constraints %%= traverse f
@@ -262,16 +262,16 @@ isView n b = do
   our . ops %= ((n, op):)
   return True
 
-is :: Name -> Type TypeAnn -> Praxis Bool
+is :: Name -> Type -> Praxis Bool
 is n t = do
   smap $ pure . sub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing })
   our . sol %= ((n, t):)
   reuse n
   return True
 
-eval :: forall a. Recursive a => Typed a -> Praxis (Typed a)
-eval x = introspect (just f) x where
-  f :: Typed Type -> Visit Praxis () (Type TypeAnn)
+eval :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+eval x = introspect (embedVisit f) x where
+  f :: Annotated Type -> Visit Praxis () Type
   f (a :< t) = case t of
     TyOp (_ :< TyOpId) t -> Resolve (view value <$> eval t)
     TyOp (a :< op) t -> Resolve $ do

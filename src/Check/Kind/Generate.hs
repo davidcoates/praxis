@@ -25,54 +25,50 @@ import           Data.List          (nub, sort)
 import qualified Data.Set           as Set
 import           Prelude            hiding (lookup)
 
-kind :: Annotated a b -> Annotation a b
-kind = view annotation
+kind :: (Recursive a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
+kind = annotation . just
 
-generate :: Recursive a => Simple a -> Praxis (Kinded a)
+generate :: Recursive a => Annotated a -> Praxis (Annotated a)
 generate x = save stage $ do
   stage .= KindCheck Generate
-  x' <- visit gen x
+  x' <- generateImpl x
   output x'
   cs <- use (our . constraints)
   output $ separate "\n\n" (nub . sort $ cs)
   return x'
 
-gen :: Recursive a => Simple a -> Visit Praxis (Annotation KindAnn a) (Kinded a)
-gen x = case typeof x of
-  IDecl    -> case runPraxisT (decl x) of { Nothing -> skip; Just r -> Resolve r }
-  IExp     -> skip
-  IPat     -> skip
-  IProgram -> skip
-  IQType   -> skip
-  IStmt    -> skip
-  IType    -> Resolve (ty x)
+-- TODO since we ignore annotation of input, could adjust this...
+generateImpl :: Recursive a => Annotated a -> Praxis (Annotated a)
+generateImpl x = case typeof x of
+  IDecl -> decl x
+  IType -> ty x
+  _     -> value (recurse generateImpl) x
 
-ty :: Simple Type -> Praxis (Kinded Type)
+ty :: Annotated Type -> Praxis (Annotated Type)
 ty = split $ \s -> \case
 
     TyApply f a -> do
       k <- freshKindUni
       f' <- ty f
       a' <- ty a
-      require $ newConstraint (kind f' `KEq` phantom (KindFun (kind a') k)) AppType s
+      require $ newConstraint (view kind f' `KEq` phantom (KindFun (view kind a') k)) AppType s
       return (k :< TyApply f' a')
 
     TyOp op t -> do
       t' <- ty t
-      let op' = cast op
-      require $ newConstraint (kind t' `KEq` phantom KindType) (Custom "typ: TyOp TODO") s
-      return (phantom KindType :< TyOp op' t')
+      require $ newConstraint (view kind t' `KEq` phantom KindType) (Custom "typ: TyOp TODO") s
+      return (phantom KindType :< TyOp op t')
 
     TyFun a b -> do
       a' <- ty a
       b' <- ty b
-      require $ newConstraint (kind a' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
-      require $ newConstraint (kind b' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
+      require $ newConstraint (view kind a' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
+      require $ newConstraint (view kind b' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
       return (phantom KindType :< TyFun a' b')
 
     TyFlat ts -> do
       ts' <- traverse ty (Set.toList ts)
-      requires $ map (\t -> newConstraint (kind t `KEq` (phantom KindConstraint)) (Custom "typ: TyFlat TODO") s) ts'
+      requires $ map (\t -> newConstraint (view kind t `KEq` (phantom KindConstraint)) (Custom "typ: TyFlat TODO") s) ts'
       return (phantom KindConstraint :< TyFlat (Set.fromList ts'))
 
     TyCon n -> do
@@ -82,7 +78,7 @@ ty = split $ \s -> \case
 
     TyRecord r -> do
       r' <- traverse ty r
-      requires $ map (\t -> newConstraint (kind t `KEq` phantom KindType) (Custom "typ: TyRecord TODO") s) (map snd (Record.toList r'))
+      requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) (Custom "typ: TyRecord TODO") s) (map snd (Record.toList r'))
       return (phantom KindType :< TyRecord r')
 
     TyVar v -> do
@@ -94,7 +90,8 @@ ty = split $ \s -> \case
           kEnv %= intro v k
           return (k :< TyVar v)
 
-tyPat :: Simple TyPat -> Praxis (Int, Kinded TyPat)
+
+tyPat :: Annotated TyPat -> Praxis (Int, Annotated TyPat)
 tyPat = splitPair $ \s -> \case
 
   TyPatVar v -> do
@@ -106,22 +103,24 @@ tyPat = splitPair $ \s -> \case
         kEnv %= intro v k
         return (1, k :< TyPatVar v)
 
-dataAlt :: Simple DataAlt -> Praxis (Kinded DataAlt)
-dataAlt = split $ \s -> \case
+
+dataAlt :: Annotated DataAlt -> Praxis (Annotated DataAlt)
+dataAlt = splitTrivial $ \s -> \case
 
   DataAlt n ts -> do
     ts' <- traverse ty ts
-    requires $ map (\t -> newConstraint (kind t `KEq` phantom KindType) (Custom "dataAlt: TODO") s) ts'
-    return (() :< DataAlt n ts')
+    requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) (Custom "dataAlt: TODO") s) ts'
+    return $ DataAlt n ts'
 
-fun :: Kinded Kind -> Kinded Kind -> Kinded Kind
+
+fun :: Annotated Kind -> Annotated Kind -> Annotated Kind
 fun a b = phantom (KindFun a b)
 
-decl :: Simple Decl -> PraxisT Maybe (Kinded Decl)
-decl = split $ \s -> \case
+decl :: Annotated Decl -> Praxis (Annotated Decl)
+decl = splitTrivial $ \s -> \case
 
   -- TODO check no duplicated patterns
-  DeclData n ps as -> PraxisT . Just $ do
+  DeclData n ps as -> do
     e <- kEnv `uses` lookup n
     case e of
       Just _  -> throwAt s $ "data declaration " <> quote (plain n) <> " redefined"
@@ -131,7 +130,8 @@ decl = split $ \s -> \case
     (Sum i, ps') <- traverse (over first Sum) <$> traverse tyPat ps
     as' <- traverse dataAlt as
     kEnv %= elimN i
-    require $ newConstraint (k `KEq` foldr fun (phantom KindType) (map kind ps')) (Custom "decl: TODO") s
-    return (() :< DeclData n ps' as')
+    require $ newConstraint (k `KEq` foldr fun (phantom KindType) (map (view kind) ps')) (Custom "decl: TODO") s
+    return $ DeclData n ps' as'
 
-  _ -> lift Nothing
+  x -> recurse generateImpl x
+

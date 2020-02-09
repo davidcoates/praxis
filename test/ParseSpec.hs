@@ -30,13 +30,13 @@ programs =
     `matches` "{ fac : Int -> Int; fac = cases { 0 -> 1; n -> n * (fac (n - 1)) } }"
   ]
 
-exp :: String -> Simple Exp
+exp :: String -> Annotated Exp
 exp s = runInternal emptyState (parse s)
 
-ty :: String -> Simple Type
+ty :: String -> Annotated Type
 ty s = runInternal emptyState (parse s)
 
-program :: String -> Simple Program
+program :: String -> Annotated Program
 program s = runInternal emptyState (parse s)
 
 spec :: Spec

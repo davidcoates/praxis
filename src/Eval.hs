@@ -18,8 +18,8 @@ import           Data.Monoid (Sum (..))
 import           Prelude     hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
-  eval' :: Typed a -> Praxis b
-  eval  :: Typed a -> Praxis b
+  eval' :: Annotated a -> Praxis b
+  eval  :: Annotated a -> Praxis b
   eval e = save stage $ do
     stage .= Evaluate
     clear
@@ -31,10 +31,10 @@ instance Evaluable Program () where
 instance Evaluable Exp Value where
   eval' = exp
 
-program :: Typed Program -> Praxis ()
+program :: Annotated Program -> Praxis ()
 program (_ :< Program ds) = mapM_ decl ds
 
-decl :: Typed Decl -> Praxis ()
+decl :: Annotated Decl -> Praxis ()
 decl (a :< e) = case e of
 
   DeclVar n t e -> do
@@ -43,7 +43,7 @@ decl (a :< e) = case e of
 
   _ -> return ()
 
-stmt :: Typed Stmt -> Praxis (Sum Int)
+stmt :: Annotated Stmt -> Praxis (Sum Int)
 stmt (_ :< s) = case s of
 
   StmtDecl d -> decl d >> return (Sum 0)
@@ -55,7 +55,7 @@ rec n v = case n of
   Just n  -> vEnv %= intro n v
   Nothing -> return ()
 
-expRec :: Maybe Name -> Typed Exp -> Praxis Value
+expRec :: Maybe Name -> Annotated Exp -> Praxis Value
 expRec n (_ :< e) = case e of
 
   Apply f x -> do
@@ -74,7 +74,7 @@ expRec n (_ :< e) = case e of
 
   Con n -> do
     Just da <- daEnv `uses` lookup n
-    let DataAltInfo _ _ args _ = view annotation da
+    let DataAltInfo _ _ args _ = view (annotation . just) da
     let f 0 = C n []
         f i = let C n vs = f (i-1) in F (\v -> return (C n (v:vs)))
     return (f (length args))
@@ -109,10 +109,10 @@ expRec n (_ :< e) = case e of
     Just v <- vEnv `uses` lookup n
     return v
 
-exp :: Typed Exp -> Praxis Value
+exp :: Annotated Exp -> Praxis Value
 exp = expRec Nothing
 
-cases :: Value -> [(Typed Pat, Typed Exp)] -> Praxis Value
+cases :: Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 cases x [] = error ("no matching pattern" ++ show x)
 cases x ((p,e):ps) = case bind x p of
   Just c  -> do
@@ -123,16 +123,16 @@ cases x ((p,e):ps) = case bind x p of
   Nothing ->
     cases x ps
 
-forceBind :: Value -> Typed Pat -> Praxis Int
+forceBind :: Value -> Annotated Pat -> Praxis Int
 forceBind v p = case bind v p of Just i  -> i
                                  Nothing -> error "no matching pattern" -- TODO
 
-binds :: [Value] -> [Typed Pat] -> Maybe (Praxis Int)
+binds :: [Value] -> [Annotated Pat] -> Maybe (Praxis Int)
 binds vs ps = do
   cs <- sequence $ zipWith bind vs ps
   return (sum <$> sequence cs)
 
-bind :: Value -> Typed Pat -> Maybe (Praxis Int)
+bind :: Value -> Annotated Pat -> Maybe (Praxis Int)
 bind v (_ :< p) = case p of
 
   PatAt n p

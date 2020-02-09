@@ -23,25 +23,23 @@ initialState :: PraxisState
 initialState = set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ set daEnv initialDAEnv $ emptyState
 
 -- TODO this actually introduces source information, but we ideally want it to be Phantom
-mono :: String -> Typed QType
-mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), ()) :< Mono (a :< t)
-  where m :: Praxis (Typed Type)
-        m = retag f <$> (parse s :: Praxis (Simple Type))
-        f :: forall a. Recursive a => I a -> Annotation SimpleAnn a -> Annotation TypeAnn a
-        f i x = case i of
-          IType  -> phantom KindType
-          IQType -> ()
+mono :: String -> Annotated QType
+mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), Nothing) :< Mono (a :< t)
+  where m :: Praxis (Annotated Type)
+        m = retag f <$> (parse s :: Praxis (Annotated Type))
+        f :: forall a. Recursive a => I a -> Maybe (Annotation a) -> Maybe (Annotation a)
+        f i Nothing = case i of
+          IType  -> Just (phantom KindType)
+          IQType -> Nothing
 
 -- TODO parse qty
-poly :: [Name] -> String -> Typed QType
+poly :: [Name] -> String -> Annotated QType
 poly vs s = let (a :< Mono t) = mono s in a :< Forall vs t
 
-kind :: String -> Typed Kind
-kind s = runInternal initialState m
-  where m :: Praxis (Typed Kind)
-        m = cast <$> (parse s :: Praxis (Simple Kind))
+kind :: String -> Annotated Kind
+kind s = runInternal initialState (parse s :: Praxis (Annotated Kind))
 
-prelude :: [(Name, Typed QType, Value)]
+prelude :: [(Name, Annotated QType, Value)]
 prelude =
   [ ("add",      mono "(Int, Int) -> Int", lift (+))
   , ("sub",      mono "(Int, Int) -> Int", lift (-))
@@ -56,7 +54,7 @@ prelude =
         lift :: (Int -> Int -> Int) -> Value
         lift f = F (\(R r) -> case Record.unpair r of { (L (Int a), L (Int b)) -> pure (L (Int (f a b))); _ -> error (show r) })
 
-preludeKinds :: [(Name, Typed Kind)]
+preludeKinds :: [(Name, Annotated Kind)]
 preludeKinds =
   [ ("Int",    kind "Type")
   , ("Bool",   kind "Type")
@@ -74,7 +72,7 @@ initialTEnv :: TEnv
 initialTEnv = fromList (map (\(n, t, _) -> (n, t)) prelude)
 
 initialKEnv :: KEnv
-initialKEnv = fromList (map (\(a,b) -> (a, cast b)) preludeKinds) where
+initialKEnv = fromList preludeKinds
 
 initialDAEnv :: DAEnv
 initialDAEnv = empty

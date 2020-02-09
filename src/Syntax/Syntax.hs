@@ -4,7 +4,6 @@
 
 module Syntax.Syntax
   ( Syntax(..)
-  , Domain(..)
   , cons
   , nil
   , maybe
@@ -42,10 +41,8 @@ class Syntax f where
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   mark :: String -> f a
   unparseable :: f a -> f a
-
-class Domain f s where -- TODO come up with a better name
-  annotated :: Recursive a => f (a s) -> f (Annotated s a)
-  combine :: f Void -> ((Annotated s a, Annotated s a) -> (a s)) -> (Annotated s a, Annotated s a) -> Annotated s a -- FIXME this is a hack
+  annotated :: Recursive a => f a -> f (Annotated a)
+  combine :: f Void -> ((Annotated a, Annotated a) -> a) -> (Annotated a, Annotated a) -> Annotated a -- FIXME this is a hack
 
 cons :: Prism [a] (a, [a])
 cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})

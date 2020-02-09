@@ -89,11 +89,11 @@ instance Show Fresh where
 
 type VEnv = Env Name Value
 
-type TEnv = LEnv Name (Typed QType)
+type TEnv = LEnv Name (Annotated QType)
 
-type KEnv = Env Name (Kinded Kind)
+type KEnv = Env Name (Annotated Kind)
 
-type DAEnv = Env Name (Typed DataAlt)
+type DAEnv = Env Name (Annotated DataAlt)
 
 data PraxisState = PraxisState
   { _filename :: String              -- ^File path (for error messages)
@@ -211,19 +211,19 @@ output x = do
   d <- use (flags . debug)
   when d $ display x
 
-freshTyUni :: Praxis (Typed Type)
+freshTyUni :: Praxis (Annotated Type)
 freshTyUni = do
   (x:xs) <- use (fresh . freshTyUnis)
   fresh . freshTyUnis .= xs
   return (TyUni x `as` phantom KindType)
 
-freshTyOpUni :: Praxis (Typed TyOp)
+freshTyOpUni :: Praxis (Annotated TyOp)
 freshTyOpUni = do
   (o:os) <- use (fresh . freshTyOpUnis)
   fresh . freshTyOpUnis .= os
   return (phantom (TyOpUni o))
 
-freshKindUni :: Praxis (Kinded Kind)
+freshKindUni :: Praxis (Annotated Kind)
 freshKindUni = do
   (k:ks) <- use (fresh . freshKindUnis)
   fresh . freshKindUnis .= ks

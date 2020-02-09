@@ -11,16 +11,14 @@ module Introspect
   , skip
   , I(..)
   , Recursive(..)
-  , Complete(..)
+  , retag
   , typeof
   , visit
   , introspect
-  , just
+  , embedVisit
+  , embedMonoid
   , sub
   , extract
-  , only
-  , retag
-  , cast
   ) where
 
 import           Common
@@ -37,10 +35,13 @@ skip = Visit (pure ())
 
 class Recursive a where
   witness :: I a
-  recurse :: Applicative f => (forall a. Recursive a => Annotated s a -> f (Annotated t a)) -> a s -> f (a t)
+  complete :: (Recursive a, Applicative f) => I a -> (forall a. Recursive a => Annotated a -> f (Annotated a)) -> Annotation a -> f (Annotation a)
+  recurse :: Applicative f => (forall a. Recursive a => Annotated a -> f (Annotated a)) -> a -> f a
 
-class Complete s where
-  complete :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> f (Annotated s a)) -> Annotation s a -> I a -> f (Annotation s a)
+completion :: (Recursive a, Applicative f) => I a -> (forall a. Recursive a => Annotated a -> f (Annotated a)) -> Maybe (Annotation a) -> f (Maybe (Annotation a))
+completion i f = \case
+  Nothing -> pure Nothing
+  Just x  -> Just <$> complete i f x
 
 data I a where
   IDataAlt :: I DataAlt
@@ -58,7 +59,7 @@ data I a where
   ITypeConstraint :: I TypeConstraint
   IKindConstraint :: I KindConstraint
 
-typeof :: forall a s. Recursive a => Annotated s a -> I a
+typeof :: forall a. Recursive a => Annotated a -> I a
 typeof _ = witness :: I a
 
 switch :: forall a b c. (Recursive a, Recursive b) => I a -> I b -> ((a ~ b) => c) -> c -> c
@@ -79,94 +80,64 @@ switch a b eq neq = case (a, b) of
   (IKindConstraint, IKindConstraint) -> eq
   _                                  -> neq
 
-visit :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated s a -> Visit f (Annotation t a) (Annotated t a)) -> Annotated s a -> f (Annotated t a)
+visit :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated a -> Visit f (Maybe (Annotation a)) (Annotated a)) -> Annotated a -> f (Annotated a)
 visit f x = case f x of
   Visit c   -> (\a' x' -> (view source x, a') :< x') <$> c <*> recurse (visit f) (view value x)
   Resolve r -> r
 
-introspect :: (Recursive a, Applicative f, Complete s) => (forall a. Recursive a => Annotated s a -> Visit f () (a s)) -> Annotated s a -> f (Annotated s a)
-introspect f x = set annotation <$> complete (introspect f) (view annotation x) (typeof x) <*> ((\r -> set value r x) <$> case f x of
+introspect :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated a -> Visit f () a) -> Annotated a -> f (Annotated a)
+introspect f x = set annotation <$> completion (typeof x) (introspect f) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
   Visit c   -> c *> recurse (introspect f) (view value x)
   Resolve r -> r
   )
 
-just :: forall a s f. (Recursive a, Applicative f) => (Annotated s a -> Visit f () (a s)) -> (forall b. Recursive b => Annotated s b -> Visit f () (b s))
-just f = g where
-  g :: forall b. Recursive b => Annotated s b -> Visit f () (b s)
+embedVisit :: forall a f. (Recursive a, Applicative f) => (Annotated a -> Visit f () a) -> (forall b. Recursive b => Annotated b -> Visit f () b)
+embedVisit f = g where
+  g :: forall b. Recursive b => Annotated b -> Visit f () b
   g x = switch (witness :: I a) (witness :: I b) (f x) skip
 
-transferA :: forall a b f s. (Recursive a, Recursive b, Applicative f) => (a s -> f (a s)) -> b s -> f (b s)
+transferA :: forall a b f. (Recursive a, Recursive b, Applicative f) => (a -> f a) -> b -> f b
 transferA f x = switch (witness :: I a) (witness :: I b) (f x) (pure x)
 
-transferM :: forall a b f s. (Recursive a, Recursive b) => (a s -> Maybe (a s)) -> b s -> Maybe (b s)
+transferM :: forall a b f. (Recursive a, Recursive b) => (a -> Maybe a) -> b -> Maybe b
 transferM f x = switch (witness :: I a) (witness :: I b) (f x) Nothing
 
-sub :: forall a b s. (Recursive a, Recursive b, Complete s) => (a s -> Maybe (a s)) -> Annotated s b -> Annotated s b
+sub :: forall a b s. (Recursive a, Recursive b) => (a -> Maybe a) -> Annotated b -> Annotated b
 sub f x = runIdentity $ introspect f' x where
-  f' :: forall a. Recursive a => Annotated s a -> Visit Identity () (a s)
+  f' :: forall a. Recursive a => Annotated a -> Visit Identity () (a)
   f' y = case transferM f (view value y) of
     Nothing -> Visit (Identity ())
     Just y' -> Resolve (Identity y')
 
-extract :: forall a b s. (Monoid b, Recursive a, Complete s) => (forall a. Recursive a => Annotated s a -> b) -> Annotated s a -> b
+extract :: forall a b. (Monoid b, Recursive a) => (forall a. Recursive a => Annotated a -> b) -> Annotated a -> b
 extract f x = getConst $ introspect f' x where
-  f' :: forall a. Recursive a => Annotated s a -> Visit (Const b) () (a s)
+  f' :: forall a. Recursive a => Annotated a -> Visit (Const b) () (a)
   f' y = Visit (Const (f y))
 
-only :: forall a b s. (Monoid b, Recursive a) => (a s -> b) -> (forall a. Recursive a => Annotated s a -> b)
-only f x = getConst $ transferA (Const . f) (view value x)
+embedMonoid :: forall a b. (Monoid b, Recursive a) => (a -> b) -> (forall a. Recursive a => Annotated a -> b)
+embedMonoid f x = getConst $ transferA (Const . f) (view value x)
 
-retag :: forall s t b. Recursive b => (forall a. Recursive a => I a -> Annotation s a -> Annotation t a) -> Annotated s b -> Annotated t b
+retag :: forall b. Recursive b => (forall a. Recursive a => I a -> Maybe (Annotation a) -> Maybe (Annotation a)) -> Annotated b -> Annotated b
 retag f = runIdentity . visit f'
-  where f' :: forall a. Recursive a => Annotated s a -> Visit Identity (Annotation t a) (Annotated t a)
+  where f' :: forall a. Recursive a => Annotated a -> Visit Identity (Maybe (Annotation a)) (Annotated a)
         f' x = Visit (Identity (f (typeof x) (view annotation x)))
-
--- TODO this cast stuff is gross REALLY FUCKING GROSS PLEASE FIX THANK
-class Castable a s t where
-  cast :: Annotated s a -> Annotated t a
-
-instance (Annotation s TyOp ~ Annotation t TyOp) => Castable TyOp s t where
-  cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation s a -> Annotation t a
-    f i x = case i of
-      ITyOp -> x
-
-instance (Annotation s Kind ~ Annotation t Kind) => Castable Kind s t where
-  cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation s a -> Annotation t a
-    f i x = case i of
-      IKind -> x
-
-instance Castable Type KindAnn TypeAnn where
-  cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation KindAnn a -> Annotation TypeAnn a
-    f i k = case i of
-      IType -> cast k
-
-instance Castable QType KindAnn TypeAnn where
-  cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation KindAnn a -> Annotation TypeAnn a
-    f i k = case i of
-      IQType -> ()
-      IType  -> cast k
-
-instance Castable TyPat KindAnn TypeAnn where
-  cast = retag f where
-    f :: forall a. Recursive a => I a -> Annotation KindAnn a -> Annotation TypeAnn a
-    f i k = case i of
-      ITyPat -> cast k
 
 -- Implementations below here
 
 -- TODO use template haskell to generate recurse
 
+trivial :: (Annotation a ~ Void, Recursive a, Applicative f) => I a -> (forall a. Recursive a => Annotated a -> f (Annotated a)) -> Annotation a -> f (Annotation a)
+trivial _ _ = absurd
+
 instance Recursive DataAlt where
   witness = IDataAlt
+  complete _ f (DataAltInfo ns ct args rt) = DataAltInfo ns <$> f ct <*> traverse f args <*> f rt
   recurse f = \case
     DataAlt n t -> DataAlt n <$> traverse f t
 
 instance Recursive Decl where
   witness = IDecl
+  complete = trivial
   recurse f = \case
     DeclData n t ts -> DeclData n <$> series (f <$> t) <*> traverse f ts
     DeclFun n ps e  -> DeclFun n <$> traverse f ps <*> f e
@@ -175,6 +146,7 @@ instance Recursive Decl where
 
 instance Recursive Exp where
   witness = IExp
+  complete _ f x = f x
   recurse f = \case
     Apply a b    -> Apply <$> f a <*> f b
     Case a as    -> Case <$> f a <*> traverse (\(a, b) -> (,) <$> f a <*> f b) as
@@ -193,6 +165,7 @@ instance Recursive Exp where
 
 instance Recursive Kind where
   witness = IKind
+  complete = trivial
   recurse f = \case
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
@@ -201,6 +174,7 @@ instance Recursive Kind where
 
 instance Recursive Pat where
   witness = IPat
+  complete _ f x = f x
   recurse f = \case
     PatAt n a   -> PatAt n <$> f a
     PatHole     -> pure PatHole
@@ -211,29 +185,34 @@ instance Recursive Pat where
 
 instance Recursive Program where
   witness = IProgram
+  complete = trivial
   recurse f = \case
     Program ds -> Program <$> traverse f ds
 
 instance Recursive Stmt where
   witness = IStmt
+  complete = trivial
   recurse f = \case
     StmtDecl d -> StmtDecl <$> f d
     StmtExp e  -> StmtExp <$> f e
 
 instance Recursive QType where
   witness = IQType
+  complete = trivial
   recurse f = \case
     Mono t      -> Mono <$> f t
     Forall vs t -> Forall <$> pure vs <*> f t
 
 instance Recursive Tok where
   witness = ITok
+  complete = trivial
   recurse f = \case
     TExp e -> TExp <$> f e
     TOp o  -> pure (TOp o)
 
 instance Recursive TyOp where
   witness = ITyOp
+  complete = trivial
   recurse f = \case
     TyOpUni n -> pure (TyOpUni n)
     TyOpBang  -> pure TyOpBang
@@ -242,11 +221,13 @@ instance Recursive TyOp where
 
 instance Recursive TyPat where
   witness = ITyPat
+  complete _ f x = f x
   recurse f = \case
     TyPatVar n  -> pure (TyPatVar n)
 
 instance Recursive Type where
   witness = IType
+  complete _ f x = f x
   recurse f = \case
     TyUni n     -> pure (TyUni n)
     TyApply a b -> TyApply <$> f a <*> f b
@@ -259,6 +240,9 @@ instance Recursive Type where
 
 instance Recursive TypeConstraint where
   witness = ITypeConstraint
+  complete _ f = \case
+    Root r       -> pure (Root r)
+    Antecedent c -> Antecedent <$> f c
   recurse f = \case
     Class t -> Class <$> f t
     TEq a b -> TEq <$> f a <*> f b
@@ -266,40 +250,8 @@ instance Recursive TypeConstraint where
 
 instance Recursive KindConstraint where
   witness = IKindConstraint
+  complete _ f = \case
+    Root r       -> pure (Root r)
+    Antecedent c -> Antecedent <$> f c
   recurse f = \case
     KEq a b -> KEq <$> f a <*> f b
-
-instance Complete SimpleAnn where
-  complete _ _ _ = pure ()
-
-instance Complete KindAnn where
-  complete f a = \case
-    IDataAlt        -> pure ()
-    IDecl           -> pure ()
-    IExp            -> pure ()
-    IKind           -> pure ()
-    IPat            -> pure ()
-    IProgram        -> pure ()
-    IQType          -> pure ()
-    IStmt           -> pure ()
-    ITyOp           -> pure ()
-    ITyPat          -> f a
-    IType           -> f a
-    ITypeConstraint -> pure ()
-    IKindConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
-
-instance Complete TypeAnn where
-  complete f a = \case
-    IDataAlt        -> case a of { DataAltInfo ns ct args rt -> DataAltInfo ns <$> f ct <*> traverse f args <*> f rt }
-    IDecl           -> pure ()
-    IExp            -> f a
-    IKind           -> pure ()
-    IPat            -> f a
-    IProgram        -> pure ()
-    IQType          -> pure ()
-    IStmt           -> pure ()
-    ITyOp           -> pure ()
-    ITyPat          -> pure a
-    IType           -> pure a
-    ITypeConstraint -> case a of { Root _ -> pure a; Antecedent a -> Antecedent <$> f a }
-    IKindConstraint -> pure ()

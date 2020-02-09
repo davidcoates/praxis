@@ -24,7 +24,7 @@ import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
 
-solve :: Praxis [(Name, Kind KindAnn)]
+solve :: Praxis [(Name, Kind)]
 solve = save stage $ save our $ do
   stage .= KindCheck Solve
   solve'
@@ -47,7 +47,7 @@ solve' = spin progress `chain` stuck where
     throw Stuck
 
 -- TODO reduce duplication with Type Solve spin
-spin :: (Kinded KindConstraint -> Praxis Bool) -> Praxis State
+spin :: (Annotated KindConstraint -> Praxis Bool) -> Praxis State
 spin solve = use (our . constraints) <&> (nub . sort) >>= \case
   [] -> return Done
   cs -> do
@@ -61,7 +61,7 @@ spin solve = use (our . constraints) <&> (nub . sort) >>= \case
         []     -> return False
         (c:cs) -> (our . staging .= cs) >> liftA2 (||) (solve c) loop
 
-unis = extract (only f) where
+unis = extract (embedMonoid f) where
   f = \case
     KindUni n      -> [n]
     KindConstraint -> []
@@ -69,7 +69,7 @@ unis = extract (only f) where
     KindType       -> []
 -- TODO find some way of combining traverseM and traverseA and use that here
 
-progress :: Kinded KindConstraint -> Praxis Bool
+progress :: Annotated KindConstraint -> Praxis Bool
 progress d = case view value d of
 
   KEq k1 k2 | k1 == k2  -> tautology
@@ -88,9 +88,9 @@ progress d = case view value d of
         introduce cs = requires (map (d `implies`) cs) >> return True
         swap = case view value d of t1 `KEq` t2 -> progress (set value (t2 `KEq` t1) d)
 
-smap :: (forall a. Recursive a => Kinded a -> Kinded a) -> Praxis ()
+smap :: (forall a. Recursive a => Annotated a -> Annotated a) -> Praxis ()
 smap f = do
-  let lower :: (Kinded Kind -> Kinded Kind) -> Kind KindAnn -> Kind KindAnn
+  let lower :: (Annotated Kind -> Annotated Kind) -> Kind -> Kind
       lower f = view value . f . phantom
   our . sol %= fmap (over second (lower f))
   our . constraints %= fmap f
@@ -98,7 +98,7 @@ smap f = do
   our . axioms %= fmap f
   kEnv %= over traverse f
 
-(~>) :: Name -> Kind KindAnn -> Praxis Bool
+(~>) :: Name -> Kind -> Praxis Bool
 (~>) n k = do
   smap $ sub (\case { KindUni n' | n == n' -> Just k; _ -> Nothing })
   our . sol %= ((n, k):)

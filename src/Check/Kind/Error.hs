@@ -8,7 +8,7 @@ import           Common
 import           Print
 import           Term
 
-data Error = Contradiction (Kinded KindConstraint)
+data Error = Contradiction (Annotated KindConstraint)
            | Stuck
 
 instance Pretty Error where

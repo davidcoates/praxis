@@ -47,7 +47,7 @@ opts (x:xs)
 opts []  = return []
 
 file :: String -> Praxis ()
-file f = (interpretFile f :: Praxis (Typed Program, ())) >> onFileSuccess
+file f = (interpretFile f :: Praxis (Annotated Program, ())) >> onFileSuccess
   where onFileSuccess = use (flags . interactive) >>= (\i -> if i then repl else runMain)
 
 runMain :: Praxis ()
@@ -67,6 +67,6 @@ repl = forever $ do
 eval :: String -> Praxis ()
 eval s = do
   -- TODO fix this so we can have declarations
-  (_, v) <- interpret s :: Praxis (Typed Exp, Value)
+  (_, v) <- interpret s :: Praxis (Annotated Exp, Value)
   liftIO $ print v
 

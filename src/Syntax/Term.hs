@@ -124,7 +124,7 @@ definePrisms ''Kind
 definePrisms ''KindConstraint
 definePrisms ''TypeConstraint
 
-syntax :: (Recursive a, Syntax f, Domain f s) => I a -> f (a s)
+syntax :: (Recursive a, Syntax f) => I a -> f a
 syntax = \case
   IDataAlt        -> dataAlt
   IDecl           -> decl
@@ -141,40 +141,40 @@ syntax = \case
   ITypeConstraint -> tyConstraint
   IKindConstraint -> kindConstraint
 
-tyConstraint :: (Syntax f, Domain f s) => f (TypeConstraint s)
+tyConstraint :: Syntax f => f TypeConstraint
 tyConstraint = _Class <$> annotated ty <|>
                _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
                mark "type constraint"
 
-kindConstraint :: (Syntax f, Domain f s) => f (KindConstraint s)
+kindConstraint :: Syntax f => f KindConstraint
 kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|>
                 mark "kind constraint"
 
-program :: (Syntax f, Domain f s) => f (Program s)
+program :: Syntax f => f Program
 program = _Program <$> block (annotated top) where -- TODO module
   top = declData <|> decl -- TODO fixity declarations, imports
 
-declData :: (Syntax f, Domain f s) => f (Decl s)
+declData :: Syntax f => f Decl
 declData = _DeclData <$> reservedId "data" *> conid <*> many (annotated tyPat) <*> alts where
   alts = cons <$> reservedId "where" *> lbrace *> annotated dataAlt <*> (semi *> annotated dataAlt) `until` rbrace <|> -- TODO clean this up
          nil <$> pure ()
 
-dataAlt :: (Syntax f, Domain f s) => f (DataAlt s)
+dataAlt :: Syntax f => f DataAlt
 dataAlt = _DataAlt <$> conid <*> many (annotated ty)
 
-tyPat :: (Syntax f, Domain f s) => f (TyPat s)
+tyPat :: Syntax f => f TyPat
 tyPat = _TyPatVar <$> varid
 
-fun :: (Syntax f, Domain f s) => f (Decl s)
+fun :: Syntax f => f Decl
 fun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
   sig = reservedOp ":" *> annotated qty
   def = annotated pat `until` reservedOp "=" <*> annotated exp
   var = _DeclVar <$> varid <*> (maybe <$> reservedOp ":" *> annotated qty) <*> reservedOp "=" *> annotated exp
 
-decl :: (Syntax f, Domain f s) => f (Decl s)
+decl :: Syntax f => f Decl
 decl = fun
 
-pat :: (Syntax f, Domain f s) => f (Pat s)
+pat :: Syntax f => f Pat
 pat = _PatCon <$> conid <*> many (annotated pat0) <|> pat0 <|> mark "pattern" where
   pat0 = _PatHole <$> special '_' <|>
          _PatRecord <$> record (annotated pat) <|>
@@ -183,7 +183,7 @@ pat = _PatCon <$> conid <*> many (annotated pat0) <|> pat0 <|> mark "pattern" wh
          special '(' *> pat <* special ')' <|>
          mark "pattern(0)"
 
-join :: (Syntax f, Domain f s, Recursive a) => f (a s) -> (Prism (a s) (Annotated s a, b), f b) -> f (a s)
+join :: (Syntax f, Recursive a) => f a -> (Prism a (Annotated a, b), f b) -> f a
 join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p where
   f (_ :< p, Nothing) = p
   f (p, Just q)       = construct _P (p, q)
@@ -191,7 +191,7 @@ join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p wher
     Just (x, y) -> Just (x, Just y)
     Nothing     -> Nothing
 
-left :: forall f a s. (Syntax f, Domain f s, Recursive a) => Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
+left :: forall f a. (Syntax f, Recursive a) => Prism a (Annotated a, Annotated a) -> f a -> f a
 left _P p = Prism f g <$> annotated p <*> many (annotated p) <|> unparseable p where
   f (_ :< p, []) = p
   f (p, q:qs)    = fold p q qs
@@ -204,7 +204,7 @@ left _P p = Prism f g <$> annotated p <*> many (annotated p) <|> unparseable p w
     Just (x, y) -> unfold x ++ [y]
     Nothing     -> [x]
 
-kind :: (Syntax f, Domain f s) => f (Kind s)
+kind :: Syntax f => f Kind
 kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind" where
   kind0 = _KindType <$> reservedCon "Type" <|>
           _KindUni <$> uni <|>
@@ -212,11 +212,11 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
           special '(' *> kind <* special ')' <|>
           mark "kind(0)"
 
-qty :: (Syntax f, Domain f s) => f (QType s)
+qty :: Syntax f => f QType
 qty = _Forall <$> reservedId "forall" *> varid `until` dot <*> annotated ty <|>
       _Mono <$> annotated ty
 
-ty :: (Syntax f, Domain f s) => f (Type s)
+ty :: Syntax f => f Type
 ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
   ty2 = _TyOp <$> annotated tyOp <*> annotated ty <|> ty1 <|> mark "type(2)"
   ty1 = left _TyApply ty0 <|> mark "type(1)"
@@ -227,13 +227,13 @@ ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
         special '(' *> ty <* special ')' <|>
         mark "type(0)"
 
-tyOp :: (Syntax f, Domain f s) => f (TyOp s)
+tyOp :: Syntax f => f TyOp
 tyOp = _TyOpBang <$> reservedOp "!" <|>
        unparseable (_TyOpUni <$> uni) <|>
        unparseable (_TyOpId <$> token (Print "id")) <|> -- keep track of where we have (TyOp TyOpId t) instead of (t)
        mark "tyOp" -- TODO TyOpVar
 
-exp :: (Syntax f, Domain f s) => f (Exp s)
+exp :: Syntax f => f Exp
 exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where
   exp3 = _Mixfix <$> some (annotated (_TOp <$> qvarsym <|> _TExp <$> annotated exp2)) <|> unparseable exp2 <|> mark "expression(3)" -- FIXME unparseable is a hack here
   exp2 = _Read <$> reservedId "read" *> varid <*> reservedId "in" *> annotated exp <|>
@@ -251,8 +251,8 @@ exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          special '(' *> exp <* special ')' <|>
          mark "expression(0)"
 
-stmt :: (Syntax f, Domain f s) => f (Stmt s)
+stmt :: Syntax f => f Stmt
 stmt = _StmtDecl <$> reservedId "let" *> annotated decl <|> _StmtExp <$> annotated exp <|> mark "statement"
 
-alt :: (Syntax f, Domain f s) => f (Annotated s Pat, Annotated s Exp)
+alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedOp "->" *> annotated exp <|> mark "case alternative"

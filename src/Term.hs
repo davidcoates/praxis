@@ -30,22 +30,15 @@ module Term
   , KindConstraint(..)
   , TypeConstraint(..)
 
-  , SimpleAnn
-  , KindAnn
-  , TypeAnn
-
   , Annotation
   , Annotated
   , source
   , annotation
   , split
+  , splitTrivial
   , splitPair
   , phantom
   , as
-
-  , Simple
-  , Kinded
-  , Typed
 
   , Derivation(..)
   , DataAltInfo(..)
@@ -73,29 +66,29 @@ instance Show Lit where
     Int i    -> show i
     String s -> show s
 
-data Decl a = DeclData Name [Annotated a TyPat] [Annotated a DataAlt]
-            | DeclFun Name [Annotated a Pat] (Annotated a Exp) -- ^Parsing only
-            | DeclSig Name (Annotated a QType) -- ^Parsing only
-            | DeclVar Name (Maybe (Annotated a QType)) (Annotated a Exp)
+data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
+          | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
+          | DeclSig Name (Annotated QType) -- ^Parsing only
+          | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq)
 
-data DataAlt a = DataAlt Name [Annotated a Type]
+data DataAlt = DataAlt Name [Annotated Type]
   deriving (Eq)
 
-data Exp a = Apply (Annotated a Exp) (Annotated a Exp)
-           | Case (Annotated a Exp) [(Annotated a Pat, Annotated a Exp)]
-           | Cases [(Annotated a Pat, Annotated a Exp)]
-           | Con Name
-           | Do [Annotated a Stmt]
-           | If (Annotated a Exp) (Annotated a Exp) (Annotated a Exp)
-           | Lambda (Annotated a Pat) (Annotated a Exp)
-           | Lit Lit
-           | Mixfix [Annotated a Tok] -- ^Parsing only
-           | Read Name (Annotated a Exp)
-           | Record (Record (Annotated a Exp))
-           | Sig (Annotated a Exp) (Annotated a Type)
-           | Var Name
-           | VarBang Name -- ^Parsing only
+data Exp = Apply (Annotated Exp) (Annotated Exp)
+         | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
+         | Cases [(Annotated Pat, Annotated Exp)]
+         | Con Name
+         | Do [Annotated Stmt]
+         | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
+         | Lambda (Annotated Pat) (Annotated Exp)
+         | Lit Lit
+         | Mixfix [Annotated Tok] -- ^Parsing only
+         | Read Name (Annotated Exp)
+         | Record (Record (Annotated Exp))
+         | Sig (Annotated Exp) (Annotated Type)
+         | Var Name
+         | VarBang Name -- ^Parsing only
   deriving (Eq)
 
 data Lit = Bool Bool
@@ -104,125 +97,110 @@ data Lit = Bool Bool
          | String String
   deriving (Eq)
 
-data Pat a = PatAt Name (Annotated a Pat)
-           | PatHole
-           | PatLit Lit
-           | PatRecord (Record (Annotated a Pat))
-           | PatVar Name
-           | PatCon Name [Annotated a Pat]
+data Pat = PatAt Name (Annotated Pat)
+         | PatHole
+         | PatLit Lit
+         | PatRecord (Record (Annotated Pat))
+         | PatVar Name
+         | PatCon Name [Annotated Pat]
   deriving (Eq)
 
-data Program a = Program [Annotated a Decl]
+data Program = Program [Annotated Decl]
   deriving (Eq)
 
-data Stmt a = StmtDecl (Annotated a Decl)
-            | StmtExp (Annotated a Exp)
+data Stmt = StmtDecl (Annotated Decl)
+          | StmtExp (Annotated Exp)
   deriving (Eq)
 
 -- |Parsing only
-data Tok a = TExp (Annotated a Exp)
-           | TOp Op
+data Tok = TExp (Annotated Exp)
+         | TOp Op
   deriving (Eq)
 
-data TyOp a = TyOpUni Name
-            | TyOpBang
-            | TyOpId
-            | TyOpVar Name
+data TyOp = TyOpUni Name
+          | TyOpBang
+          | TyOpId
+          | TyOpVar Name
   deriving (Eq, Ord)
 
-data TyPat a = TyPatVar Name
+data TyPat = TyPatVar Name
   deriving (Eq, Ord)
 
-data Type a = TyUni Name                                      -- Compares less than all other types
-            | TyApply (Annotated a Type) (Annotated a Type)
-            | TyCon Name
-            | TyFlat (Set (Annotated a Type))                 -- Used for constraints
-            | TyFun (Annotated a Type) (Annotated a Type)
-            | TyRecord (Record (Annotated a Type))            -- A type record : T
-            | TyOp (Annotated a TyOp) (Annotated a Type)
-            | TyVar Name
+data Type = TyUni Name                                -- Compares less than all other types
+          | TyApply (Annotated Type) (Annotated Type)
+          | TyCon Name
+          | TyFlat (Set (Annotated Type))             -- Used for constraints
+          | TyFun (Annotated Type) (Annotated Type)
+          | TyRecord (Record (Annotated Type))        -- A type record : T
+          | TyOp (Annotated TyOp) (Annotated Type)
+          | TyVar Name
   deriving (Eq, Ord)
 
-data QType a = Mono (Annotated a Type)
-             | Forall [Name] (Annotated a Type)
+data QType = Mono (Annotated Type)
+           | Forall [Name] (Annotated Type)
   deriving (Eq, Ord)
 
-data Kind a = KindUni Name
-            | KindConstraint
-            | KindFun (Annotated a Kind) (Annotated a Kind)
-            | KindType
+data Kind = KindUni Name
+          | KindConstraint
+          | KindFun (Annotated Kind) (Annotated Kind)
+          | KindType
   deriving (Eq, Ord)
 
-data TypeConstraint a = Class (Annotated a Type)
-                      | TEq (Annotated a Type) (Annotated a Type)
-                      | TOpEq Name Name
+data TypeConstraint = Class (Annotated Type)
+                    | TEq (Annotated Type) (Annotated Type)
+                    | TOpEq Name Name
   deriving (Eq, Ord)
 
 infixl 8 `TEq`
 infixl 8 `TOpEq`
 
-data KindConstraint a = KEq (Annotated a Kind) (Annotated a Kind)
+data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
-data SimpleAnn
-data KindAnn
-data TypeAnn
+type family Annotation a where
+  Annotation Exp            = Annotated Type
+  Annotation Pat            = Annotated Type
+  Annotation TyPat          = Annotated Kind
+  Annotation Type           = Annotated Kind
+  Annotation TypeConstraint = Derivation TypeConstraint
+  Annotation KindConstraint = Derivation KindConstraint
+  Annotation DataAlt        = DataAltInfo
+  Annotation a              = Void
 
-type family Annotation a (b :: * -> *) where
-  -- |SimpleAnn
-  Annotation SimpleAnn a            = ()
-  -- |KindAnn
-  Annotation KindAnn TyPat          = Kinded Kind
-  Annotation KindAnn Type           = Kinded Kind
-  Annotation KindAnn KindConstraint = Derivation KindAnn KindConstraint
-  Annotation KindAnn a              = ()
-  -- |TypeAnn
-  Annotation TypeAnn Exp            = Typed Type
-  Annotation TypeAnn Pat            = Typed Type
-  Annotation TypeAnn TyPat          = Typed Kind
-  Annotation TypeAnn Type           = Typed Kind
-  Annotation TypeAnn TypeConstraint = Derivation TypeAnn TypeConstraint
-  Annotation TypeAnn DataAlt        = DataAltInfo
-  Annotation TypeAnn a              = ()
+type Annotated a = Tag (Source, Maybe (Annotation a)) a
 
-type Annotated a b = Tag (Source, Annotation a b) (b a)
-
-source :: Functor f => (Source -> f Source) -> Annotated s a -> f (Annotated s a)
+source :: Functor f => (Source -> f Source) -> Annotated a -> f (Annotated a)
 source = tag . first
 
-annotation :: Functor f => (Annotation s a -> f (Annotation s a)) -> Annotated s a -> f (Annotated s a)
+annotation :: Functor f => (Maybe (Annotation a) -> f (Maybe (Annotation a))) -> Annotated a -> f (Annotated a)
 annotation = tag . second
 
-cosource :: Functor f => (Tag (Annotation s a) (a s) -> f (Tag (Annotation t a) (a t))) -> Annotated s a -> f (Annotated t a)
-cosource f ((s, a) :< x) = (\(a :< x) -> (s, a) :< x) <$> f (a :< x)
+split :: Functor f => (Source -> a -> f (Tag (Annotation a) a)) -> Annotated a -> f (Annotated a)
+split f ((s, _) :< x) = (\(a :< x) -> ((s, Just a)) :< x) <$> f s x
 
-split :: Functor f => (Source -> a s -> f (Tag (Annotation t a) (a t))) -> Annotated s a -> f (Annotated t a)
-split f x = (\y -> set cosource y x) <$> f (view source x) (view value x)
+splitTrivial :: Functor f => (Source -> a -> f a) -> Annotated a -> f (Annotated a)
+splitTrivial f ((s, _) :< x) = (\x -> ((s, Nothing) :< x)) <$> f s x
 
-splitPair :: Functor f => (Source -> a s -> f (b, Tag (Annotation t a) (a t))) -> Annotated s a -> f (b, Annotated t a)
+splitPair :: Functor f => (Source -> a -> f (b, Tag (Annotation a) a)) -> Annotated a -> f (b, Annotated a)
 splitPair f = runPairT . split (\s a -> PairT (f s a))
 
-phantom :: (Annotation a b ~ ()) => b a -> Annotated a b
-phantom x = x `as` ()
+phantom :: a -> Annotated a
+phantom x = (Phantom, Nothing) :< x
 
-as :: b a -> Annotation a b -> Annotated a b
-as x a = (Phantom, a) :< x
-
-type Simple a = Annotated SimpleAnn a
-type Kinded a = Annotated KindAnn a
-type Typed  a = Annotated TypeAnn a
+as :: a -> Annotation a -> Annotated a
+as x a = (Phantom, Just a) :< x
 
 -- TODO should this be somewhere else?
-data Derivation s a = Root String
-                    | Antecedent (Annotated s a)
+data Derivation a = Root String
+                    | Antecedent (Annotated a)
 
-instance Pretty (Annotated s a) => Pretty (Derivation s a) where
+instance Pretty (Annotated a) => Pretty (Derivation a) where
   pretty (Root r)       = "\n|-> (" <> plain r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
 
-data DataAltInfo = DataAltInfo [Name] (Typed QType) [Typed Type] (Typed Type)
+data DataAltInfo = DataAltInfo [Name] (Annotated QType) [Annotated Type] (Annotated Type)
 
-instance (Pretty (Typed Type), Pretty (Typed QType)) => Pretty DataAltInfo where
+instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataAltInfo where
   pretty (DataAltInfo ns ct args rt) =
     pretty ct <> " i.e., " <>
     (if null ns then "" else "forall " <> separate " " (map plain ns) <> ". ") <>

@@ -8,9 +8,9 @@ import           Common
 import           Print
 import           Term
 
-data Error = Contradiction (Typed TypeConstraint)
-           | ShareAffine (Typed Type)
-           | Underdefined (Typed TypeConstraint)
+data Error = Contradiction (Annotated TypeConstraint)
+           | ShareAffine (Annotated Type)
+           | Underdefined (Annotated TypeConstraint)
            | Stuck
 
 instance Pretty Error where

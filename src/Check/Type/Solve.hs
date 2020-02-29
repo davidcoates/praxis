@@ -149,13 +149,14 @@ resolve c = case view value c of
 
   TEq (_ :< TyOp (_ :< TyOpUni n1) t1) (_ :< TyOp (_ :< TyOpUni n2) t2) | n1 == n2 -> introduce [ TEq t1 t2 ]
 
-  TEq (_ :< TyOp (_ :< op) t1) t2 -> do
+  TEq (a :< TyOp (_ :< op) t1) t2 -> do
     s1 <- resolve (phantom (Share t1))
     s2 <- resolve (phantom (Share t2))
     case (op, truth s1, truth s2, viewFree t2) of
-      (TyOpUni _, _, Just True, True)        -> introduce [ TEq t1 t2 ]
-      (TyOpUni n, Just False, Just False, _) -> n `isView` False >> introduce [ TEq t1 t2 ]
-      (TyOpUni n, Just False, Just True,  _) -> n `isView` True >> solved
+      (TyOpUni n, Just False, Just True, _) -> n `isView` True >> ((\c -> Unproven { antecedents = [ c ], trivial = False }) <$> eval (c `implies` TEq (a :< TyOp (phantom TyOpBang) t1) t2)) -- TODO ugly AF
+      (TyOpUni n, _, Just False, _)         -> n `isView` False >> introduce [ TEq t1 t2 ] -- FIXME as above, introduced constraint derivation does not have resolved n ???
+      (TyOpUni _, _, Just True, True)       -> introduce [ TEq t1 t2 ]
+      (TyOpUni _, Just True, _, True)       -> introduce [ TEq t1 t2 ]
       _ -> defer
 
   TEq _ (_ :< TyOp _ _) -> swap
@@ -223,12 +224,9 @@ resolve c = case view value c of
 
     viewFree :: Annotated Type -> Bool
     viewFree t = case view value t of
-      TyUni _ -> False
-      TyOp (_ :< op) t -> case op of
-        TyOpBang  -> False
-        TyOpUni _ -> False
-        TyOpId    -> viewFree t
-      _ -> True
+      TyUni _  -> False
+      TyOp _ _ -> False
+      _        -> True
 
 
 smap :: (forall a. Recursive a => Annotated a -> Praxis (Annotated a)) -> Praxis ()
@@ -245,7 +243,7 @@ smap f = do
 isView :: Name -> Bool -> Praxis ()
 isView n b = do
   let op = if b then TyOpBang else TyOpId
-  smap $ pure . sub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing })
+  smap $ eval . sub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing })
   our . ops %= ((n, op):)
   return ()
 

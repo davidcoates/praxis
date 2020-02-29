@@ -9,13 +9,13 @@ import           Print
 import           Term
 
 data Error = Contradiction (Annotated TypeConstraint)
-           | ShareAffine (Annotated Type)
+           | AffineInconsistency (Annotated Type)
            | Underdefined (Annotated TypeConstraint)
            | Stuck
 
 instance Pretty Error where
   pretty = \case
-    Contradiction c -> "found contradiction " <> pretty c
-    ShareAffine t   -> "deduced Share " <> pretty t <> " and Affine " <> pretty t
-    Stuck           -> "infinite loop detected :("
-    Underdefined c  -> "failed to completely deduce the unification variable(s) present in " <> pretty c
+    Contradiction c       -> "found contradiction " <> pretty c
+    AffineInconsistency t -> "deduced Affine " <> pretty t <> " and Share " <> pretty t
+    Stuck                 -> "infinite loop detected :("
+    Underdefined c        -> "failed to completely deduce the unification variable(s) present in " <> pretty c

@@ -80,7 +80,7 @@ string = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminat
   inner = while (satisfy (/= '"')) ((char '\\' *> (escape <$> consume)) <|> consume)
 
 reservedids = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall", "let"]
-reservedcons = ["Type", "Constraint"]
+reservedcons = ["Type", "Constraint", "Share", "Affine"]
 reservedops = [":", "=>", "=", "\\", "->", "@", "!"]
 
 -- Possibly qualified, possibly reserved conid / varid / consym / varsym

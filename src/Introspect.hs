@@ -244,8 +244,10 @@ instance Recursive TypeConstraint where
     Root r       -> pure (Root r)
     Antecedent c -> Antecedent <$> f c
   recurse f = \case
-    Class t -> Class <$> f t
-    TEq a b -> TEq <$> f a <*> f b
+    Class t   -> Class <$> f t
+    Affine t  -> Affine <$> f t
+    Share t   -> Share <$> f t
+    TEq a b   -> TEq <$> f a <*> f b
     TOpEq a b -> pure (TOpEq a b)
 
 instance Recursive KindConstraint where

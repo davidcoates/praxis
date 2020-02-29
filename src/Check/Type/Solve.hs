@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE NamedFieldPuns       #-}
 {-# LANGUAGE Rank2Types           #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -10,8 +11,7 @@ module Check.Type.Solve
   ) where
 
 import           Check.Type.Error
-import           Check.Type.Require  hiding (affine, share)
-import qualified Check.Type.Require  as Require (affine, share)
+import           Check.Type.Require
 import           Check.Type.System
 import           Common
 import           Introspect
@@ -25,6 +25,7 @@ import           Data.List           (foldl', nub, sort)
 import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
+import           Data.Traversable    (forM)
 
 solve :: Praxis ([(Name, Type)], [(Name, TyOp)])
 solve = save stage $ save our $ do
@@ -73,175 +74,161 @@ classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
   Class t     -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
   TEq t1 t2   -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
 
-data Resolution = Known Bool -- In general we can't deduce Known False because of the open world assumption. The exception is Share / Affine (and their consequents)
-                | Unknown
-                | Unknowable
-                | ImpliedBy [TypeConstraint]
-  deriving (Eq, Ord)
+data Resolution = Proven
+                | Disproven { open :: Bool }
+                | Unproven { antecedents :: [Annotated TypeConstraint], trivial :: Bool }
+  deriving Show
 
--- TODO need proper instance solver
-resolve :: Annotated Type -> Praxis Resolution
-resolve t = case view value t of
+(&&&) :: Resolution -> Resolution -> Resolution
+(&&&) = curry $ \case
+  (Proven, r)      -> r
+  (r, Proven)      -> r
+  (Disproven o, _) -> Disproven o
+  (_, Disproven o) -> Disproven o
+  (r, s)           -> Unproven { antecedents = antecedents r ++ antecedents s, trivial = trivial r || trivial s }
 
-  TyApply (_ :< TyCon "Share") t  -> share t
+(|||) :: Resolution -> Resolution -> Resolution
+(|||) = curry $ \case
+  (Disproven _, r) -> r
+  (r, Disproven _) -> r
+  (Proven, _)      -> Proven
+  (_, Proven)      -> Proven
+  (r, s)           -> Unproven { antecedents = antecedents r ++ antecedents s, trivial = trivial r || trivial s }
 
-  TyApply (_ :< TyCon "Affine") t -> affine t
+truth :: Resolution -> Maybe Bool
+truth = \case
+  Proven      -> Just True
+  Disproven _ -> Just False
+  _           -> Nothing
 
-
-resolves :: Traversable t => Bool -> (Annotated Type -> Praxis Resolution) -> (Annotated Type -> TypeConstraint) -> t (Annotated Type) -> Praxis Resolution
-resolves p f c ts = foldl' (<>) (Known p) <$> series (fmap weaken ts) where
-  weaken t = do
-    r <- f t
-    case r of
-      Unknown -> return (ImpliedBy [c t])
-      _       -> return r
-  (<>) x y = case if x <= y then (x, y) else (y, x) of
-    (Known p', r)                -> if p == p' then r else Known p'
-    (Unknowable, _)              -> Unknowable
-    (ImpliedBy xs, ImpliedBy ys) -> ImpliedBy (xs ++ ys)
-
-
--- TODO might want to provide a function excluded_middle :: (Share a => b) -> (Affine a => b) -> b
-
-affine :: Annotated Type -> Praxis Resolution
-affine t = do
-  s <- (shareImpl True t)
-  a <- (shareImpl False t)
-  case (s, a) of
-    (Known p, Known q)       -> if p == q then error "share == affine" else return (Known q)
-    (Unknowable, Unknowable) -> return (Known False) -- Open world assumption does NOT apply to Share / Affine
-    (Unknown, Unknown)       -> return Unknown
-
-share :: Annotated Type -> Praxis Resolution
-share t = do
-  s <- (shareImpl True t)
-  a <- (shareImpl False t)
-  case (s, a) of
-    (Known p, Known q)       -> if p == q then error "share == affine" else return (Known p)
-    (Unknowable, Unknowable) -> return (Known False) -- Open world assumption does NOT apply to Share / Affine
-    (Unknown, Unknown)       -> return Unknown
-
-shareImpl :: Bool -> Annotated Type -> Praxis Resolution
-shareImpl p t = case view value t of
-
-  TyOp (_ :< op) t'
-    | TyOpBang  <- op -> return (Known p)
-    | TyOpUni _ <- op -> do
-      r <- shareImpl p t'
-      return $ case r of
-        Known p' | p == p' -> Known p'
-        _                  -> Unknown
-
-  TyFun _ _  -> return (Known p)
-
-  TyRecord r -> resolves p (shareImpl p) (if p then Require.share else Require.affine) r
-
-  TyCon n
-    | n `elem` ["Int", "Char", "Bool"] -> return (Known p)
-
-  -- FIXME make this general!
-  TyApply (_ :< TyCon "List") _ -> return (Known (not p))
-
-  -- TODO derivations??
-  TyVar n -> do
-    axs <- fmap (view value) <$> use (our . axioms)
-    let s = Require.share t `elem` axs
-    let a = Require.affine t `elem` axs
-    case (s, a) of
-      (True, False)  -> return (Known True)
-      (False, True)  -> return (Known False)
-      (False, False) -> return Unknowable
-      (True, True)   -> throw (ShareAffine t)
-
-  _ -> return Unknown
-
+untrivialise :: Resolution -> Resolution
+untrivialise r = case r of
+  Unproven { trivial = True } -> r{ trivial = False }
+  _                           -> r
 
 progress :: Annotated TypeConstraint -> Praxis Bool
-progress d = case view value d of
+progress c = resolve c >>= \case
+  Proven                            -> return True
+  Disproven _                       -> throw (Contradiction c)
+  Unproven { antecedents, trivial } -> requires antecedents >> return (not trivial)
 
-  Class t -> do
-    r <- resolve t
-    case r of
-      Known False  -> contradiction
-      Known True   -> tautology
-      Unknown      -> defer
-      ImpliedBy ts -> introduce ts
+resolve :: Annotated TypeConstraint -> Praxis Resolution
+resolve c = case view value c of
+
+  Share t -> do
+    s <- shareImpl c
+    a <- shareImpl (phantom (Affine t))
+    case (s, a) of
+      (Unproven _ _, _)     -> defer
+      (_, Unproven _ _)     -> defer
+      (Proven, Proven)      -> throw (AffineInconsistency t)
+      (Proven, Disproven _) -> return Proven
+      (Disproven o, _)      -> return (Disproven o)
+
+  Affine t -> do
+    s <- shareImpl (phantom (Share t))
+    a <- shareImpl c
+    case (s, a) of
+      (Unproven _ _, _)     -> defer
+      (_, Unproven _ _)     -> defer
+      (Proven, Proven)      -> throw (AffineInconsistency t)
+      (Proven, Disproven _) -> return Proven
+      (Disproven o, _)      -> return (Disproven o)
 
   TEq t1 t2 | t1 == t2 -> tautology
 
-  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else x `is` view value t
+  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else x `is` view value t >> solved
   TEq _ (_ :< TyUni _) -> swap
 
-  TEq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2  -> introduce [ TEq t1 t2 ]
+  TEq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2 -> introduce [ TEq t1 t2 ]
 
   TEq (_ :< TyRecord r1) (_ :< TyRecord r2) | sort (keys r1) == sort (keys r2) ->
     let values = map snd . Record.toCanonicalList in introduce (zipWith TEq (values r1) (values r2)) -- TODO create zipRecord or some such
 
   TEq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> introduce [ TEq t1 s1, TEq t2 s2 ]
 
-  TEq t1@(_ :< TyFlat e1) t2@(_ :< TyFlat e2)
-    | e1 > e2 -> swap
-    | [_ :< TyUni n] <- Set.toList e1 -> if n `elem` unis t2 then defer else n `is` view value t2
-    | []             <- Set.toList e1 -> let empty (_ :< TyUni n) = n `is` TyFlat Set.empty
-                                             empty _              = contradiction
-                                         in foldr (\a b -> empty a >> b) solved e2
-    | Just ((n1, l1), (n2, l2)) <- liftA2 (,) (snake e1) (snake e2) ->
-        if n1 == n2 then do
-          a <- freshTyUni
-          n1 `is` TyFlat (Set.unions [Set.singleton a, Set.difference l2 l1, Set.difference l1 l2])
-        else
-          n1 `is` TyFlat (Set.union (Set.difference l2 l1) (Set.singleton (TyUni n2 `as` phantom KindType)))
-    | Just (n1, l1) <- snake e1 ->
-        if literals e2 then
-          if Set.isSubsetOf l1 e2 then
-            defer
-            -- FIXME This isn't correct! We could add any subset of l1 to n1
-            -- solve n1 (TyFlat (Set.difference e2 l1)) -- TODO for all these differences, need to flatten?
-          else
-            contradiction
-        else
-          defer
-    | null (unis t1 ++ unis t2) -> contradiction
-    | otherwise                     -> defer
-
   TEq (_ :< TyOp (_ :< TyOpUni n1) t1) (_ :< TyOp (_ :< TyOpUni n2) t2) | n1 == n2 -> introduce [ TEq t1 t2 ]
 
   TEq (_ :< TyOp (_ :< op) t1) t2 -> do
-    s1 <- share t1
-    s2 <- share t2
-    case (op, s1, s2, viewFree t2) of
-      (TyOpUni _, _, Known True, True)         -> introduce [ TEq t1 t2 ]
-      (TyOpUni n, Known False, Known False, _) -> n `isView` False >> introduce [ TEq t1 t2 ]
-      (TyOpUni n, Known False, Known True, _)  -> n `isView` True
+    s1 <- resolve (phantom (Share t1))
+    s2 <- resolve (phantom (Share t2))
+    case (op, truth s1, truth s2, viewFree t2) of
+      (TyOpUni _, _, Just True, True)        -> introduce [ TEq t1 t2 ]
+      (TyOpUni n, Just False, Just False, _) -> n `isView` False >> introduce [ TEq t1 t2 ]
+      (TyOpUni n, Just False, Just True,  _) -> n `isView` True >> solved
       _ -> defer
 
   TEq _ (_ :< TyOp _ _) -> swap
 
   _ -> contradiction
 
-  where solved = return True
-        tautology = solved
-        defer = require d >> return False
-        contradiction = throw (Contradiction d)
-        introduce cs = requires (map (d `implies`) cs) >> return True
-        swap = case view value d of t1 `TEq` t2 -> progress (set value (t2 `TEq` t1) d)
 
-        snake :: Set (Annotated Type) -> Maybe (Name, Set (Annotated Type))
-        snake es = case Set.toList es of
-          ((_ :< TyUni n):es) -> if null (concatMap unis es) then Just (n, Set.fromList es) else Nothing
-          _                   -> Nothing
+  where
+    tautology :: Praxis Resolution
+    tautology = return Proven
 
-        literals :: Set (Annotated Type) -> Bool
-        literals es = null (concatMap unis (Set.toList es))
+    solved = tautology
 
-        viewFree :: Annotated Type -> Bool
-        viewFree t = case view value t of
-          TyUni _ -> False
-          TyOp (_ :< op) t -> case op of
-            TyOpBang  -> False
-            TyOpUni _ -> False
-            TyOpId    -> viewFree t
-          _ -> True
+    contradiction :: Praxis Resolution
+    contradiction = return $ Disproven { open = False }
+
+    introduce :: [TypeConstraint] -> Praxis Resolution
+    introduce cs = return $ Unproven { antecedents = map (c `implies`) cs, trivial = False }
+
+    defer :: Praxis Resolution
+    defer = return $ Unproven { antecedents = [ c ], trivial = True }
+
+    resolved :: Bool -> Praxis Resolution
+    resolved True  = tautology
+    resolved False = contradiction
+
+    swap = case view value c of t1 `TEq` t2 -> resolve (set value (t2 `TEq` t1) c)
+
+    shareImpl :: Annotated TypeConstraint -> Praxis Resolution
+    shareImpl c = case view value t of
+
+      TyOp (_ :< op) t'
+        | TyOpBang  <- op -> resolved p
+        | TyOpUni _ <- op -> do
+          r <- resolve (share t')
+          case truth r of
+            Just p' | p == p' -> resolved (not p')
+            _                 -> defer
+
+      TyFun _ _  -> resolved p
+
+      TyRecord r -> untrivialise <$> (foldl' (if p then (&&&) else (|||)) (if p then Proven else Disproven { open = False }) <$> forM r (resolve . share))
+
+      TyCon n
+        | n `elem` ["Int", "Char", "Bool"] -> resolved p
+
+      -- FIXME make this general!
+      TyApply (_ :< TyCon "List") _ -> resolved (not p)
+
+      TyVar n -> do
+        axs <- fmap (view value) <$> use (our . axioms)
+        resolved ((if p then Share else Affine) t `elem` axs)
+
+      _ -> defer
+
+      where
+        (p, t) = case view value c of
+          Share t  -> (True, t)
+          Affine t -> (False, t)
+
+        share t = c `implies` (if p then Share else Affine) t
+
+        defer = return $ Unproven { antecedents = [ c ], trivial = True }
+
+
+    viewFree :: Annotated Type -> Bool
+    viewFree t = case view value t of
+      TyUni _ -> False
+      TyOp (_ :< op) t -> case op of
+        TyOpBang  -> False
+        TyOpUni _ -> False
+        TyOpId    -> viewFree t
+      _ -> True
 
 
 smap :: (forall a. Recursive a => Annotated a -> Praxis (Annotated a)) -> Praxis ()
@@ -255,19 +242,19 @@ smap f = do
   tEnv %%= traverse f
   return ()
 
-isView :: Name -> Bool -> Praxis Bool
+isView :: Name -> Bool -> Praxis ()
 isView n b = do
   let op = if b then TyOpBang else TyOpId
   smap $ pure . sub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing })
   our . ops %= ((n, op):)
-  return True
+  return ()
 
-is :: Name -> Type -> Praxis Bool
+is :: Name -> Type -> Praxis ()
 is n t = do
   smap $ pure . sub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing })
   our . sol %= ((n, t):)
   reuse n
-  return True
+  return ()
 
 eval :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
 eval x = introspect (embedVisit f) x where
@@ -276,8 +263,8 @@ eval x = introspect (embedVisit f) x where
     TyOp (_ :< TyOpId) t -> Resolve (view value <$> eval t)
     TyOp (a :< op) t -> Resolve $ do
       t' <- eval t
-      r <- share t'
+      r <- resolve (phantom (Share t'))
       return $ case r of
-        Known True -> view value t'
-        _          -> TyOp (a :< op) t'
+        Proven -> view value t'
+        _      -> TyOp (a :< op) t'
     _ -> skip

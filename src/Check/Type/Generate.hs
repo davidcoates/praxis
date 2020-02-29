@@ -80,8 +80,8 @@ read s n = do
   case LEnv.lookupFull n l of
     Just (c, u, t) -> do
       t <- ungeneraliseQType t
-      requires [ newConstraint (share t) (UnsafeView n) s | u ]
-      requires [ newConstraint (share t) (Captured n) s   | c ]
+      requires [ newConstraint (Share t) (UnsafeView n) s | u ]
+      requires [ newConstraint (Share t) (Captured n) s   | c ]
       return t
     Nothing     -> throwAt s (NotInScope n)
 
@@ -93,8 +93,8 @@ mark s n = do
     Just (c, u, t) -> do
       tEnv .= LEnv.mark n l
       t <- ungeneraliseQType t
-      requires [ newConstraint (share t) (Shared n)   s | u ]
-      requires [ newConstraint (share t) (Captured n) s | c ]
+      requires [ newConstraint (Share t) (Shared n)   s | u ]
+      requires [ newConstraint (Share t) (Captured n) s | c ]
       return t
     Nothing     -> throwAt s (NotInScope n)
 

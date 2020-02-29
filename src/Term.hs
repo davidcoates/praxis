@@ -147,6 +147,8 @@ data Kind = KindUni Name
   deriving (Eq, Ord)
 
 data TypeConstraint = Class (Annotated Type)
+                    | Affine (Annotated Type)
+                    | Share (Annotated Type)
                     | TEq (Annotated Type) (Annotated Type)
                     | TOpEq Name Name
   deriving (Eq, Ord)

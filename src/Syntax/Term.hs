@@ -142,7 +142,9 @@ syntax = \case
   IKindConstraint -> kindConstraint
 
 tyConstraint :: Syntax f => f TypeConstraint
-tyConstraint = _Class <$> annotated ty <|>
+tyConstraint = _Affine <$> reservedCon "Affine" *> annotated ty <|>
+               _Share <$> reservedCon "Share" *> annotated ty <|>
+               _Class <$> annotated ty <|>
                _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
                mark "type constraint"
 

@@ -68,12 +68,6 @@ unis = extract (embedMonoid f)
  where f (TyUni n) = [n]
        f _         = []
 
--- TODO use sets here?
-classes :: [Name] -> [Annotated TypeConstraint] -> Maybe [Annotated Type]
-classes ns cs = (\f -> concat <$> mapM f cs) $ \d -> case view value d of
-  Class t     -> let ns' = unis t in if all (`elem` ns) ns' then Just [t] else if any (`elem` ns') ns then Nothing else Just []
-  TEq t1 t2   -> if any (`elem` (unis t1 ++ unis t2)) ns then Nothing else Just []
-
 data Resolution = Proven
                 | Disproven { open :: Bool }
                 | Unproven { antecedents :: [Annotated TypeConstraint], trivial :: Bool }
@@ -137,7 +131,7 @@ resolve c = case view value c of
 
   TEq t1 t2 | t1 == t2 -> tautology
 
-  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else x `is` view value t >> solved
+  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else x `is` view value t >> solved -- Note: Occurs check here
   TEq _ (_ :< TyUni _) -> swap
 
   TEq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2 -> introduce [ TEq t1 t2 ]

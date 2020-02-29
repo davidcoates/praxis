@@ -74,7 +74,7 @@ progress d = case view value d of
 
   KEq k1 k2 | k1 == k2  -> tautology
 
-  KEq (_ :< KindUni x) k -> if x `elem` unis k then contradiction else x ~> (view value k)
+  KEq (_ :< KindUni x) k -> if x `elem` unis k then contradiction else x `is` (view value k) -- Note: Occurs check here
   KEq _ (_ :< KindUni _) -> swap
 
   KEq (_ :< KindFun t1 t2) (_ :< KindFun t3 t4) -> introduce [ KEq t1 t3, KEq t2 t4 ]
@@ -98,8 +98,8 @@ smap f = do
   our . axioms %= fmap f
   kEnv %= over traverse f
 
-(~>) :: Name -> Kind -> Praxis Bool
-(~>) n k = do
+is :: Name -> Kind -> Praxis Bool
+is n k = do
   smap $ sub (\case { KindUni n' | n == n' -> Just k; _ -> Nothing })
   our . sol %= ((n, k):)
   reuse n

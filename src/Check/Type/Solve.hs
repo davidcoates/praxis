@@ -62,7 +62,7 @@ spin = use (our . constraints) <&> (nub . sort) >>= \case
   where
     loop = use (our . staging) >>= \case
         []     -> return False
-        (c:cs) -> (our . staging .= cs) >> liftA2 (||) (smap eval >> progress c) loop
+        (c:cs) -> (our . staging .= cs) >> liftA2 (||) (progress c) loop
 
 unis = extract (embedMonoid f)
  where f (TyUni n) = [n]
@@ -153,11 +153,11 @@ resolve c = case view value c of
     s1 <- resolve (phantom (Share t1))
     s2 <- resolve (phantom (Share t2))
     case (op, truth s1, truth s2, viewFree t2) of
-      (TyOpUni n, Just False, Just True, _) -> n `isView` True >> ((\c -> Unproven { antecedents = [ c ], trivial = False }) <$> eval (c `implies` TEq (a :< TyOp (phantom TyOpBang) t1) t2)) -- TODO ugly AF
-      (TyOpUni n, _, Just False, _)         -> n `isView` False >> introduce [ TEq t1 t2 ] -- FIXME as above, introduced constraint derivation does not have resolved n ???
+      (TyOpUni n, Just False, Just True, _) -> n `isView` True
+      (TyOpUni n, _, Just False, _)         -> n `isView` False
       (TyOpUni _, _, Just True, True)       -> introduce [ TEq t1 t2 ]
       (TyOpUni _, Just True, _, True)       -> introduce [ TEq t1 t2 ]
-      _ -> defer
+      _                                     -> defer
 
   TEq _ (_ :< TyOp _ _) -> swap
 
@@ -228,6 +228,23 @@ resolve c = case view value c of
       TyOp _ _ -> False
       _        -> True
 
+    isView :: Name -> Bool -> Praxis Resolution
+    isView n b = do
+      let op = if b then TyOpBang else TyOpId
+          f :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+          f  = eval . sub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing })
+      smap f
+      our . ops %= ((n, op):)
+      c' <- f c
+      return $ Unproven { antecedents = [ c' ], trivial = False }
+
+    is :: Name -> Type -> Praxis ()
+    is n t = do
+      smap $ eval . sub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing })
+      our . sol %= ((n, t):)
+      reuse n
+      return ()
+
 
 smap :: (forall a. Recursive a => Annotated a -> Praxis (Annotated a)) -> Praxis ()
 smap f = do
@@ -238,20 +255,6 @@ smap f = do
   our . staging %%= traverse f
   our . axioms %%= traverse f
   tEnv %%= traverse f
-  return ()
-
-isView :: Name -> Bool -> Praxis ()
-isView n b = do
-  let op = if b then TyOpBang else TyOpId
-  smap $ eval . sub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing })
-  our . ops %= ((n, op):)
-  return ()
-
-is :: Name -> Type -> Praxis ()
-is n t = do
-  smap $ pure . sub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing })
-  our . sol %= ((n, t):)
-  reuse n
   return ()
 
 eval :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)

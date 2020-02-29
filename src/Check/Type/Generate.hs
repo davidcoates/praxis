@@ -186,7 +186,6 @@ exp = split $ \s -> \case
 
   Apply f x -> do
     yt <- freshTyUni
-    ye <- freshTyUni
     f' <- exp f
     x' <- exp x
     let ft = view ty f'

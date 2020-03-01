@@ -5,6 +5,7 @@ import           Env
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
+import           Pretty
 import           Record
 import           Term
 import           Value
@@ -53,11 +54,11 @@ file f = (interpretFile f :: Praxis (Annotated Program, ())) >> onFileSuccess
 runMain :: Praxis ()
 runMain = do
   t <- tEnv `uses` lookup "main"
-  case t of Nothing -> liftIO $ putStrLn "Missing main function"
+  case t of Nothing -> throw "missing main function"
             Just (_ :< Mono (_ :< TyFun (_ :< r) (_ :< r'))) | r == TyRecord Record.unit
                                                              , r' == TyRecord Record.unit ->
               do { Just (F f) <- vEnv `uses` lookup "main"; f (R Record.unit); return () }
-            _ -> liftIO $ putStrLn "Ill-typed main function"
+            Just t -> throwAt (view source t) $ pretty "main function has bad type " <> quote (pretty t) <> pretty ", expected () -> ()"
 
 repl :: Praxis ()
 repl = forever $ do

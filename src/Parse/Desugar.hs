@@ -34,7 +34,7 @@ run :: Recursive a => Annotated a -> Praxis (Annotated a)
 run x = save stage $ do
   stage .= Desugar
   x' <- desugar x
-  output x'
+  display x' `ifFlag` debug
   return x'
 
 desugar :: Recursive a => Annotated a -> Praxis (Annotated a)

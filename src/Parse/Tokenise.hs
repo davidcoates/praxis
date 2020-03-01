@@ -21,10 +21,10 @@ run :: Bool -> String -> Praxis [Sourced Token]
 run top s = save stage $ do
   stage .= Tokenise
   ts <- Tokeniser.run token s
-  output $ separate " " (map (view value) ts)
+  display (separate " " (map (view value) ts)) `ifFlag` debug
   stage .= Layout
   let ts' = layout top ts
-  output $ separate " " (map (view value) ts')
+  display (separate " " (map (view value) ts')) `ifFlag` debug
   return ts'
 
 -- Helper functions

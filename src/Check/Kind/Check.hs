@@ -19,5 +19,5 @@ check a = save stage $ do
   a' <- generate a
   ks <- solve
   let r = sub (\k -> case k of { KindUni n -> lookup n ks; _ -> Nothing }) a'
-  output r
+  display r `ifFlag` debug
   return r

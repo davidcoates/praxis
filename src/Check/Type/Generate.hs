@@ -109,11 +109,12 @@ generate :: Recursive a => Annotated a -> Praxis (Annotated a)
 generate x = save stage $ do
   stage .= TypeCheck Generate
   x' <- generateImpl x
-  output x'
+  display x' `ifFlag` debug
   cs <- use (our . constraints)
-  output $ separate "\n\n" (nub . sort $ cs)
-  use tEnv >>= output
-  use daEnv >>= output
+  (`ifFlag` debug) $ do
+    display (separate "\n\n" (nub . sort $ cs))
+    use tEnv >>= display
+    use daEnv >>= display
   return x'
 
 generateImpl :: Recursive a => Annotated a -> Praxis (Annotated a)

@@ -49,7 +49,7 @@ solve' = spin `chain` stuck where
     Done -> return Done
   stuck = do
     cs <- (nub . sort) <$> use (our . constraints)
-    output $ separate "\n\n" cs
+    display (separate "\n\n" cs) `ifFlag` debug
     throw Stuck
 
 spin :: Praxis State

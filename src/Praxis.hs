@@ -45,8 +45,9 @@ module Praxis
   , freshVar
   , reuse
 
-  , clear
-  , output
+  , clearTerm
+  , ifFlag
+  , display
 
   , (%%=)
   )
@@ -150,19 +151,31 @@ makeLenses ''Fresh
 makeLenses ''PraxisState
 
 throw :: Pretty a => a -> Praxis b
-throw x = display (pretty (Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
+throw x = displayBare (pretty (Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
 
 throwAt :: Pretty a => Source -> a -> Praxis b
-throwAt s x = display (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
+throwAt s x = displayBare (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
 
 display :: Pretty a => a -> Praxis ()
-display x = try p >> return () where -- TODO why the try?
-  p = do
-    s <- use stage
-    t <- liftIO $ getTerm
-    liftIO $ printColoredS t $ "\n{- " <> Style Italic (Value (show s)) <> " -}\n\n"
-    let o = case s of { KindCheck _ -> Kinds; TypeCheck _ -> Types; _ -> Plain }
-    liftIO $ printColoredS t $ runPrintable (pretty x) o <> "\n"
+display x = do
+  t <- liftIO $ getTerm
+  s <- use stage
+  liftIO $ printColoredS t $ "\n{- " <> Style Italic (Value (show s)) <> " -}\n\n"
+  displayBare x
+
+displayBare :: Pretty a => a -> Praxis ()
+displayBare x = do
+  t <- liftIO $ getTerm
+  s <- use stage
+  let o = case s of { KindCheck _ -> Kinds; TypeCheck _ -> Types; _ -> Plain }
+  liftIO $ printColoredS t $ runPrintable (pretty x) o <> "\n"
+
+clearTerm :: Praxis ()
+clearTerm = liftIO $ do
+  putStrLn ""
+  Terminal.size >>= \case
+    Just (Terminal.Window _ w) -> putStrLn $ replicate w '='
+    Nothing                    -> pure ()
 
 save :: Lens' PraxisState a -> Praxis b -> Praxis b
 save l c = do
@@ -185,11 +198,6 @@ runInternal s c = case fst $ unsafePerformIO (runPraxis c' s) of
   Just x  -> x
   where c' = (flags . static .= True) >> c
 
-assert :: Lens' PraxisState a -> (a -> Bool) -> String -> Praxis b -> Praxis b
-assert l p s c = do
-  x <- use l
-  if p x then c else error s
-
 liftIO :: IO a -> Praxis a
 liftIO io = do
   s <- use (flags . static)
@@ -199,19 +207,8 @@ liftIO io = do
 runPraxis :: Praxis a -> PraxisState -> IO (Maybe a, PraxisState)
 runPraxis = runStateT . runMaybeT
 
-clear :: Praxis ()
-clear = do
-  d <- use (flags . debug)
-  when d $ liftIO $ do
-    putStrLn ""
-    Terminal.size >>= \case
-      Just (Terminal.Window _ w) -> putStrLn $ replicate w '='
-      Nothing                    -> pure ()
-
-output :: Pretty a => a -> Praxis ()
-output x = do
-  d <- use (flags . debug)
-  when d $ display x
+ifFlag :: Praxis () -> Lens' Flags Bool -> Praxis ()
+ifFlag c f = use (flags . f) >>= (flip when) c
 
 freshTyUni :: Praxis (Annotated Type)
 freshTyUni = do

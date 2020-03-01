@@ -21,6 +21,6 @@ check a = save stage $ do
   let solveTy   = \case { TyUni n   -> lookup n ts;  _ -> Nothing }
   let solveTyOp = \case { TyOpUni n -> lookup n ops; _ -> Nothing }
   r <- eval (sub solveTyOp (sub solveTy a'))
-  output r
+  display r `ifFlag` debug
   return r
   -- TODO type defaulting

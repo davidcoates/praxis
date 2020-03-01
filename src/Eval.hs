@@ -22,7 +22,7 @@ class Evaluable a b | a -> b where
   eval  :: Annotated a -> Praxis b
   eval e = save stage $ do
     stage .= Evaluate
-    clear
+    clearTerm `ifFlag` debug
     eval' e
 
 instance Evaluable Program () where

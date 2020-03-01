@@ -20,5 +20,5 @@ run :: forall a. Recursive a => [Sourced Token] -> Praxis (Annotated a)
 run ts = save stage $ do
   stage .= Parse
   p <- Parser.run parse ts
-  output p
+  display p `ifFlag` debug
   return p

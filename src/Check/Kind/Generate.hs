@@ -33,9 +33,9 @@ generate :: Recursive a => Annotated a -> Praxis (Annotated a)
 generate x = save stage $ do
   stage .= KindCheck Generate
   x' <- generateImpl x
-  output x'
+  display x' `ifFlag` debug
   cs <- use (our . constraints)
-  output $ separate "\n\n" (nub . sort $ cs)
+  display (separate "\n\n" (nub . sort $ cs)) `ifFlag` debug
   return x'
 
 -- TODO since we ignore annotation of input, could adjust this...

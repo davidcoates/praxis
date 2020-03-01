@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFoldable     #-}
 {-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Env.LEnv
@@ -15,6 +16,7 @@ where
 
 import           Env
 import           Env.Env
+import           Pretty
 
 import           Control.Arrow (second)
 import           Data.List     (intercalate)
@@ -30,10 +32,9 @@ instance Functor (LEnv a) where
   fmap f (LEnv l ls) = LEnv (fmap f' l) (map (fmap f') ls) where
     f' (u, x) = (u, f x)
 
--- TODO Pretty, not Show
-instance (Show a, Show b) => Show (LEnv a b) where
-  show (LEnv l ls) = intercalate "|" (map show' (l:ls)) where
-    show' (Env l) = "[" ++ intercalate ", " (map (\(a,(u,b)) -> show a ++ (if u then " :* " else " :o ") ++ show b) l) ++ " ]"
+instance (Show a, Pretty b) => Pretty (LEnv a b) where
+  pretty (LEnv l ls) = separate "|" (map pretty' (l:ls)) where
+    pretty' (Env l) = "[" <> separate ", " (map (\(a,(u,b)) -> pretty (show a) <> (if u then " :* " else " :o ") <> pretty b) l) <> " ]"
 
 instance Environment LEnv where
   intro a b (LEnv l ls) = LEnv (intro a (False, b) l) ls

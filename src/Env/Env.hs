@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFoldable     #-}
 {-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Env.Env
@@ -14,6 +15,7 @@ import           Data.List    (intercalate)
 import           Env
 import           Prelude      hiding (lookup)
 import qualified Prelude      (lookup)
+import           Pretty
 
 -- TODO Cosider putting source in Env
 newtype Env a b = Env [(a, b)]
@@ -30,9 +32,8 @@ instance Environment Env where
   empty = Env []
   lookup a (Env l) = Prelude.lookup a l
 
--- TODO Pretty, not Show
-instance (Show a, Show b) => Show (Env a b) where
-  show (Env l) = "[" ++ intercalate ", " (map (\(a,b) -> show a ++ " : " ++ show b) l) ++ " ]"
+instance (Show a, Pretty b) => Pretty (Env a b) where
+  pretty (Env l) = "[" <> separate ", " (map (\(a,b) -> pretty (show a) <> " : " <> pretty b) l) <> " ]"
 
 -- |adjust the value associated with a given key
 adjust :: Eq a => (b -> b) -> a -> Env a b -> Env a b

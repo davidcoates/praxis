@@ -112,7 +112,8 @@ generate x = save stage $ do
   output x'
   cs <- use (our . constraints)
   output $ separate "\n\n" (nub . sort $ cs)
-  -- TODO show tEnv and daEnv
+  use tEnv >>= output
+  use daEnv >>= output
   return x'
 
 generateImpl :: Recursive a => Annotated a -> Praxis (Annotated a)

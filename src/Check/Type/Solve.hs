@@ -150,7 +150,6 @@ resolve c = case view value c of
       (TyOpUni n, Just False, Just True, _) -> n `isView` True
       (TyOpUni n, _, Just False, _)         -> n `isView` False
       (TyOpUni _, _, Just True, True)       -> introduce [ TEq t1 t2 ]
-      (TyOpUni _, Just True, _, True)       -> introduce [ TEq t1 t2 ]
       _                                     -> defer
 
   TEq _ (_ :< TyOp _ _) -> swap

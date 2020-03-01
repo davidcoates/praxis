@@ -71,7 +71,6 @@ unis = extract (embedMonoid f)
 data Resolution = Proven
                 | Disproven { open :: Bool }
                 | Unproven { antecedents :: [Annotated TypeConstraint], trivial :: Bool }
-  deriving Show
 
 (&&&) :: Resolution -> Resolution -> Resolution
 (&&&) = curry $ \case

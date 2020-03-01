@@ -30,6 +30,7 @@ instance Functor (LEnv a) where
   fmap f (LEnv l ls) = LEnv (fmap f' l) (map (fmap f') ls) where
     f' (u, x) = (u, f x)
 
+-- TODO Pretty, not Show
 instance (Show a, Show b) => Show (LEnv a b) where
   show (LEnv l ls) = intercalate "|" (map show' (l:ls)) where
     show' (Env l) = "[" ++ intercalate ", " (map (\(a,(u,b)) -> show a ++ (if u then " :* " else " :o ") ++ show b) l) ++ " ]"

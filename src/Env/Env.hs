@@ -30,6 +30,7 @@ instance Environment Env where
   empty = Env []
   lookup a (Env l) = Prelude.lookup a l
 
+-- TODO Pretty, not Show
 instance (Show a, Show b) => Show (Env a b) where
   show (Env l) = "[" ++ intercalate ", " (map (\(a,b) -> show a ++ " : " ++ show b) l) ++ " ]"
 

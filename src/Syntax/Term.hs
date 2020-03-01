@@ -232,7 +232,7 @@ ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
 tyOp :: Syntax f => f TyOp
 tyOp = _TyOpBang <$> reservedOp "!" <|>
        unparseable (_TyOpUni <$> uni) <|>
-       unparseable (_TyOpId <$> token (Print "id")) <|> -- keep track of where we have (TyOp TyOpId t) instead of (t)
+       unparseable (_TyOpId <$> token (ReservedOp "<id>")) <|>
        mark "tyOp" -- TODO TyOpVar
 
 exp :: Syntax f => f Exp

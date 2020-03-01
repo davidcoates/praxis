@@ -8,8 +8,8 @@ data Stage = Unknown
            | Layout
            | Parse
            | Desugar
-           | TypeCheck Check
            | KindCheck Check
+           | TypeCheck Check
            | Evaluate
 
 data Check = Warmup
@@ -23,8 +23,8 @@ instance Show Stage where
     Layout      -> "Tokenise (Layout)"
     Parse       -> "Parse"
     Desugar     -> "Parse (Desugar)"
-    TypeCheck c -> "Type Check" ++ show c
     KindCheck c -> "Kind Check" ++ show c
+    TypeCheck c -> "Type Check" ++ show c
     Evaluate    -> "Evaluate"
 
 instance Show Check where

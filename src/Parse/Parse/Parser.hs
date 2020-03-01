@@ -9,6 +9,7 @@ module Parse.Parse.Parser
 import           Common
 import qualified Parse.Parser        as Parser
 import           Praxis
+import           Pretty
 import qualified Syntax.Parser       as Syntax
 import           Term
 import           Token

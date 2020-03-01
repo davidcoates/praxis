@@ -15,6 +15,7 @@ module Parse.Parser
   ) where
 
 import           Common
+import           Pretty
 
 import           Control.Applicative (Alternative (..))
 import           Control.Arrow       (right)
@@ -25,7 +26,7 @@ data Error = Error (Colored String)
            | Skip
 
 instance Pretty Error where
-  pretty (Error s) = s
+  pretty (Error s) = pretty s
   pretty Skip      = "<unknown>"
 
 data Result t a = Result { _result :: Either Error a, _remaining :: [t], _consumed :: Bool }
@@ -54,7 +55,7 @@ match p = Parser $ \case
   (t:ts) -> if p t then Result (Right t) ts True else Result (Left Skip) (t:ts) False
 
 mark :: String -> Parser t a
-mark s = Parser $ \ts -> Result (Left (Error ("expected " <> plain s))) ts False
+mark s = Parser $ \ts -> Result (Left (Error ("expected " <> pure s))) ts False
 
 eof :: Parser t ()
 eof = Parser $ \ts -> Result (if null ts then Right () else Left Skip) ts False
@@ -73,4 +74,4 @@ takeExact n     [] = Nothing
 takeExact n (x:xs) = fmap (x:) (takeExact (n - 1) xs)
 
 throw :: String -> Parser t a
-throw s = Parser $ \ts -> Result (Left (Error (plain s))) ts True
+throw s = Parser $ \ts -> Result (Left (Error (pure s))) ts True

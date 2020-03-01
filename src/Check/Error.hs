@@ -5,8 +5,9 @@ module Check.Error
   ) where
 
 import           Common
+import           Pretty
 
 data Error = NotInScope Name
 
 instance Pretty Error where
-  pretty (NotInScope n) = "variable " <> quote (plain n) <> " is not in scope"
+  pretty (NotInScope n) = "variable " <> quote (pretty n) <> " is not in scope"

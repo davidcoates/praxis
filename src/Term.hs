@@ -45,6 +45,7 @@ module Term
   ) where
 
 import           Common
+import           Pretty
 import           Record
 
 import           Data.Set (Set)
@@ -194,10 +195,10 @@ as x a = (Phantom, Just a) :< x
 
 -- TODO should this be somewhere else?
 data Derivation a = Root String
-                    | Antecedent (Annotated a)
+                  | Antecedent (Annotated a)
 
 instance Pretty (Annotated a) => Pretty (Derivation a) where
-  pretty (Root r)       = "\n|-> (" <> plain r <> ")"
+  pretty (Root r)       = "\n|-> (" <> pretty r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
 
 data DataAltInfo = DataAltInfo [Name] (Annotated QType) [Annotated Type] (Annotated Type)
@@ -205,6 +206,6 @@ data DataAltInfo = DataAltInfo [Name] (Annotated QType) [Annotated Type] (Annota
 instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataAltInfo where
   pretty (DataAltInfo ns ct args rt) =
     pretty ct <> " i.e., " <>
-    (if null ns then "" else "forall " <> separate " " (map plain ns) <> ". ") <>
+    (if null ns then "" else "forall " <> separate " " ns <> ". ") <>
     (if null args then "" else separate ", " args <> " ~> ") <>
     pretty rt

@@ -3,6 +3,7 @@ module Token
   ) where
 
 import           Common
+import           Pretty
 import           Term   (Lit (..), QString (..))
 
 data Token = QVarId QString
@@ -13,7 +14,7 @@ data Token = QVarId QString
            | ReservedOp String
            | ReservedId String
            | Lit Lit
-           | Print (Colored String)
+           | Print (Printable String)
            | Special Char
            | Uni String
   deriving Eq
@@ -29,15 +30,15 @@ grey   = RGB 242 242 242
 white  = RGB 255 255 255
 
 instance Pretty Token where
-  pretty = \case
-    QVarId q      -> Fg white $ plain $ show q
-    QConId q      -> Fg yellow $ plain $ show q
-    QVarSym q     -> Fg red $ plain $ show q
-    QConSym q     -> Fg white $ plain $ show q
-    ReservedCon s -> Fg yellow $ plain s
-    ReservedOp s  -> Fg purple $ plain s
-    ReservedId s  -> Style Bold $ Fg blue $ plain s
-    Lit l         -> Fg green $ plain $ show l
-    Print x       -> Style Italic $ Fg grey $ x
-    Special c     -> Fg cyan $ plain [c]
-    Uni s         -> Fg orange $ plain s
+  pretty (Print (Printable p)) = Printable (Style Italic . Fg grey . p)
+  pretty x = pretty $ case x of
+    QVarId q      -> Fg white $ Value $ show q
+    QConId q      -> Fg yellow $ Value $ show q
+    QVarSym q     -> Fg red $ Value $ show q
+    QConSym q     -> Fg white $ Value $ show q
+    ReservedCon s -> Fg yellow $ Value s
+    ReservedOp s  -> Fg purple $ Value s
+    ReservedId s  -> Style Bold $ Fg blue $ Value s
+    Lit l         -> Fg green $ Value $ show l
+    Special c     -> Fg cyan $ Value [c]
+    Uni s         -> Fg orange $ Value s

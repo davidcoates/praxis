@@ -2,8 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Common
-  ( module Common.Pretty
-  , module Common.Source
+  ( module Common.Source
   , module Common.Tag
 
   , Name
@@ -25,6 +24,7 @@ module Common
   , first
   , second
 
+  , liftA2
   , Const(..)
   , Identity(..)
   , Sum(..)
@@ -45,7 +45,6 @@ module Common
   , foldMapA
   ) where
 
-import           Common.Pretty
 import           Common.Source
 import           Common.Tag
 

@@ -14,21 +14,21 @@ import           Check.Type.Require
 import           Check.Type.System
 import           Common
 import           Env
-import qualified Env.LEnv            as LEnv
+import qualified Env.LEnv           as LEnv
 import           Introspect
 import           Praxis
+import           Pretty
 import           Print
 import           Record
 import           Stage
 import           Term
 
-import           Control.Applicative (liftA2)
-import           Control.Monad       (replicateM)
-import           Data.Foldable       (foldlM)
-import           Data.List           (nub, sort)
-import qualified Data.Set            as Set
-import           Prelude             hiding (exp, log, lookup, read)
-import qualified Prelude             (lookup)
+import           Control.Monad      (replicateM)
+import           Data.Foldable      (foldlM)
+import           Data.List          (nub, sort)
+import qualified Data.Set           as Set
+import           Prelude            hiding (exp, log, lookup, read)
+import qualified Prelude            (lookup)
 
 ty :: (Recursive a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
@@ -103,7 +103,7 @@ getData s n = do
   l <- use daEnv
   case lookup n l of
     Just v  -> return (view (annotation . just) v)
-    Nothing -> throwAt s $ "data constructor " <> quote (plain n) <> " is not in scope"
+    Nothing -> throwAt s $ "data constructor " <> quote (pretty n) <> " is not in scope"
 
 generate :: Recursive a => Annotated a -> Praxis (Annotated a)
 generate x = save stage $ do
@@ -302,7 +302,7 @@ pat op = splitPair $ \s -> \case
   PatCon n ps -> do
     -- Lookup the data alternative with this name
     DataAltInfo ns ct args rt <- getData s n
-    unless (length args == length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (plain n)
+    unless (length args == length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
     (Sum i, ps') <- traverse (over first Sum) <$> traverse (pat op) ps
     f <- ungeneralise ns
     let rt'   = f rt

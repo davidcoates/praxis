@@ -4,8 +4,6 @@ module Common.Tag
   , value
   ) where
 
-import           Common.Pretty
-
 import           Control.Applicative
 import           Data.Bifunctor
 import           Data.Monoid         ((<>))

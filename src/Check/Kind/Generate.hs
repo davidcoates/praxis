@@ -16,6 +16,7 @@ import           Common
 import           Env
 import           Introspect
 import           Praxis
+import           Pretty
 import           Print
 import qualified Record
 import           Stage
@@ -123,7 +124,7 @@ decl = splitTrivial $ \s -> \case
   DeclData n ps as -> do
     e <- kEnv `uses` lookup n
     case e of
-      Just _  -> throwAt s $ "data declaration " <> quote (plain n) <> " redefined"
+      Just _  -> throwAt s $ "data declaration " <> quote (pretty n) <> " redefined"
       Nothing -> pure ()
     k <- freshKindUni
     kEnv %= intro n k

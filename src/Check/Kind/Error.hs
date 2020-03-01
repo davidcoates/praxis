@@ -5,6 +5,7 @@ module Check.Kind.Error
   ) where
 
 import           Common
+import           Pretty
 import           Print
 import           Term
 

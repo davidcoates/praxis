@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -9,6 +10,7 @@ module Print
 
 import           Common
 import           Introspect
+import           Pretty
 import           Syntax.Unparser
 import           Term
 import           Token
@@ -33,40 +35,39 @@ instance Unparser Printer where
   mark s = Printer (error s)
   annotated f = Printer $ \x -> let
     body  = force f (view value x)
-    constraint = display (view source x) (\s -> "[" <> pretty s <> "]") ++ body ++ display (label (typeof x) (view annotation x)) id
-    display s f = if s == mempty then [] else [Print (f s)]
+    constraint = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof x) (view annotation x))]
       in Just $ case typeof x of
     ITypeConstraint -> constraint
     IKindConstraint -> constraint
-    _               -> display (label (typeof x) (view annotation x)) (\l -> "[" <> pretty l <> "]") ++ body
+    _               -> [Print (cmap (\c -> if null c then Nil else "[" <> c <> "]") (label (typeof x) (view annotation x)))] ++ body
 
-indent :: Int -> Colored String
+indent :: Int -> Printable String
 indent n
   | n <= 0    = "\n" -- TODO why are we getting -1?
   | otherwise = indent (n-1) <> "    "
 
-unlayout :: [Token] -> Colored String
+unlayout :: [Token] -> Printable String
 unlayout ts = unlayout' (-1) ts where
   unlayout' n ts = case ts of
     []      -> ""
     Special t : ts
-      | t == '{' -> (if n >= 0 then indent (n+1) else Nil) <> unlayout' (n+1) ts
+      | t == '{' -> (if n >= 0 then indent (n+1) else blank) <> unlayout' (n+1) ts
       | t == ';' -> indent n <> unlayout' n ts
       | t == '}' -> unlayout' (n-1) ts
     [t]    -> pretty t
-    t : ts -> pretty t <> " " <> unlayout' n ts
+    t : ts -> cmap (\c -> if null c then Nil else c <> " ") (pretty t) <> unlayout' n ts
 
 instance (Recursive a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
   pretty = unlayout . force unparse
 
-label :: Recursive a => I a -> Maybe (Annotation a) -> Colored String
-label i Nothing  = Nil
+label :: Recursive a => I a -> Maybe (Annotation a) -> Printable String
+label _ Nothing  = blank
 label i (Just a) = case i of
-  IExp            -> pretty a
-  IPat            -> pretty a
-  ITyPat          -> pretty a
-  IType           -> pretty a
+  IExp            -> prettyIf Types a
+  IPat            -> prettyIf Types a
+  ITyPat          -> prettyIf Kinds a
+  IType           -> prettyIf Kinds a
   ITypeConstraint -> pretty a
   IKindConstraint -> pretty a
   IDataAlt        -> pretty a
-  _               -> Nil
+  _               -> blank

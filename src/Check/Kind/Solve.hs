@@ -14,15 +14,15 @@ import           Check.Kind.System
 import           Common
 import           Introspect
 import           Praxis
+import           Pretty
 import           Record
 import           Stage
 import           Term
 
-import           Control.Applicative (liftA2)
-import           Data.List           (nub, sort)
-import           Data.Maybe          (fromMaybe)
-import           Data.Set            (Set, union)
-import qualified Data.Set            as Set
+import           Data.List          (nub, sort)
+import           Data.Maybe         (fromMaybe)
+import           Data.Set           (Set, union)
+import qualified Data.Set           as Set
 
 solve :: Praxis [(Name, Kind)]
 solve = save stage $ save our $ do

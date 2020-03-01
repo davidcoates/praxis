@@ -54,6 +54,7 @@ module Praxis
 
 import qualified Check.System                 as Check (System)
 import           Common
+import           Pretty
 import           Record                       (Record)
 import           Stage
 import           Term
@@ -149,18 +150,19 @@ makeLenses ''Fresh
 makeLenses ''PraxisState
 
 throw :: Pretty a => a -> Praxis b
-throw x = display (Style Bold (Fg DullRed "error: ") <> pretty x) >> empty
+throw x = display (pretty (Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
 
 throwAt :: Pretty a => Source -> a -> Praxis b
-throwAt s x = display (Style Bold (pretty s) <> " " <> Style Bold (Fg DullRed "error: ") <> pretty x) >> empty
+throwAt s x = display (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
 
 display :: Pretty a => a -> Praxis ()
-display x = try p >> return () where
+display x = try p >> return () where -- TODO why the try?
   p = do
     s <- use stage
     t <- liftIO $ getTerm
-    liftIO $ printColoredS t $ "\n{- " <> Style Italic (plain (show s)) <> " -}\n\n"
-    liftIO $ printColoredS t $ pretty x <> "\n"
+    liftIO $ printColoredS t $ "\n{- " <> Style Italic (Value (show s)) <> " -}\n\n"
+    let o = case s of { KindCheck _ -> Kinds; TypeCheck _ -> Types; _ -> Plain }
+    liftIO $ printColoredS t $ runPrintable (pretty x) o <> "\n"
 
 save :: Lens' PraxisState a -> Praxis b -> Praxis b
 save l c = do

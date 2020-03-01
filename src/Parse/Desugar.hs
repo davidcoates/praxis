@@ -12,13 +12,14 @@ module Parse.Desugar
 import           Common
 import           Introspect
 import           Praxis
+import           Pretty
 import           Print
 import           Record                 (Record, pair)
 import qualified Record                 (toList)
 import           Stage
 import           Term
 
-import           Control.Applicative    (Const, liftA2, liftA3)
+import           Control.Applicative    (liftA3)
 import           Control.Arrow          (left)
 import           Control.Monad          (unless)
 import           Data.List              (intersperse)
@@ -69,7 +70,7 @@ record s build f r = do
   r' <- traverse f r
   case Record.toList r' of
     [(Nothing, x)] -> return $ x
-    [(Just _, _)]  -> throwAt s $ plain "illegal single-field record"
+    [(Just _, _)]  -> throwAt s ("illegal single-field record" :: String)
     _              -> return $ build r'
 
 exp :: Annotated Exp -> Praxis (Annotated Exp)
@@ -86,7 +87,7 @@ exp (a :< x) = case x of
 
   Record r    -> record (fst a) (\r' -> a :< Record r') exp r
 
-  VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (plain s) <> " is not the argument of a function"
+  VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (pretty s) <> " is not the argument of a function"
 
   _           -> (a :<) <$> recurse desugar x
 
@@ -99,7 +100,7 @@ decls (a :< d : ds) = case d of
     t <- qty t
     decls ds >>= \case
       (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
-      _                                         -> throwAt (fst a) $ "declaration of " <> quote (plain n) <> " lacks an accompanying binding"
+      _                                         -> throwAt (fst a) $ "declaration of " <> quote (pretty n) <> " lacks an accompanying binding"
 
   DeclFun n ps e -> do
     ps <- mapM pat ps

@@ -16,6 +16,7 @@ import           Check.Type.System
 import           Common
 import           Introspect
 import           Praxis
+import           Pretty
 import           Record
 import           Stage               hiding (Unknown)
 import           Term

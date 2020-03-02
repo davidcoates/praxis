@@ -109,25 +109,9 @@ progress c = resolve c >>= \case
 resolve :: Annotated TypeConstraint -> Praxis Resolution
 resolve c = case view value c of
 
-  Share t -> do
-    s <- shareImpl c
-    a <- shareImpl (phantom (Affine t))
-    case (s, a) of
-      (Unproven _ _, _)     -> defer
-      (_, Unproven _ _)     -> defer
-      (Proven, Proven)      -> throw (AffineInconsistency t)
-      (Proven, Disproven _) -> return Proven
-      (Disproven o, _)      -> return (Disproven o)
+  Share t -> shareImpl c
 
-  Affine t -> do
-    s <- shareImpl (phantom (Share t))
-    a <- shareImpl c
-    case (s, a) of
-      (Unproven _ _, _)     -> defer
-      (_, Unproven _ _)     -> defer
-      (Proven, Proven)      -> throw (AffineInconsistency t)
-      (Proven, Disproven _) -> return Proven
-      (Disproven o, _)      -> return (Disproven o)
+  Affine t -> shareImpl c
 
   TEq t1 t2 | t1 == t2 -> tautology
 

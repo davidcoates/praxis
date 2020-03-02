@@ -80,9 +80,9 @@ string = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminat
   inner :: Tokeniser String
   inner = while (satisfy (/= '"')) ((char '\\' *> (escape <$> consume)) <|> consume)
 
-reservedids = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall", "let"]
-reservedcons = ["Type", "Constraint", "Share", "Affine"]
-reservedops = [":", "=>", "=", "\\", "->", "@", "!", "<id>"]
+reservedIds = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall", "let"]
+reservedCons = ["Type", "Constraint", "Share", "Affine"]
+reservedOps = [":", "=>", "=", "\\", "->", "@", "!", "<id>"]
 
 -- Possibly qualified, possibly reserved conid / varid / consym / varsym
 stuff :: Tokeniser Token
@@ -93,9 +93,9 @@ stuff = form <$> stuff' where
   sym = satisfy isSymbol *> while (satisfy isSymbol) consume
   qualified = (:) <$> conid <*> ((satisfies 2 (\[x, y] -> x == '.' && (isLower y || isUpper y || isSymbol y)) *> consume *> stuff') <|> pure [])
   form :: [String] -> Token
-  form [x] | x `elem` reservedids = ReservedId x
-           | x `elem` reservedcons = ReservedCon x
-           | x `elem` reservedops = ReservedOp x
+  form [x] | x `elem` reservedIds = ReservedId x
+           | x `elem` reservedCons = ReservedCon x
+           | x `elem` reservedOps = ReservedOp x
   form xs = let qs = QString (init xs) (last xs) in case last xs of
     x | isLower (head x) -> QVarId qs
     x | isUpper (head x) -> QConId qs

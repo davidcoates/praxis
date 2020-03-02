@@ -77,7 +77,7 @@ varid = match f (\s -> QVarId (QString [] s)) where
     _        -> Nothing
 
 uni :: Syntax f => f String
-uni = match (const Nothing) (\s -> Uni s) where
+uni = unparseable $ match (const Nothing) (\s -> Uni s)
 
 conid :: Syntax f => f String
 conid = match f (\s -> QConId (QString [] s)) where
@@ -231,9 +231,9 @@ ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
 
 tyOp :: Syntax f => f TyOp
 tyOp = _TyOpBang <$> reservedOp "!" <|>
-       unparseable (_TyOpUni <$> uni) <|>
-       unparseable (_TyOpId <$> token (ReservedOp "<id>")) <|>
-       mark "tyOp" -- TODO TyOpVar
+       _TyOpUni <$> uni <|>
+       _TyOpId <$> reservedOp "<id>" <|>
+       mark "type operator" -- TODO TyOpVar
 
 exp :: Syntax f => f Exp
 exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where

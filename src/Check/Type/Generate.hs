@@ -2,6 +2,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeFamilies           #-}
 
 module Check.Type.Generate
@@ -45,13 +46,17 @@ Alternative is to transform the source which would mess up error messages
 
 OR don't allow this, and don't allow explicit forall.
 -}
-ungeneralise :: [Name] -> Praxis (Annotated Type -> Annotated Type)
+ungeneralise :: [QVar] -> Praxis (Annotated Type -> Annotated Type)
 ungeneralise vs = do
-  l <- zipWith (\n (_ :< t) -> (n, t)) vs <$> replicateM (length vs) freshTyUni
-  return $ sub (\case { TyVar n -> n `Prelude.lookup` l; _ -> Nothing})
+  vars <- series $ [ (\t -> (n, view value t)) <$> freshTyUni | QVar n <- vs ]
+  opVars <- series $ [ (\t -> (n, view value t)) <$> freshTyOpUni | QOpVar n <- vs ]
+  return $ sub $ \x -> case typeof x of
+    IType |   TyVar n <- x -> n `Prelude.lookup` vars
+    ITyOp | TyOpVar n <- x -> n `Prelude.lookup` opVars
+    _                      -> Nothing
 
 ungeneraliseQType :: Annotated QType -> Praxis (Annotated Type)
-ungeneraliseQType (_ :< t) = case t of
+ungeneraliseQType q = case view value q of
   Mono t      -> return t
   Forall vs t -> ($ t) <$> ungeneralise vs
 
@@ -117,8 +122,8 @@ generate x = save stage $ do
     use daEnv >>= display
   return x'
 
-generateImpl :: Recursive a => Annotated a -> Praxis (Annotated a)
-generateImpl x = case typeof x of
+generateImpl :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+generateImpl x = case witness :: I a of
     IDecl -> decl x
     IExp  -> exp x
     _     -> value (recurse generateImpl) x
@@ -157,7 +162,7 @@ decl = splitTrivial $ \s -> \case
               ns = map ((\(TyPatVar n) -> n) . view value) ps
               ct = phantom $ case ps of
                 [] -> Mono rt
-                _  -> Forall (map ((\(TyPatVar n) -> n) . view value) ps) (foldr fun rt args)
+                _  -> Forall (map ((\(TyPatVar n) -> QVar n) . view value) ps) (foldr fun rt args)
               da = ((s, Just (DataAltInfo ns ct args rt)) :< DataAlt n args)
           daEnv %= Env.intro n da
           return da
@@ -306,7 +311,7 @@ pat op = splitPair $ \s -> \case
     DataAltInfo ns ct args rt <- getData s n
     unless (length args == length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
     (Sum i, ps') <- traverse (over first Sum) <$> traverse (pat op) ps
-    f <- ungeneralise ns
+    f <- ungeneralise (map QVar ns)
     let rt'   = f rt
         args' = map f args
     requires [ newConstraint (view ty p' `TEq` arg') (Custom "TODO: PatCon") s | (p', arg') <- zip ps' args' ]

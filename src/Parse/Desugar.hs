@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
 
 module Parse.Desugar
   ( run
@@ -37,8 +38,8 @@ run x = save stage $ do
   display x' `ifFlag` debug
   return x'
 
-desugar :: Recursive a => Annotated a -> Praxis (Annotated a)
-desugar x = ($ x) $ case typeof x of
+desugar :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+desugar x = ($ x) $ case witness :: I a of
   IProgram -> program
   IExp     -> exp
   IPat     -> pat

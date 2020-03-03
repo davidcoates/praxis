@@ -59,6 +59,8 @@ spin = use (our . constraints) <&> (nub . sort) >>= \case
     our . constraints .= []
     our . staging .= cs
     warm <- loop
+    cs <- (nub . sort) <$> use (our . constraints)
+    display (separate "\n\n" cs) `ifFlag` debug
     return $ if warm then Warm else Cold
   where
     loop = use (our . staging) >>= \case
@@ -209,7 +211,7 @@ resolve c = case view value c of
     isView n b = do
       let op = if b then TyOpBang else TyOpId
           f :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
-          f  = eval . sub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing })
+          f  = eval . sub (embedSub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing }))
       smap f
       our . ops %= ((n, op):)
       c' <- f c
@@ -217,7 +219,7 @@ resolve c = case view value c of
 
     is :: Name -> Type -> Praxis ()
     is n t = do
-      smap $ eval . sub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing })
+      smap $ eval . sub (embedSub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing }))
       our . sol %= ((n, t):)
       reuse n
       return ()

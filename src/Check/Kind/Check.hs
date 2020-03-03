@@ -18,6 +18,6 @@ check a = save stage $ do
   our .= initialSystem
   a' <- generate a
   ks <- solve
-  let r = sub (\k -> case k of { KindUni n -> lookup n ks; _ -> Nothing }) a'
+  let r = sub (embedSub (\k -> case k of { KindUni n -> lookup n ks; _ -> Nothing })) a'
   display r `ifFlag` debug
   return r

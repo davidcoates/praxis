@@ -2,6 +2,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeFamilies           #-}
 
 module Check.Kind.Generate
@@ -39,8 +40,8 @@ generate x = save stage $ do
   return x'
 
 -- TODO since we ignore annotation of input, could adjust this...
-generateImpl :: Recursive a => Annotated a -> Praxis (Annotated a)
-generateImpl x = case typeof x of
+generateImpl :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+generateImpl x = case witness :: I a of
   IDecl -> decl x
   IType -> ty x
   _     -> value (recurse generateImpl) x

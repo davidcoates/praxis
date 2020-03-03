@@ -3,7 +3,7 @@ data List a where
   Nil
   Cons (a, List a)
 
-map : forall a b. (a -> b) -> List a -> List b
+map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
 map f = cases
   Nil          -> Nil
   Cons (x, xs) -> Cons (f x, map f xs)
@@ -16,5 +16,6 @@ sum = cases
 main : () -> ()
 main () = do
   let xs = Cons (1, Cons (2, Cons (3, Nil)))
-  let ys = map (\x -> x + 1) xs
+  let ys = map (\x -> x + 1) !xs
+  print (sum !xs)
   print (sum !ys)

@@ -117,6 +117,7 @@ definePrisms ''Tok
 definePrisms ''TyOp
 definePrisms ''TyPat
 definePrisms ''Type
+definePrisms ''QVar
 definePrisms ''QType
 
 definePrisms ''Kind
@@ -215,8 +216,14 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
           mark "kind(0)"
 
 qty :: Syntax f => f QType
-qty = _Forall <$> reservedId "forall" *> varid `until` dot <*> annotated ty <|>
-      _Mono <$> annotated ty
+qty = _Forall <$> reservedId "forall" *> qvar `until` dot <*> annotated ty <|>
+      _Mono <$> annotated ty <|>
+      mark "quantified type"
+
+qvar :: Syntax f => f QVar
+qvar = _QVar <$> varid <|>
+       _QOpVar <$> reservedOp "?" *> varid <|>
+       mark "type or type operator variable"
 
 ty :: Syntax f => f Type
 ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
@@ -233,7 +240,8 @@ tyOp :: Syntax f => f TyOp
 tyOp = _TyOpBang <$> reservedOp "!" <|>
        _TyOpUni <$> uni <|>
        _TyOpId <$> reservedOp "<id>" <|>
-       mark "type operator" -- TODO TyOpVar
+       _TyOpVar <$> reservedOp "?" *> varid <|>
+       mark "type operator"
 
 exp :: Syntax f => f Exp
 exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where

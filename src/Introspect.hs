@@ -16,6 +16,7 @@ module Introspect
   , visit
   , introspect
   , embedVisit
+  , embedSub
   , embedMonoid
   , sub
   , extract
@@ -59,7 +60,7 @@ data I a where
   ITypeConstraint :: I TypeConstraint
   IKindConstraint :: I KindConstraint
 
-typeof :: forall a. Recursive a => Annotated a -> I a
+typeof :: forall a. Recursive a => a -> I a
 typeof _ = witness :: I a
 
 switch :: forall a b c. (Recursive a, Recursive b) => I a -> I b -> ((a ~ b) => c) -> c -> c
@@ -85,8 +86,8 @@ visit f x = case f x of
   Visit c   -> (\a' x' -> (view source x, a') :< x') <$> c <*> recurse (visit f) (view value x)
   Resolve r -> r
 
-introspect :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated a -> Visit f () a) -> Annotated a -> f (Annotated a)
-introspect f x = set annotation <$> completion (typeof x) (introspect f) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
+introspect :: forall a f. (Recursive a, Applicative f) => (forall a. Recursive a => Annotated a -> Visit f () a) -> Annotated a -> f (Annotated a)
+introspect f x = set annotation <$> completion (witness :: I a) (introspect f) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
   Visit c   -> c *> recurse (introspect f) (view value x)
   Resolve r -> r
   )
@@ -102,25 +103,28 @@ transferA f x = switch (witness :: I a) (witness :: I b) (f x) (pure x)
 transferM :: forall a b f. (Recursive a, Recursive b) => (a -> Maybe a) -> b -> Maybe b
 transferM f x = switch (witness :: I a) (witness :: I b) (f x) Nothing
 
-sub :: forall a b s. (Recursive a, Recursive b) => (a -> Maybe a) -> Annotated b -> Annotated b
+sub :: forall a. Recursive a => (forall b. Recursive b => b -> Maybe b) -> Annotated a -> Annotated a
 sub f x = runIdentity $ introspect f' x where
-  f' :: forall a. Recursive a => Annotated a -> Visit Identity () (a)
-  f' y = case transferM f (view value y) of
+  f' :: forall b. Recursive b => Annotated b -> Visit Identity () b
+  f' y = case f (view value y) of
     Nothing -> Visit (Identity ())
     Just y' -> Resolve (Identity y')
 
-extract :: forall a b. (Monoid b, Recursive a) => (forall a. Recursive a => Annotated a -> b) -> Annotated a -> b
+extract :: forall a m. (Recursive a, Monoid m) => (forall b. Recursive b => b -> m) -> Annotated a -> m
 extract f x = getConst $ introspect f' x where
-  f' :: forall a. Recursive a => Annotated a -> Visit (Const b) () (a)
-  f' y = Visit (Const (f y))
+  f' :: forall b. Recursive b => Annotated b -> Visit (Const m) () b
+  f' y = Visit (Const (f (view value y)))
 
-embedMonoid :: forall a b. (Monoid b, Recursive a) => (a -> b) -> (forall a. Recursive a => Annotated a -> b)
-embedMonoid f x = getConst $ transferA (Const . f) (view value x)
+embedSub :: forall a b. Recursive a => (a -> Maybe a) -> (forall a. Recursive a => a -> Maybe a)
+embedSub f x = transferM f x
+
+embedMonoid :: forall a b. (Monoid b, Recursive a) => (a -> b) -> (forall a. Recursive a => a -> b)
+embedMonoid f x = getConst $ transferA (Const . f) x
 
 retag :: forall b. Recursive b => (forall a. Recursive a => I a -> Maybe (Annotation a) -> Maybe (Annotation a)) -> Annotated b -> Annotated b
 retag f = runIdentity . visit f'
   where f' :: forall a. Recursive a => Annotated a -> Visit Identity (Maybe (Annotation a)) (Annotated a)
-        f' x = Visit (Identity (f (typeof x) (view annotation x)))
+        f' x = Visit (Identity (f (witness :: I a) (view annotation x)))
 
 -- Implementations below here
 

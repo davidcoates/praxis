@@ -100,7 +100,7 @@ smap f = do
 
 is :: Name -> Kind -> Praxis Bool
 is n k = do
-  smap $ sub (\case { KindUni n' | n == n' -> Just k; _ -> Nothing })
+  smap $ sub (embedSub (\case { KindUni n' | n == n' -> Just k; _ -> Nothing }))
   our . sol %= ((n, k):)
   reuse n
   return True

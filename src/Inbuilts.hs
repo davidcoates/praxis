@@ -34,7 +34,7 @@ mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), Not
 
 -- TODO parse qty
 poly :: [Name] -> String -> Annotated QType
-poly vs s = let (a :< Mono t) = mono s in a :< Forall (map QVar vs) t
+poly vs s = let (a :< Mono t) = mono s in a :< Forall (map QTyVar vs) t
 
 kind :: String -> Annotated Kind
 kind s = runInternal initialState (parse s :: Praxis (Annotated Kind))

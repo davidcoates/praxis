@@ -46,7 +46,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> stuff)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> tyOpVar <|> stuff)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment
@@ -64,6 +64,9 @@ int :: Tokeniser Token
 int = satisfy isDigit *> (Lit . Int <$> decimal)
   where decimal :: Tokeniser Int
         decimal = read <$> while (satisfy isDigit) consume
+
+tyOpVar :: Tokeniser Token
+tyOpVar = char '?' *> (TyOpVar <$> (satisfy isLower *> while (satisfy isLetter) consume))
 
 -- TODO
 escape :: Char -> Char

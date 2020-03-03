@@ -126,10 +126,10 @@ defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _interactive = False, _static = False }
 
 defaultFresh = Fresh
-  { _freshTyUnis   = map (("?t"++) . show) [0..]
-  , _freshTyOpUnis = map (("?v"++) . show) [0..]
-  , _freshKindUnis = map (("?k"++) . show) [0..]
-  , _freshVars     = map (("?x"++) . show) [0..]
+  { _freshTyUnis   = map (("'t"++) . show) [0..]
+  , _freshTyOpUnis = map (("'v"++) . show) [0..]
+  , _freshKindUnis = map (("'k"++) . show) [0..]
+  , _freshVars     = map (("'x"++) . show) [0..]
   }
 
 emptyState :: PraxisState

@@ -21,7 +21,7 @@ module Term
   , TyOp(..)
   , TyPat(..)
   , Type(..)
-  , QVar(..)
+  , QTyVar(..)
   , QType(..)
 
   -- | T2
@@ -138,11 +138,11 @@ data Type = TyUni Name                                -- Compares less than all 
           | TyVar Name
   deriving (Eq, Ord)
 
-data QVar = QVar Name | QOpVar Name
+data QTyVar = QTyVar Name | QTyOpVar Name
   deriving (Eq, Ord)
 
 data QType = Mono (Annotated Type)
-           | Forall [QVar] (Annotated Type)
+           | Forall [QTyVar] (Annotated Type)
   deriving (Eq, Ord)
 
 data Kind = KindUni Name

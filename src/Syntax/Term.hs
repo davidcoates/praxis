@@ -76,8 +76,14 @@ varid = match f (\s -> QVarId (QString [] s)) where
     QVarId n -> if null (qualification n) then Just (name n) else Nothing
     _        -> Nothing
 
+tyOpVar :: Syntax f => f String
+tyOpVar = match f (\s -> Token.TyOpVar s) where
+  f = \case
+    Token.TyOpVar s -> Just s
+    _               -> Nothing
+
 uni :: Syntax f => f String
-uni = unparseable $ match (const Nothing) (\s -> Uni s)
+uni = match (const Nothing) (\s -> Uni s)
 
 conid :: Syntax f => f String
 conid = match f (\s -> QConId (QString [] s)) where
@@ -117,7 +123,7 @@ definePrisms ''Tok
 definePrisms ''TyOp
 definePrisms ''TyPat
 definePrisms ''Type
-definePrisms ''QVar
+definePrisms ''QTyVar
 definePrisms ''QType
 
 definePrisms ''Kind
@@ -133,7 +139,7 @@ syntax = \case
   IKind           -> kind
   IPat            -> pat
   IProgram        -> program
-  IQType          -> qty
+  IQType          -> qTy
   IStmt           -> stmt
   ITok            -> undefined
   ITyOp           -> tyOp
@@ -170,9 +176,9 @@ tyPat = _TyPatVar <$> varid
 
 fun :: Syntax f => f Decl
 fun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
-  sig = reservedOp ":" *> annotated qty
+  sig = reservedOp ":" *> annotated qTy
   def = annotated pat `until` reservedOp "=" <*> annotated exp
-  var = _DeclVar <$> varid <*> (maybe <$> reservedOp ":" *> annotated qty) <*> reservedOp "=" *> annotated exp
+  var = _DeclVar <$> varid <*> (maybe <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
 
 decl :: Syntax f => f Decl
 decl = fun
@@ -215,19 +221,19 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
           special '(' *> kind <* special ')' <|>
           mark "kind(0)"
 
-qty :: Syntax f => f QType
-qty = _Forall <$> reservedId "forall" *> qvar `until` dot <*> annotated ty <|>
+qTy :: Syntax f => f QType
+qTy = _Forall <$> reservedId "forall" *> qTyVar `until` dot <*> annotated ty <|>
       _Mono <$> annotated ty <|>
       mark "quantified type"
 
-qvar :: Syntax f => f QVar
-qvar = _QVar <$> varid <|>
-       _QOpVar <$> reservedOp "?" *> varid <|>
-       mark "type or type operator variable"
+qTyVar :: Syntax f => f QTyVar
+qTyVar = _QTyVar <$> varid <|>
+         _QTyOpVar <$> tyOpVar <|>
+          mark "type or type operator variable"
 
 ty :: Syntax f => f Type
 ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
-  ty2 = _TyOp <$> annotated tyOp <*> annotated ty <|> ty1 <|> mark "type(2)"
+  ty2 = _TyOp <$> annotated tyOp <*> annotated ty2 <|> ty1 <|> mark "type(2)"
   ty1 = left _TyApply ty0 <|> mark "type(1)"
   ty0 = _TyVar <$> varid <|>
         _TyCon <$> conid <|>
@@ -240,7 +246,7 @@ tyOp :: Syntax f => f TyOp
 tyOp = _TyOpBang <$> reservedOp "!" <|>
        _TyOpUni <$> uni <|>
        _TyOpId <$> reservedOp "<id>" <|>
-       _TyOpVar <$> reservedOp "?" *> varid <|>
+       _TyOpVar <$> tyOpVar <|>
        mark "type operator"
 
 exp :: Syntax f => f Exp

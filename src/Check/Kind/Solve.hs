@@ -81,12 +81,20 @@ progress d = case view value d of
 
   _ -> contradiction
 
-  where solved = return True
-        tautology = solved
-        defer = require d >> return False
-        contradiction = throw (Contradiction d)
-        introduce cs = requires (map (d `implies`) cs) >> return True
-        swap = case view value d of t1 `KEq` t2 -> progress (set value (t2 `KEq` t1) d)
+  where
+    solved = return True
+    tautology = solved
+    defer = require d >> return False
+    contradiction = throw (Contradiction d)
+    introduce cs = requires (map (d `implies`) cs) >> return True
+    swap = case view value d of t1 `KEq` t2 -> progress (set value (t2 `KEq` t1) d)
+
+    is :: Name -> Kind -> Praxis Bool
+    is n k = do
+      smap $ sub (embedSub (\case { KindUni n' | n == n' -> Just k; _ -> Nothing }))
+      our . sol %= ((n, k):)
+      reuse n
+      return True
 
 smap :: (forall a. Recursive a => Annotated a -> Annotated a) -> Praxis ()
 smap f = do
@@ -97,10 +105,3 @@ smap f = do
   our . staging %= fmap f
   our . axioms %= fmap f
   kEnv %= over traverse f
-
-is :: Name -> Kind -> Praxis Bool
-is n k = do
-  smap $ sub (embedSub (\case { KindUni n' | n == n' -> Just k; _ -> Nothing }))
-  our . sol %= ((n, k):)
-  reuse n
-  return True

@@ -108,6 +108,7 @@ progress c = resolve c >>= \case
   Disproven _                       -> throw (Contradiction c)
   Unproven { antecedents, trivial } -> requires antecedents >> return (not trivial)
 
+-- TODO check axioms
 resolve :: Annotated TypeConstraint -> Praxis Resolution
 resolve c = case view value c of
 
@@ -127,16 +128,25 @@ resolve c = case view value c of
 
   TEq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> introduce [ TEq t1 s1, TEq t2 s2 ]
 
-  TEq (_ :< TyOp (_ :< TyOpUni n1) t1) (_ :< TyOp (_ :< TyOpUni n2) t2) | n1 == n2 -> introduce [ TEq t1 t2 ]
-
-  TEq (a :< TyOp (_ :< op) t1) t2 -> do
+  TEq (_ :< TyOp op1 t1) t2 -> do
     s1 <- resolve (phantom (Share t1))
     s2 <- resolve (phantom (Share t2))
-    case (op, truth s1, truth s2, viewFree t2) of
-      (TyOpUni n, Just False, Just True, _) -> n `isView` True
-      (TyOpUni n, _, Just False, _)         -> n `isView` False
-      (TyOpUni _, _, Just True, True)       -> introduce [ TEq t1 t2 ]
-      _                                     -> defer
+    case (view value op1, truth s1, truth s2) of
+      (TyOpUni n, Just False, Just True) -> n `isOp` TyOpBang
+      (TyOpUni n, _, Just False)         -> n `isOp` TyOpId
+      (_, _, Just True) | viewFree t2    -> introduce [ TEq t1 t2 ]
+      _  | TyOp op2 t2 <- view value t2  -> do
+          s2 <- resolve (phantom (Share t2))
+          case (truth s1, truth s2) of
+            (Just False, Just False) -> case (view value op1, view value op2) of
+              (TyOpUni n1, TyOpUni n2) -> if n1 == n2 then introduce [ TEq t1 t2 ] else n1 `isOp` TyOpUni n2
+              (TyOpUni n1, op)         -> n1 `isOp` op
+              (op, TyOpUni n2)         -> n2 `isOp` op
+              (TyOpVar n1, TyOpVar n2) -> if n1 == n2 then introduce [ TEq t1 t2 ] else contradiction
+              (TyOpBang, TyOpBang)     -> introduce [ TEq t1 t2 ]
+              _                        -> contradiction
+            _ -> defer
+      _                                  -> defer
 
   TEq _ (_ :< TyOp _ _) -> swap
 
@@ -207,10 +217,9 @@ resolve c = case view value c of
       TyOp _ _ -> False
       _        -> True
 
-    isView :: Name -> Bool -> Praxis Resolution
-    isView n b = do
-      let op = if b then TyOpBang else TyOpId
-          f :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+    isOp :: Name -> TyOp -> Praxis Resolution
+    isOp n op = do
+      let f :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
           f  = eval . sub (embedSub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing }))
       smap f
       our . ops %= ((n, op):)

@@ -236,7 +236,6 @@ instance Recursive Type where
     TyUni n     -> pure (TyUni n)
     TyApply a b -> TyApply <$> f a <*> f b
     TyCon n     -> pure (TyCon n)
-    TyFlat ts   -> TyFlat <$> (Set.fromList <$> traverse f (Set.toList ts))
     TyFun a b   -> TyFun <$> f a <*> f b
     TyRecord r  -> TyRecord <$> traverse f r
     TyOp op t   -> TyOp <$> f op <*> f t

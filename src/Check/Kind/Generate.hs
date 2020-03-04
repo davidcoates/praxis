@@ -68,11 +68,6 @@ ty = split $ \s -> \case
       require $ newConstraint (view kind b' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
       return (phantom KindType :< TyFun a' b')
 
-    TyFlat ts -> do
-      ts' <- traverse ty (Set.toList ts)
-      requires $ map (\t -> newConstraint (view kind t `KEq` (phantom KindConstraint)) (Custom "typ: TyFlat TODO") s) ts'
-      return (phantom KindConstraint :< TyFlat (Set.fromList ts'))
-
     TyCon n -> do
       e <- kEnv `uses` lookup n
       case e of Nothing -> throwAt s (NotInScope n)

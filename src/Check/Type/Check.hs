@@ -1,3 +1,6 @@
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Check.Type.Check
   ( check
   ) where
@@ -13,14 +16,17 @@ import           Stage
 import           Term
 
 check :: Recursive a => Annotated a -> Praxis (Annotated a)
-check a = save stage $ do
+check x = save stage $ do
   stage .= TypeCheck Warmup
   our .= initialSystem
-  a' <- generate a
+  x <- generate x
   (ts, ops) <- solve
-  let solveTy   = \case { TyUni n   -> lookup n ts;  _ -> Nothing }
-  let solveTyOp = \case { TyOpUni n -> lookup n ops; _ -> Nothing }
-  r <- eval (sub (embedSub solveTyOp) (sub (embedSub solveTy) a'))
-  display r `ifFlag` debug
-  return r
+  let f :: forall a. Recursive a => a -> Maybe a
+      f x = case witness :: I a of
+        IType -> case x of {   TyUni n ->  lookup n ts; _ -> Nothing }
+        ITyOp -> case x of { TyOpUni n -> lookup n ops; _ -> Nothing }
+        _     -> Nothing
+  x <- eval (sub f x)
+  display x `ifFlag` debug
+  return x
   -- TODO type defaulting

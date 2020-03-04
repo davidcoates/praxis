@@ -131,7 +131,6 @@ data TyPat = TyPatVar Name
 data Type = TyUni Name                                -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
-          | TyFlat (Set (Annotated Type))             -- Used for constraints
           | TyFun (Annotated Type) (Annotated Type)
           | TyRecord (Record (Annotated Type))        -- A type record : T
           | TyOp (Annotated TyOp) (Annotated Type)

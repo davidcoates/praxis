@@ -236,9 +236,10 @@ resolve c = case view value c of
 
 smap :: (forall a. Recursive a => Annotated a -> Praxis (Annotated a)) -> Praxis ()
 smap f = do
-  let lower :: (Annotated Type -> Praxis (Annotated Type)) -> Type -> Praxis Type
-      lower f x = view value <$> f (x `as` phantom KindType)
+  let lower :: Recursive a => (Annotated a -> Praxis (Annotated a)) -> a -> Praxis a
+      lower f x = view value <$> f (phantom x)
   our . sol %%= traverse (second (lower f))
+  our . ops %%= traverse (second (lower f))
   our . constraints %%= traverse f
   our . staging %%= traverse f
   our . axioms %%= traverse f

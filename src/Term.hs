@@ -207,8 +207,4 @@ instance Pretty (Annotated a) => Pretty (Derivation a) where
 data DataAltInfo = DataAltInfo [Name] (Annotated QType) [Annotated Type] (Annotated Type)
 
 instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataAltInfo where
-  pretty (DataAltInfo ns ct args rt) =
-    pretty ct <> " i.e., " <>
-    (if null ns then "" else "forall " <> separate " " ns <> ". ") <>
-    (if null args then "" else separate ", " args <> " ~> ") <>
-    pretty rt
+  pretty (DataAltInfo ns ct args rt) = pretty ct

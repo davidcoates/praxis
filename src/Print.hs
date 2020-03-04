@@ -39,7 +39,7 @@ instance Unparser Printer where
       in Just $ case typeof (view value x) of
     ITypeConstraint -> constraint
     IKindConstraint -> constraint
-    y               -> [Print (cmap (\c -> if null c then Nil else "[" <> c <> "]") (label y (view annotation x)))] ++ body
+    i               -> [Print (cmap (\c -> if null c then Nil else "[" <> c <> "]") (label i (view annotation x)))] ++ body
 
 indent :: Int -> Printable String
 indent n

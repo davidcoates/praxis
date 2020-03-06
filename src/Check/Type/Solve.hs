@@ -108,9 +108,8 @@ progress c = resolve c >>= \case
   Disproven _                       -> throw (Contradiction c)
   Unproven { antecedents, trivial } -> requires antecedents >> return (not trivial)
 
--- TODO check axioms
 resolve :: Annotated TypeConstraint -> Praxis Resolution
-resolve c = case view value c of
+resolve c = checkAxioms c $ case view value c of
 
   Share t -> shareImpl c
 
@@ -174,8 +173,13 @@ resolve c = case view value c of
 
     swap = case view value c of t1 `TEq` t2 -> resolve (set value (t2 `TEq` t1) c)
 
+    checkAxioms :: Annotated TypeConstraint -> Praxis Resolution -> Praxis Resolution
+    checkAxioms c r = do
+      isAxiom <- (c `elem`) <$> use (our . axioms)
+      if isAxiom then solved else r
+
     shareImpl :: Annotated TypeConstraint -> Praxis Resolution
-    shareImpl c = case view value t of
+    shareImpl c = checkAxioms c $ case view value t of
 
       TyOp (_ :< op) t'
         | TyOpBang  <- op -> resolved p
@@ -194,10 +198,6 @@ resolve c = case view value c of
 
       -- FIXME make this general!
       TyApply (_ :< TyCon "List") _ -> resolved (not p)
-
-      TyVar n -> do
-        axs <- fmap (view value) <$> use (our . axioms)
-        resolved ((if p then Share else Affine) t `elem` axs)
 
       _ -> defer
 

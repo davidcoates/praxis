@@ -61,21 +61,12 @@ data QString = QString { qualification :: [String], name :: String }
 instance Show QString where
   show s = intercalate "." (qualification s ++ [name s])
 
-instance Show Lit where
-  show = \case
-    Bool b   -> show b
-    Char c   -> show c
-    Int i    -> show i
-    String s -> show s
-
 data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
           | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
           | DeclSig Name (Annotated QType) -- ^Parsing only
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
-  deriving (Eq)
 
 data DataAlt = DataAlt Name [Annotated Type]
-  deriving (Eq)
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
@@ -91,13 +82,19 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
          | Var Name
          | VarBang Name -- ^Parsing only
-  deriving (Eq)
 
 data Lit = Bool Bool
          | Char Char
          | Int Int
          | String String
-  deriving (Eq)
+  deriving Eq
+
+instance Show Lit where
+  show = \case
+    Bool b   -> show b
+    Char c   -> show c
+    Int i    -> show i
+    String s -> show s
 
 data Pat = PatAt Name (Annotated Pat)
          | PatHole
@@ -105,19 +102,15 @@ data Pat = PatAt Name (Annotated Pat)
          | PatRecord (Record (Annotated Pat))
          | PatVar Name
          | PatCon Name [Annotated Pat]
-  deriving (Eq)
 
 data Program = Program [Annotated Decl]
-  deriving (Eq)
 
 data Stmt = StmtDecl (Annotated Decl)
           | StmtExp (Annotated Exp)
-  deriving (Eq)
 
 -- |Parsing only
 data Tok = TExp (Annotated Exp)
          | TOp Op
-  deriving (Eq)
 
 data TyOp = TyOpUni Name
           | TyOpBang

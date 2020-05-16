@@ -1,0 +1,356 @@
+=========
+OPERATORS
+=========
+
+* Operators should be pronouncable => Operators are (only) syntax, identified with a named function.
+
+* Operator precedence is defined relative to other operators.
+
+* Operator precedence is transitive.
+
+plus : (Int, Int) -> Int
+plus = ...
+
+times : (Int, Int) -> Int
+times = ...
+
+negate : Int -> Int
+negate = ...
+
+operator left (_ + _) = plus (_, _)
+
+operator left (_ * _) = times (_, _) binds
+  stronger than (_ + _)
+
+operator (- _) = negate _ binds
+  stronger than (_ * _)
+
+
+* Operators can be imported / exported (infix form can not be qualified)
+
+Prelude.Num.(_ + _) (4, 2)
+
+
+========
+SECTIONS
+========
+
+* Holes can be used to create sections, e.g., (_ + 2) = \x -> x + 2.
+
+* Multiple holes produce a lambda accepting a tuple argument.
+
+* TODO should holes be allowed outside of operators, with an appropriate enclosing grammar level? E.g.,
+  - f _ + 2 = \x -> f x + 2
+  - f g h _ = \x -> f g h x
+
+
+==================================
+RIGHT ASSOCIATIVITY OF APPLICATION
+==================================
+
+* Function and type application is right-associative.
+
+* Data constructors take at most one argument (which can be a tuple)
+
+* Type constrcutors take at most one argument (which can be a type tuple)
+
+
+===========
+TYPE TUPLES
+===========
+
+* [_, _] constructs a type pair (nesting as (_, _) does to allow type tuples) 
+
+* if t1 : k1, t2 : k2 then [t1, t2] : [k1, k2].
+
+data Parser [t, a] = Parser (\[t] -> (Maybe a, [t]))
+
+
+=============
+TYPE SECTIONS
+=============
+
+* Holes may be used as with sections to create type sections.
+
+* Alternative, type lambdas may be used. TODO are these actually necessary? They would be to reverse the argument order, or for deep instances (which may not be allowed?)
+
+instance Functor Parser [t, _] where
+  ...
+
+interface Bifunctor f where
+  Left  : instance Functor f [_, b] 
+  Right : instance Functor f [a, _]
+
+
+========================
+INTERFACES AND INSTANCES
+========================
+
+interface Functor f where
+  map : forall a b ?v. (?v a -> b) -> ?v f a -> f b
+  operator f <$> x = map f x
+
+interface Cartesian f where
+  pair : forall a b ?v ?w. (?v f a, ?w f b) -> f (?v a, ?w b)
+  operator (_ <*> _) = pair (_, _)
+  
+interface Pointed f where
+  instance Cartesian f
+  pure : forall a. a -> f a
+  operator (< _ >) = pure _
+
+interface Applicative f where
+  instance Pointed f
+  instance Functor f
+  liftA2 : forall ?v ?w a b c. ((?v a, ?w b) -> c) -> (?v f a, ?w f b) -> f c
+  default liftA2 f (x, y) = f <$> (x <*> y)
+
+interface Bind f where
+  instance Cartesian f
+  bind : forall a b. (?v a -> f b) -> ?v f a -> f b
+  operator (_ <<= _) = bind _ _
+  join : forall a. f (f a) -> f a
+  default join = (id =<<)
+
+using Monad m = (Applicative m, Bind m)
+
+interface Traversable t where
+  instance Monad t
+  traverse : forall a b f ?v. Applicative f => (?v a -> f b) -> ?v t a -> f (t b) 
+    
+
+
+-- Applicative  
+  default instance Cartesian f where
+    x <*> y = liftA2 id
+  default Functor f where
+    f <$> x = liftA2 (\(c, _) -> f c) (x, pure ())
+
+Natural = instance Traversable List where
+  traverse f = cases
+    Nil          -> pure Nil
+    Cons (x, xs) -> Cons <$> f x <*> traverse f xs
+
+
+
+Note: Not recursive
+
+F : C => D
+
+nameof "F" D = F
+
+
+Vector monoid requires copy of elements??
+
+
+interface Monoid m where
+  unit : () -> m
+  _ *_ : forall ?v ?w. (?v m, ?w m) -> m
+
+interface Copy of a : Type where
+  copy : !a -> a
+
+"unique interface" ?
+
+Copy a => (!Vector a, !Vector a) -> Vector a
+
+(Vector a, Vector a) -> Vector a
+
+Copy a => (Vector a, !Vector a) -> Vector a
+
+Copy a => (!Vector a, Vector a) -> Vector a
+
+
+Not free:
+!Vector a -> Vector !a
+
+Not free:
+Copy a => Vector !a -> Vector a
+
+Free? But observability disallows this !
+Vector a -> Vector !a
+
+a -> !a  seems dangerous. If we use it it looks like we can destruct a after use.
+Would need shared ownership
+
+addl : Copy a => (Vector a, !Vector a) -> Vector a
+
+rewrite x + copy y = addl (x, y)
+
+Then monoid is just
+_ + _ : (m, m) -> m
+or
+_ + _ : (!m, !m) -> m
+First is more general if we can't copy elements
+Second is more general if we can't copy value
+
+_ += _ : (m a, ! m a) -> m a
+
+
+
+
+
+1) REMOVE MONO, ALLOW CONSTRAINTS FOR MONOMORPHIC FUNCTIONS
+
+2) INTERFACES AND INSTANCES
+
+data Ordering = LT | EQ | GT deriving Eq
+
+interface Eq a where
+  op == : (!a, !a) -> Bool
+  x == y = not (x /= y)
+  op /=_ : (!a, !a) -> Bool
+  x /= y = not (x == y)
+  minimal instance op == | op /=
+
+interface Ord a where
+  compare : (!a, !a) -> Ordering
+  instance Eq a -- Unnamed lifted subinterface
+  default instance Eq a where
+    x == y = compare (x, y) == EQ
+
+Natural = instance Ord Int where
+  compare (x, y) = ...
+
+op < : forall a. Ord a => (!a, !a) -> Bool
+x < y = compare (x, y) == LT
+
+min : forall ?v a. Ord a => (?v a, ?v a) -> ?v a
+min (x, y) = if !x < !y then x else y
+
+-- Local default with using
+x0 = 3 < 5 using Natural -- True
+
+-- Named instance heads
+foo : forall a. (Ord a as I, Ord a as J)  => (!a, !a) -> Bool
+foo (x, y) = I.compare (x, y) == LT && J.compare (x, y) == LT
+
+-- Explicit call with different instances
+y0 = foo with (Natural, AnotherOrdering) (4, 5)
+
+-- Or default both
+y1 = foo (4, 5) using Natural
+
+-- Instance morphism
+Reverse = instance forall a. (Ord a as I) => Ord a where
+  compare (x, y) = case I.compare (x, y) of
+    LT -> GT
+    EQ -> EQ
+    GT -> LT
+
+Reserved = Reverse with Natural
+
+x1 = 3 < 5 using Reversed -- False
+
+-- Can have multiple instances of the same name in the same scope
+-- If needed, disambiguate with type: Natural : Ord Int, Natural : Ord Char
+-- <<< SEMANTIC RESOLUTION >>> avoid stupid names like NaturalOrdInt
+
+Natural = instance Ord Char where
+  compare (x, y) = ...
+  instance Eq Char where -- override default implementation
+    ...
+
+-- unique instance means all Eq Int are equivalent to this, used as a global default
+unique Natural of Eq Int
+
+
+
+
+
+
+
+
+
+For resolution: What is the type of Natural?
+
+Option 1: Delayed resolution: t, with constraint t `Named` Natural.
+
+
+* When calling a function, how do we know whether we have reduced all constraints?
+
+
+f : forall t. (Eq t, Ord Int) => t
+
+f with cs --> (Eq t, Ord Int) ~ cs
+
+If they are concrete, we can do a default lookup, and remove if default.
+If they are not concrete, delay.
+Once all concrete and not default, try to match.
+
+(Ord Int) ~ t, t `Named` Natural
+
+--> Ord Int `Named` Natural
+
+But how are dictionaries passed? Here (Ord Int) is naive, we do not have a dictionary associated with it. 
+
+Distinguish between these types of instances?
+
+Instead have a map
+
+nameof t = Natural
+
+(Ord Int) ~ t, nameof t = Natural --> Lookup Natural of Ord Int, that is t.
+
+Should supply unknown dictionary in Ord Int above? I.e., all classes.
+
+Class (Ord Int) (structure)
+
+
+
+Related: How to disambiguate compare for non-named instance? Ord.compare ?
+
+TODO: Ord Int => ...
+MONOMORPHIC type.
+
+Should be allowed!
+
+
+Ord String Natural...
+
+
+Lexicographic : Ord Char => Ord String
+Lexicographic = instance Ord String where
+  ...
+
+Natural = Lexicographic with Natural
+
+
+=======
+RECORDS
+=======
+
+data X = A { x : a, y : b }
+  deriving Ord using instance Ord { x : a, y : b } where
+    compare (a, b) = compare ((view x a, view y a), (view x b, view y b))
+
+data X is
+  A { x : a, y : b } using Natural = instance Ord { x : a, y : b} where
+    compare (a, b) = compare ((view x a, view y a), (view x b, view y b))
+  B ...
+  deriving Ord
+
+Natural of Ord { x : a, y : b } in namespace X.A
+
+
+==================
+REMAINING PROBLEMS
+==================
+
+* Unique instances vs unique interfaces (e.g., know all instances of Functor must be unique for type up, assuming purity is a law)
+
+* The view form of <$>, <*>, etc won't work for e.g., Parser. We could have all these instances object only.
+
+interface Functor f where
+  map : forall a b. (a -> b) -> f a -> f b
+  operator (_ <$> _) = map _ _
+
+interface Prisofunctor f where
+  instance Functor f
+  default instance Functor where
+    map = prisomap
+  prisomap : forall a b ?v. (?v a -> b) -> ?v f a -> f b
+  default prisomap f xs = f <$> split xs
+  operator (_ <?$> _) = prisomap _ _ binds equal to (_ <$> _)
+  split : forall a ?v. ?v f a -> f ?v a
+  default split xs = id <?$> xs

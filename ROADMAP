@@ -17,12 +17,12 @@ times = ...
 negate : Int -> Int
 negate = ...
 
-operator left (_ + _) = plus (_, _)
+operator left (_ + _) = plus
 
-operator left (_ * _) = times (_, _) binds
+operator left (_ * _) = times binds
   stronger than (_ + _)
 
-operator (- _) = negate _ binds
+operator (- _) = negate binds
   stronger than (_ * _)
 
 

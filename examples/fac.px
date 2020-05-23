@@ -1,3 +1,14 @@
+
+-- FIXME move operators to prelude
+
+operator (_ - _) = subtract
+
+operator (_ * _) = multiply where
+  precedence above (_ - _)
+
+operator (_ . _) = compose where
+  associates right
+
 fac : Int -> Int
 fac = cases
   0 -> 1

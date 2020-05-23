@@ -181,6 +181,8 @@ decl = splitTrivial $ \s -> \case
     equal t' (view ty e') (UserSignature (Just n)) s
     return $ DeclVar n Nothing e'
 
+  op@(DeclOp _ _ _) -> return op
+
 
 mono :: Annotated Type -> Annotated QType
 mono t = (view source t, Nothing) :< Mono t
@@ -309,7 +311,7 @@ pat op = splitPair $ \s -> \case
   PatCon n ps -> do
     -- Lookup the data alternative with this name
     DataAltInfo ns ct args rt <- getData s n
-    unless (length args == length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
+    when (length args /= length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
     (Sum i, ps') <- traverse (over first Sum) <$> traverse (pat op) ps
     f <- ungeneralise (map QTyVar ns)
     let rt'   = f rt

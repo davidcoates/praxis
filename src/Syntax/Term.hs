@@ -20,11 +20,16 @@ import           Syntax.TH
 import           Term
 import           Token
 
+import           Data.List     (intersperse)
+import           Data.Maybe    (catMaybes)
 import           Prelude       hiding (exp, maybe, pure, until, (*>), (<$>),
                                 (<*), (<*>))
 
 -- TODO move this elsewhere?
+definePrisms ''Bool
 definePrisms ''Either
+definePrisms ''Ordering
+
 prefix :: Syntax f => f a -> (Prism d (a, b), f b) -> (Prism d (a, c), f c) -> f d
 prefix a (l, b) (r, c) = Prism f g <$> a <*> (_Left <$> b <|> _Right <$> c) where
   f (a, Left x)  = construct l (a, x)
@@ -43,26 +48,29 @@ token t = match (\t' -> if t' == t then Just () else Nothing) (const t)
 special :: Syntax f => Char -> f ()
 special c = token (Special c) <|> mark ("special '" ++ [c] ++ "'")
 
+-- FIXME contextule reservation is dirty
+contextualOp :: Syntax f => Name -> f ()
+contextualOp op = token (QVarSym (QString [] op)) <|> mark ("contextually-reserved '" ++ op ++ "'")
+
+contextualId :: Syntax f => Name -> f ()
+contextualId id = token (QVarId (QString [] id)) <|> mark ("contextually-reserved '" ++ id ++ "'")
+
 dot :: Syntax f => f ()
-dot = token (QVarSym (QString [] ".")) <|> mark "contextually-reserved '.'"
-
-lbrace :: Syntax f => f ()
-lbrace = special '{'
-
-rbrace :: Syntax f => f ()
-rbrace = special '}'
-
-semi :: Syntax f => f ()
-semi = special ';'
-
-comma :: Syntax f => f ()
-comma = special ','
+dot = contextualOp "."
 
 block :: Syntax f => f a -> f [a]
-block p = lbrace *> cons <$> p <*> (semi *> p) `until` rbrace
+block p = special '{' *> cons <$> p <*> (special ';' *> p) `until` special '}'
+
+blockOrLine :: Syntax f => f a -> f (a, [a])
+blockOrLine f = special '{' *> f <*> (special ';' *> f) `until` special '}' <|>
+                f <*> nil <$> pure ()
+
+blockLike :: Syntax f => f () -> f a -> f [a]
+blockLike f g = cons <$> f *> blockOrLine g <|>
+                nil <$> pure ()
 
 list :: Syntax f => f a -> f [a]
-list p = special '(' *> (nil <$> special ')' *> pure () <|> cons <$> p <*> (comma *> p) `until` special ')')
+list p = special '(' *> (nil <$> special ')' *> pure () <|> cons <$> p <*> (special ',' *> p) `until` special ')')
 
 -- This also captures parenthesised p's (which is corrected by desugaring)
 record :: Syntax f => f a -> f (Record a)
@@ -91,11 +99,11 @@ conid = match f (\s -> QConId (QString [] s)) where
     QConId n -> if null (qualification n) then Just (name n) else Nothing
     _        -> Nothing
 
-qvarsym :: Syntax f => f QString
-qvarsym = match f QVarSym where
+varsym :: Syntax f => f String
+varsym = match f (\s -> QVarSym (QString [] s)) where
   f = \case
-    QVarSym n -> Just n
-    _         -> Nothing
+    QVarSym n -> if null (qualification n) then Just (name n) else Nothing
+    _          -> Nothing
 
 lit :: Syntax f => f Lit
 lit = match f (\l -> Token.Lit l) where
@@ -112,6 +120,11 @@ reservedCon s = token (ReservedCon s) <|> mark ("reserved name '" ++ s ++ "'")
 reservedId :: Syntax f => String -> f ()
 reservedId s = token (ReservedId s) <|> mark ("reserved name '" ++ s ++ "'")
 
+definePrisms ''Assoc
+definePrisms ''Op
+definePrisms ''OpRules
+definePrisms ''Prec
+
 definePrisms ''DataAlt
 definePrisms ''Decl
 definePrisms ''Exp
@@ -123,8 +136,8 @@ definePrisms ''Tok
 definePrisms ''TyOp
 definePrisms ''TyPat
 definePrisms ''Type
-definePrisms ''QTyVar
 definePrisms ''QType
+definePrisms ''QTyVar
 
 definePrisms ''Kind
 
@@ -133,18 +146,28 @@ definePrisms ''TypeConstraint
 
 syntax :: (Recursive a, Syntax f) => I a -> f a
 syntax = \case
+  -- | Operators
+  IAssoc          -> assoc
+  IOp             -> op
+  IOpRules        -> opRules
+  IPrec           -> prec
+  -- | T0
   IDataAlt        -> dataAlt
   IDecl           -> decl
   IExp            -> exp
-  IKind           -> kind
   IPat            -> pat
   IProgram        -> program
-  IQType          -> qTy
   IStmt           -> stmt
   ITok            -> undefined
+  -- | T1
   ITyOp           -> tyOp
   ITyPat          -> tyPat
   IType           -> ty
+  IQType          -> qTy
+  IQTyVar         -> qTyVar
+  -- | T2
+  IKind           -> kind
+  -- | Solver
   ITypeConstraint -> tyConstraint
   IKindConstraint -> kindConstraint
 
@@ -161,12 +184,11 @@ kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|
 
 program :: Syntax f => f Program
 program = _Program <$> block (annotated top) where -- TODO module
-  top = declData <|> decl -- TODO fixity declarations, imports
+  top = declData <|> declOp <|> decl -- TODO fixity declarations, imports
 
 declData :: Syntax f => f Decl
 declData = _DeclData <$> reservedId "data" *> conid <*> many (annotated tyPat) <*> alts where
-  alts = cons <$> reservedId "where" *> lbrace *> annotated dataAlt <*> (semi *> annotated dataAlt) `until` rbrace <|> -- TODO clean this up
-         nil <$> pure ()
+  alts = blockLike (reservedId "where") (annotated dataAlt)
 
 dataAlt :: Syntax f => f DataAlt
 dataAlt = _DataAlt <$> conid <*> many (annotated ty)
@@ -251,7 +273,7 @@ tyOp = _TyOpBang <$> reservedOp "!" <|>
 
 exp :: Syntax f => f Exp
 exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where
-  exp3 = _Mixfix <$> some (annotated (_TOp <$> qvarsym <|> _TExp <$> annotated exp2)) <|> unparseable exp2 <|> mark "expression(3)" -- FIXME unparseable is a hack here
+  exp3 = _Mixfix <$> some (annotated (_TOp <$> varsym <|> _TExp <$> annotated exp2)) <|> unparseable exp2 <|> mark "expression(3)" -- FIXME unparseable is a hack here
   exp2 = _Read <$> reservedId "read" *> varid <*> reservedId "in" *> annotated exp <|>
          _Do <$> reservedId "do" *> block (annotated stmt) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
@@ -272,3 +294,29 @@ stmt = _StmtDecl <$> reservedId "let" *> annotated decl <|> _StmtExp <$> annotat
 
 alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedOp "->" *> annotated exp <|> mark "case alternative"
+
+declOp :: Syntax f => f Decl
+declOp = _DeclOp <$> reservedId "operator" *> annotated op <*> reservedOp "=" *> varid <*> annotated opRules
+
+op :: Syntax f => f Op
+op = _Op <$> special '(' *> atLeast 2 atom <* special ')' where
+  atom = nothing <$> special '_' <|> maybe <$> varsym
+
+opRules :: Syntax f => f OpRules
+opRules = _OpMultiRules <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
+          unparseable (_OpRules <$> reservedId "where" *> special '{' *> optional (annotated assoc <* special ';') <*> precs <* special '}')
+
+-- FIXME contextul reservation is dirty
+assoc :: Syntax f => f Assoc
+assoc = contextualId "associates" *> assoc' where
+  assoc' = _AssocLeft <$> contextualId "left" <|>
+           _AssocRight <$> contextualId "right"
+
+precs :: Syntax f => f [Annotated Prec]
+precs = blockLike (contextualId "precedence") (annotated prec)
+
+prec :: Syntax f => f Prec
+prec = _Prec <$> ordering <*> op where
+  ordering = _GT <$> contextualId "above" <|>
+             _LT <$> contextualId "below" <|>
+             _EQ <$> contextualId "equal"

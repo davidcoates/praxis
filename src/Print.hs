@@ -33,13 +33,14 @@ instance Unparser Printer where
     Just xs -> Just xs
   token = Printer $ \x -> Just [x]
   mark s = Printer (error s)
-  annotated f = Printer $ \x -> let
-    body  = force f (view value x)
-    constraint = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof (view value x)) (view annotation x))]
-      in Just $ case typeof (view value x) of
-    ITypeConstraint -> constraint
-    IKindConstraint -> constraint
-    i               -> [Print (cmap (\c -> if null c then Nil else "[" <> c <> "]") (label i (view annotation x)))] ++ body
+  annotated f = Printer g where
+    g x = Just $ case typeof (view value x) of
+      ITypeConstraint -> constraint
+      IKindConstraint -> constraint
+      i               -> [Print (cmap (\c -> if null c then Nil else "[" <> c <> "]") (label i (view annotation x)))] ++ body
+      where
+        body        = force f (view value x)
+        constraint = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof (view value x)) (view annotation x))]
 
 indent :: Int -> Printable String
 indent n

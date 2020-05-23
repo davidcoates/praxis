@@ -4,8 +4,13 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Term
-  ( Op
-  , QString(..)
+  ( QString(..)
+
+  -- | Operators
+  , Assoc(..)
+  , Op(..)
+  , OpRules(..)
+  , Prec(..)
 
   -- | T0
   , DataAlt(..)
@@ -51,23 +56,36 @@ import           Record
 
 import           Data.Set (Set)
 
--- |Parsing only
-type Op = QString
-
 -- |TODO move this to Common?
+-- FIXME make Qualified a type w/ qualification :: [String] and unqualified :: a
 data QString = QString { qualification :: [String], name :: String }
   deriving (Ord, Eq)
 
 instance Show QString where
   show s = intercalate "." (qualification s ++ [name s])
 
+
+-- * OPERATORS *
+data Assoc = AssocLeft | AssocRight
+
+data Op = Op [Maybe Name] -- TDO qualification over this
+  deriving (Eq, Ord)
+
+data OpRules = OpRules (Maybe (Annotated Assoc)) [Annotated Prec]
+             | OpMultiRules [Either (Annotated Assoc) [Annotated Prec]] -- ^Parsing only
+
+data Prec = Prec Ordering Op
+
+-- * DECLARATIONS *
 data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
           | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
+          | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME QString
           | DeclSig Name (Annotated QType) -- ^Parsing only
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
 
 data DataAlt = DataAlt Name [Annotated Type]
 
+-- * EXPRESSIONS *
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
@@ -80,7 +98,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Read Name (Annotated Exp)
          | Record (Record (Annotated Exp))
          | Sig (Annotated Exp) (Annotated Type)
-         | Var Name
+         | Var Name -- FIXME QString
          | VarBang Name -- ^Parsing only
 
 data Lit = Bool Bool
@@ -89,6 +107,7 @@ data Lit = Bool Bool
          | String String
   deriving Eq
 
+-- TODO remove?
 instance Show Lit where
   show = \case
     Bool b   -> show b
@@ -110,7 +129,7 @@ data Stmt = StmtDecl (Annotated Decl)
 
 -- |Parsing only
 data Tok = TExp (Annotated Exp)
-         | TOp Op
+         | TOp Name
 
 data TyOp = TyOpUni Name
           | TyOpBang
@@ -163,7 +182,7 @@ type family Annotation a where
   Annotation Type           = Annotated Kind
   Annotation TypeConstraint = Derivation TypeConstraint
   Annotation KindConstraint = Derivation KindConstraint
-  Annotation DataAlt        = DataAltInfo
+  Annotation DataAlt        = DataAltInfo -- FIXME should just be a map?
   Annotation a              = Void
 
 type Annotated a = Tag (Source, Maybe (Annotation a)) a

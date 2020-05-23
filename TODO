@@ -1,0 +1,17 @@
+
+* rename Recursive to Term
+
+* cleanup Desguar, fst a etc
+
+Syntax:
+
+* General tidy and alignment
+
+* definePrisms Maybe
+
+* Construct as Maybe (a -> b) instead of unparseable
+
+* Relook at combine
+
+
+

@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Syntax.Unparser
   ( Unparser(..)

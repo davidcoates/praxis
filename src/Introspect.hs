@@ -25,8 +25,9 @@ module Introspect
 import           Common
 import           Term
 
-import qualified Data.Set as Set (fromList, toList)
-import           GHC.Exts (Constraint)
+import           Data.Bitraversable (bitraverse)
+import qualified Data.Set           as Set (fromList, toList)
+import           GHC.Exts           (Constraint)
 
 data Visit f a b = Visit (f a)
                  | Resolve (f b)
@@ -34,6 +35,7 @@ data Visit f a b = Visit (f a)
 skip :: Applicative f => Visit f () a
 skip = Visit (pure ())
 
+-- TODO rename this to Term or some such
 class Recursive a where
   witness :: I a
   complete :: (Recursive a, Applicative f) => I a -> (forall a. Recursive a => Annotated a -> f (Annotated a)) -> Annotation a -> f (Annotation a)
@@ -44,19 +46,30 @@ completion i f = \case
   Nothing -> pure Nothing
   Just x  -> Just <$> complete i f x
 
+-- TODO Lit? Fixity?
 data I a where
+  -- | Operators
+  IAssoc    :: I Assoc
+  IOp       :: I Op
+  IOpRules  :: I OpRules
+  IPrec     :: I Prec
+  -- | T0
   IDataAlt :: I DataAlt
   IDecl    :: I Decl
   IExp     :: I Exp
-  IKind    :: I Kind
   IPat     :: I Pat
   IProgram :: I Program
-  IQType   :: I QType
   IStmt    :: I Stmt
   ITok     :: I Tok
-  ITyOp    :: I TyOp
-  ITyPat   :: I TyPat
-  IType    :: I Type
+  -- | T1
+  ITyOp   :: I TyOp
+  ITyPat  :: I TyPat
+  IType   :: I Type
+  IQType  :: I QType
+  IQTyVar :: I QTyVar
+  -- | T2
+  IKind :: I Kind
+  -- | Solver
   ITypeConstraint :: I TypeConstraint
   IKindConstraint :: I KindConstraint
 
@@ -65,20 +78,31 @@ typeof _ = witness :: I a
 
 switch :: forall a b c. (Recursive a, Recursive b) => I a -> I b -> ((a ~ b) => c) -> c -> c
 switch a b eq neq = case (a, b) of
+  -- | Operators
+  (IAssoc, IAssoc)                   -> eq
+  (IOp, IOp)                         -> eq
+  (IOpRules, IOpRules)               -> eq
+  (IPrec, IPrec)                     -> eq
+  -- | T0
   (IDataAlt, IDataAlt)               -> eq
   (IDecl, IDecl)                     -> eq
   (IExp, IExp)                       -> eq
-  (IKind, IKind)                     -> eq
   (IPat, IPat)                       -> eq
   (IProgram, IProgram)               -> eq
-  (IQType, IQType)                   -> eq
   (IStmt, IStmt)                     -> eq
   (ITok, ITok)                       -> eq
+  -- | T1
   (ITyOp, ITyOp)                     -> eq
   (ITyPat, ITyPat)                   -> eq
   (IType, IType)                     -> eq
+  (IQType, IQType)                   -> eq
+  (IQTyVar, IQTyVar)                 -> eq
+  -- | T2
+  (IKind, IKind)                     -> eq
+  -- | Solver
   (ITypeConstraint, ITypeConstraint) -> eq
   (IKindConstraint, IKindConstraint) -> eq
+  -- |
   _                                  -> neq
 
 visit :: (Recursive a, Applicative f) => (forall a. Recursive a => Annotated a -> Visit f (Maybe (Annotation a)) (Annotated a)) -> Annotated a -> f (Annotated a)
@@ -133,6 +157,32 @@ retag f = runIdentity . visit f'
 trivial :: (Annotation a ~ Void, Recursive a, Applicative f) => I a -> (forall a. Recursive a => Annotated a -> f (Annotated a)) -> Annotation a -> f (Annotation a)
 trivial _ _ = absurd
 
+-- | Operators
+
+instance Recursive Assoc where
+  witness = IAssoc
+  complete = trivial
+  recurse _ = pure
+
+instance Recursive Op where
+  witness = IOp
+  complete = trivial
+  recurse _ = pure
+
+instance Recursive OpRules where
+  witness = IOpRules
+  complete = trivial
+  recurse f = \case
+    OpRules a ps    -> OpRules <$> traverse f a <*> traverse f ps
+    OpMultiRules rs -> OpMultiRules <$> traverse (bitraverse f (traverse f)) rs
+
+instance Recursive Prec where
+  witness = IPrec
+  complete = trivial
+  recurse _ = pure
+
+-- | T0
+
 instance Recursive DataAlt where
   witness = IDataAlt
   complete _ f (DataAltInfo ns ct args rt) = DataAltInfo ns <$> f ct <*> traverse f args <*> f rt
@@ -143,10 +193,11 @@ instance Recursive Decl where
   witness = IDecl
   complete = trivial
   recurse f = \case
-    DeclData n t ts -> DeclData n <$> series (f <$> t) <*> traverse f ts
+    DeclData n t ts -> DeclData n <$> traverse f t <*> traverse f ts
     DeclFun n ps e  -> DeclFun n <$> traverse f ps <*> f e
+    DeclOp o d rs   -> DeclOp <$> f o <*> pure d <*> f rs
     DeclSig n t     -> DeclSig n <$> f t
-    DeclVar n t e   -> DeclVar n <$> series (f <$> t) <*> f e
+    DeclVar n t e   -> DeclVar n <$> traverse f t <*> f e
 
 instance Recursive Exp where
   witness = IExp
@@ -166,15 +217,6 @@ instance Recursive Exp where
     Sig e t      -> Sig <$> f e <*> f t
     Var n        -> pure (Var n)
     VarBang n    -> pure (VarBang n)
-
-instance Recursive Kind where
-  witness = IKind
-  complete = trivial
-  recurse f = \case
-    KindUni n      -> pure (KindUni n)
-    KindConstraint -> pure KindConstraint
-    KindFun a b    -> KindFun <$> f a <*> f b
-    KindType       -> pure KindType
 
 instance Recursive Pat where
   witness = IPat
@@ -200,19 +242,14 @@ instance Recursive Stmt where
     StmtDecl d -> StmtDecl <$> f d
     StmtExp e  -> StmtExp <$> f e
 
-instance Recursive QType where
-  witness = IQType
-  complete = trivial
-  recurse f = \case
-    Mono t      -> Mono <$> f t
-    Forall vs t -> Forall <$> pure vs <*> f t
-
 instance Recursive Tok where
   witness = ITok
   complete = trivial
   recurse f = \case
     TExp e -> TExp <$> f e
     TOp o  -> pure (TOp o)
+
+-- | T1
 
 instance Recursive TyOp where
   witness = ITyOp
@@ -241,6 +278,31 @@ instance Recursive Type where
     TyOp op t   -> TyOp <$> f op <*> f t
     TyVar n     -> pure (TyVar n)
 
+instance Recursive QType where
+  witness = IQType
+  complete = trivial
+  recurse f = \case
+    Mono t      -> Mono <$> f t
+    Forall vs t -> Forall <$> pure vs <*> f t
+
+instance Recursive QTyVar where
+  witness = IQTyVar
+  complete = trivial
+  recurse _ = pure
+
+-- | T2
+
+instance Recursive Kind where
+  witness = IKind
+  complete = trivial
+  recurse f = \case
+    KindUni n      -> pure (KindUni n)
+    KindConstraint -> pure KindConstraint
+    KindFun a b    -> KindFun <$> f a <*> f b
+    KindType       -> pure KindType
+
+-- | Solver
+
 instance Recursive TypeConstraint where
   witness = ITypeConstraint
   complete _ f = \case
@@ -260,3 +322,4 @@ instance Recursive KindConstraint where
     Antecedent c -> Antecedent <$> f c
   recurse f = \case
     KEq a b -> KEq <$> f a <*> f b
+

@@ -9,6 +9,7 @@ module Syntax.Syntax
   , maybe
   , nothing
   , many
+  , atLeast
   , some
   , optional
   ) where
@@ -50,6 +51,7 @@ cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})
 nil :: Prism [a] ()
 nil = Prism (const []) (\case { [] -> Just (); _ -> Nothing })
 
+-- FIXME call this just?!?! definePrisms ''Maybe ?!
 maybe :: Prism (Maybe a) a
 maybe = Prism Just id
 
@@ -60,8 +62,12 @@ many :: Syntax f => f a -> f [a]
 many p = cons <$> p <*> many p <|>
          nil <$> pure ()
 
+atLeast :: Syntax f => Int -> f a -> f [a]
+atLeast 0 p = many p
+atLeast n p = cons <$> p <*> atLeast (n - 1) p
+
 some :: Syntax f => f a -> f [a]
-some p = cons <$> p <*> many p
+some = atLeast 1
 
 optional :: Syntax f => f a -> f (Maybe a)
 optional p = maybe <$> p <|>

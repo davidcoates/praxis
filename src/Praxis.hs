@@ -13,6 +13,15 @@ module Praxis
   , DAEnv(..)
   , VEnv(..)
 
+  -- |Operators
+  , OpTable
+  , OpNode
+  , OpGraph
+  , OpContext(..)
+  , table
+  , levels
+  , graph
+
   , throw
   , throwAt
 
@@ -33,6 +42,7 @@ module Praxis
   , filename
   , flags
   , stage
+  , opContext
   , kEnv
   , tEnv
   , daEnv
@@ -65,12 +75,15 @@ import           Control.Concurrent
 import           Control.Lens                 (Lens', makeLenses, traverseOf)
 import           Control.Monad.Trans.Class    (MonadTrans (..))
 import qualified Control.Monad.Trans.State    as State (get, modify, put)
+import           Data.Map.Strict              (Map)
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
 import           Env.Env
 import           Env.LEnv
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
+import           Text.Earley.Mixfix.DAG       (DAG)
+import qualified Text.Earley.Mixfix.DAG       as DAG (Fixity, Op)
 import           Value
 
 data Flags = Flags
@@ -97,16 +110,27 @@ type KEnv = Env Name (Annotated Kind)
 
 type DAEnv = Env Name (Annotated DataAlt)
 
+type OpTable = Map Op (Name, DAG.Fixity, [Annotated Prec])
+
+type OpNode = DAG.Op (Annotated Name) (Annotated Exp)
+
+type OpGraph = DAG Int [OpNode]
+
+data OpContext = OpContext { _table :: OpTable, _levels :: [[Op]], _graph :: OpGraph }
+
+makeLenses ''OpContext
+
 data PraxisState = PraxisState
-  { _filename :: String              -- ^File path (for error messages)
-  , _flags    :: Flags               -- ^Flags
-  , _fresh    :: Fresh
-  , _stage    :: Stage               -- ^Current stage of compilation
-  , _kEnv     :: KEnv                -- ^Kind environment
-  , _tEnv     :: TEnv                -- ^Type environment
-  , _daEnv    :: DAEnv               -- ^Data alternative environment
-  , _vEnv     :: VEnv                -- ^Value environment for interpreter
-  , _system   :: Check.System        -- ^ TODO rename?
+  { _filename  :: String              -- ^File path (for error messages)
+  , _flags     :: Flags               -- ^Flags
+  , _fresh     :: Fresh
+  , _stage     :: Stage               -- ^Current stage of compilation
+  , _opContext :: OpContext
+  , _kEnv      :: KEnv                -- ^Kind environment
+  , _tEnv      :: TEnv                -- ^Type environment
+  , _daEnv     :: DAEnv               -- ^Data alternative environment
+  , _vEnv      :: VEnv                -- ^Value environment for interpreter
+  , _system    :: Check.System        -- ^ TODO rename?
   }
 
 instance Show PraxisState where
@@ -138,6 +162,7 @@ emptyState = PraxisState
   , _flags        = defaultFlags
   , _fresh        = defaultFresh
   , _stage        = Unknown
+  , _opContext    = unset "opContext"
   , _kEnv         = unset "kEnv"
   , _tEnv         = unset "tEnv"
   , _daEnv        = unset "daEnv"

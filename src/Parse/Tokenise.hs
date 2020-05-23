@@ -83,7 +83,7 @@ string = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminat
   inner :: Tokeniser String
   inner = while (satisfy (/= '"')) ((char '\\' *> (escape <$> consume)) <|> consume)
 
-reservedIds = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall", "let"]
+reservedIds = ["read", "in", "if", "then", "else", "using", "data", "class", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator"]
 reservedCons = ["Type", "Constraint", "Share", "Affine"]
 reservedOps = [":", "=>", "=", "\\", "->", "@", "!", "<id>", "?"]
 

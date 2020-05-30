@@ -14,13 +14,13 @@ module Praxis
   , VEnv(..)
 
   -- |Operators
-  , OpTable
+  , OpDefns
   , OpNode
-  , OpGraph
+  , OpTable
   , OpContext(..)
+  , defns
   , table
   , levels
-  , graph
 
   , throw
   , throwAt
@@ -82,8 +82,7 @@ import           Env.Env
 import           Env.LEnv
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
-import           Text.Earley.Mixfix.DAG       (DAG)
-import qualified Text.Earley.Mixfix.DAG       as DAG (Fixity, Op)
+import qualified Text.Earley.Mixfix.Graph     as Earley (Fixity, Op, OpTable)
 import           Value
 
 data Flags = Flags
@@ -110,13 +109,13 @@ type KEnv = Env Name (Annotated Kind)
 
 type DAEnv = Env Name (Annotated DataAlt)
 
-type OpTable = Map Op (Name, DAG.Fixity, [Annotated Prec])
+type OpDefns = Map Op (Name, Earley.Fixity, [Annotated Prec])
 
-type OpNode = DAG.Op (Annotated Name) (Annotated Exp)
+type OpNode = Earley.Op (Annotated Name) (Annotated Exp)
 
-type OpGraph = DAG Int [OpNode]
+type OpTable = Earley.OpTable (Annotated Name) (Annotated Exp)
 
-data OpContext = OpContext { _table :: OpTable, _levels :: [[Op]], _graph :: OpGraph }
+data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _table :: OpTable }
 
 makeLenses ''OpContext
 

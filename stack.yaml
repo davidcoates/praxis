@@ -15,7 +15,7 @@
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-resolver: lts-12.17
+resolver: lts-15.13
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -42,7 +42,7 @@ packages:
 extra-deps:
 - pretty-tree-0.1.0.0
 - git: git@github.com:davidcoates/earley-mixfix-extra.git
-  commit: 3cf86201da03baa289e4062ed4af8fe38e9c3cfa
+  commit: c850f7d292101e7457237afc7a9422e78dcd9543
 
 # Override default flag values for local packages and extra-deps
 flags: {}

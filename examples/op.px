@@ -1,7 +1,6 @@
 
 operator (_ + _) = add
 
-
 operator (_ - _) = subtract where
   associates left
   precedence equal (_ + _)
@@ -10,11 +9,18 @@ operator (_ * _) = multiply where
   associates left
   precedence above (_ + _)
 
--- FIXME, prefix (presumably postfix, closed (?) too) not working
--- operator (- _) = negate
+-- FIXME broken
+operator (- _) = negate where
+  precedence above (_ * _)
 
 -- 7
 x = 1 + 2 * 3
 
 -- -4
 y = 1 - 2 - 3
+
+-- FIXME
+-- 2
+-- z = 1 -- 2
+
+z = - 1

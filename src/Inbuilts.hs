@@ -9,17 +9,17 @@ module Inbuilts
 import           Common
 import           Env
 import           Introspect
-import           Parse                  (parse)
+import           Parse                    (parse)
 import           Praxis
 import qualified Record
 import           Term
 import           Value
 
-import           Data.List              (nub, sort)
-import qualified Data.Map.Strict        as Map (empty)
-import qualified Data.Set               as Set (empty)
-import           Text.Earley.Mixfix.DAG (DAG)
-import qualified Text.Earley.Mixfix.DAG as DAG
+import           Data.Array               (array)
+import           Data.List                (nub, sort)
+import qualified Data.Map.Strict          as Map (empty)
+import qualified Data.Set                 as Set (empty)
+import qualified Text.Earley.Mixfix.Graph as Earley
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
@@ -82,4 +82,4 @@ initialDAEnv :: DAEnv
 initialDAEnv = empty
 
 initialOpContext :: OpContext
-initialOpContext = OpContext { _table = Map.empty, _levels = [], _graph = DAG.DAG { DAG.nodes = [], DAG.neighbors = undefined, DAG.value = undefined } }
+initialOpContext = OpContext { _defns = Map.empty, _levels = [], _table = Earley.OpTable { Earley.precedence = array (0, 0) [], Earley.table = array (0, 0) [] } }

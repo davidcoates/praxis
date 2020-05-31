@@ -22,25 +22,14 @@ import           Token
 
 import           Data.List     (intersperse)
 import           Data.Maybe    (catMaybes)
-import           Prelude       hiding (exp, maybe, pure, until, (*>), (<$>),
-                                (<*), (<*>))
+import           Prelude       hiding (exp, pure, until, (*>), (<$>), (<*),
+                                (<*>), _Just)
 
--- TODO move this elsewhere?
 definePrisms ''Bool
-definePrisms ''Either
 definePrisms ''Ordering
 
-prefix :: Syntax f => f a -> (Prism d (a, b), f b) -> (Prism d (a, c), f c) -> f d
-prefix a (l, b) (r, c) = Prism f g <$> a <*> (_Left <$> b <|> _Right <$> c) where
-  f (a, Left x)  = construct l (a, x)
-  f (a, Right x) = construct r (a, x)
-  g d = case (destruct l d, destruct r d) of
-    (Just (a, x), Nothing) -> Just (a, Left x)
-    (Nothing, Just (a, x)) -> Just (a, Right x)
-    (Nothing, Nothing)     -> Nothing
-
 until :: Syntax f => f a -> f () -> f [a]
-until p q = nil <$> q <|> cons <$> p <*> until p q
+until p q = _Nil <$> q <|> _Cons <$> p <*> until p q
 
 token :: Syntax f => Token -> f ()
 token t = match (\t' -> if t' == t then Just () else Nothing) (const t)
@@ -59,18 +48,18 @@ dot :: Syntax f => f ()
 dot = contextualOp "."
 
 block :: Syntax f => f a -> f [a]
-block p = special '{' *> cons <$> p <*> (special ';' *> p) `until` special '}'
+block p = special '{' *> _Cons <$> p <*> (special ';' *> p) `until` special '}'
 
 blockOrLine :: Syntax f => f a -> f (a, [a])
 blockOrLine f = special '{' *> f <*> (special ';' *> f) `until` special '}' <|>
-                f <*> nil <$> pure ()
+                f <*> _Nil <$> pure ()
 
 blockLike :: Syntax f => f () -> f a -> f [a]
-blockLike f g = cons <$> f *> blockOrLine g <|>
-                nil <$> pure ()
+blockLike f g = _Cons <$> f *> blockOrLine g <|>
+                _Nil <$> pure ()
 
 list :: Syntax f => f a -> f [a]
-list p = special '(' *> (nil <$> special ')' *> pure () <|> cons <$> p <*> (special ',' *> p) `until` special ')')
+list p = special '(' *> (_Nil <$> special ')' *> pure () <|> _Cons <$> p <*> (special ',' *> p) `until` special ')')
 
 -- This also captures parenthesised p's (which is corrected by desugaring)
 record :: Syntax f => f a -> f (Record a)
@@ -200,7 +189,7 @@ fun :: Syntax f => f Decl
 fun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
   sig = reservedOp ":" *> annotated qTy
   def = annotated pat `until` reservedOp "=" <*> annotated exp
-  var = _DeclVar <$> varid <*> (maybe <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
+  var = _DeclVar <$> varid <*> (_Just <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
 
 decl :: Syntax f => f Decl
 decl = fun
@@ -300,7 +289,7 @@ declOp = _DeclOp <$> reservedId "operator" *> annotated op <*> reservedOp "=" *>
 
 op :: Syntax f => f Op
 op = _Op <$> special '(' *> atLeast 2 atom <* special ')' where
-  atom = nothing <$> special '_' <|> maybe <$> varsym
+  atom = _Nothing <$> special '_' <|> _Just <$> varsym
 
 opRules :: Syntax f => f OpRules
 opRules = _OpMultiRules <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>

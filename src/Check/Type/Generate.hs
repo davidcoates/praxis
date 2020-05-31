@@ -31,7 +31,7 @@ import qualified Data.Set           as Set
 import           Prelude            hiding (exp, log, lookup, read)
 import qualified Prelude            (lookup)
 
-ty :: (Recursive a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
+ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
 
 {-
@@ -110,7 +110,7 @@ getData s n = do
     Just v  -> return (view (annotation . just) v)
     Nothing -> throwAt s $ "data constructor " <> quote (pretty n) <> " is not in scope"
 
-generate :: Recursive a => Annotated a -> Praxis (Annotated a)
+generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate x = save stage $ do
   stage .= TypeCheck Generate
   x' <- generateImpl x
@@ -122,7 +122,7 @@ generate x = save stage $ do
     use daEnv >>= display
   return x'
 
-generateImpl :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+generateImpl :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 generateImpl x = case witness :: I a of
     IDecl -> decl x
     IExp  -> exp x

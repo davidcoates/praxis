@@ -30,7 +30,7 @@ mono :: String -> Annotated QType
 mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), Nothing) :< Mono (a :< t)
   where m :: Praxis (Annotated Type)
         m = retag f <$> (parse s :: Praxis (Annotated Type))
-        f :: forall a. Recursive a => I a -> Maybe (Annotation a) -> Maybe (Annotation a)
+        f :: forall a. Term a => I a -> Maybe (Annotation a) -> Maybe (Annotation a)
         f i Nothing = case i of
           IType  -> Just (phantom KindType)
           IQType -> Nothing

@@ -24,7 +24,7 @@ class Unparser f where
   empty :: f a
   (<|>) :: f a -> f a -> f a
   token :: f Token
-  annotated :: Recursive a => f a -> f (Annotated a)
+  annotated :: Term a => f a -> f (Annotated a)
   mark :: String -> f a
 
 newtype T f a = T { unT :: f a }
@@ -41,6 +41,6 @@ instance Unparser f => Syntax (T f) where
   annotated (T p) = T (annotated p)
   combine = error "<unparser combine>"
 
-unparse :: forall a f. (Recursive a, Unparser f) => f (Annotated a)
+unparse :: forall a f. (Term a, Unparser f) => f (Annotated a)
 unparse = unT (Syntax.annotated (syntax (witness :: I a)))
 

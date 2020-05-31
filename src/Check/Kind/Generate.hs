@@ -27,10 +27,10 @@ import           Data.List          (nub, sort)
 import qualified Data.Set           as Set
 import           Prelude            hiding (lookup)
 
-kind :: (Recursive a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
+kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
 kind = annotation . just
 
-generate :: Recursive a => Annotated a -> Praxis (Annotated a)
+generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate x = save stage $ do
   stage .= KindCheck Generate
   x' <- generateImpl x
@@ -40,7 +40,7 @@ generate x = save stage $ do
   return x'
 
 -- TODO since we ignore annotation of input, could adjust this...
-generateImpl :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+generateImpl :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 generateImpl x = case witness :: I a of
   IDecl -> decl x
   IType -> ty x

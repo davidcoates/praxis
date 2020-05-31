@@ -219,7 +219,7 @@ resolve c = checkAxioms c $ case view value c of
 
     isOp :: Name -> TyOp -> Praxis Resolution
     isOp n op = do
-      let f :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+      let f :: forall a. Term a => Annotated a -> Praxis (Annotated a)
           f  = eval . sub (embedSub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing }))
       smap f
       our . ops %= ((n, op):)
@@ -234,9 +234,9 @@ resolve c = checkAxioms c $ case view value c of
       return ()
 
 
-smap :: (forall a. Recursive a => Annotated a -> Praxis (Annotated a)) -> Praxis ()
+smap :: (forall a. Term a => Annotated a -> Praxis (Annotated a)) -> Praxis ()
 smap f = do
-  let lower :: Recursive a => (Annotated a -> Praxis (Annotated a)) -> a -> Praxis a
+  let lower :: Term a => (Annotated a -> Praxis (Annotated a)) -> a -> Praxis a
       lower f x = view value <$> f (phantom x)
   our . sol %%= traverse (second (lower f))
   our . ops %%= traverse (second (lower f))
@@ -246,7 +246,7 @@ smap f = do
   tEnv %%= traverse f
   return ()
 
-eval :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+eval :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 eval x = introspect (embedVisit f) x where
   f :: Annotated Type -> Visit Praxis () Type
   f (a :< t) = case t of

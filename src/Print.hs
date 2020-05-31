@@ -58,10 +58,10 @@ unlayout ts = unlayout' (-1) ts where
     [t]    -> pretty t
     t : ts -> cmap (\c -> if null c then Nil else c <> " ") (pretty t) <> unlayout' n ts
 
-instance (Recursive a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
+instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
   pretty = unlayout . force unparse
 
-label :: Recursive a => I a -> Maybe (Annotation a) -> Printable String
+label :: Term a => I a -> Maybe (Annotation a) -> Printable String
 label _ Nothing  = blank
 label i (Just a) = case i of
   IExp            -> prettyIf Types a

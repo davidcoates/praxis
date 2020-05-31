@@ -15,13 +15,13 @@ import           Praxis
 import           Stage
 import           Term
 
-check :: Recursive a => Annotated a -> Praxis (Annotated a)
+check :: Term a => Annotated a -> Praxis (Annotated a)
 check x = save stage $ do
   stage .= TypeCheck Warmup
   our .= initialSystem
   x <- generate x
   (ts, ops) <- solve
-  let f :: forall a. Recursive a => a -> Maybe a
+  let f :: forall a. Term a => a -> Maybe a
       f x = case witness :: I a of
         IType -> case x of {   TyUni n ->  lookup n ts; _ -> Nothing }
         ITyOp -> case x of { TyOpUni n -> lookup n ops; _ -> Nothing }

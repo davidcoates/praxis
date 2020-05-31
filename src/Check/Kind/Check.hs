@@ -12,7 +12,7 @@ import           Praxis
 import           Stage
 import           Term
 
-check :: Recursive a => Annotated a -> Praxis (Annotated a)
+check :: Term a => Annotated a -> Praxis (Annotated a)
 check a = save stage $ do
   stage .= KindCheck Warmup
   our .= initialSystem

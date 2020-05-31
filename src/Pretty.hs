@@ -14,7 +14,7 @@ module Pretty
 
 import           Common
 
-import           Data.Monoid.Colorful hiding (Pair)
+import           Data.Monoid.Colorful hiding (Pair, Term)
 import           Data.String          (IsString (..))
 
 data Option = Plain | Types | Kinds deriving Eq

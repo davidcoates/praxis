@@ -41,14 +41,14 @@ import           Text.Earley
 import qualified Text.Earley.Mixfix       as Earley
 import qualified Text.Earley.Mixfix.Graph as Earley
 
-run :: Recursive a => Annotated a -> Praxis (Annotated a)
+run :: Term a => Annotated a -> Praxis (Annotated a)
 run x = save stage $ do
   stage .= Desugar
   x' <- desugar x
   display x' `ifFlag` debug
   return x'
 
-desugar :: forall a. Recursive a => Annotated a -> Praxis (Annotated a)
+desugar :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 desugar x = ($ x) $ case witness :: I a of
   IProgram -> program
   IExp     -> exp

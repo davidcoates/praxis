@@ -96,7 +96,7 @@ progress d = case view value d of
       reuse n
       return True
 
-smap :: (forall a. Recursive a => Annotated a -> Annotated a) -> Praxis ()
+smap :: (forall a. Term a => Annotated a -> Annotated a) -> Praxis ()
 smap f = do
   let lower :: (Annotated Kind -> Annotated Kind) -> Kind -> Kind
       lower f = view value . f . phantom

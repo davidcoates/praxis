@@ -42,7 +42,7 @@ class Syntax f where
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   mark :: String -> f a
   unparseable :: f a -> f a
-  annotated :: Recursive a => f a -> f (Annotated a)
+  annotated :: Term a => f a -> f (Annotated a)
   combine :: f Void -> ((Annotated a, Annotated a) -> a) -> (Annotated a, Annotated a) -> Annotated a -- FIXME this is a hack
 
 cons :: Prism [a] (a, [a])

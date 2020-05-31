@@ -144,7 +144,7 @@ definePrisms ''Kind
 definePrisms ''KindConstraint
 definePrisms ''TypeConstraint
 
-syntax :: (Recursive a, Syntax f) => I a -> f a
+syntax :: (Term a, Syntax f) => I a -> f a
 syntax = \case
   -- | Operators
   IAssoc          -> assoc
@@ -214,7 +214,7 @@ pat = _PatCon <$> conid <*> many (annotated pat0) <|> pat0 <|> mark "pattern" wh
          special '(' *> pat <* special ')' <|>
          mark "pattern(0)"
 
-join :: (Syntax f, Recursive a) => f a -> (Prism a (Annotated a, b), f b) -> f a
+join :: (Syntax f, Term a) => f a -> (Prism a (Annotated a, b), f b) -> f a
 join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p where
   f (_ :< p, Nothing) = p
   f (p, Just q)       = construct _P (p, q)
@@ -222,7 +222,7 @@ join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p wher
     Just (x, y) -> Just (x, Just y)
     Nothing     -> Nothing
 
-left :: forall f a. (Syntax f, Recursive a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+left :: forall f a. (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
 left _P p = Prism f g <$> annotated p <*> many (annotated p) <|> unparseable p where
   f (_ :< p, []) = p
   f (p, q:qs)    = fold p q qs

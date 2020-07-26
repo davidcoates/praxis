@@ -82,4 +82,4 @@ initialDAEnv :: DAEnv
 initialDAEnv = empty
 
 initialOpContext :: OpContext
-initialOpContext = OpContext { _defns = Map.empty, _levels = [], _table = Earley.OpTable { Earley.precedence = array (0, 0) [], Earley.table = array (0, 0) [] } }
+initialOpContext = OpContext { _defns = Map.empty, _levels = [], _table = Earley.OpTable { Earley.precedence = array (1, 0) [], Earley.table = array (1, 0) [] } }

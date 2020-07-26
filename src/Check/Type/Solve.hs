@@ -199,6 +199,10 @@ resolve c = checkAxioms c $ case view value c of
       -- FIXME make this general!
       TyApply (_ :< TyCon "List") _ -> resolved (not p)
 
+      TyVar n -> do
+        isAxiom <- (c `elem`) <$> use (our . axioms)
+        resolved isAxiom
+
       _ -> defer
 
       where

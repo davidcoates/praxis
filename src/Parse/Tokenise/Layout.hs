@@ -3,6 +3,7 @@ module Parse.Tokenise.Layout
   ) where
 
 import           Common
+import           Prelude hiding (lines)
 import           Token
 
 lbrace :: Sourced Token
@@ -14,20 +15,21 @@ rbrace = Phantom :< Special '}'
 semi :: Sourced Token
 semi = Phantom :< Special ';'
 
--- |Inserts phantom layout tokens based on indentation
 layout :: Bool -> [Sourced Token] -> [Sourced Token]
-layout topLevel ts = l (-1) topLevel [] ts
-  where l :: Int -> Bool -> [Int] -> [Sourced Token] -> [Sourced Token] -- This function works by magic
-        l i b cs [] = replicate (length cs) rbrace
-        l i True cs (t@(_:<Special '{'):ts) = t : l i False cs ts
-        l i b cs (t@(a:<x):ts) | b         = lbrace : t : l i' b' (j:cs) ts
-                               | null cs   = t : l i' b' cs ts
-                               | i' > i    = case compare j (head cs) of LT -> rbrace : l i b (tail cs) (t:ts)
-                                                                         EQ -> semi : t : l i' b' cs ts
-                                                                         GT -> t : l i' b' cs ts
-                               | otherwise = t : l i' b' cs ts
-          where i' = line . end $ a
-                j  = column . start $ a
-                b' = case x of ReservedId x -> x `elem` ["do", "of", "where", "cases"]
-                               _            -> False
+layout block ts = if block then [lbrace] ++ ts' ++ [rbrace] else ts' where ts' = layout' [] (lines ts)
 
+lines :: [Sourced Token] -> [[Sourced Token]]
+lines []     = []
+lines (x:xs) = case lines xs of
+    []   -> [[x]]
+    l:ls -> if (line . start . view tag) (head l) == (line . end . view tag) x then (x:l):ls else [x] : l : ls
+
+layout' :: [Int] -> [[Sourced Token]] -> [Sourced Token]
+layout' [] []     = []
+layout' is []     = replicate (length is - 1) rbrace
+layout' is (l:ls) = let li = (column . start . view tag) (head l) in case is of
+    [] -> l ++ layout' [li] ls
+    _  -> case compare li (head is) of
+        GT -> (lbrace : l) ++ layout' (li : is) ls
+        EQ -> (semi : l) ++ layout' is ls
+        LT -> rbrace : layout' (tail is) (l : ls)

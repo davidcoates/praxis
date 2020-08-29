@@ -39,10 +39,10 @@ special c = token (Special c) <|> mark ("special '" ++ [c] ++ "'")
 
 -- FIXME contextule reservation is dirty
 contextualOp :: Syntax f => Name -> f ()
-contextualOp op = token (QVarSym (QString [] op)) <|> mark ("contextually-reserved '" ++ op ++ "'")
+contextualOp op = token (QVarSym (unqualified op)) <|> mark ("contextually-reserved '" ++ op ++ "'")
 
 contextualId :: Syntax f => Name -> f ()
-contextualId id = token (QVarId (QString [] id)) <|> mark ("contextually-reserved '" ++ id ++ "'")
+contextualId id = token (QVarId (unqualified id)) <|> mark ("contextually-reserved '" ++ id ++ "'")
 
 dot :: Syntax f => f ()
 dot = contextualOp "."
@@ -68,9 +68,9 @@ record p = f <$> list p' where
   f = Prism (\r -> Record.fromList r) (\kvs -> Just (map (\(_, v) -> (Nothing, v)) (Record.toList kvs)))
 
 varid :: Syntax f => f String
-varid = match f (\s -> QVarId (QString [] s)) where
+varid = match f (\s -> QVarId (unqualified s)) where
   f = \case
-    QVarId n -> if null (qualification n) then Just (name n) else Nothing
+    QVarId n -> if null (qualification n) then Just (unqualify n) else Nothing
     _        -> Nothing
 
 tyOpVar :: Syntax f => f String
@@ -83,15 +83,15 @@ uni :: Syntax f => f String
 uni = match (const Nothing) (\s -> Uni s)
 
 conid :: Syntax f => f String
-conid = match f (\s -> QConId (QString [] s)) where
+conid = match f (\s -> QConId (unqualified s)) where
   f = \case
-    QConId n -> if null (qualification n) then Just (name n) else Nothing
+    QConId n -> if null (qualification n) then Just (unqualify n) else Nothing
     _        -> Nothing
 
 varsym :: Syntax f => f String
-varsym = match f (\s -> QVarSym (QString [] s)) where
+varsym = match f (\s -> QVarSym (unqualified s)) where
   f = \case
-    QVarSym n -> if null (qualification n) then Just (name n) else Nothing
+    QVarSym n -> if null (qualification n) then Just (unqualify n) else Nothing
     _          -> Nothing
 
 lit :: Syntax f => f Lit

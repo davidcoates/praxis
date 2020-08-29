@@ -43,6 +43,9 @@ module Common
   , absurd
 
   , foldMapA
+
+  , Qualified(..)
+  , unqualified
   ) where
 
 import           Common.Source
@@ -91,3 +94,13 @@ foldMapA f = foldr (liftA2 mappend . f) (pure mempty)
 
 just :: Functor f => (a -> f b) -> Maybe a -> f (Maybe b)
 just f (Just x) = Just <$> f x
+
+data Qualified a = Qualified { qualification :: [Name], unqualify :: a }
+  deriving (Eq, Ord)
+
+instance Show a => Show (Qualified a) where
+  show q = intercalate "." (qualification q ++ [show (unqualify q)])
+
+unqualified :: a -> Qualified a
+unqualified x = Qualified { qualification = [], unqualify = x }
+

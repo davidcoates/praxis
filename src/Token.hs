@@ -4,12 +4,12 @@ module Token
 
 import           Common
 import           Pretty
-import           Term   (Lit (..), QString (..))
+import           Term   (Lit (..))
 
-data Token = QVarId QString
-           | QConId QString
-           | QVarSym QString
-           | QConSym QString
+data Token = QVarId (Qualified Name)
+           | QConId (Qualified Name)
+           | QVarSym (Qualified Name)
+           | QConSym (Qualified Name)
            | ReservedCon String
            | ReservedOp String
            | ReservedId String

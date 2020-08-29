@@ -9,7 +9,7 @@ import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Praxis                   hiding (throw)
 import           Pretty
 import           Stage
-import           Term                     (Lit (..), QString (..))
+import           Term                     (Lit (..))
 import           Token
 
 import           Control.Applicative      (Alternative (..), Applicative (..))
@@ -99,7 +99,7 @@ stuff = form <$> stuff' where
   form [x] | x `elem` reservedIds = ReservedId x
            | x `elem` reservedCons = ReservedCon x
            | x `elem` reservedOps = ReservedOp x
-  form xs = let qs = QString (init xs) (last xs) in case last xs of
+  form xs = let qs = Qualified { qualification = init xs, unqualify = last xs } in case last xs of
     x | isLower (head x) -> QVarId qs
     x | isUpper (head x) -> QConId qs
     x | head x == ':'    -> QConSym qs

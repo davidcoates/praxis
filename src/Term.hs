@@ -4,10 +4,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Term
-  ( QString(..)
-
   -- | Operators
-  , Assoc(..)
+  ( Assoc(..)
   , Op(..)
   , OpRules(..)
   , Prec(..)
@@ -56,14 +54,6 @@ import           Record
 
 import           Data.Set (Set)
 
--- |TODO move this to Common?
--- FIXME make Qualified a type w/ qualification :: [String] and unqualified :: a
-data QString = QString { qualification :: [String], name :: String }
-  deriving (Ord, Eq)
-
-instance Show QString where
-  show s = intercalate "." (qualification s ++ [name s])
-
 
 -- * OPERATORS *
 data Assoc = AssocLeft | AssocRight
@@ -82,7 +72,7 @@ data Prec = Prec Ordering Op
 -- * DECLARATIONS *
 data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
           | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
-          | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME QString
+          | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
           | DeclSig Name (Annotated QType) -- ^Parsing only
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
@@ -103,7 +93,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Read Name (Annotated Exp)
          | Record (Record (Annotated Exp))
          | Sig (Annotated Exp) (Annotated Type)
-         | Var Name -- FIXME QString
+         | Var Name -- FIXME Qualified Name
          | VarBang Name -- ^Parsing only
   deriving (Eq, Ord)
 

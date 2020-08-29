@@ -67,14 +67,17 @@ instance Show QString where
 
 -- * OPERATORS *
 data Assoc = AssocLeft | AssocRight
+  deriving (Eq, Ord)
 
 data Op = Op [Maybe Name] -- TDO qualification over this
   deriving (Eq, Ord)
 
 data OpRules = OpRules (Maybe (Annotated Assoc)) [Annotated Prec]
              | OpMultiRules [Either (Annotated Assoc) [Annotated Prec]] -- ^Parsing only
+  deriving (Eq, Ord)
 
 data Prec = Prec Ordering Op
+  deriving (Eq, Ord)
 
 -- * DECLARATIONS *
 data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
@@ -82,8 +85,10 @@ data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME QString
           | DeclSig Name (Annotated QType) -- ^Parsing only
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
+  deriving (Eq, Ord)
 
 data DataAlt = DataAlt Name [Annotated Type]
+  deriving (Eq, Ord)
 
 -- * EXPRESSIONS *
 data Exp = Apply (Annotated Exp) (Annotated Exp)
@@ -100,12 +105,13 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
          | Var Name -- FIXME QString
          | VarBang Name -- ^Parsing only
+  deriving (Eq, Ord)
 
 data Lit = Bool Bool
          | Char Char
          | Int Int
          | String String
-  deriving Eq
+  deriving (Eq, Ord)
 
 -- TODO remove?
 instance Show Lit where
@@ -121,15 +127,19 @@ data Pat = PatAt Name (Annotated Pat)
          | PatRecord (Record (Annotated Pat))
          | PatVar Name
          | PatCon Name [Annotated Pat]
+  deriving (Eq, Ord)
 
 data Program = Program [Annotated Decl]
+  deriving (Eq, Ord)
 
 data Stmt = StmtDecl (Annotated Decl)
           | StmtExp (Annotated Exp)
+  deriving (Eq, Ord)
 
 -- |Parsing only
 data Tok = TExp (Annotated Exp)
          | TOp Name
+  deriving (Eq, Ord)
 
 data TyOp = TyOpUni Name
           | TyOpBang

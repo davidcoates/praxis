@@ -1,6 +1,4 @@
 
-operator (_ + _) = add
-
 data List a where
   Nil
   Cons (a, List a)

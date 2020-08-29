@@ -1,5 +1,8 @@
 module ParseSpec where
 
+import           Common
+import           Inbuilts
+import           Introspect
 import           Parse         (parse)
 import           Praxis
 import           Term
@@ -11,8 +14,10 @@ import           Test.Hspec
 matches a b = (a, b)
 
 exps =
-  [ "1 + 2 + 3" `matches` "(1 + 2) + 3"
+  [ "1 + 2" `matches` "1 + 2"
+  , "1 + 2 + 3" `matches` "(1 + 2) + 3"
   , "1 + 2 * 3" `matches` "1 + (2 * 3)"
+  , "1 - - 2" `matches` "1 - (- 2)"
   , "f x 1 + g y * z" `matches` "((f x) 1) + ((g y) * z)"
   , "f x + f y + f z" `matches` "((f x) + (f y)) + (f z)" ]
 
@@ -22,22 +27,24 @@ tys =
   , "Maybe (Maybe a) -> Maybe b" `matches` "(Maybe (Maybe a)) -> (Maybe b)"
   ]
 
+-- TODO broken - simply check parsing + unparsing = identity
 programs =
-  [ " fac : Int -> Int   \n\
-    \ fac = cases        \n\
-    \ 0 -> 1             \n\
-    \ n -> n * fac (n -1)"
-    `matches` "{ fac : Int -> Int; fac = cases { 0 -> 1; n -> n * (fac (n - 1)) } }"
+  [ unlines
+      [ "fac : Int -> Int"
+      , "fac = cases"
+      , "  0 -> 1"
+      , "  n -> n * fac (n -1)"
+      ] `matches` "{ fac : Int -> Int; fac = cases { 0 -> 1; n -> n * (fac (n - 1)) } }"
   ]
 
 exp :: String -> Annotated Exp
-exp s = runInternal emptyState (parse s)
+exp s = runInternal initialState (parse s)
 
 ty :: String -> Annotated Type
-ty s = runInternal emptyState (parse s)
+ty s = runInternal initialState (parse s)
 
 program :: String -> Annotated Program
-program s = runInternal emptyState (parse s)
+program s = runInternal initialState (parse s)
 
 spec :: Spec
 spec = do

@@ -13,12 +13,14 @@ import           Parse                    (parse)
 import           Praxis
 import qualified Record
 import           Term
+import qualified Text.Earley.Mixfix.Graph as Earley
 import           Value
 
 import           Data.Array               (array)
 import           Data.List                (nub, sort)
-import qualified Data.Map.Strict          as Map (empty)
+import qualified Data.Map.Strict          as Map (empty, fromList)
 import qualified Data.Set                 as Set (empty)
+import qualified Text.Earley.Mixfix       as Earley
 import qualified Text.Earley.Mixfix.Graph as Earley
 
 -- TODO Make this importPrelude, a Monadic action?
@@ -81,5 +83,27 @@ initialKEnv = fromList preludeKinds
 initialDAEnv :: DAEnv
 initialDAEnv = empty
 
+preludeOps = unlines $
+  [ "operator (_ + _) = add where"
+  , "  associates left"
+  , ""
+  , "operator (_ - _) = subtract where"
+  , "  associates left"
+  , "  precedence equal (_ + _)"
+  , ""
+  , "operator (_ * _) = multipliy where"
+  , "  associates left"
+  , "  precedence above (_ + _)"
+  , ""
+  , "operator (- _) = negate where"
+  , "  precedence above (_ * _)"
+  , ""
+  , "operator (_ . _) = compose where"
+  , "  associates right"
+  ]
+
 initialOpContext :: OpContext
-initialOpContext = OpContext { _defns = Map.empty, _levels = [], _table = Earley.OpTable { Earley.precedence = array (1, 0) [], Earley.table = array (1, 0) [] } }
+initialOpContext = runInternal (set opContext emptyOpContext $ set vEnv initialVEnv $ emptyState) ((parse preludeOps :: Praxis (Annotated Program)) >> use opContext)
+
+emptyOpContext :: OpContext
+emptyOpContext = OpContext { _defns = Map.empty, _levels = [], _table = Earley.OpTable { Earley.precedence = array (1, 0) [], Earley.table = array (1, 0) [] } }

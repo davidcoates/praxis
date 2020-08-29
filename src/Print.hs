@@ -61,6 +61,9 @@ unlayout ts = unlayout' (-1) ts where
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
   pretty = unlayout . force unparse
 
+instance (Term a, x ~ Annotation a) => Show (Tag (Source, Maybe x) a) where
+  show x = show (runPrintable (pretty x) Plain)
+
 label :: Term a => I a -> Maybe (Annotation a) -> Printable String
 label _ Nothing  = blank
 label i (Just a) = case i of

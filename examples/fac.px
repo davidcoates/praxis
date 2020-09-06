@@ -8,7 +8,7 @@ main : () -> ()
 main () = do
   putStrLn "Enter a number:"
   let x = getInt ()
-  putInt (fac x)
+  putInt fac x
 
 -- Without prompts
 main' : () -> ()

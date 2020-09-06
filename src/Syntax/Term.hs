@@ -211,17 +211,17 @@ join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p wher
     Just (x, y) -> Just (x, Just y)
     Nothing     -> Nothing
 
-left :: forall f a. (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
-left _P p = Prism f g <$> annotated p <*> many (annotated p) <|> unparseable p where
-  f (_ :< p, []) = p
-  f (p, q:qs)    = fold p q qs
-  fold p q []     = construct _P (p, q)
-  fold p q (r:rs) = fold (combine (empty :: f Void) (construct _P) (p, q)) r rs
+right :: forall f a. (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+right _P p = Prism f g <$> annotated p <*> many (annotated p) <|> unparseable p where
+  f (p, ps)    = view value (fold p ps)
+  fold p = \case
+    []     -> p
+    (q:qs) -> combine (empty :: f Void) (construct _P) (p, fold q qs)
   g x = case destruct _P x of
-    Just (x, y) -> Just (let z:zs = unfold x ++ [y] in (z, zs)) -- TODO tidy this up
+    Just (x, y) -> Just (let z:zs = x : unfold y in (z, zs)) -- TODO tidy this up
     Nothing     -> Nothing
   unfold x = case destruct _P (view value x) of
-    Just (x, y) -> unfold x ++ [y]
+    Just (x, y) -> x : unfold y
     Nothing     -> [x]
 
 kind :: Syntax f => f Kind
@@ -245,7 +245,7 @@ qTyVar = _QTyVar <$> varid <|>
 ty :: Syntax f => f Type
 ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
   ty2 = _TyOp <$> annotated tyOp <*> annotated ty2 <|> ty1 <|> mark "type(2)"
-  ty1 = left _TyApply ty0 <|> mark "type(1)"
+  ty1 = right _TyApply ty0 <|> mark "type(1)"
   ty0 = _TyVar <$> varid <|>
         _TyCon <$> conid <|>
         _TyRecord <$> record (annotated ty) <|>
@@ -269,7 +269,7 @@ exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Cases <$> reservedId "cases" *> block alt <|>
          _Lambda <$> reservedOp "\\" *> annotated pat <*> reservedOp "->" *> annotated exp <|>
          exp1 <|> mark "expression(2)"
-  exp1 = left _Apply exp0 <|> mark "expression(1)"
+  exp1 = right _Apply exp0 <|> mark "expression(1)"
   exp0 = _Record <$> record (annotated exp) <|>
          _VarBang <$> reservedOp "!" *> varid <|>
          _Var <$> varid <|> -- TODO qualified

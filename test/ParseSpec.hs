@@ -18,13 +18,13 @@ exps =
   , "1 + 2 + 3" `matches` "(1 + 2) + 3"
   , "1 + 2 * 3" `matches` "1 + (2 * 3)"
   , "1 - - 2" `matches` "1 - (- 2)"
-  , "f x 1 + g y * z" `matches` "((f x) 1) + ((g y) * z)"
+  , "f x 1 + g y * z" `matches` "(f (x 1)) + ((g y) * z)"
   , "f x + f y + f z" `matches` "((f x) + (f y)) + (f z)" ]
 
 tys =
   [ "Int -> Int -> Int" `matches` "Int -> (Int -> Int)"
-  , "A B C" `matches` "(A B) C"
-  , "Maybe (Maybe a) -> Maybe b" `matches` "(Maybe (Maybe a)) -> (Maybe b)"
+  , "A B C" `matches` "A (B C)"
+  , "Maybe Maybe a -> Maybe b" `matches` "(Maybe (Maybe a)) -> (Maybe b)"
   ]
 
 -- TODO broken - simply check parsing + unparsing = identity

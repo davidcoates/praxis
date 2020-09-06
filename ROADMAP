@@ -316,21 +316,41 @@ Lexicographic = instance Ord String where
 Natural = Lexicographic with Natural
 
 
+======
+TUPLES
+======
+
+Nested
+
+(x, y, z) == (x, (y, z))
+
+
 =======
 RECORDS
 =======
 
-data X = A { x : a, y : b }
-  deriving Ord using instance Ord { x : a, y : b } where
-    compare (a, b) = compare ((view x a, view y a), (view x b, view y b))
+{ Con1 : Type1, Con2 : Type2, ... }
 
-data X is
-  A { x : a, y : b } using Natural = instance Ord { x : a, y : b} where
-    compare (a, b) = compare ((view x a, view y a), (view x b, view y b))
-  B ...
-  deriving Ord
+import Lens (Con1) -- Can introduce arbitrary lenses
 
-Natural of Ord { x : a, y : b } in namespace X.A
+>>> Requires Rank2 types <<<
+
+Con1 : forall a b. Con1 a in b => (forall f ?v. Functor f => (a -> f a) -> (b -> f b))
+
+^^^ vs. Prisofunctor with additional ?v ^^^
+
+^^^ vs. Viewfunctor with ! ^^^
+
+
+
+Ordered, { Con1 : x, Con2 : y } != { Con2 : y, Con1 : x }
+
+Introduce a type-level function Tuple:
+
+Tuple { Con1 : Type1, Con2 : Type2, Con3 : Type3 } = ( Type1, Type2, Type3 )
+
+record   : forall a b. (a ~ Tuple b) => a -> b
+unrecord : forall a b. (a ~ Tuple b) => b -> a
 
 
 ==================
@@ -354,3 +374,15 @@ interface Prisofunctor f where
   operator (_ <?$> _) = prisomap _ _ binds equal to (_ <$> _)
   split : forall a ?v. ?v f a -> f ?v a
   default split xs = id <?$> xs
+
+interface Functor ?v f where
+  map : forall a b. (?v a -> b) -> ?v (f a) -> f b
+  operator (_ <$> _) = map _ _
+
+
+Functor op(id) f
+
+Functor op(!) f
+
+Functor ?v f
+

@@ -91,7 +91,7 @@ preludeOps = unlines $
   , "  associates left"
   , "  precedence equal (_ + _)"
   , ""
-  , "operator (_ * _) = multipliy where"
+  , "operator (_ * _) = multiply where"
   , "  associates left"
   , "  precedence above (_ + _)"
   , ""

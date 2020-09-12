@@ -3,12 +3,12 @@ module Parse.Tokenise
   ) where
 
 import           Common                   hiding (asum)
-import           Parse.Tokenise.Layout
+import qualified Parse.Tokenise.Layout    as Layout
 import           Parse.Tokenise.Tokeniser hiding (run)
 import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Praxis                   hiding (throw)
 import           Pretty
-import           Stage
+import qualified Stage
 import           Term                     (Lit (..))
 import           Token
 
@@ -19,11 +19,11 @@ import           Prelude                  hiding (until)
 
 run :: Bool -> String -> Praxis [Sourced Token]
 run top s = save stage $ do
-  stage .= Tokenise
+  stage .= Stage.Tokenise
   ts <- Tokeniser.run token s
   display (separate " " (map (view value) ts)) `ifFlag` debug
-  stage .= Layout
-  let ts' = layout top ts
+  stage .= Stage.Layout
+  let ts' = Layout.layout top ts
   display (separate " " (map (view value) ts')) `ifFlag` debug
   return ts'
 
@@ -46,7 +46,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> tyOpVar <|> stuff)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> literal <|> tyOpVar <|> stuff)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment
@@ -54,8 +54,11 @@ whitespace = newline <|> space <|> comment
         space = match isSpace *> pure ()
         comment = matches 2 (== "--") *> until newline consume *> pure ()
 
+layout :: Tokeniser Token
+layout = Layout <$> match (`elem` "{};")
+
 special :: Tokeniser Token
-special = Special <$> match (`elem` "(),;[]`{}_")
+special = Special <$> match (`elem` "(),[]`_")
 
 literal :: Tokeniser Token
 literal = int <|> chara <|> string

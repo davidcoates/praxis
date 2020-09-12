@@ -37,6 +37,9 @@ token t = match (\t' -> if t' == t then Just () else Nothing) (const t)
 special :: Syntax f => Char -> f ()
 special c = token (Special c) <|> mark ("special '" ++ [c] ++ "'")
 
+layout :: Syntax f => Char -> f ()
+layout c = token (Layout c) <|> mark ("layout '" ++ [c] ++ "'")
+
 -- FIXME contextule reservation is dirty
 contextualOp :: Syntax f => Name -> f ()
 contextualOp op = token (QVarSym (unqualified op)) <|> mark ("contextually-reserved '" ++ op ++ "'")
@@ -48,10 +51,10 @@ dot :: Syntax f => f ()
 dot = contextualOp "."
 
 block :: Syntax f => f a -> f [a]
-block p = special '{' *> _Cons <$> p <*> (special ';' *> p) `until` special '}'
+block p = layout '{' *> _Cons <$> p <*> (layout ';' *> p) `until` layout '}'
 
 blockOrLine :: Syntax f => f a -> f (a, [a])
-blockOrLine f = special '{' *> f <*> (special ';' *> f) `until` special '}' <|>
+blockOrLine f = layout '{' *> f <*> (layout ';' *> f) `until` layout '}' <|>
                 f <*> _Nil <$> pure ()
 
 blockLike :: Syntax f => f () -> f a -> f [a]

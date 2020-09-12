@@ -79,7 +79,7 @@ data Resolution = Proven
 (&&&) = curry $ \case
   (Proven, r)      -> r
   (r, Proven)      -> r
-  (Disproven o, _) -> Disproven o
+  (Disproven o, _) -> Disproven o -- TODO open?
   (_, Disproven o) -> Disproven o
   (r, s)           -> Unproven { antecedents = antecedents r ++ antecedents s, trivial = trivial r || trivial s }
 

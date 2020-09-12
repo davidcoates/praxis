@@ -51,7 +51,7 @@ unlayout :: [Token] -> Printable String
 unlayout ts = unlayout' (-1) ts where
   unlayout' n ts = case ts of
     []      -> ""
-    Special t : ts
+    Layout t : ts
       | t == '{' -> (if n >= 0 then indent (n+1) else blank) <> unlayout' (n+1) ts
       | t == ';' -> indent n <> unlayout' n ts
       | t == '}' -> unlayout' (n-1) ts

@@ -7,13 +7,13 @@ import           Prelude hiding (lines)
 import           Token
 
 lbrace :: Sourced Token
-lbrace = Phantom :< Special '{'
+lbrace = Phantom :< Layout '{'
 
 rbrace :: Sourced Token
-rbrace = Phantom :< Special '}'
+rbrace = Phantom :< Layout '}'
 
 semi :: Sourced Token
-semi = Phantom :< Special ';'
+semi = Phantom :< Layout ';'
 
 layout :: Bool -> [Sourced Token] -> [Sourced Token]
 layout block ts = if block then [lbrace] ++ ts' ++ [rbrace] else ts' where ts' = layout' [] (lines ts)

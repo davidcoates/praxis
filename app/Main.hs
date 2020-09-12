@@ -5,8 +5,6 @@ import           Env
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
-import           Pretty
-import           Record
 import           Term
 import           Value
 
@@ -55,9 +53,8 @@ runMain :: Praxis ()
 runMain = do
   t <- tEnv `uses` lookup "main"
   case t of Nothing -> throw "missing main function"
-            Just (_ :< Mono (_ :< TyFun (_ :< r) (_ :< r'))) | r == TyRecord Record.unit
-                                                             , r' == TyRecord Record.unit ->
-              do { Just (F f) <- vEnv `uses` lookup "main"; f (R Record.unit); return () }
+            Just (_ :< Mono (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) ->
+              do { Just (F f) <- vEnv `uses` lookup "main"; f U; return () }
             Just t -> throwAt (view source t) $ pretty "main function has bad type " <> quote (pretty t) <> pretty ", expected () -> ()"
 
 repl :: Praxis ()

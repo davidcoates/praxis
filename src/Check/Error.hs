@@ -5,7 +5,6 @@ module Check.Error
   ) where
 
 import           Common
-import           Pretty
 
 data Error = NotInScope Name
 

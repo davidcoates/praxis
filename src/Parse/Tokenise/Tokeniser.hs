@@ -16,7 +16,6 @@ import           Common
 import           Parse.Parser        (Parser (..))
 import qualified Parse.Parser        as Parser (match, run, satisfies, throw)
 import           Praxis              (Praxis, throwAt)
-import           Pretty
 import           Token
 
 import           Control.Applicative (Alternative (..), Applicative (..))

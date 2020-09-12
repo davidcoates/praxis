@@ -49,8 +49,6 @@ module Term
   ) where
 
 import           Common
-import           Pretty
-import           Record
 
 import           Data.Set (Set)
 
@@ -91,8 +89,9 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Lit Lit
          | Mixfix [Annotated Tok] -- ^Parsing only
          | Read Name (Annotated Exp)
-         | Record (Record (Annotated Exp))
+         | Pair (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
+         | Unit
          | Var Name -- FIXME Qualified Name
          | VarBang Name -- ^Parsing only
   deriving (Eq, Ord)
@@ -112,11 +111,12 @@ instance Show Lit where
     String s -> show s
 
 data Pat = PatAt Name (Annotated Pat)
+         | PatCon Name [Annotated Pat] -- TODO replace with (Annotated Pat) or Maybe (Annotated Pat)
          | PatHole
          | PatLit Lit
-         | PatRecord (Record (Annotated Pat))
+         | PatPair (Annotated Pat) (Annotated Pat)
+         | PatUnit
          | PatVar Name
-         | PatCon Name [Annotated Pat]
   deriving (Eq, Ord)
 
 data Program = Program [Annotated Decl]
@@ -137,15 +137,17 @@ data TyOp = TyOpUni Name
           | TyOpVar Name
   deriving (Eq, Ord)
 
+-- TODO TyPatPack
 data TyPat = TyPatVar Name
   deriving (Eq, Ord)
 
-data Type = TyUni Name                                -- Compares less than all other types
+data Type = TyUni Name -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
           | TyFun (Annotated Type) (Annotated Type)
-          | TyRecord (Record (Annotated Type))        -- A type record : T
           | TyOp (Annotated TyOp) (Annotated Type)
+          | TyPair (Annotated Type) (Annotated Type)
+          | TyUnit
           | TyVar Name
   deriving (Eq, Ord)
 

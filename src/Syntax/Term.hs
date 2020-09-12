@@ -12,8 +12,6 @@ module Syntax.Term
 
 import           Common
 import           Introspect
-import           Record        (Record)
-import qualified Record
 import           Syntax.Prism
 import           Syntax.Syntax
 import           Syntax.TH
@@ -60,15 +58,6 @@ blockOrLine f = layout '{' *> f <*> (layout ';' *> f) `until` layout '}' <|>
 blockLike :: Syntax f => f () -> f a -> f [a]
 blockLike f g = _Cons <$> f *> blockOrLine g <|>
                 _Nil <$> pure ()
-
-list :: Syntax f => f a -> f [a]
-list p = special '(' *> (_Nil <$> special ')' *> pure () <|> _Cons <$> p <*> (special ',' *> p) `until` special ')')
-
--- This also captures parenthesised p's (which is corrected by desugaring)
-record :: Syntax f => f a -> f (Record a)
-record p = f <$> list p' where
-  p' = Prism (\v -> (Nothing, v)) (Just . snd) <$> p -- TODO named fields
-  f = Prism (\r -> Record.fromList r) (\kvs -> Just (map (\(_, v) -> (Nothing, v)) (Record.toList kvs)))
 
 varid :: Syntax f => f String
 varid = match f (\s -> QVarId (unqualified s)) where
@@ -163,6 +152,36 @@ syntax = \case
   ITypeConstraint -> tyConstraint
   IKindConstraint -> kindConstraint
 
+
+tuple :: (Syntax f, Term a) => Prism a () -> Prism a (Annotated a, Annotated a) -> f a -> f a
+tuple unit pair p = special '(' *> tuple' where
+  tuple' = unit <$> special ')' *> pure () <|> rightWithSep (special ',') pair p <* special ')'
+
+join :: (Syntax f, Term a) => f a -> (Prism a (Annotated a, b), f b) -> f a
+join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p where
+  f (_ :< p, Nothing) = p
+  f (p, Just q)       = construct _P (p, q)
+  g x = case destruct _P x of
+    Just (x, y) -> Just (x, Just y)
+    Nothing     -> Nothing
+
+right :: forall f a. (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+right = rightWithSep (pure ())
+
+rightWithSep :: forall f a. (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
+rightWithSep s _P p = Prism f g <$> annotated p <*> many (s *> annotated p) <|> unparseable p where
+  f (p, ps)    = view value (fold p ps)
+  fold p = \case
+    []     -> p
+    (q:qs) -> combine (empty :: f Void) (construct _P) (p, fold q qs)
+  g x = case destruct _P x of
+    Just (x, y) -> Just (let z:zs = x : unfold y in (z, zs)) -- TODO tidy this up
+    Nothing     -> Nothing
+  unfold x = case destruct _P (view value x) of
+    Just (x, y) -> x : unfold y
+    Nothing     -> [x]
+
+
 tyConstraint :: Syntax f => f TypeConstraint
 tyConstraint = _Affine <$> reservedCon "Affine" *> annotated ty <|>
                _Share <$> reservedCon "Share" *> annotated ty <|>
@@ -200,32 +219,10 @@ decl = fun
 pat :: Syntax f => f Pat
 pat = _PatCon <$> conid <*> many (annotated pat0) <|> pat0 <|> mark "pattern" where
   pat0 = _PatHole <$> special '_' <|>
-         _PatRecord <$> record (annotated pat) <|>
          _PatLit <$> lit <|>
          _PatVar <$> varid <|>
-         special '(' *> pat <* special ')' <|>
+         tuple _PatUnit _PatPair pat <|>
          mark "pattern(0)"
-
-join :: (Syntax f, Term a) => f a -> (Prism a (Annotated a, b), f b) -> f a
-join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p where
-  f (_ :< p, Nothing) = p
-  f (p, Just q)       = construct _P (p, q)
-  g x = case destruct _P x of
-    Just (x, y) -> Just (x, Just y)
-    Nothing     -> Nothing
-
-right :: forall f a. (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
-right _P p = Prism f g <$> annotated p <*> many (annotated p) <|> unparseable p where
-  f (p, ps)    = view value (fold p ps)
-  fold p = \case
-    []     -> p
-    (q:qs) -> combine (empty :: f Void) (construct _P) (p, fold q qs)
-  g x = case destruct _P x of
-    Just (x, y) -> Just (let z:zs = x : unfold y in (z, zs)) -- TODO tidy this up
-    Nothing     -> Nothing
-  unfold x = case destruct _P (view value x) of
-    Just (x, y) -> x : unfold y
-    Nothing     -> [x]
 
 kind :: Syntax f => f Kind
 kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind" where
@@ -251,9 +248,8 @@ ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
   ty1 = right _TyApply ty0 <|> mark "type(1)"
   ty0 = _TyVar <$> varid <|>
         _TyCon <$> conid <|>
-        _TyRecord <$> record (annotated ty) <|>
         _TyUni <$> uni <|>
-        special '(' *> ty <* special ')' <|>
+        tuple _TyUnit _TyPair ty <|>
         mark "type(0)"
 
 tyOp :: Syntax f => f TyOp
@@ -273,12 +269,11 @@ exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Lambda <$> reservedOp "\\" *> annotated pat <*> reservedOp "->" *> annotated exp <|>
          exp1 <|> mark "expression(2)"
   exp1 = right _Apply exp0 <|> mark "expression(1)"
-  exp0 = _Record <$> record (annotated exp) <|>
-         _VarBang <$> reservedOp "!" *> varid <|>
+  exp0 = _VarBang <$> reservedOp "!" *> varid <|>
          _Var <$> varid <|> -- TODO qualified
          _Con <$> conid <|>
          _Lit <$> lit <|>
-         special '(' *> exp <* special ')' <|>
+         tuple _Unit _Pair exp <|>
          mark "expression(0)"
 
 stmt :: Syntax f => f Stmt

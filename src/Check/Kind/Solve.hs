@@ -14,8 +14,6 @@ import           Check.Kind.System
 import           Common
 import           Introspect
 import           Praxis
-import           Pretty
-import           Record
 import           Stage
 import           Term
 

@@ -9,7 +9,6 @@ module Eval
 import           Common
 import           Env
 import           Praxis
-import           Record
 import           Stage
 import           Term
 import           Value
@@ -99,9 +98,7 @@ expRec n (_ :< e) = case e of
 
   Read _ e -> exp e
 
-  Record r -> do
-    x <- mapM exp r
-    return (R x)
+  Pair a b -> P <$> exp a <*> exp b
 
   Sig e _ -> exp e
 
@@ -147,11 +144,11 @@ bind v (_ :< p) = case p of
   PatLit l | L l' <- v
     -> if l == l' then Just (return 0) else Nothing
 
-  PatRecord r | R r' <- v
-    -> do
-    let vs = map snd $ Record.toCanonicalList r'
-        ps = map snd $ Record.toCanonicalList r
-    binds vs ps
+  PatPair p q | P p' q' <- v
+    -> binds [p', q'] [p, q]
+
+  PatUnit
+    -> Just (return 0)
 
   PatVar n
     -> Just $ vEnv %= intro n v >> return 1

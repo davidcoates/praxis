@@ -3,7 +3,6 @@ module Token
   ) where
 
 import           Common
-import           Pretty
 import           Term   (Lit (..))
 
 data Token = QVarId (Qualified Name)

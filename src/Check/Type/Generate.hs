@@ -18,9 +18,7 @@ import           Env
 import qualified Env.LEnv           as LEnv
 import           Introspect
 import           Praxis
-import           Pretty
 import           Print
-import           Record
 import           Stage
 import           Term
 
@@ -252,10 +250,11 @@ exp = split $ \s -> \case
     tEnv %= elim
     return (view ty e' :< view value e')
 
-  Record r -> do
-    r' <- traverse exp r
-    let t = TyRecord (fmap (view ty) r') `as` phantom KindType
-    return (t :< Record r')
+  Pair p q -> do
+    p' <- exp p
+    q' <- exp q
+    let t = TyPair (view ty p') (view ty q') `as` phantom KindType
+    return (t :< Pair p' q')
 
 {-
   Sig e t -> do
@@ -265,9 +264,14 @@ exp = split $ \s -> \case
     return e'
 -}
 
+  Unit -> do
+    let t = TyUnit `as` phantom KindType
+    return (t :< Unit)
+
   Var n -> do
     t <- mark s n
     return (t :< Var n)
+
 
 equals :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
 equals ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
@@ -288,26 +292,6 @@ pat op = splitPair $ \s -> \case
     tEnv %= intro v (mono t)
     return (i + 1, t :< PatAt v p')
 
-  PatHole -> do
-    t <- freshTyUni
-    return (0, t :< PatHole)
-
-  PatLit l -> return (0, TyCon (lit l) `as` phantom KindType :< PatLit l)
-    where lit (Bool _)   = "Bool"
-          lit (Char _)   = "Char"
-          lit (Int _)    = "Int"
-          lit (String _) = "String"
-
-  PatRecord r -> do
-    (Sum i, r') <- traverse (over first Sum) <$> traverse (pat op) r
-    let t = TyRecord (fmap (view ty) r') `as` phantom KindType
-    return (i, t :< PatRecord r')
-
-  PatVar v -> do
-    t <- freshTyUni
-    tEnv %= intro v (mono (TyOp op t `as` phantom KindType))
-    return (1, t :< PatVar v)
-
   PatCon n ps -> do
     -- Lookup the data alternative with this name
     DataAltInfo ns ct args rt <- getData s n
@@ -318,3 +302,28 @@ pat op = splitPair $ \s -> \case
         args' = map f args
     requires [ newConstraint (view ty p' `TEq` arg') (Custom "TODO: PatCon") s | (p', arg') <- zip ps' args' ]
     return (i, rt' :< PatCon n ps')
+
+  PatHole -> do
+    t <- freshTyUni
+    return (0, t :< PatHole)
+
+  PatLit l -> return (0, TyCon (lit l) `as` phantom KindType :< PatLit l)
+    where lit (Bool _)   = "Bool"
+          lit (Char _)   = "Char"
+          lit (Int _)    = "Int"
+          lit (String _) = "String"
+
+  PatPair p q -> do
+    (i, p') <- pat op p
+    (j, q') <- pat op q
+    let t = TyPair (view ty p') (view ty q') `as` phantom KindType
+    return (i + j, t :< PatPair p' q')
+
+  PatUnit -> do
+    let t = TyUnit `as` phantom KindType
+    return (0, t :< PatUnit)
+
+  PatVar v -> do
+    t <- freshTyUni
+    tEnv %= intro v (mono (TyOp op t `as` phantom KindType))
+    return (1, t :< PatVar v)

@@ -2,7 +2,8 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Common
-  ( module Common.Source
+  ( module Common.Pretty
+  , module Common.Source
   , module Common.Tag
 
   , Name
@@ -23,6 +24,7 @@ module Common
   , uses
   , first
   , second
+  , both
 
   , liftA2
   , Const(..)
@@ -48,12 +50,13 @@ module Common
   , unqualified
   ) where
 
+import           Common.Pretty
 import           Common.Source
 import           Common.Tag
 
 import           Control.Applicative       (Const (..), liftA2)
-import           Control.Lens              (Lens', makeLenses, over, set, use,
-                                            uses, view, (%=), (.=), _1, _2)
+import           Control.Lens              (Lens', both, makeLenses, over, set,
+                                            use, uses, view, (%=), (.=), _1, _2)
 import           Control.Monad             (unless, when)
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Maybe (MaybeT (..))

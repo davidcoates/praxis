@@ -11,7 +11,6 @@ import           Env
 import           Introspect
 import           Parse                    (parse)
 import           Praxis
-import qualified Record
 import           Term
 import qualified Text.Earley.Mixfix.Graph as Earley
 import           Value
@@ -50,15 +49,15 @@ prelude =
   , ("subtract", mono "(Int, Int) -> Int", lift (-))
   , ("multiply", mono "(Int, Int) -> Int", lift (*))
   , ("negate",   mono "Int -> Int", F (\(L (Int x)) -> pure (L (Int (negate x)))))
-  , ("getInt",   mono "() -> Int",         F (\(R _) -> liftIO ((L . Int) <$> readLn)))
-  , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure (R Record.unit))))
-  , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure (R Record.unit))))
-  , ("compose",  poly [ "a", "b", "c" ] "(b -> c, a -> b) -> a -> c", F (\(R r) -> case Record.unpair r of (F f, F g) -> pure (F (\x -> g x >>= f))))
-  , ("print",    poly [ "a" ]  "a -> ()",  F (\x -> liftIO (print x >> pure (R Record.unit)))) -- TODO should have Show constraint
+  , ("getInt",   mono "() -> Int",         F (\U -> liftIO ((L . Int) <$> readLn)))
+  , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure U)))
+  , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure U)))
+  , ("compose",  poly [ "a", "b", "c" ] "(b -> c, a -> b) -> a -> c", F (\(P (F f) (F g)) -> pure (F (\x -> g x >>= f))))
+  , ("print",    poly [ "a" ]  "a -> ()",  F (\x -> liftIO (print x >> pure U))) -- TODO should have Show constraint
   ]
   where
-        lift :: (Int -> Int -> Int) -> Value
-        lift f = F (\(R r) -> case Record.unpair r of { (L (Int a), L (Int b)) -> pure (L (Int (f a b))); _ -> error (show r) })
+    lift :: (Int -> Int -> Int) -> Value
+    lift f = F (\(P (L (Int a)) (L (Int b))) -> pure (L (Int (f a b))))
 
 preludeKinds :: [(Name, Annotated Kind)]
 preludeKinds =

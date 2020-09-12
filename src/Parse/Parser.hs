@@ -15,7 +15,6 @@ module Parse.Parser
   ) where
 
 import           Common
-import           Pretty
 
 import           Control.Applicative (Alternative (..))
 import           Control.Arrow       (right)

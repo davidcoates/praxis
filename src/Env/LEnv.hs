@@ -14,9 +14,9 @@ module Env.LEnv
   )
 where
 
+import           Common
 import           Env
 import           Env.Env
-import           Pretty
 
 import           Control.Arrow (second)
 import           Data.List     (intercalate)

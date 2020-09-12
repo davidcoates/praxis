@@ -19,7 +19,8 @@ exps =
   , "1 + 2 * 3" `matches` "1 + (2 * 3)"
   , "1 - - 2" `matches` "1 - (- 2)"
   , "f x 1 + g y * z" `matches` "(f (x 1)) + ((g y) * z)"
-  , "f x + f y + f z" `matches` "((f x) + (f y)) + (f z)" ]
+  , "f x + f y + f z" `matches` "((f x) + (f y)) + (f z)"
+  , "(x, y, z)" `matches` "(x, (y, z))"]
 
 tys =
   [ "Int -> Int -> Int" `matches` "Int -> (Int -> Int)"

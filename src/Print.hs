@@ -10,7 +10,6 @@ module Print
 
 import           Common
 import           Introspect
-import           Pretty
 import           Syntax.Unparser
 import           Term
 import           Token

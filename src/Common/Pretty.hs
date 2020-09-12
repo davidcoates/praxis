@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Pretty
+module Common.Pretty
   ( Option(..)
   , Printable(..)
   , blank
@@ -12,8 +12,7 @@ module Pretty
   , module Data.Monoid.Colorful
   ) where
 
-import           Common
-
+import           Control.Applicative  (liftA2)
 import           Data.Monoid.Colorful hiding (Pair, Term)
 import           Data.String          (IsString (..))
 

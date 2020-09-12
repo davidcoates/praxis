@@ -212,8 +212,9 @@ instance Term Exp where
     Lit l        -> pure (Lit l)
     Mixfix ts    -> Mixfix <$> traverse f ts
     Read n a     -> Read n <$> f a
-    Record r     -> Record <$> traverse f r
+    Pair a b     -> Pair <$> f a <*> f b
     Sig e t      -> Sig <$> f e <*> f t
+    Unit         -> pure Unit
     Var n        -> pure (Var n)
     VarBang n    -> pure (VarBang n)
 
@@ -222,11 +223,12 @@ instance Term Pat where
   complete _ f x = f x
   recurse f = \case
     PatAt n a   -> PatAt n <$> f a
+    PatCon n ps -> PatCon n <$> traverse f ps
     PatHole     -> pure PatHole
     PatLit l    -> pure (PatLit l)
-    PatRecord r -> PatRecord <$> traverse f r
+    PatPair a b -> PatPair <$> f a <*> f b
+    PatUnit     -> pure PatUnit
     PatVar n    -> pure (PatVar n)
-    PatCon n ps -> PatCon n <$> traverse f ps
 
 instance Term Program where
   witness = IProgram
@@ -273,8 +275,9 @@ instance Term Type where
     TyApply a b -> TyApply <$> f a <*> f b
     TyCon n     -> pure (TyCon n)
     TyFun a b   -> TyFun <$> f a <*> f b
-    TyRecord r  -> TyRecord <$> traverse f r
     TyOp op t   -> TyOp <$> f op <*> f t
+    TyPair a b  -> TyPair <$> f a <*> f b
+    TyUnit      -> pure TyUnit
     TyVar n     -> pure (TyVar n)
 
 instance Term QType where

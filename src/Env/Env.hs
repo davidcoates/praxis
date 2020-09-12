@@ -15,7 +15,6 @@ import           Data.List    (intercalate)
 import           Env
 import           Prelude      hiding (lookup)
 import qualified Prelude      (lookup)
-import           Pretty
 
 -- TODO Cosider putting source in Env
 newtype Env a b = Env [(a, b)]

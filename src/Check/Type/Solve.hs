@@ -16,8 +16,6 @@ import           Check.Type.System
 import           Common
 import           Introspect
 import           Praxis
-import           Pretty
-import           Record
 import           Stage               hiding (Unknown)
 import           Term
 
@@ -122,8 +120,7 @@ resolve c = checkAxioms c $ case view value c of
 
   TEq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2 -> introduce [ TEq t1 t2 ]
 
-  TEq (_ :< TyRecord r1) (_ :< TyRecord r2) | sort (keys r1) == sort (keys r2) ->
-    let values = map snd . Record.toCanonicalList in introduce (zipWith TEq (values r1) (values r2)) -- TODO create zipRecord or some such
+  TEq (_ :< TyPair s1 s2) (_ :< TyPair t1 t2) -> introduce [ TEq s1 t1, TEq s2 t2 ]
 
   TEq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> introduce [ TEq t1 s1, TEq t2 s2 ]
 
@@ -191,7 +188,9 @@ resolve c = checkAxioms c $ case view value c of
 
       TyFun _ _  -> resolved p
 
-      TyRecord r -> untrivialise <$> (foldl' (if p then (&&&) else (|||)) (if p then Proven else Disproven { open = False }) <$> forM r (resolve . share))
+      TyUnit -> resolved p
+
+      TyPair s t -> untrivialise <$> (\(s, t) -> (if p then (&&&) else (|||)) s t) <$> both (resolve . share) (s, t)
 
       TyCon n
         | n `elem` ["Int", "Char", "Bool"] -> resolved p

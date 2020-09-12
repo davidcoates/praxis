@@ -65,8 +65,6 @@ module Praxis
 
 import qualified Check.System                 as Check (System)
 import           Common
-import           Pretty
-import           Record                       (Record)
 import           Stage
 import           Term
 

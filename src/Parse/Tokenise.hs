@@ -7,7 +7,6 @@ import qualified Parse.Tokenise.Layout    as Layout
 import           Parse.Tokenise.Tokeniser hiding (run)
 import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Praxis                   hiding (throw)
-import           Pretty
 import qualified Stage
 import           Term                     (Lit (..))
 import           Token

@@ -14,10 +14,7 @@ import           Common
 import           Env
 import           Introspect
 import           Praxis
-import           Pretty
 import           Print
-import           Record                   (Record, pair)
-import qualified Record                   (fromList, toList)
 import           Stage
 import           Term
 
@@ -76,14 +73,6 @@ stmts (s:ss) | a :< StmtExp e <- s = do
                   where isStmtDecl (_ :< StmtDecl _) = True
                         isStmtDecl _                 = False
 
-record :: Source -> (Record b -> b) -> (a -> Praxis b) -> Record a -> Praxis b
-record s build f r = do
-  r' <- traverse f r
-  case Record.toList r' of
-    [(Nothing, x)] -> return $ x
-    [(Just _, _)]  -> throwAt s ("illegal single-field record" :: String)
-    _              -> return $ build r'
-
 -- TODO clean up this 'fst a' nonsense
 exp :: Annotated Exp -> Praxis (Annotated Exp)
 exp (a :< x) = case x of
@@ -96,8 +85,6 @@ exp (a :< x) = case x of
     return (a :< Do ss')
 
   Mixfix ts   -> mixfix ts
-
-  Record r    -> record (fst a) (\r' -> a :< Record r') exp r
 
   VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (pretty s) <> " is not the argument of a function"
 
@@ -214,19 +201,10 @@ dataAlt (a :< x) = (a :<) <$> case x of
 
 -- TODO check for overlapping patterns?
 pat :: Annotated Pat -> Praxis (Annotated Pat)
-pat (a :< x) = case x of
-
-  PatRecord r -> record (fst a) (\r' -> a :< PatRecord r') pat r
-
-  _           -> (a :<) <$> recurse desugar x
-
+pat (a :< x) = (a :<) <$> recurse desugar x
 
 ty :: Annotated Type -> Praxis (Annotated Type)
-ty (a :< x) = case x of
-
-  TyRecord r -> record (fst a) (\r' -> a :< TyRecord r') ty r
-
-  _          -> (a :<) <$> recurse desugar x
+ty (a :< x) = (a :<) <$> recurse desugar x
 
 
 qty :: Annotated QType -> Praxis (Annotated QType)
@@ -295,8 +273,12 @@ makeOpTable ls opDefns = Earley.OpTable
       (n, fix, _) = opDefns Map.! op
       -- FIXME combine annotations
       build :: [Annotated Exp] -> Annotated Exp
-      build ps = phantom $ Apply (phantom $ Var n) (if length ps == 1 then head ps else phantom $ Record (Record.fromList (zip (repeat Nothing) ps)))
-
+      build ps = phantom $ Apply (phantom $ Var n) (right ps)
+      right :: [Annotated Exp] -> Annotated Exp
+      right = \case
+        []     -> phantom Unit
+        [x]    -> x
+        (x:xs) -> phantom $ Pair x (right xs)
 
 -- Repeatedly remove vertices with no outgoing edges, if we succeed the graph is acyclic
 acyclic :: Graph -> Bool

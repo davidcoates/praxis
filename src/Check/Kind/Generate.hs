@@ -17,9 +17,7 @@ import           Common
 import           Env
 import           Introspect
 import           Praxis
-import           Pretty
 import           Print
-import qualified Record
 import           Stage
 import           Term
 
@@ -56,10 +54,10 @@ ty = split $ \s -> \case
       require $ newConstraint (view kind f' `KEq` phantom (KindFun (view kind a') k)) AppType s
       return (k :< TyApply f' a')
 
-    TyOp op t -> do
-      t' <- ty t
-      require $ newConstraint (view kind t' `KEq` phantom KindType) (Custom "typ: TyOp TODO") s
-      return (phantom KindType :< TyOp op t')
+    TyCon n -> do
+      e <- kEnv `uses` lookup n
+      case e of Nothing -> throwAt s (NotInScope n)
+                Just k  -> return (k :< TyCon n)
 
     TyFun a b -> do
       a' <- ty a
@@ -68,15 +66,19 @@ ty = split $ \s -> \case
       require $ newConstraint (view kind b' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
       return (phantom KindType :< TyFun a' b')
 
-    TyCon n -> do
-      e <- kEnv `uses` lookup n
-      case e of Nothing -> throwAt s (NotInScope n)
-                Just k  -> return (k :< TyCon n)
+    TyOp op t -> do
+      t' <- ty t
+      require $ newConstraint (view kind t' `KEq` phantom KindType) (Custom "typ: TyOp TODO") s
+      return (phantom KindType :< TyOp op t')
 
-    TyRecord r -> do
-      r' <- traverse ty r
-      requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) (Custom "typ: TyRecord TODO") s) (map snd (Record.toList r'))
-      return (phantom KindType :< TyRecord r')
+    TyPair p q -> do
+      p' <- ty p
+      q' <- ty q
+      requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) (Custom "typ: TyPair TODO") s) [p', q']
+      return (phantom KindType :< TyPair p' q')
+
+    TyUnit -> do
+      return (phantom KindType :< TyUnit)
 
     TyVar v -> do
       e <- kEnv `uses` lookup v

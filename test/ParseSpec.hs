@@ -39,8 +39,8 @@ programs =
       ] `matches`
     unlines
       [ "fac = cases"
-      , " 0 -> 1"
-      , " n -> multiply ( n , fac subtract ( n , 1 ) )"
+      , "\t0 -> 1"
+      , "\tn -> multiply ( n , fac subtract ( n , 1 ) )"
       ]
   ]
 
@@ -68,3 +68,5 @@ spec = do
     forM_ programs $ \(a, b) -> do
       it (a ++ " should parse as " ++ b) $ do
         (parse a :: Annotated Program) `shouldBe` parse b
+      it (b ++ " should be in normal form") $ do
+         unparse (parse b :: Annotated Program) `shouldBe` b

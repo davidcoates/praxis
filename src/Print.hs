@@ -41,23 +41,21 @@ instance Unparser Printer where
         body        = force f (view value x)
         constraint = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof (view value x)) (view annotation x))]
 
-indent :: Int -> Printable String
-indent n
-  | n <= 0    = "\n" -- TODO why are we getting -1?
-  | otherwise = indent (n-1) <> "    "
+indent :: Int -> String
+indent n = '\n' : replicate n '\t'
 
-unlayout :: [Token] -> Printable String
-unlayout ts = unlayout' False (-1) ts where
+unlayout :: [Token] -> Option -> Colored String
+unlayout ts o = unlayout' False (-1) ts where
   unlayout' needsSpace depth ts = case ts of
-    []      -> ""
+    []      -> Nil
     Layout t : ts
-      | t == '{' -> (if depth >= 0 then indent (depth + 1) else blank) <> unlayout' False (depth + 1) ts
-      | t == ';' -> indent depth <> unlayout' False depth ts
-      | t == '}' -> unlayout' False (depth - 1) ts
-    t : ts -> cmap (\c -> if null c then Nil else if needsSpace then " " <> c else c) (pretty t) <> unlayout' True depth ts
+      | t == '{' -> (if depth == -1 then Nil else Value (indent (depth + 1))) <> unlayout' False (depth + 1) ts
+      | t == ';' -> Value (indent depth) <> unlayout' False depth ts
+      | t == '}' -> (if depth == 0 then Nil else Value "\n") <> unlayout' False (depth - 1) ts
+    t : ts -> let p = runPrintable (pretty t) o in if null p then unlayout' needsSpace depth ts else (if needsSpace then Value " " else Nil) <> p <> unlayout' True depth ts
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
-  pretty = unlayout . force unparse
+  pretty x = Printable (unlayout (force unparse x))
 
 label :: Term a => I a -> Maybe (Annotation a) -> Printable String
 label _ Nothing  = blank

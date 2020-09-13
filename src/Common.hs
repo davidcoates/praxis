@@ -1,5 +1,4 @@
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Common
   ( module Common.Pretty
@@ -44,6 +43,7 @@ module Common
   , Void
   , absurd
 
+  , fold
   , foldMapA
 
   , Qualified(..)
@@ -101,8 +101,9 @@ just f (Just x) = Just <$> f x
 data Qualified a = Qualified { qualification :: [Name], unqualify :: a }
   deriving (Eq, Ord)
 
-instance Show a => Show (Qualified a) where
-  show q = intercalate "." (qualification q ++ [show (unqualify q)])
+-- TODO make this general while suppressing quotes for strings
+instance Show (Qualified Name) where
+  show q = intercalate "." (qualification q ++ [unqualify q])
 
 unqualified :: a -> Qualified a
 unqualified x = Qualified { qualification = [], unqualify = x }

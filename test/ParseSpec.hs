@@ -1,9 +1,12 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies      #-}
+
 module ParseSpec where
 
 import           Common
 import           Inbuilts
 import           Introspect
-import           Parse         (parse)
+import qualified Parse         (parse)
 import           Praxis
 import           Term
 
@@ -28,36 +31,40 @@ tys =
   , "Maybe Maybe a -> Maybe b" `matches` "(Maybe (Maybe a)) -> (Maybe b)"
   ]
 
--- TODO broken - simply check parsing + unparsing = identity
 programs =
   [ unlines
-      [ "fac : Int -> Int"
-      , "fac = cases"
+      [ "fac = cases"
       , "  0 -> 1"
-      , "  n -> n * fac (n -1)"
-      ] `matches` "{ fac : Int -> Int; fac = cases { 0 -> 1; n -> n * (fac (n - 1)) } }"
+      , "  n -> n * fac (n - 1)"
+      ] `matches`
+    unlines
+      [ "fac = cases " -- TODO get rid of trailing space?
+      , " 0 -> 1 "
+      , " n -> multiply ( n , fac subtract ( n , 1 ) )"
+      ]
   ]
 
-exp :: String -> Annotated Exp
-exp s = runInternal initialState (parse s)
 
-ty :: String -> Annotated Type
-ty s = runInternal initialState (parse s)
+instance (Term a, x ~ Annotation a) => Show (Tag (Source, Maybe x) a) where
+  show x = fold (runPrintable (pretty x) Plain)
 
-program :: String -> Annotated Program
-program s = runInternal initialState (parse s)
+parse :: Term a => String -> Annotated a
+parse s = runInternal initialState (Parse.parse s)
+
+unparse :: Term a => Annotated a -> String
+unparse = show
 
 spec :: Spec
 spec = do
   describe "Expressions" $ do
     forM_ exps $ \(a, b) -> do
       it (a ++ " should parse as " ++ b) $ do
-        exp a `shouldBe` exp b
+        (parse a :: Annotated Exp) `shouldBe` parse b
   describe "Types" $ do
     forM_ tys $ \(a, b) -> do
       it (a ++ " should parse as " ++ b) $ do
-        ty a `shouldBe` ty b
+        (parse a :: Annotated Type) `shouldBe` parse b
   describe "Programs" $ do
     forM_ programs $ \(a, b) -> do
       it (a ++ " should parse as " ++ b) $ do
-        program a `shouldBe` program b
+        (parse a :: Annotated Program) `shouldBe` parse b

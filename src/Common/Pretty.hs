@@ -6,7 +6,7 @@ module Common.Pretty
   , Printable(..)
   , blank
   , Pretty(..)
-  , cmap
+  , mapIfNotNull
   , quote
   , separate
   , module Data.Monoid.Colorful
@@ -57,11 +57,11 @@ instance Pretty (Colored String) where
 instance Pretty (Printable String) where
   pretty = id
 
-cmap :: (Colored String -> Colored String) -> Printable String -> Printable String
-cmap f (Printable p) = Printable (\o -> f (p o))
+mapIfNotNull :: (Colored String -> Colored String) -> Printable String -> Printable String
+mapIfNotNull f p = Printable $ \o -> let x = runPrintable p o in if null x then x else f x
 
 quote :: Printable String -> Printable String
-quote = cmap (\s -> Style Bold ("'" <> s <> "'"))
+quote p = Printable $ \o -> "'" <> runPrintable p o <> "'"
 
 separate :: Pretty a => String -> [a] -> Printable String
 separate _ []     = blank

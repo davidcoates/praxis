@@ -38,8 +38,8 @@ programs =
       , "  n -> n * fac (n - 1)"
       ] `matches`
     unlines
-      [ "fac = cases " -- TODO get rid of trailing space?
-      , " 0 -> 1 "
+      [ "fac = cases"
+      , " 0 -> 1"
       , " n -> multiply ( n , fac subtract ( n , 1 ) )"
       ]
   ]

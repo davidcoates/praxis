@@ -47,15 +47,14 @@ indent n
   | otherwise = indent (n-1) <> "    "
 
 unlayout :: [Token] -> Printable String
-unlayout ts = unlayout' (-1) ts where
-  unlayout' n ts = case ts of
+unlayout ts = unlayout' False (-1) ts where
+  unlayout' needsSpace depth ts = case ts of
     []      -> ""
     Layout t : ts
-      | t == '{' -> (if n >= 0 then indent (n+1) else blank) <> unlayout' (n+1) ts
-      | t == ';' -> indent n <> unlayout' n ts
-      | t == '}' -> unlayout' (n-1) ts
-    [t]    -> pretty t
-    t : ts -> cmap (\c -> if null c then Nil else c <> " ") (pretty t) <> unlayout' n ts
+      | t == '{' -> (if depth >= 0 then indent (depth + 1) else blank) <> unlayout' False (depth + 1) ts
+      | t == ';' -> indent depth <> unlayout' False depth ts
+      | t == '}' -> unlayout' False (depth - 1) ts
+    t : ts -> cmap (\c -> if null c then Nil else if needsSpace then " " <> c else c) (pretty t) <> unlayout' True depth ts
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
   pretty = unlayout . force unparse

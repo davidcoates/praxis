@@ -58,4 +58,3 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - praxis
-    - hspec

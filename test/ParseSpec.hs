@@ -58,15 +58,15 @@ spec :: Spec
 spec = do
   describe "Expressions" $ do
     forM_ exps $ \(a, b) -> do
-      it (a ++ " should parse as " ++ b) $ do
+      it (a ++ " EQUALS " ++ b) $ do
         (parse a :: Annotated Exp) `shouldBe` parse b
   describe "Types" $ do
     forM_ tys $ \(a, b) -> do
-      it (a ++ " should parse as " ++ b) $ do
+      it (a ++ " EQUALS " ++ b) $ do
         (parse a :: Annotated Type) `shouldBe` parse b
   describe "Programs" $ do
     forM_ programs $ \(a, b) -> do
-      it (a ++ " should parse as " ++ b) $ do
+      it ("\n" ++ a ++ "EQUALS\n" ++ b) $ do
         (parse a :: Annotated Program) `shouldBe` parse b
-      it (b ++ " should be in normal form") $ do
+      it ("\n" ++ b ++ "IS IN NORMAL FORM") $ do
          unparse (parse b :: Annotated Program) `shouldBe` b

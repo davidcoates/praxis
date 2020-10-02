@@ -102,6 +102,8 @@ expRec n (_ :< e) = case e of
 
   Sig e _ -> exp e
 
+  Unit -> pure U
+
   Var n -> do
     Just v <- vEnv `uses` lookup n
     return v

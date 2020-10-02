@@ -284,7 +284,6 @@ instance Term QType where
   witness = IQType
   complete = trivial
   recurse f = \case
-    Mono t      -> Mono <$> f t
     Forall vs t -> Forall <$> pure vs <*> f t
 
 instance Term QTyVar where

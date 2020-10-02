@@ -206,15 +206,10 @@ pat (a :< x) = (a :<) <$> recurse desugar x
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty (a :< x) = (a :<) <$> recurse desugar x
 
-
 qty :: Annotated QType -> Praxis (Annotated QType)
-qty (a :< x) = (a :<) <$> case x of
+qty (a :< x) = (a :<) <$> recurse desugar x
 
-  Mono t      -> Mono <$> ty t
-
-  Forall vs t -> Forall vs <$> ty t
-
-
+-- TODO avoid al lthis repetition?
 tyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
 tyPat (a :< x) = (a :<) <$> recurse desugar x
 

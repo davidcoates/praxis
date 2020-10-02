@@ -233,9 +233,7 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
           mark "kind(0)"
 
 qTy :: Syntax f => f QType
-qTy = _Forall <$> reservedId "forall" *> qTyVar `until` dot <*> annotated ty <|>
-      _Mono <$> annotated ty <|>
-      mark "quantified type"
+qTy = _Forall <$> (_Cons <$> (reservedId "forall" *> qTyVar) <*> (many qTyVar <* dot) <|> _Nil <$> pure ()) <*> annotated ty <|> mark "quantified type"
 
 qTyVar :: Syntax f => f QTyVar
 qTyVar = _QTyVar <$> varid <|>

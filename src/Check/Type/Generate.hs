@@ -54,9 +54,7 @@ ungeneralise vs = do
     _                      -> Nothing
 
 ungeneraliseQType :: Annotated QType -> Praxis (Annotated Type)
-ungeneraliseQType q = case view value q of
-  Mono t      -> return t
-  Forall vs t -> ($ t) <$> ungeneralise vs
+ungeneraliseQType (_ :< Forall vs t) = ($ t) <$> ungeneralise vs
 
 join :: Praxis a -> Praxis b -> Praxis (a, b)
 join f1 f2 = do
@@ -158,9 +156,7 @@ decl = splitTrivial $ \s -> \case
         f ((s, Nothing) :< DataAlt n args) = do
           let rt = apply c $ map (over value (\(TyPatVar n) -> TyVar n)) ps
               ns = map ((\(TyPatVar n) -> n) . view value) ps
-              ct = phantom $ case ps of
-                [] -> Mono rt
-                _  -> Forall (map ((\(TyPatVar n) -> QTyVar n) . view value) ps) (foldr fun rt args)
+              ct = phantom $ Forall (map ((\(TyPatVar n) -> QTyVar n) . view value) ps) (foldr fun rt args)
               da = ((s, Just (DataAltInfo ns ct args rt)) :< DataAlt n args)
           daEnv %= Env.intro n da
           return da
@@ -170,12 +166,12 @@ decl = splitTrivial $ \s -> \case
   -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n sig e -> do
-    t <- case sig of Nothing -> (\t -> (view source t, Nothing) :< Mono t) <$> freshTyUni
+    t <- case sig of Nothing -> mono <$> freshTyUni
                      Just t  -> pure t
     tEnv %= intro n t
     e' <- exp e
     -- TODO this won't work if we allow nested polymorphic definitions
-    let t' = case view value t of { Mono t -> t; Forall _ t -> t }
+    let Forall _ t' = view value t
     equal t' (view ty e') (UserSignature (Just n)) s
     return $ DeclVar n Nothing e'
 
@@ -183,7 +179,7 @@ decl = splitTrivial $ \s -> \case
 
 
 mono :: Annotated Type -> Annotated QType
-mono t = (view source t, Nothing) :< Mono t
+mono t = (view source t, Nothing) :< Forall [] t
 
 exp :: Annotated Exp -> Praxis (Annotated Exp)
 exp = split $ \s -> \case

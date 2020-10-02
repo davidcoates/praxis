@@ -28,7 +28,7 @@ initialState = set opContext initialOpContext $ set tEnv initialTEnv $ set vEnv 
 
 -- TODO this actually introduces source information, but we ideally want it to be Phantom
 mono :: String -> Annotated QType
-mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), Nothing) :< Mono (a :< t)
+mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), Nothing) :< Forall [] (a :< t)
   where m :: Praxis (Annotated Type)
         m = retag f <$> (parse s :: Praxis (Annotated Type))
         f :: forall a. Term a => I a -> Maybe (Annotation a) -> Maybe (Annotation a)
@@ -38,7 +38,7 @@ mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), Not
 
 -- TODO parse qty
 poly :: [Name] -> String -> Annotated QType
-poly vs s = let (a :< Mono t) = mono s in a :< Forall (map QTyVar vs) t
+poly vs s = let (a :< Forall [] t) = mono s in a :< Forall (map QTyVar vs) t
 
 kind :: String -> Annotated Kind
 kind s = runInternal initialState (parse s :: Praxis (Annotated Kind))

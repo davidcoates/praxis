@@ -75,7 +75,7 @@ data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
 
-data DataAlt = DataAlt Name [Annotated Type]
+data DataAlt = DataAlt Name (Maybe (Annotated Type))
   deriving (Eq, Ord)
 
 -- * EXPRESSIONS *
@@ -111,7 +111,7 @@ instance Show Lit where
     String s -> show s
 
 data Pat = PatAt Name (Annotated Pat)
-         | PatCon Name [Annotated Pat] -- TODO replace with (Annotated Pat) or Maybe (Annotated Pat)
+         | PatCon Name (Maybe (Annotated Pat))
          | PatHole
          | PatLit Lit
          | PatPair (Annotated Pat) (Annotated Pat)
@@ -217,7 +217,7 @@ instance Pretty (Annotated a) => Pretty (Derivation a) where
   pretty (Root r)       = "\n|-> (" <> pretty r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
 
-data DataAltInfo = DataAltInfo [Name] (Annotated QType) [Annotated Type] (Annotated Type)
+data DataAltInfo = DataAltInfo (Annotated QType) (Maybe (Annotated Type)) (Annotated Type)
 
 instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataAltInfo where
-  pretty (DataAltInfo ns ct args rt) = pretty ct
+  pretty (DataAltInfo qt at rt) = pretty qt

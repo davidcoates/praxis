@@ -73,10 +73,10 @@ expRec n (_ :< e) = case e of
 
   Con n -> do
     Just da <- daEnv `uses` lookup n
-    let DataAltInfo _ _ args _ = view (annotation . just) da
-    let f 0 = C n []
-        f i = let C n vs = f (i-1) in F (\v -> return (C n (v:vs)))
-    return (f (length args))
+    let DataAltInfo _ at _ = view (annotation . just) da
+    return $ case at of
+      Nothing -> C n Nothing
+      Just _  -> F (\v -> return $ C n (Just v))
 
   Do ss -> do
     Sum i <- asum (map stmt (init ss))
@@ -126,19 +126,16 @@ forceBind :: Value -> Annotated Pat -> Praxis Int
 forceBind v p = case bind v p of Just i  -> i
                                  Nothing -> error "no matching pattern" -- TODO
 
-binds :: [Value] -> [Annotated Pat] -> Maybe (Praxis Int)
-binds vs ps = do
-  cs <- sequence $ zipWith bind vs ps
-  return (sum <$> sequence cs)
-
 bind :: Value -> Annotated Pat -> Maybe (Praxis Int)
 bind v (_ :< p) = case p of
 
   PatAt n p
     -> (\c -> do { vEnv %= intro n v; i <- c; return (i+1) }) <$> bind v p
 
-  PatCon n ps | C m vs <- v
-    -> if n == m then binds vs ps else Nothing
+  PatCon n p | C m v <- v
+    -> if n /= m then Nothing else case (p, v) of
+      (Nothing, Nothing) -> Just (return 0)
+      (Just p, Just v)   -> bind v p
 
   PatHole
     -> Just (return 0)
@@ -147,7 +144,10 @@ bind v (_ :< p) = case p of
     -> if l == l' then Just (return 0) else Nothing
 
   PatPair p q | P p' q' <- v
-    -> binds [p', q'] [p, q]
+    -> do
+      i <- bind p' p
+      j <- bind q' q
+      return $ liftA2 (+) i j
 
   PatUnit
     -> Just (return 0)

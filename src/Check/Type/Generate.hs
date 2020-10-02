@@ -25,6 +25,7 @@ import           Term
 import           Control.Monad      (replicateM)
 import           Data.Foldable      (foldlM)
 import           Data.List          (nub, sort)
+import           Data.Maybe         (isJust)
 import qualified Data.Set           as Set
 import           Prelude            hiding (exp, log, lookup, read)
 import qualified Prelude            (lookup)
@@ -153,11 +154,13 @@ decl = splitTrivial $ \s -> \case
     -- TODO could be kind annotated to avoid this lookup
     Just k <- kEnv `uses` Env.lookup n
     let c = TyCon n `as` k
-        f ((s, Nothing) :< DataAlt n args) = do
-          let rt = apply c $ map (over value (\(TyPatVar n) -> TyVar n)) ps
-              ns = map ((\(TyPatVar n) -> n) . view value) ps
-              ct = phantom $ Forall (map ((\(TyPatVar n) -> QTyVar n) . view value) ps) (foldr fun rt args)
-              da = ((s, Just (DataAltInfo ns ct args rt)) :< DataAlt n args)
+        f ((s, Nothing) :< DataAlt n at) = do
+          let rt = apply c $ map (over value (\(TyPatVar n) -> TyVar n)) ps -- Return type of the constructor
+              ut = case at of -- Type of the constructor (unqualified)
+                Just at -> fun at rt
+                Nothing -> rt
+              qt = phantom $ Forall (map ((\(TyPatVar n) -> QTyVar n) . view value) ps) ut -- Type of the constructor (qualified)
+              da = ((s, Just (DataAltInfo qt at rt)) :< DataAlt n at)
           daEnv %= Env.intro n da
           return da
     alts' <- traverse f alts
@@ -211,8 +214,8 @@ exp = split $ \s -> \case
     return (fun t1 t2 :< Cases alts')
 
   Con n -> do
-    DataAltInfo _ q _ _ <- getData s n
-    t <- ungeneraliseQType q
+    DataAltInfo qt _ _ <- getData s n
+    t <- ungeneraliseQType qt
     return (t :< Con n)
 
   Do ss -> do
@@ -288,16 +291,22 @@ pat op = splitPair $ \s -> \case
     tEnv %= intro v (mono t)
     return (i + 1, t :< PatAt v p')
 
-  PatCon n ps -> do
+  PatCon n pt -> do
     -- Lookup the data alternative with this name
-    DataAltInfo ns ct args rt <- getData s n
-    when (length args /= length ps) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
-    (Sum i, ps') <- traverse (over first Sum) <$> traverse (pat op) ps
-    f <- ungeneralise (map QTyVar ns)
-    let rt'   = f rt
-        args' = map f args
-    requires [ newConstraint (view ty p' `TEq` arg') (Custom "TODO: PatCon") s | (p', arg') <- zip ps' args' ]
-    return (i, rt' :< PatCon n ps')
+    DataAltInfo qt at rt <- getData s n
+    when (isJust at /= isJust pt) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
+
+    let Forall vs _ = view value qt
+    f <- ungeneralise vs
+    let rt' = f rt
+
+    case pt of
+      Nothing -> return (0, rt' :< PatCon n Nothing)
+      Just pt -> do
+        (i, pt') <- pat op pt
+        let Just at' = at
+        require $ newConstraint (view ty pt' `TEq` f at') (Custom "TODO: PatCon") s
+        return (i, rt' :< PatCon n (Just pt'))
 
   PatHole -> do
     t <- freshTyUni

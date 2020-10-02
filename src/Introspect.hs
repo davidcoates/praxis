@@ -184,9 +184,9 @@ instance Term Prec where
 
 instance Term DataAlt where
   witness = IDataAlt
-  complete _ f (DataAltInfo ns ct args rt) = DataAltInfo ns <$> f ct <*> traverse f args <*> f rt
+  complete _ f (DataAltInfo ct args rt) = DataAltInfo <$> f ct <*> traverse f args <*> f rt
   recurse f = \case
-    DataAlt n t -> DataAlt n <$> traverse f t
+    DataAlt n at -> DataAlt n <$> traverse f at
 
 instance Term Decl where
   witness = IDecl
@@ -223,7 +223,7 @@ instance Term Pat where
   complete _ f x = f x
   recurse f = \case
     PatAt n a   -> PatAt n <$> f a
-    PatCon n ps -> PatCon n <$> traverse f ps
+    PatCon n p  -> PatCon n <$> traverse f p
     PatHole     -> pure PatHole
     PatLit l    -> pure (PatLit l)
     PatPair a b -> PatPair <$> f a <*> f b

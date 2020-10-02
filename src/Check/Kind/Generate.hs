@@ -106,10 +106,13 @@ tyPat = splitPair $ \s -> \case
 dataAlt :: Annotated DataAlt -> Praxis (Annotated DataAlt)
 dataAlt = splitTrivial $ \s -> \case
 
-  DataAlt n ts -> do
-    ts' <- traverse ty ts
-    requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) (Custom "dataAlt: TODO") s) ts'
-    return $ DataAlt n ts'
+  DataAlt n at -> do
+    case at of
+      Nothing -> return $ DataAlt n Nothing
+      Just at -> do
+        at' <- ty at
+        require $ newConstraint (view kind at' `KEq` phantom KindType) (Custom "dataAlt: TODO") s
+        return $ DataAlt n (Just at')
 
 
 fun :: Annotated Kind -> Annotated Kind -> Annotated Kind

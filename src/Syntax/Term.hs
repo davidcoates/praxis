@@ -202,7 +202,7 @@ declData = _DeclData <$> reservedId "data" *> conid <*> many (annotated tyPat) <
   alts = blockLike (reservedId "where") (annotated dataAlt)
 
 dataAlt :: Syntax f => f DataAlt
-dataAlt = _DataAlt <$> conid <*> many (annotated ty)
+dataAlt = _DataAlt <$> conid <*> optional (annotated ty)
 
 tyPat :: Syntax f => f TyPat
 tyPat = _TyPatVar <$> varid
@@ -217,7 +217,7 @@ decl :: Syntax f => f Decl
 decl = fun
 
 pat :: Syntax f => f Pat
-pat = _PatCon <$> conid <*> many (annotated pat0) <|> pat0 <|> mark "pattern" where
+pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern" where
   pat0 = _PatHole <$> special '_' <|>
          _PatLit <$> lit <|>
          _PatVar <$> varid <|>

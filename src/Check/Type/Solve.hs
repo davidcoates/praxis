@@ -130,6 +130,7 @@ resolve c = checkAxioms c $ case view value c of
     case (view value op1, truth s1, truth s2) of
       (TyOpUni n, Just False, Just True) -> n `isOp` TyOpBang
       (TyOpUni n, _, Just False)         -> n `isOp` TyOpId
+      (TyOpBang, _, Just False)          -> contradiction
       (_, _, Just True) | viewFree t2    -> introduce [ TEq t1 t2 ]
       _  | TyOp op2 t2 <- view value t2  -> do
           s2 <- resolve (phantom (Share t2))

@@ -50,7 +50,9 @@ prelude =
   , ("multiply", mono "(Int, Int) -> Int", lift (*))
   , ("negate",   mono "Int -> Int", F (\(L (Int x)) -> pure (L (Int (negate x)))))
   , ("getInt",   mono "() -> Int",         F (\U -> liftIO ((L . Int) <$> readLn)))
+  , ("getContents", mono "() -> String", F (\U -> liftIO ((L . String) <$> getContents)))
   , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure U)))
+  , ("putStr",   mono "String -> ()",      F (\(L (String x)) -> liftIO (putStr x >> pure U)))
   , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure U)))
   , ("compose",  poly [ "a", "b", "c" ] "(b -> c, a -> b) -> a -> c", F (\(P (F f) (F g)) -> pure (F (\x -> g x >>= f))))
   , ("print",    poly [ "a" ]  "a -> ()",  F (\x -> liftIO (print x >> pure U))) -- TODO should have Show constraint

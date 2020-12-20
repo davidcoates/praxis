@@ -42,7 +42,7 @@ instance Unparser Printer where
         constraint = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof (view value x)) (view annotation x))]
 
 indent :: Int -> String
-indent n = '\n' : replicate n '\t'
+indent n = '\n' : replicate (2*n) ' '
 
 unlayout :: [Token] -> Option -> Colored String
 unlayout ts o = unlayout' False (-1) ts where

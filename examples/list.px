@@ -1,5 +1,5 @@
 
-data List a where
+type List a = cases
   Nil
   Cons (a, List a)
 

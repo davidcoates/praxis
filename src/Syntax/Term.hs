@@ -198,8 +198,9 @@ program = _Program <$> block (annotated top) where -- TODO module
   top = declData <|> declOp <|> decl -- TODO fixity declarations, imports
 
 declData :: Syntax f => f Decl
-declData = _DeclData <$> reservedId "data" *> conid <*> many (annotated tyPat) <*> alts where
-  alts = blockLike (reservedId "where") (annotated dataAlt)
+declData = _DeclData <$> reservedId "type" *> conid <*> many (annotated tyPat) <*> reservedOp "=" *> alts where
+  alts = _Singleton <$> annotated dataAlt <|> reservedId "cases" *> block (annotated dataAlt)
+  _Singleton = Prism (\x -> [x]) (\case { [x] -> Just x; _ -> Nothing }) -- short definition for a single constructor
 
 dataAlt :: Syntax f => f DataAlt
 dataAlt = _DataAlt <$> conid <*> optional (annotated ty)

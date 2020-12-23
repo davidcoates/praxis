@@ -223,8 +223,9 @@ exp = split $ \s -> \case
     let f (StmtDecl _) = 1
         f (StmtExp _)  = 0
     tEnv %= elimN (sum (map (f . view value) ss'))
-    let t = (\(_ :< StmtExp ((_, Just t) :< _)) -> t) (last ss')
-    return (t :< Do ss')
+    case view value (last ss') of
+      StmtExp ((_, Just t) :< _) -> return (t :< Do ss')
+      _                          -> throwAt s $ ("do block must end in an expression" :: String)
 
   If a b c -> do
     a' <- exp a

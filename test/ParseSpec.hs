@@ -20,6 +20,7 @@ exps =
   [ "1 + 2" `matches` "1 + 2"
   , "1 + 2 + 3" `matches` "(1 + 2) + 3"
   , "1 + 2 * 3" `matches` "1 + (2 * 3)"
+  , "1 - 2 - 3" `matches` "(1 - 2) - 3"
   , "1 - - 2" `matches` "1 - (- 2)"
   , "f x 1 + g y * z" `matches` "(f (x 1)) + ((g y) * z)"
   , "f x + f y + f z" `matches` "((f x) + (f y)) + (f z)"
@@ -34,13 +35,13 @@ tys =
 programs =
   [ unlines
       [ "fac = cases"
-      , "  0 -> 1"
-      , "  n -> n * fac (n - 1)"
+      , "    0 -> 1"
+      , "    n -> n * fac (n - 1)"
       ] `matches`
     unlines
       [ "fac = cases"
-      , "\t0 -> 1"
-      , "\tn -> multiply ( n , fac subtract ( n , 1 ) )"
+      , "  0 -> 1"
+      , "  n -> multiply ( n , fac subtract ( n , 1 ) )"
       ]
   ]
 

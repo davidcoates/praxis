@@ -252,7 +252,7 @@ ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
         mark "type(0)"
 
 tyOp :: Syntax f => f TyOp
-tyOp = _TyOpBang <$> reservedOp "!" <|>
+tyOp = _TyOpBang <$> reservedOp "&" <|>
        _TyOpUni <$> uni <|>
        _TyOpId <$> reservedOp "<id>" <|>
        _TyOpVar <$> tyOpVar <|>
@@ -268,7 +268,7 @@ exp = exp3 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Lambda <$> reservedOp "\\" *> annotated pat <*> reservedOp "->" *> annotated exp <|>
          exp1 <|> mark "expression(2)"
   exp1 = right _Apply exp0 <|> mark "expression(1)"
-  exp0 = _VarBang <$> reservedOp "!" *> varid <|>
+  exp0 = _VarBang <$> reservedOp "&" *> varid <|>
          _Var <$> varid <|> -- TODO qualified
          _Con <$> conid <|>
          _Lit <$> lit <|>

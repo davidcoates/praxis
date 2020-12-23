@@ -11,7 +11,7 @@ instance forall ?v. Functor [?v, List] where
     Nil          -> Nil
     Cons (x, xs) -> Cons (f x, (map f) xs)
 
-sum : !List Int -> Int
+sum : &List Int -> Int
 sum = cases
   Nil          -> 0
   Cons (x, xs) -> x + sum xs
@@ -19,6 +19,6 @@ sum = cases
 main : () -> ()
 main () = do
   let xs = Cons (1, Cons (2, Cons (3, Nil)))
-  let ys = (map (\x -> x + 1)) !xs
-  print sum !xs
-  print sum !ys
+  let ys = (map (\x -> x + 1)) &xs
+  print sum &xs
+  print sum &ys

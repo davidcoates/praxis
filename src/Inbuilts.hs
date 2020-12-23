@@ -57,7 +57,7 @@ prelude =
   , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure U)))
   , ("compose",  poly [ "a", "b", "c" ] "(b -> c, a -> b) -> a -> c", F (\(P (F f) (F g)) -> pure (F (\x -> g x >>= f))))
   , ("print",    poly [ "a" ]  "a -> ()",  F (\x -> liftIO (print x >> pure U))) -- TODO should have Show constraint
-  , ("at",       mono "(!String, Int) -> Char", F (\(P (L (String xs)) (L (Int i))) -> pure (L (Char (xs !! i)))))
+  , ("at",       mono "(&String, Int) -> Char", F (\(P (L (String xs)) (L (Int i))) -> pure (L (Char (xs !! i)))))
   ]
   where
     lift :: (Int -> Int -> Int) -> Value
@@ -104,7 +104,7 @@ preludeOps = unlines $
   , "operator (_ . _) = compose where"
   , "  associates right"
   , ""
-  , "operator (_ !! _) = at"
+  , "operator (_ ! _) = at"
   ]
 
 initialOpContext :: OpContext

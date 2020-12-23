@@ -35,6 +35,7 @@ mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), Not
         f i Nothing = case i of
           IType  -> Just (phantom KindType)
           IQType -> Nothing
+          ITyOp  -> Nothing
 
 -- TODO parse qty
 poly :: [Name] -> String -> Annotated QType
@@ -50,12 +51,13 @@ prelude =
   , ("multiply", mono "(Int, Int) -> Int", lift (*))
   , ("negate",   mono "Int -> Int", F (\(L (Int x)) -> pure (L (Int (negate x)))))
   , ("getInt",   mono "() -> Int",         F (\U -> liftIO ((L . Int) <$> readLn)))
-  , ("getContents", mono "() -> String", F (\U -> liftIO ((L . String) <$> getContents)))
+  , ("getContents", mono "() -> String", F (\U -> liftIO ((L . String) <$> getContents))) -- TODO need to make many of these functions strict
   , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure U)))
   , ("putStr",   mono "String -> ()",      F (\(L (String x)) -> liftIO (putStr x >> pure U)))
   , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure U)))
   , ("compose",  poly [ "a", "b", "c" ] "(b -> c, a -> b) -> a -> c", F (\(P (F f) (F g)) -> pure (F (\x -> g x >>= f))))
   , ("print",    poly [ "a" ]  "a -> ()",  F (\x -> liftIO (print x >> pure U))) -- TODO should have Show constraint
+  , ("at",       mono "(!String, Int) -> Char", F (\(P (L (String xs)) (L (Int i))) -> pure (L (Char (xs !! i)))))
   ]
   where
     lift :: (Int -> Int -> Int) -> Value
@@ -101,6 +103,8 @@ preludeOps = unlines $
   , ""
   , "operator (_ . _) = compose where"
   , "  associates right"
+  , ""
+  , "operator (_ !! _) = at"
   ]
 
 initialOpContext :: OpContext

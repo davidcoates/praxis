@@ -195,6 +195,7 @@ resolve c = checkAxioms c $ case view value c of
 
       TyCon n
         | n `elem` ["Int", "Char", "Bool"] -> resolved p
+        | n `elem` ["String"]              -> resolved (not p)
 
       -- FIXME make this general!
       TyApply (_ :< TyCon "List") _ -> resolved (not p)

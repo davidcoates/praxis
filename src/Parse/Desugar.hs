@@ -73,18 +73,47 @@ stmts (s:ss) | a :< StmtExp e <- s = do
                   where isStmtDecl (_ :< StmtDecl _) = True
                         isStmtDecl _                 = False
 
+
+-- Helper for desugaring &
+-- Turns top-level VarBang into Var and returns the name of such variables
+--
+-- TODO disallow a mix of Var and VarBang, e.g., (?x, x) or even (?x, f x)
+expRead :: Annotated Exp -> Praxis (Annotated Exp, [Name])
+expRead (a :< x) = case x of
+
+  Sig e t -> do
+    (e', ns) <- expRead e
+    return (a :< Sig e' t, ns)
+
+  Pair x y -> do
+    (x', ns) <- expRead x
+    (y', ms) <- expRead y
+    return (a :< Pair x' y', ns ++ ms)
+
+  VarBang n -> return (a :< Var n, [n])
+
+  _ -> do
+    x' <- exp (a :< x)
+    return (x', [])
+
+
 -- TODO clean up this 'fst a' nonsense
 exp :: Annotated Exp -> Praxis (Annotated Exp)
 exp (a :< x) = case x of
 
-  Apply x (a' :< VarBang s) ->
-    exp (a :< Read s (a :< Apply x (a' :< Var s))) -- TODO sources
+  Apply x y -> do
+    x' <- exp x
+    (y', ns) <- expRead y
+    return (a :< Apply x' y')
+    let unwrap []     = (a :< Apply x' y')
+        unwrap (n:ns) = (a :< Read n (unwrap ns))
+    return (unwrap ns)
 
   Do ss       -> do
     ss' <- stmts ss
     return (a :< Do ss')
 
-  Mixfix ts   -> mixfix ts
+  Mixfix ts   -> mixfix ts >>= exp
 
   VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (pretty s) <> " is not the argument of a function"
 
@@ -216,14 +245,14 @@ tyPat (a :< x) = (a :<) <$> recurse desugar x
 
 type MTok = Earley.Tok (Annotated Name) (Annotated Exp)
 
-tok :: Annotated Tok -> Praxis MTok
-tok (a :< TOp op) = pure (Earley.TOp (a :< op))
-tok (a :< TExp e) = Earley.TExp <$> exp e
+tok :: Annotated Tok -> MTok
+tok (a :< TOp op) = Earley.TOp (a :< op)
+tok (a :< TExp e) = Earley.TExp e
 
 mixfix :: [Annotated Tok] -> Praxis (Annotated Exp)
 mixfix ts = do
   let s = view source (head ts)
-  ts' <- mapM tok ts
+  let ts' = map tok ts
   opTable <- use (opContext . table)
   let (parses, _) = fullParses (parser (Earley.simpleMixfixExpression opTable)) ts'
   case parses of [e] -> return e

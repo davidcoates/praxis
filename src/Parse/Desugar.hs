@@ -55,6 +55,7 @@ desugar x = ($ x) $ case witness :: I a of
   IType    -> ty
   IKind    -> pure
   ITyOp    -> pure
+  IQType   -> qty
 
 program :: Annotated Program -> Praxis (Annotated Program)
 program (a :< Program ds) = do

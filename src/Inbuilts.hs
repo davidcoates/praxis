@@ -26,38 +26,38 @@ import qualified Text.Earley.Mixfix.Graph as Earley
 initialState :: PraxisState
 initialState = set tSynonyms Map.empty $ set opContext initialOpContext $ set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ set daEnv initialDAEnv $ emptyState
 
--- TODO this actually introduces source information, but we ideally want it to be Phantom
-mono :: String -> Annotated QType
-mono s = let (a :< t) = runInternal initialState m in (view source (a :< t), Nothing) :< Forall [] (a :< t)
-  where m :: Praxis (Annotated Type)
-        m = retag f <$> (parse s :: Praxis (Annotated Type))
-        f :: forall a. Term a => I a -> Maybe (Annotation a) -> Maybe (Annotation a)
-        f i Nothing = case i of
-          IType  -> Just (phantom KindType)
-          IQType -> Nothing
-          ITyOp  -> Nothing
+mono :: String -> Annotated Type
+mono s = runInternal initialState (parse s :: Praxis (Annotated Type))
 
--- TODO parse qty
-poly :: [Name] -> String -> Annotated QType
-poly vs s = let (a :< Forall [] t) = mono s in a :< Forall (map QTyVar vs) t
+poly :: String -> Annotated QType
+poly s = runInternal initialState (parse s :: Praxis (Annotated QType))
 
 kind :: String -> Annotated Kind
 kind s = runInternal initialState (parse s :: Praxis (Annotated Kind))
 
 prelude :: [(Name, Annotated QType, Value)]
 prelude =
-  [ ("add" ,     mono "(Int, Int) -> Int", lift (+))
-  , ("subtract", mono "(Int, Int) -> Int", lift (-))
-  , ("multiply", mono "(Int, Int) -> Int", lift (*))
-  , ("negate",   mono "Int -> Int", F (\(L (Int x)) -> pure (L (Int (negate x)))))
-  , ("getInt",   mono "() -> Int",         F (\U -> liftIO ((L . Int) <$> readLn)))
-  , ("getContents", mono "() -> String", F (\U -> liftIO ((L . String) <$> getContents))) -- TODO need to make many of these functions strict
-  , ("putInt",   mono "Int -> ()",         F (\(L (Int x)) -> liftIO (print x >> pure U)))
-  , ("putStr",   mono "String -> ()",      F (\(L (String x)) -> liftIO (putStr x >> pure U)))
-  , ("putStrLn", mono "String -> ()",      F (\(L (String x)) -> liftIO (putStrLn x >> pure U)))
-  , ("compose",  poly [ "a", "b", "c" ] "(b -> c, a -> b) -> a -> c", F (\(P (F f) (F g)) -> pure (F (\x -> g x >>= f))))
-  , ("print",    poly [ "a" ]  "a -> ()",  F (\x -> liftIO (print x >> pure U))) -- TODO should have Show constraint
-  , ("at",       mono "(&String, Int) -> Char", F (\(P (L (String xs)) (L (Int i))) -> pure (L (Char (xs !! i)))))
+  [ ("add" ,        poly "(Int, Int) -> Int", lift (+))
+  , ("subtract",    poly "(Int, Int) -> Int", lift (-))
+  , ("multiply",    poly "(Int, Int) -> Int", lift (*))
+  , ("negate",      poly "Int -> Int",
+      F (\(L (Int x)) -> pure (L (Int (negate x)))))
+  , ("getInt",      poly "() -> Int",
+      F (\U -> liftIO ((L . Int) <$> readLn)))
+  , ("getContents", poly "() -> String",
+      F (\U -> liftIO ((L . String) <$> getContents))) -- TODO need to make many of these functions strict
+  , ("putInt",      poly "Int -> ()",
+      F (\(L (Int x)) -> liftIO (print x >> pure U)))
+  , ("putStr",      poly "String -> ()",
+      F (\(L (String x)) -> liftIO (putStr x >> pure U)))
+  , ("putStrLn",    poly "String -> ()",
+      F (\(L (String x)) -> liftIO (putStrLn x >> pure U)))
+  , ("compose",     poly "forall a b c. (b -> c, a -> b) -> a -> c",
+      F (\(P (F f) (F g)) -> pure (F (\x -> g x >>= f))))
+  , ("print",       poly "forall a. a -> ()",
+      F (\x -> liftIO (print x >> pure U))) -- TODO should have Show constraint
+  , ("at",          poly "(&String, Int) -> Char",
+      F (\(P (L (String xs)) (L (Int i))) -> pure (L (Char (xs !! i)))))
   ]
   where
     lift :: (Int -> Int -> Int) -> Value

@@ -11,7 +11,6 @@ module Introspect
   , skip
   , I(..)
   , Term(..)
-  , retag
   , typeof
   , visit
   , introspect
@@ -72,6 +71,7 @@ data I a where
   -- | Solver
   ITypeConstraint :: I TypeConstraint
   IKindConstraint :: I KindConstraint
+
 
 typeof :: forall a. Term a => a -> I a
 typeof _ = witness :: I a
@@ -152,11 +152,6 @@ embedSub f x = transferM f x
 
 embedMonoid :: forall a b. (Monoid b, Term a) => (a -> b) -> (forall a. Term a => a -> b)
 embedMonoid f x = getConst $ transferA (Const . f) x
-
-retag :: forall b. Term b => (forall a. Term a => I a -> Maybe (Annotation a) -> Maybe (Annotation a)) -> Annotated b -> Annotated b
-retag f = runIdentity . visit f'
-  where f' :: forall a. Term a => Annotated a -> Visit Identity (Maybe (Annotation a)) (Annotated a)
-        f' x = Visit (Identity (f (witness :: I a) (view annotation x)))
 
 -- Implementations below here
 

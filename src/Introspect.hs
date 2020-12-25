@@ -20,6 +20,7 @@ module Introspect
   , embedMonoid
   , sub
   , extract
+  , extractPartial
   ) where
 
 import           Common
@@ -136,9 +137,15 @@ sub f x = runIdentity $ introspect f' x where
     Just y' -> Resolve (Identity y')
 
 extract :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> m) -> Annotated a -> m
-extract f x = getConst $ visit f' x where
+extract f = extractPartial (\x -> (f x, True))
+
+-- Similar to extract, but with control for whether or not to recurse
+extractPartial :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> (m, Bool)) -> Annotated a -> m
+extractPartial f x = getConst $ visit f' x where
   f' :: forall b. Term b => Annotated b -> Visit (Const m) (Maybe (Annotation b)) (Annotated b)
-  f' y = Visit (Const (f (view value y)))
+  f' y = case f (view value y) of
+    (m, True)  -> Visit (Const m)
+    (m, False) -> Resolve (Const m)
 
 embedSub :: forall a b. Term a => (a -> Maybe a) -> (forall a. Term a => a -> Maybe a)
 embedSub f x = transferM f x

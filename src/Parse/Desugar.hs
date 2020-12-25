@@ -76,10 +76,20 @@ stmts (s:ss) | a :< StmtExp e <- s = do
                         isStmtDecl _                 = False
 
 
+freeVars :: Annotated Exp -> Set Name
+freeVars = extractPartial f where
+  f :: forall a. Term a => a -> (Set Name, Bool)
+  f x = case witness :: I a of
+    IExp  -> case x of
+      Var n -> (Set.singleton n, False)
+      _     -> (Set.empty,        True)
+    IDecl -> case x of
+      DeclVar n _ e -> (Set.delete n (freeVars e), False)
+      _             -> (Set.empty,                  True)
+    _     -> (Set.empty, True)
+
 -- Helper for desugaring &
 -- Turns top-level VarBang into Var and returns the name of such variables
---
--- TODO disallow a mix of Var and VarBang, e.g., (?x, x) or even (?x, f x)
 expRead :: Annotated Exp -> Praxis (Annotated Exp, Set Name)
 expRead (a :< x) = case x of
 
@@ -106,6 +116,8 @@ exp (a :< x) = case x of
   Apply x y -> do
     x' <- exp x
     (y', ns) <- expRead y
+    let mixedVars = freeVars y `Set.intersection` ns
+    when (not (null mixedVars)) $ throwAt (fst a) $ "variable(s) " <> separate ", " (map (quote . pretty) (Set.elems mixedVars)) <> " used in a read context"
     let unwrap []     = (a :< Apply x' y')
         unwrap (n:ns) = (a :< Read n (unwrap ns))
     return (unwrap (Set.elems ns))
@@ -116,7 +128,7 @@ exp (a :< x) = case x of
 
   Mixfix ts   -> mixfix ts >>= exp
 
-  VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (pretty s) <> " is not the argument of a function"
+  VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (pretty s) <> " is not in a valid read context"
 
   _           -> (a :<) <$> recurse desugar x
 

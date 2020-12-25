@@ -33,6 +33,8 @@ import           Data.Maybe               (catMaybes, isNothing, listToMaybe,
                                            mapMaybe)
 import           Data.Maybe               (isNothing, listToMaybe, mapMaybe)
 import           Data.Monoid              ((<>))
+import           Data.Set                 (Set)
+import qualified Data.Set                 as Set
 import           Prelude                  hiding (exp)
 import           Text.Earley
 import qualified Text.Earley.Mixfix       as Earley
@@ -78,7 +80,7 @@ stmts (s:ss) | a :< StmtExp e <- s = do
 -- Turns top-level VarBang into Var and returns the name of such variables
 --
 -- TODO disallow a mix of Var and VarBang, e.g., (?x, x) or even (?x, f x)
-expRead :: Annotated Exp -> Praxis (Annotated Exp, [Name])
+expRead :: Annotated Exp -> Praxis (Annotated Exp, Set Name)
 expRead (a :< x) = case x of
 
   Sig e t -> do
@@ -88,13 +90,13 @@ expRead (a :< x) = case x of
   Pair x y -> do
     (x', ns) <- expRead x
     (y', ms) <- expRead y
-    return (a :< Pair x' y', ns ++ ms)
+    return (a :< Pair x' y', ns `Set.union` ms)
 
-  VarBang n -> return (a :< Var n, [n])
+  VarBang n -> return (a :< Var n, Set.singleton n)
 
   _ -> do
     x' <- exp (a :< x)
-    return (x', [])
+    return (x', Set.empty)
 
 
 -- TODO clean up this 'fst a' nonsense
@@ -104,10 +106,9 @@ exp (a :< x) = case x of
   Apply x y -> do
     x' <- exp x
     (y', ns) <- expRead y
-    return (a :< Apply x' y')
     let unwrap []     = (a :< Apply x' y')
         unwrap (n:ns) = (a :< Read n (unwrap ns))
-    return (unwrap ns)
+    return (unwrap (Set.elems ns))
 
   Do ss       -> do
     ss' <- stmts ss

@@ -104,11 +104,13 @@ switch a b eq neq = case (a, b) of
   -- |
   _                                  -> neq
 
+-- Apply a visitor through a term
 visit :: (Term a, Applicative f) => (forall a. Term a => Annotated a -> Visit f (Maybe (Annotation a)) (Annotated a)) -> Annotated a -> f (Annotated a)
 visit f x = case f x of
   Visit c   -> (\a' x' -> (view source x, a') :< x') <$> c <*> recurse (visit f) (view value x)
   Resolve r -> r
 
+-- Apply a visitor through the term, including through annotations
 introspect :: forall a f. (Term a, Applicative f) => (forall a. Term a => Annotated a -> Visit f () a) -> Annotated a -> f (Annotated a)
 introspect f x = set annotation <$> completion (witness :: I a) (introspect f) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
   Visit c   -> c *> recurse (introspect f) (view value x)
@@ -134,8 +136,8 @@ sub f x = runIdentity $ introspect f' x where
     Just y' -> Resolve (Identity y')
 
 extract :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> m) -> Annotated a -> m
-extract f x = getConst $ introspect f' x where
-  f' :: forall b. Term b => Annotated b -> Visit (Const m) () b
+extract f x = getConst $ visit f' x where
+  f' :: forall b. Term b => Annotated b -> Visit (Const m) (Maybe (Annotation b)) (Annotated b)
   f' y = Visit (Const (f (view value y)))
 
 embedSub :: forall a b. Term a => (a -> Maybe a) -> (forall a. Term a => a -> Maybe a)

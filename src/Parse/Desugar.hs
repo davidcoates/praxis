@@ -234,6 +234,12 @@ decls (a :< d : ds) = case d of
     ds' <- decls ds
     return (a :< DeclOp op n rs' : ds')
 
+  DeclSyn n t -> do
+    t' <- ty t
+    tSynonyms %= Map.insert n t'
+    ds' <- decls ds
+    return (a :< DeclSyn n t' : ds')
+
 
 dataAlt :: Annotated DataAlt -> Praxis (Annotated DataAlt)
 dataAlt (a :< x) = (a :<) <$> case x of
@@ -246,7 +252,16 @@ pat :: Annotated Pat -> Praxis (Annotated Pat)
 pat (a :< x) = (a :<) <$> recurse desugar x
 
 ty :: Annotated Type -> Praxis (Annotated Type)
-ty (a :< x) = (a :<) <$> recurse desugar x
+ty (a :< x) = case x of
+
+  TyCon n -> do
+    syn <- tSynonyms `uses` Map.lookup n
+    return $ case syn of
+      Just t  -> t
+      Nothing -> a :< TyCon n
+
+  _           -> (a :<) <$> recurse desugar x
+
 
 qty :: Annotated QType -> Praxis (Annotated QType)
 qty (a :< x) = (a :<) <$> recurse desugar x

@@ -205,6 +205,7 @@ instance Term Decl where
     DeclFun n ps e  -> DeclFun n <$> traverse f ps <*> f e
     DeclOp o d rs   -> DeclOp <$> f o <*> pure d <*> f rs
     DeclSig n t     -> DeclSig n <$> f t
+    DeclSyn n t     -> DeclSyn n <$> f t
     DeclVar n t e   -> DeclVar n <$> traverse f t <*> f e
 
 instance Term Exp where

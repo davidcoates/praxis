@@ -47,6 +47,7 @@ module Praxis
   , tEnv
   , daEnv
   , vEnv
+  , tSynonyms
   , system
 
   , freshTyUni
@@ -127,6 +128,7 @@ data PraxisState = PraxisState
   , _tEnv      :: TEnv                -- ^Type environment
   , _daEnv     :: DAEnv               -- ^Data alternative environment
   , _vEnv      :: VEnv                -- ^Value environment for interpreter
+  , _tSynonyms :: Map Name (Annotated Type) -- ^Type synonyms TODO encapsulate within desugarer?
   , _system    :: Check.System        -- ^ TODO rename?
   }
 
@@ -164,6 +166,7 @@ emptyState = PraxisState
   , _tEnv         = unset "tEnv"
   , _daEnv        = unset "daEnv"
   , _vEnv         = unset "vEnv"
+  , _tSynonyms    = unset "tSynonyms"
   , _system       = unset "system"
   }
   where unset s = error ("unset " ++ s)

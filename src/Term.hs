@@ -72,6 +72,7 @@ data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
           | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
           | DeclSig Name (Annotated QType) -- ^Parsing only
+          | DeclSyn Name (Annotated Type) -- ^Parsing only
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
 

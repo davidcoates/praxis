@@ -24,7 +24,7 @@ import qualified Text.Earley.Mixfix.Graph as Earley
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
-initialState = set opContext initialOpContext $ set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ set daEnv initialDAEnv $ emptyState
+initialState = set tSynonyms Map.empty $ set opContext initialOpContext $ set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ set daEnv initialDAEnv $ emptyState
 
 -- TODO this actually introduces source information, but we ideally want it to be Phantom
 mono :: String -> Annotated QType

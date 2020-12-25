@@ -195,7 +195,10 @@ kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|
 
 program :: Syntax f => f Program
 program = _Program <$> block (annotated top) where -- TODO module
-  top = declData <|> declOp <|> decl -- TODO fixity declarations, imports
+  top = declUsing <|> declData <|> declOp <|> decl -- TODO fixity declarations, imports
+
+declUsing :: Syntax f => f Decl
+declUsing = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
 
 declData :: Syntax f => f Decl
 declData = _DeclData <$> reservedId "type" *> conid <*> many (annotated tyPat) <*> reservedOp "=" *> alts where

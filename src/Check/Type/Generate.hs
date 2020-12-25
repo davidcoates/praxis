@@ -180,6 +180,8 @@ decl = splitTrivial $ \s -> \case
 
   op@(DeclOp _ _ _) -> return op
 
+  DeclSyn s t -> return $ DeclSyn s t
+
 
 mono :: Annotated Type -> Annotated QType
 mono t = (view source t, Nothing) :< Forall [] t

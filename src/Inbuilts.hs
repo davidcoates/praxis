@@ -119,7 +119,7 @@ initialOpContext :: OpContext
 initialOpContext = runInternal (set opContext emptyOpContext $ set vEnv initialVEnv $ emptyState) ((parse preludeOps :: Praxis (Annotated Program)) >> use opContext)
 
 emptyOpContext :: OpContext
-emptyOpContext = OpContext { _defns = Map.empty, _levels = [], _table = Earley.OpTable { Earley.precedence = array (1, 0) [], Earley.table = array (1, 0) [] } }
+emptyOpContext = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [], _table = Earley.OpTable { Earley.precedence = array (0, -1) [], Earley.table = array (0, -1) [] } }
 
 initialTSynonyms :: Map Name (Annotated Type)
 initialTSynonyms = Map.singleton "String" (mono "Array Char")

@@ -21,6 +21,7 @@ module Praxis
   , defns
   , table
   , levels
+  , prec
 
   , throw
   , throwAt
@@ -75,6 +76,7 @@ import           Control.Concurrent
 import           Control.Lens                 (Lens', makeLenses, traverseOf)
 import           Control.Monad.Trans.Class    (MonadTrans (..))
 import qualified Control.Monad.Trans.State    as State (get, modify, put)
+import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
@@ -115,7 +117,7 @@ type OpNode = Earley.Op (Annotated Name) (Annotated Exp)
 
 type OpTable = Earley.OpTable (Annotated Name) (Annotated Exp)
 
-data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _table :: OpTable }
+data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Graph, _table :: OpTable }
 
 makeLenses ''OpContext
 

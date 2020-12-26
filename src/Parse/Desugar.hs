@@ -21,8 +21,8 @@ import           Term
 import           Control.Applicative      (liftA3)
 import           Control.Arrow            (left)
 import           Control.Monad            (unless)
-import           Data.Array               (assocs, bounds, elems, listArray,
-                                           (!))
+import           Data.Array               (array, assocs, bounds, elems,
+                                           indices, listArray, (!), (//))
 import           Data.Graph               (Graph, reachable)
 import           Data.List                (intersperse, nub, partition)
 import           Data.List                (intersect, (\\))
@@ -206,10 +206,13 @@ decls (a :< d : ds) = case d of
 
     -- Add operator to levels
     opLevels <- use (opContext . levels)
-    let opLevels' = case eq of Nothing                 -> [view value op] : opLevels
+    let opLevels' = case eq of Nothing                 -> opLevels ++ [[view value op]]
                                Just (_ :< Prec EQ op') -> map (\ops -> if op' `elem` ops then view value op : ops else ops) opLevels
 
-    -- Determine fixity and associativity
+    let levelOf = Map.fromList (zip [0..] opLevels')
+        indexOf = Map.fromList [ (op, i) | (i, ops) <- zip [0..] opLevels', op <- ops ]
+
+    -- Determine associativity
     let assoc' = case assoc of Nothing                -> Earley.NonAssoc
                                Just (_ :< AssocLeft)  -> Earley.LeftAssoc
                                Just (_ :< AssocRight) -> Earley.RightAssoc
@@ -218,23 +221,29 @@ decls (a :< d : ds) = case d of
 
         Op ns = view value op
 
+    -- Determine fixity
     fixity <- case (head ns, last ns) of (Nothing, Nothing) -> return (Earley.Infix assoc')
                                          (Nothing,  Just _) -> noAssoc >> return Earley.Postfix
                                          (Just _,  Nothing) -> noAssoc >> return Earley.Prefix
                                          (Just _,   Just _) -> noAssoc >> return Earley.Closed
 
-    -- Add operator to table
+    -- Add operator to definitions
     opDefns <- use (opContext . defns)
     when (view value op `Map.member` opDefns) $ throwAt (fst a) ("operator already defined" :: String)
     let opDefns' = Map.insert (view value op) (n, fixity, ps') opDefns
 
-    let opTable = makeOpTable opLevels' opDefns'
-    unless (acyclic (Earley.precedence opTable)) $ throwAt (fst a) ("operator precedence forms a cycle" :: String)
+    -- Add operator to precedence graph
+    opPrec <- use (opContext . prec)
+    let opPrec' = addOp (view value op) (map (view value) ps') indexOf opPrec
+    unless (acyclic opPrec') $ throwAt (fst a) ("operator precedence forms a cycle" :: String)
 
-    opContext .= OpContext { _defns = opDefns', _levels = opLevels', _table = opTable }
+    -- Construct operator table
+    let opTable = makeOpTable opPrec' opDefns' levelOf indexOf
+    opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec', _table = opTable }
 
     ds' <- decls ds
     return (a :< DeclOp op n rs' : ds')
+
 
   DeclSyn n t -> do
     t' <- ty t
@@ -292,50 +301,23 @@ mixfix ts = do
 closure :: Graph -> Graph
 closure g = listArray (bounds g) (map (concatMap (reachable g)) (elems g))
 
-makeOpTable :: [[Op]] -> OpDefns -> OpTable
-makeOpTable ls opDefns = Earley.OpTable
-  { Earley.precedence = closure (listArray bounds (map neighbours is))
-  , Earley.table = listArray bounds (map (map valueOf . levelOf) is) } where
+makeOpTable :: Graph -> OpDefns -> Map Int [Op] -> Map Op Int -> OpTable
+makeOpTable opPrec opDefns levelOf indexOf = Earley.OpTable
+  { Earley.precedence = closure opPrec
+  , Earley.table = listArray (bounds opPrec) (map (map (opNode opDefns)) (Map.elems levelOf))
+  }
 
-    ils = zip [1..] ls
-
-    is = map fst ils
-    bounds = (1, if null is then 0 else last is)
-
-    levelOf :: Int -> [Op]
-    levelOf i = levelOf' ils where
-      levelOf' ((j,ops):ils) = if i == j then ops else levelOf' ils
-
-    indexOf :: Op -> Int
-    indexOf op = indexOf' ils where
-      indexOf' ((i,ops):ils) = if op `elem` ops then i else indexOf' ils
-
-    equiv :: Op -> [Op]
-    equiv op = equiv' ils where
-      equiv' ((_,ops):ils) = if op `elem` ops then ops else equiv' ils
-
-    precs :: Op -> [Prec]
-    precs op = (\(_, _, ps) -> map (view value) ps) (opDefns Map.! op)
-
-    neighbours :: Int -> [Int]
-    neighbours = nub . map indexOf . concatMap neighbours' . levelOf
-
-    neighbours' :: Op -> [Op]
-    neighbours' op = nub (explicit ++ implicit) where
-      explicit = [ gt | eq <- equiv op, Prec LT gt <- precs eq ]
-      implicit = [ gt | gt <- Map.keys opDefns, Prec GT eq <- precs gt, eq `elem` equiv op ]
-
-    valueOf :: Op -> OpNode
-    valueOf op@(Op parts) = Earley.Op { Earley.parts = map phantom (catMaybes parts), Earley.build = build, Earley.fixity = fix } where
-      (n, fix, _) = opDefns Map.! op
-      -- FIXME combine annotations
-      build :: [Annotated Exp] -> Annotated Exp
-      build ps = phantom $ Apply (phantom $ Var n) (right ps)
-      right :: [Annotated Exp] -> Annotated Exp
-      right = \case
-        []     -> phantom Unit
-        [x]    -> x
-        (x:xs) -> phantom $ Pair x (right xs)
+opNode :: OpDefns -> Op -> OpNode
+opNode opDefns op@(Op parts) = Earley.Op { Earley.parts = map phantom (catMaybes parts), Earley.build = build, Earley.fixity = fix } where
+  (n, fix, _) = opDefns Map.! op
+  -- FIXME combine annotations
+  build :: [Annotated Exp] -> Annotated Exp
+  build ps = phantom $ Apply (phantom $ Var n) (right ps)
+  right :: [Annotated Exp] -> Annotated Exp
+  right = \case
+    []     -> phantom Unit
+    [x]    -> x
+    (x:xs) -> phantom $ Pair x (right xs)
 
 -- Repeatedly remove vertices with no outgoing edges, if we succeed the graph is acyclic
 acyclic :: Graph -> Bool
@@ -344,3 +326,17 @@ acyclic g = acyclic' (map fst (assocs g)) where
   acyclic' ns = if null leaves then False else acyclic' (ns \\ leaves) where
     leaves = filter (\n -> null (g ! n `intersect` ns)) ns
 
+addVertex :: Op -> Int -> Graph -> Graph
+addVertex op n g = if n `elem` indices g then g else array (0, n) ((n, []) : assocs g)
+
+addEdges :: [(Int, Int)] -> Graph -> Graph
+addEdges []     g = g
+addEdges (e:es) g = addEdges es (addEdge e g)
+
+addEdge :: (Int, Int) -> Graph -> Graph
+addEdge (a, b) g = g // [(a, nub (b : g ! a))]
+
+addOp :: Op -> [Prec] -> Map Op Int -> Graph -> Graph
+addOp op ps indexOf prec = addEdges (map edge ps) (addVertex op (indexOf Map.! op) prec) where
+  edge (Prec LT gt) = (indexOf Map.! op, indexOf Map.! gt)
+  edge (Prec GT lt) = (indexOf Map.! lt, indexOf Map.! op)

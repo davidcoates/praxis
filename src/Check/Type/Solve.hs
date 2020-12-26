@@ -6,8 +6,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Check.Type.Solve
-  ( solve
-  , eval
+  ( run
+  , normalise
   ) where
 
 import           Check.Type.Error
@@ -26,10 +26,10 @@ import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
 import           Data.Traversable    (forM)
 
-solve :: Praxis ([(Name, Type)], [(Name, TyOp)])
-solve = save stage $ save our $ do
+run :: Praxis ([(Name, Type)], [(Name, TyOp)])
+run = save stage $ save our $ do
   stage .= TypeCheck Solve
-  solve'
+  solve
   ts <- use (our . sol)
   ops <- use (our . ops)
   return (ts, ops)
@@ -38,12 +38,12 @@ data State = Cold
            | Warm
            | Done
 
-solve' :: Praxis State
-solve' = spin `chain` stuck where
+solve :: Praxis State
+solve = spin `chain` stuck where
   chain :: Praxis State -> Praxis State -> Praxis State
   chain p1 p2 = p1 >>= \case
     Cold -> p2
-    Warm -> solve'
+    Warm -> solve
     Done -> return Done
   stuck = do
     cs <- (nub . sort) <$> use (our . constraints)
@@ -225,7 +225,7 @@ resolve c = checkAxioms c $ case view value c of
     isOp :: Name -> TyOp -> Praxis Resolution
     isOp n op = do
       let f :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-          f  = eval . sub (embedSub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing }))
+          f  = normalise . sub (embedSub (\case { TyOpUni n' | n == n' -> Just op; _ -> Nothing }))
       smap f
       our . ops %= ((n, op):)
       c' <- f c
@@ -233,7 +233,7 @@ resolve c = checkAxioms c $ case view value c of
 
     is :: Name -> Type -> Praxis ()
     is n t = do
-      smap $ eval . sub (embedSub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing }))
+      smap $ normalise . sub (embedSub (\case { TyUni n' | n == n' -> Just t; _ -> Nothing }))
       our . sol %= ((n, t):)
       reuse n
       return ()
@@ -251,13 +251,13 @@ smap f = do
   tEnv %%= traverse f
   return ()
 
-eval :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-eval x = introspect (embedVisit f) x where
+normalise :: forall a. Term a => Annotated a -> Praxis (Annotated a)
+normalise x = introspect (embedVisit f) x where
   f :: Annotated Type -> Visit Praxis () Type
   f (a :< t) = case t of
-    TyOp (_ :< TyOpId) t -> Resolve (view value <$> eval t)
+    TyOp (_ :< TyOpId) t -> Resolve (view value <$> normalise t)
     TyOp (a :< op) t -> Resolve $ do
-      t' <- eval t
+      t' <- normalise t
       r <- resolve (phantom (Share t'))
       return $ case r of
         Proven -> view value t'

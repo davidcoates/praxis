@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies           #-}
 
 module Check.Type.Generate
-  ( generate
+  ( run
   ) where
 
 import           Check.Error
@@ -107,10 +107,10 @@ getData s n = do
     Just v  -> return (view (annotation . just) v)
     Nothing -> throwAt s $ "data constructor " <> quote (pretty n) <> " is not in scope"
 
-generate :: Term a => Annotated a -> Praxis (Annotated a)
-generate x = save stage $ do
+run :: Term a => Annotated a -> Praxis (Annotated a)
+run x = save stage $ do
   stage .= TypeCheck Generate
-  x' <- generateImpl x
+  x' <- generate x
   display x' `ifFlag` debug
   cs <- use (our . constraints)
   (`ifFlag` debug) $ do
@@ -119,11 +119,11 @@ generate x = save stage $ do
     use daEnv >>= display
   return x'
 
-generateImpl :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-generateImpl x = case witness :: I a of
+generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
+generate x = case witness :: I a of
     IDecl -> decl x
     IExp  -> exp x
-    _     -> value (recurse generateImpl) x
+    _     -> value (recurse generate) x
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -221,7 +221,7 @@ exp = split $ \s -> \case
     return (t :< Con n)
 
   Do ss -> do
-    ss' <- traverse generateImpl ss
+    ss' <- traverse generate ss
     let f (StmtDecl _) = 1
         f (StmtExp _)  = 0
     tEnv %= elimN (sum (map (f . view value) ss'))

@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies           #-}
 
 module Check.Kind.Generate
-  ( generate
+  ( run
   ) where
 
 import           Check.Error
@@ -28,21 +28,21 @@ import           Prelude            hiding (lookup)
 kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
 kind = annotation . just
 
-generate :: Term a => Annotated a -> Praxis (Annotated a)
-generate x = save stage $ do
+run :: Term a => Annotated a -> Praxis (Annotated a)
+run x = save stage $ do
   stage .= KindCheck Generate
-  x' <- generateImpl x
+  x' <- generate x
   display x' `ifFlag` debug
   cs <- use (our . constraints)
   display (separate "\n\n" (nub . sort $ cs)) `ifFlag` debug
   return x'
 
 -- TODO since we ignore annotation of input, could adjust this...
-generateImpl :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-generateImpl x = case witness :: I a of
+generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
+generate x = case witness :: I a of
   IDecl -> decl x
   IType -> ty x
-  _     -> value (recurse generateImpl) x
+  _     -> value (recurse generate) x
 
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty = split $ \s -> \case
@@ -135,5 +135,5 @@ decl = splitTrivial $ \s -> \case
     require $ newConstraint (k `KEq` foldr fun (phantom KindType) (map (view kind) ps')) (Custom "decl: TODO") s
     return $ DeclData n ps' as'
 
-  x -> recurse generateImpl x
+  x -> recurse generate x
 

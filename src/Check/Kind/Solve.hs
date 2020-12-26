@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Check.Kind.Solve
-  ( solve
+  ( run
   ) where
 
 import           Check.Kind.Error
@@ -22,22 +22,22 @@ import           Data.Maybe         (fromMaybe)
 import           Data.Set           (Set, union)
 import qualified Data.Set           as Set
 
-solve :: Praxis [(Name, Kind)]
-solve = save stage $ save our $ do
+run :: Praxis [(Name, Kind)]
+run = save stage $ save our $ do
   stage .= KindCheck Solve
-  solve'
+  solve
   use (our . sol)
 
 data State = Cold
            | Warm
            | Done
 
-solve' :: Praxis State
-solve' = spin progress `chain` stuck where
+solve :: Praxis State
+solve = spin progress `chain` stuck where
   chain :: Praxis State -> Praxis State -> Praxis State
   chain p1 p2 = p1 >>= \case
     Cold -> p2
-    Warm -> solve'
+    Warm -> solve
     Done -> return Done
   stuck = do
     cs <- (nub . sort) <$> use (our . constraints)

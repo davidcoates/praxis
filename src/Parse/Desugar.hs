@@ -21,8 +21,9 @@ import           Term
 import           Control.Applicative      (liftA3)
 import           Control.Arrow            (left)
 import           Control.Monad            (unless)
-import           Data.Array               (assocs, listArray, (!))
-import           Data.Graph               (Graph)
+import           Data.Array               (assocs, bounds, elems, listArray,
+                                           (!))
+import           Data.Graph               (Graph, reachable)
 import           Data.List                (intersperse, nub, partition)
 import           Data.List                (intersect, (\\))
 import           Data.List                (intersect, (\\))
@@ -288,10 +289,12 @@ mixfix ts = do
                  []  -> throwAt s ("no mixfix parse" :: String) -- TODO more info
                  _   -> throwAt s ("ambiguous mixfix parse" :: String) -- TODO more info
 
+closure :: Graph -> Graph
+closure g = listArray (bounds g) (map (concatMap (reachable g)) (elems g))
 
 makeOpTable :: [[Op]] -> OpDefns -> OpTable
 makeOpTable ls opDefns = Earley.OpTable
-  { Earley.precedence = listArray bounds (map neighbours is)
+  { Earley.precedence = closure (listArray bounds (map neighbours is))
   , Earley.table = listArray bounds (map (map valueOf . levelOf) is) } where
 
     ils = zip [1..] ls
@@ -299,27 +302,28 @@ makeOpTable ls opDefns = Earley.OpTable
     is = map fst ils
     bounds = (1, if null is then 0 else last is)
 
-    indexOf :: Op -> Int
-    indexOf op = indexOf' ils where
-      indexOf' ((i,ops):ils) = if op `elem` ops then i else indexOf' ils
-
     levelOf :: Int -> [Op]
     levelOf i = levelOf' ils where
       levelOf' ((j,ops):ils) = if i == j then ops else levelOf' ils
+
+    indexOf :: Op -> Int
+    indexOf op = indexOf' ils where
+      indexOf' ((i,ops):ils) = if op `elem` ops then i else indexOf' ils
 
     equiv :: Op -> [Op]
     equiv op = equiv' ils where
       equiv' ((_,ops):ils) = if op `elem` ops then ops else equiv' ils
 
-    directNeighbours :: Op -> [Op]
-    directNeighbours op = explicit ++ implicit where
-      explicit = [ op' | (_ :< Prec LT op') <- (\(_, _, ps) -> ps) (opDefns Map.! op) ]
-      implicit = [ op' | (op', (_, _, ps)) <- Map.toList opDefns, (_ :< Prec GT op'') <- ps, op'' == op ]
+    precs :: Op -> [Prec]
+    precs op = (\(_, _, ps) -> map (view value) ps) (opDefns Map.! op)
 
     neighbours :: Int -> [Int]
-    neighbours i = nub . concat . map neighbours' $ levelOf i
-    neighbours' :: Op -> [Int]
-    neighbours' op = map indexOf (concat (map equiv (directNeighbours op)))
+    neighbours = nub . map indexOf . concatMap neighbours' . levelOf
+
+    neighbours' :: Op -> [Op]
+    neighbours' op = nub (explicit ++ implicit) where
+      explicit = [ gt | eq <- equiv op, Prec LT gt <- precs eq ]
+      implicit = [ gt | gt <- Map.keys opDefns, Prec GT eq <- precs gt, eq `elem` equiv op ]
 
     valueOf :: Op -> OpNode
     valueOf op@(Op parts) = Earley.Op { Earley.parts = map phantom (catMaybes parts), Earley.build = build, Earley.fixity = fix } where

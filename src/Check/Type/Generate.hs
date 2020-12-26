@@ -242,7 +242,7 @@ exp = split $ \s -> \case
     return (fun (view ty p') (view ty e') :< Lambda p' e')
 
   Lit x -> do
-    let t = case x of { Int _ -> TyCon "Int" ; Bool _ -> TyCon "Bool" ; String _ -> TyCon "String" ; Char _ -> TyCon "Char" }
+    let t = case x of { Int _ -> TyCon "Int" ; Bool _ -> TyCon "Bool" ; String _ -> TyApply (phantom $ TyCon "Array") (phantom $ TyCon "Char") ; Char _ -> TyCon "Char" }
     return (t `as` phantom KindType :< Lit x)
 
   Read n e -> do

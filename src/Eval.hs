@@ -11,10 +11,12 @@ import           Env
 import           Praxis
 import           Stage
 import           Term
-import           Value
+import           Value         (Value)
+import qualified Value
 
-import           Data.Monoid (Sum (..))
-import           Prelude     hiding (exp, lookup)
+import           Data.Array.IO
+import           Data.Monoid   (Sum (..))
+import           Prelude       hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
   eval' :: Annotated a -> Praxis b
@@ -58,7 +60,7 @@ expRec :: Maybe Name -> Annotated Exp -> Praxis Value
 expRec n (_ :< e) = case e of
 
   Apply f x -> do
-    F f' <- exp f
+    Value.Fun f' <- exp f
     x' <- exp x
     f' x'
 
@@ -68,15 +70,15 @@ expRec n (_ :< e) = case e of
 
   Cases ps -> do
     l <- use vEnv
-    let e = F $ \v -> save vEnv $ do { vEnv .= l; rec n e; cases v ps }
+    let e = Value.Fun $ \v -> save vEnv $ do { vEnv .= l; rec n e; cases v ps }
     return e
 
   Con n -> do
     Just da <- daEnv `uses` lookup n
     let DataAltInfo _ at _ = view (annotation . just) da
     return $ case at of
-      Nothing -> C n Nothing
-      Just _  -> F (\v -> return $ C n (Just v))
+      Nothing -> Value.Con n Nothing
+      Just _  -> Value.Fun (\v -> return $ Value.Con n (Just v))
 
   Do ss -> do
     Sum i <- asum (map stmt (init ss))
@@ -86,23 +88,27 @@ expRec n (_ :< e) = case e of
     return v
 
   If a b c -> do
-    L (Bool a') <- exp a
+    Value.Bool a' <- exp a
     if a' then exp b else exp c
 
   Lambda p e -> do
     l <- use vEnv
-    let f = F $ \v -> save vEnv $ do { vEnv .= l; rec n f; i <- forceBind v p; exp e }
+    let f = Value.Fun $ \v -> save vEnv $ do { vEnv .= l; rec n f; i <- forceBind v p; exp e }
     return f
 
-  Lit l -> return (L l)
+  Lit l -> case l of
+    Bool b   -> pure $ Value.Bool b
+    Char c   -> pure $ Value.Char c
+    Int  i   -> pure $ Value.Int  i
+    String s -> Value.Array <$> Value.fromString s
 
   Read _ e -> exp e
 
-  Pair a b -> P <$> exp a <*> exp b
+  Pair a b -> Value.Pair <$> exp a <*> exp b
 
   Sig e _ -> exp e
 
-  Unit -> pure U
+  Term.Unit -> return Value.Unit
 
   Var n -> do
     Just v <- vEnv `uses` lookup n
@@ -132,7 +138,7 @@ bind v (_ :< p) = case p of
   PatAt n p
     -> (\c -> do { vEnv %= intro n v; i <- c; return (i+1) }) <$> bind v p
 
-  PatCon n p | C m v <- v
+  PatCon n p | Value.Con m v <- v
     -> if n /= m then Nothing else case (p, v) of
       (Nothing, Nothing) -> Just (return 0)
       (Just p, Just v)   -> bind v p
@@ -140,10 +146,14 @@ bind v (_ :< p) = case p of
   PatHole
     -> Just (return 0)
 
-  PatLit l | L l' <- v
-    -> if l == l' then Just (return 0) else Nothing
+  PatLit l -> if match then Just (return 0) else Nothing where
+    match = case (l, v) of
+      (Bool b,   Value.Bool b') -> b == b'
+      (Char c,   Value.Char c') -> c == c'
+      (Int i,     Value.Int i') -> i == i'
+      _                         -> False
 
-  PatPair p q | P p' q' <- v
+  PatPair p q | Value.Pair p' q' <- v
     -> do
       i <- bind p' p
       j <- bind q' q

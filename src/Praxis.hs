@@ -32,6 +32,7 @@ module Praxis
   , runInternal
 
   -- |Lift an IO computation to the Praxis monad
+  , liftIOUnsafe
   , liftIO
 
   -- |Flag lenses
@@ -223,11 +224,13 @@ runInternal s c = case fst $ unsafePerformIO (runPraxis c' s) of
   Just x  -> x
   where c' = (flags . static .= True) >> c
 
+liftIOUnsafe :: IO a -> Praxis a
+liftIOUnsafe io = lift (lift io)
+
 liftIO :: IO a -> Praxis a
 liftIO io = do
   s <- use (flags . static)
-  -- If the static flag is set, we must not perform IO
-  if s then empty else lift (lift io)
+  if s then empty else liftIOUnsafe io
 
 runPraxis :: Praxis a -> PraxisState -> IO (Maybe a, PraxisState)
 runPraxis = runStateT . runMaybeT

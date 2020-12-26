@@ -92,6 +92,13 @@ lit = match f (\l -> Token.Lit l) where
     Token.Lit l -> Just l
     _           -> Nothing
 
+litNoString :: Syntax f => f Lit
+litNoString = match f (\l -> Token.Lit l) where
+  f = \case
+    Token.Lit (String _) -> Nothing
+    Token.Lit l          -> Just l
+    _                    -> Nothing
+
 reservedOp :: Syntax f => String -> f ()
 reservedOp s = token (ReservedOp s) <|> mark ("reserved op '" ++ s ++ "'")
 
@@ -223,7 +230,7 @@ decl = fun
 pat :: Syntax f => f Pat
 pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern" where
   pat0 = _PatHole <$> special '_' <|>
-         _PatLit <$> lit <|>
+         _PatLit <$> litNoString <|> -- TODO allow string literals
          _PatVar <$> varid <|>
          tuple _PatUnit _PatPair pat <|>
          mark "pattern(0)"

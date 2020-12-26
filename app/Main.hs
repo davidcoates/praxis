@@ -54,7 +54,7 @@ runMain = do
   t <- tEnv `uses` lookup "main"
   case t of Nothing -> throw "missing main function"
             Just (_ :< Forall [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) ->
-              do { Just (F f) <- vEnv `uses` lookup "main"; f U; return () }
+              do { Just (Fun f) <- vEnv `uses` lookup "main"; f Value.Unit; return () }
             Just t -> throwAt (view source t) $ pretty "main function has bad type " <> quote (pretty t) <> pretty ", expected () -> ()"
 
 repl :: Praxis ()

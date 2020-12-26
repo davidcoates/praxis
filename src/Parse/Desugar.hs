@@ -145,7 +145,7 @@ operator op@(a :< Op ns) = do
       alternating' _ []      = True
       alternating' x (x':xs) = x /= x' && alternating' x' xs
 
-  unless (alternating (map isNothing ns)) $ throwAt (fst a) $ "op " <> quote (pretty op) <> " is non-alternating holes"
+  unless (alternating (map isNothing ns)) $ throwAt (fst a) $ "op " <> quote (pretty op) <> " has non-alternating holes"
   return op
 
 

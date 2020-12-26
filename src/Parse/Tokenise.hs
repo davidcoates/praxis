@@ -36,7 +36,7 @@ while p t = (p *> ((:) <$> t <*> while p t)) <|> pure []
 char :: Char -> Tokeniser Char
 char c = match (== c)
 
-isSymbol = (`elem` "!#$%&*+./<=>?@\\^|-~:")
+isSymbol = (`elem` "!#$%&*+./<=>?@\\^|-~:[]")
 isLower = (`elem` ['a'..'z'])
 isUpper = (`elem` ['A'..'Z'])
 isDigit = (`elem` ['0'..'9'])
@@ -57,7 +57,7 @@ layout :: Tokeniser Token
 layout = Layout <$> match (`elem` "{};")
 
 special :: Tokeniser Token
-special = Special <$> match (`elem` "(),[]`_")
+special = Special <$> match (`elem` "(),`_")
 
 literal :: Tokeniser Token
 literal = int <|> chara <|> string

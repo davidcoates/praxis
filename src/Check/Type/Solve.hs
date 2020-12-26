@@ -195,9 +195,11 @@ resolve c = checkAxioms c $ case view value c of
 
       TyCon n
         | n `elem` ["Int", "Char", "Bool"] -> resolved p
-        | n `elem` ["String"]              -> resolved (not p)
+        | n `elem` ["String"]              -> error "shouldnt get here questionable mark? FIXME"
 
-      -- FIXME make this general!
+      TyApply (_ :< TyCon "Array") _ -> resolved (not p)
+
+      -- FIXME make this general! This is a hack for the examples!
       TyApply (_ :< TyCon "List") _ -> resolved (not p)
 
       TyVar n -> do

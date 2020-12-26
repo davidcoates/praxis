@@ -11,20 +11,21 @@ import           Env
 import           Introspect
 import           Parse                    (parse)
 import           Praxis
-import           Term
+import           Term                     hiding (Lit (..), Pair, Unit)
 import qualified Text.Earley.Mixfix.Graph as Earley
 import           Value
 
 import           Data.Array               (array)
 import           Data.List                (nub, sort)
-import qualified Data.Map.Strict          as Map (empty, fromList)
+import           Data.Map.Strict          (Map)
+import qualified Data.Map.Strict          as Map (empty, fromList, singleton)
 import qualified Data.Set                 as Set (empty)
 import qualified Text.Earley.Mixfix       as Earley
 import qualified Text.Earley.Mixfix.Graph as Earley
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
-initialState = set tSynonyms Map.empty $ set opContext initialOpContext $ set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ set daEnv initialDAEnv $ emptyState
+initialState = set tSynonyms initialTSynonyms $ set opContext initialOpContext $ set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ set daEnv initialDAEnv $ emptyState
 
 mono :: String -> Annotated Type
 mono s = runInternal initialState (parse s :: Praxis (Annotated Type))
@@ -41,27 +42,31 @@ prelude =
   , ("subtract",    poly "(Int, Int) -> Int", lift (-))
   , ("multiply",    poly "(Int, Int) -> Int", lift (*))
   , ("negate",      poly "Int -> Int",
-      F (\(L (Int x)) -> pure (L (Int (negate x)))))
+      Fun (\(Int x) -> pure (Int (negate x))))
   , ("getInt",      poly "() -> Int",
-      F (\U -> liftIO ((L . Int) <$> readLn)))
-  , ("getContents", poly "() -> String",
-      F (\U -> liftIO ((L . String) <$> getContents))) -- TODO need to make many of these functions strict
+      Fun (\Unit -> liftIO (Int <$> readLn)))
+  , ("getContents", poly "() -> Array Char",
+      Fun (\Unit -> liftIO getContents >>= (\s -> Value.Array <$> (Value.fromString s)))) -- TODO need to make many of these functions strict?
   , ("putInt",      poly "Int -> ()",
-      F (\(L (Int x)) -> liftIO (print x >> pure U)))
-  , ("putStr",      poly "String -> ()",
-      F (\(L (String x)) -> liftIO (putStr x >> pure U)))
-  , ("putStrLn",    poly "String -> ()",
-      F (\(L (String x)) -> liftIO (putStrLn x >> pure U)))
+      Fun (\(Int x) -> liftIO (print x >> pure Unit)))
+  , ("putStr",      poly "Array Char -> ()", -- FIXME REF? How to call with literal?
+      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIO (putStr s)) >> pure Unit))
+  , ("putStrLn",    poly "Array Char -> ()", -- FIXME REF? How to call with literal?
+      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIO (putStrLn s)) >> pure Unit))
   , ("compose",     poly "forall a b c. (b -> c, a -> b) -> a -> c",
-      F (\(P (F f) (F g)) -> pure (F (\x -> g x >>= f))))
+      Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
   , ("print",       poly "forall a. a -> ()",
-      F (\x -> liftIO (print x >> pure U))) -- TODO should have Show constraint
-  , ("at",          poly "(&String, Int) -> Char",
-      F (\(P (L (String xs)) (L (Int i))) -> pure (L (Char (xs !! i)))))
+      Fun (\x -> liftIO (print x >> pure Unit))) -- TODO should have Show constraint
+  , ("at",          poly "forall a. (&Array a, Int) -> a",
+      Fun (\(Pair (Array a) (Int i)) -> Value.readArray a i))
+  , ("len",         poly "forall a. &Array a -> Int",
+      Fun (\(Array a) -> Value.Int <$> Value.len a))
+  , ("set",         poly "forall a. (Array a, Int, a) -> Array a",
+      Fun (\(Pair (Array a) (Pair (Int i) e)) -> Value.writeArray a i e >> pure (Array a)))
   ]
   where
     lift :: (Int -> Int -> Int) -> Value
-    lift f = F (\(P (L (Int a)) (L (Int b))) -> pure (L (Int (f a b))))
+    lift f = Fun (\(Pair (Int a) (Int b)) -> pure (Int (f a b)))
 
 preludeKinds :: [(Name, Annotated Kind)]
 preludeKinds =
@@ -69,6 +74,7 @@ preludeKinds =
   , ("Bool",   kind "Type")
   , ("String", kind "Type")
   , ("Char",   kind "Type")
+  , ("Array",  kind "Type -> Type")
   , ("Affine", kind "Type -> Constraint")
   , ("Share",  kind "Type -> Constraint")
   , ("->",     kind "Type -> Type -> Type")
@@ -105,6 +111,8 @@ preludeOps = unlines $
   , "  associates right"
   , ""
   , "operator (_ ! _) = at"
+  , ""
+  , "operator (_ ! _ <- _) = set" -- TODO doesnt work
   ]
 
 initialOpContext :: OpContext
@@ -112,3 +120,6 @@ initialOpContext = runInternal (set opContext emptyOpContext $ set vEnv initialV
 
 emptyOpContext :: OpContext
 emptyOpContext = OpContext { _defns = Map.empty, _levels = [], _table = Earley.OpTable { Earley.precedence = array (1, 0) [], Earley.table = array (1, 0) [] } }
+
+initialTSynonyms :: Map Name (Annotated Type)
+initialTSynonyms = Map.singleton "String" (mono "Array Char")

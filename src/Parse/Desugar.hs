@@ -13,33 +13,31 @@ module Parse.Desugar
 import           Common
 import           Env
 import           Introspect
+import qualified Parse.Mixfix        as Mixfix
 import           Praxis
 import           Print
 import           Stage
 import           Term
 
-import           Control.Applicative      (liftA3)
-import           Control.Arrow            (left)
-import           Control.Monad            (unless)
-import           Data.Array               (array, assocs, bounds, elems,
-                                           indices, listArray, (!), (//))
-import           Data.Graph               (Graph, reachable)
-import           Data.List                (intersperse, nub, partition)
-import           Data.List                (intersect, (\\))
-import           Data.List                (intersect, (\\))
-import           Data.Map.Strict          (Map)
-import qualified Data.Map.Strict          as Map
-import           Data.Maybe               (fromJust)
-import           Data.Maybe               (catMaybes, isNothing, listToMaybe,
-                                           mapMaybe)
-import           Data.Maybe               (isNothing, listToMaybe, mapMaybe)
-import           Data.Monoid              ((<>))
-import           Data.Set                 (Set)
-import qualified Data.Set                 as Set
-import           Prelude                  hiding (exp)
-import           Text.Earley
-import qualified Text.Earley.Mixfix       as Earley
-import qualified Text.Earley.Mixfix.Graph as Earley
+import           Control.Applicative (liftA3)
+import           Control.Arrow       (left)
+import           Control.Monad       (unless)
+import           Data.Array          (array, assocs, bounds, elems, indices,
+                                      listArray, (!), (//))
+import           Data.Graph          (Graph, reachable)
+import           Data.List           (intersperse, nub, partition)
+import           Data.List           (intersect, (\\))
+import           Data.List           (intersect, (\\))
+import           Data.Map.Strict     (Map)
+import qualified Data.Map.Strict     as Map
+import           Data.Maybe          (fromJust)
+import           Data.Maybe          (catMaybes, isNothing, listToMaybe,
+                                      mapMaybe)
+import           Data.Maybe          (isNothing, listToMaybe, mapMaybe)
+import           Data.Monoid         ((<>))
+import           Data.Set            (Set)
+import qualified Data.Set            as Set
+import           Prelude             hiding (exp)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run x = save stage $ do
@@ -128,7 +126,7 @@ exp (a :< x) = case x of
     ss' <- stmts ss
     return (a :< Do ss')
 
-  Mixfix ts   -> mixfix ts >>= exp
+  Mixfix ts   -> Mixfix.parse (fst a) ts >>= exp -- Need to desguar after parsing
 
   VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (pretty s) <> " is not in a valid read context"
 
@@ -212,34 +210,26 @@ decls (a :< d : ds) = case d of
     let levelOf = Map.fromList (zip [0..] opLevels')
         indexOf = Map.fromList [ (op, i) | (i, ops) <- zip [0..] opLevels', op <- ops ]
 
-    -- Determine associativity
-    let assoc' = case assoc of Nothing                -> Earley.NonAssoc
-                               Just (_ :< AssocLeft)  -> Earley.LeftAssoc
-                               Just (_ :< AssocRight) -> Earley.RightAssoc
-        noAssoc :: Praxis ()
-        noAssoc = unless (isNothing assoc) $ throwAt (fst a) ("associativity can not be specified for non-infix op " <> quote (pretty op))
-
-        Op ns = view value op
-
     -- Determine fixity
-    fixity <- case (head ns, last ns) of (Nothing, Nothing) -> return (Earley.Infix assoc')
-                                         (Nothing,  Just _) -> noAssoc >> return Earley.Postfix
-                                         (Just _,  Nothing) -> noAssoc >> return Earley.Prefix
-                                         (Just _,   Just _) -> noAssoc >> return Earley.Closed
+    let noAssoc = unless (isNothing assoc) $ throwAt (fst a) ("associativity can not be specified for non-infix op " <> quote (pretty op))
+        Op ns = view value op
+    fixity <- case (head ns, last ns) of
+      (Nothing, Nothing) -> return (Infix (view value <$> assoc))
+      (Nothing,  Just _) -> noAssoc >> return Postfix
+      (Just _,  Nothing) -> noAssoc >> return Prefix
+      (Just _,   Just _) -> noAssoc >> return Closed
 
     -- Add operator to definitions
     opDefns <- use (opContext . defns)
     when (view value op `Map.member` opDefns) $ throwAt (fst a) ("operator already defined" :: String)
-    let opDefns' = Map.insert (view value op) (n, fixity, ps') opDefns
+    let opDefns' = Map.insert (view value op) (n, fixity) opDefns
 
     -- Add operator to precedence graph
     opPrec <- use (opContext . prec)
     let opPrec' = addOp (view value op) (map (view value) ps') indexOf opPrec
     unless (acyclic opPrec') $ throwAt (fst a) ("operator precedence forms a cycle" :: String)
 
-    -- Construct operator table
-    let opTable = makeOpTable opPrec' opDefns' levelOf indexOf
-    opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec', _table = opTable }
+    opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
 
     ds' <- decls ds
     return (a :< DeclOp op n rs' : ds')
@@ -280,44 +270,6 @@ qty (a :< x) = (a :<) <$> recurse desugar x
 -- TODO avoid al lthis repetition?
 tyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
 tyPat (a :< x) = (a :<) <$> recurse desugar x
-
-
-type MTok = Earley.Tok (Annotated Name) (Annotated Exp)
-
-tok :: Annotated Tok -> MTok
-tok (a :< TOp op) = Earley.TOp (a :< op)
-tok (a :< TExp e) = Earley.TExp e
-
-mixfix :: [Annotated Tok] -> Praxis (Annotated Exp)
-mixfix ts = do
-  let s = view source (head ts)
-  let ts' = map tok ts
-  opTable <- use (opContext . table)
-  let (parses, _) = fullParses (parser (Earley.simpleMixfixExpression opTable)) ts'
-  case parses of [e] -> return e
-                 []  -> throwAt s ("no mixfix parse" :: String) -- TODO more info
-                 _   -> throwAt s ("ambiguous mixfix parse" :: String) -- TODO more info
-
-closure :: Graph -> Graph
-closure g = listArray (bounds g) (map (concatMap (reachable g)) (elems g))
-
-makeOpTable :: Graph -> OpDefns -> Map Int [Op] -> Map Op Int -> OpTable
-makeOpTable opPrec opDefns levelOf indexOf = Earley.OpTable
-  { Earley.precedence = closure opPrec
-  , Earley.table = listArray (bounds opPrec) (map (map (opNode opDefns)) (Map.elems levelOf))
-  }
-
-opNode :: OpDefns -> Op -> OpNode
-opNode opDefns op@(Op parts) = Earley.Op { Earley.parts = map phantom (catMaybes parts), Earley.build = build, Earley.fixity = fix } where
-  (n, fix, _) = opDefns Map.! op
-  -- FIXME combine annotations
-  build :: [Annotated Exp] -> Annotated Exp
-  build ps = phantom $ Apply (phantom $ Var n) (right ps)
-  right :: [Annotated Exp] -> Annotated Exp
-  right = \case
-    []     -> phantom Unit
-    [x]    -> x
-    (x:xs) -> phantom $ Pair x (right xs)
 
 -- Repeatedly remove vertices with no outgoing edges, if we succeed the graph is acyclic
 acyclic :: Graph -> Bool

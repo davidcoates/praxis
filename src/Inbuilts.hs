@@ -9,19 +9,16 @@ module Inbuilts
 import           Common
 import           Env
 import           Introspect
-import           Parse                    (parse)
+import           Parse           (parse)
 import           Praxis
-import           Term                     hiding (Lit (..), Pair, Unit)
-import qualified Text.Earley.Mixfix.Graph as Earley
+import           Term            hiding (Lit (..), Pair, Unit)
 import           Value
 
-import           Data.Array               (array)
-import           Data.List                (nub, sort)
-import           Data.Map.Strict          (Map)
-import qualified Data.Map.Strict          as Map (empty, fromList, singleton)
-import qualified Data.Set                 as Set (empty)
-import qualified Text.Earley.Mixfix       as Earley
-import qualified Text.Earley.Mixfix.Graph as Earley
+import           Data.Array      (array)
+import           Data.List       (nub, sort)
+import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map (empty, fromList, singleton)
+import qualified Data.Set        as Set (empty)
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
@@ -119,7 +116,7 @@ initialOpContext :: OpContext
 initialOpContext = runInternal (set opContext emptyOpContext $ set vEnv initialVEnv $ emptyState) ((parse preludeOps :: Praxis (Annotated Program)) >> use opContext)
 
 emptyOpContext :: OpContext
-emptyOpContext = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [], _table = Earley.OpTable { Earley.precedence = array (0, -1) [], Earley.table = array (0, -1) [] } }
+emptyOpContext = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
 
 initialTSynonyms :: Map Name (Annotated Type)
 initialTSynonyms = Map.singleton "String" (mono "Array Char")

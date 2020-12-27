@@ -14,12 +14,10 @@ module Praxis
   , VEnv(..)
 
   -- |Operators
+  , Fixity(..)
   , OpDefns
-  , OpNode
-  , OpTable
   , OpContext(..)
   , defns
-  , table
   , levels
   , prec
 
@@ -84,7 +82,6 @@ import           Env.Env
 import           Env.LEnv
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
-import qualified Text.Earley.Mixfix.Graph     as Earley (Fixity, Op, OpTable)
 import           Value
 
 data Flags = Flags
@@ -111,13 +108,15 @@ type KEnv = Env Name (Annotated Kind)
 
 type DAEnv = Env Name (Annotated DataAlt)
 
-type OpDefns = Map Op (Name, Earley.Fixity, [Annotated Prec])
+data Fixity = Infix (Maybe Assoc)
+            | Prefix
+            | Postfix
+            | Closed
+  deriving (Eq, Ord)
 
-type OpNode = Earley.Op (Annotated Name) (Annotated Exp)
+type OpDefns = Map Op (Name, Fixity)
 
-type OpTable = Earley.OpTable (Annotated Name) (Annotated Exp)
-
-data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Graph, _table :: OpTable }
+data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Graph }
 
 makeLenses ''OpContext
 

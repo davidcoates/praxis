@@ -6,7 +6,6 @@ module Parse.Parser
   ( Parser
   , Alternative(..)
   , Error(..)
-  , eof
   , mark
   , match
   , run
@@ -55,9 +54,6 @@ match p = Parser $ \case
 
 mark :: String -> Parser t a
 mark s = Parser $ \ts -> Result (Left (Error ("expected " <> pure s))) ts False
-
-eof :: Parser t ()
-eof = Parser $ \ts -> Result (if null ts then Right () else Left Skip) ts False
 
 run :: Parser t a -> [t] -> (Either Error a, [t])
 run p ts = let r = runParser p ts in (view result r, view remaining r)

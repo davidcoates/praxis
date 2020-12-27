@@ -41,8 +41,6 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 - pretty-tree-0.1.0.0
-- git: git@github.com:davidcoates/earley-mixfix-extra.git
-  commit: c850f7d292101e7457237afc7a9422e78dcd9543
 
 # Override default flag values for local packages and extra-deps
 flags: {}

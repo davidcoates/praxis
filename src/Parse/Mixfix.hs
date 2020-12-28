@@ -51,7 +51,7 @@ run :: Source -> Parser (Annotated Exp) -> [Annotated Tok] -> Praxis (Annotated 
 run s p ts = case runParser (p <* eof) ts of
   []        -> throwAt s "no mixfix parse"
   [(a, [])] -> return a
-  (a:b:_)   -> throwAt s "ambiguous mixfix parse"
+  (a:b:_)   -> throwAt s "ambiguous mixfix parse" -- TODO provide more information here, say the first two parses?
 
 -- The transitive closure of a precedence graph
 closure :: Graph -> Graph
@@ -62,9 +62,7 @@ parse s ts = do
   opLevels <- use (opContext . levels)
   opDefns <- use (opContext . defns)
   opPrec <- use (opContext . prec)
-  run s (mixfix opDefns opLevels (closure opPrec)) ts
-
--- Map Op (Name, Fixity)
+  run s (mixfix opDefns opLevels (closure opPrec)) ts -- TODO skip the closure?
 
 anyExp :: Parser (Annotated Exp)
 anyExp = match f where

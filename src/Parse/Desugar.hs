@@ -137,14 +137,13 @@ exp (a :< x) = case x of
 operator :: Annotated Op -> Praxis (Annotated Op)
 operator op@(a :< Op ns) = do
 
-  let alternating :: [Bool] -> Bool
-      alternating []     = True
-      alternating (x:xs) = alternating' x xs
-      alternating' :: Bool -> [Bool] -> Bool
-      alternating' _ []      = True
-      alternating' x (x':xs) = x /= x' && alternating' x' xs
+  let consecutiveHoles :: [Maybe Name] -> Bool
+      consecutiveHoles = \case
+        (Nothing:Nothing:xs) -> True
+        []                   -> False
+        (x:xs)               -> consecutiveHoles xs
 
-  unless (alternating (map isNothing ns)) $ throwAt (fst a) $ "op " <> quote (pretty op) <> " has non-alternating holes"
+  when (consecutiveHoles ns) $ throwAt (fst a) $ "op " <> quote (pretty op) <> " has two consecutive holes"
   return op
 
 

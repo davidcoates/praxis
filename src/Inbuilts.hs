@@ -107,9 +107,9 @@ preludeOps = unlines $
   , "operator (_ . _) = compose where"
   , "  associates right"
   , ""
-  , "operator (_ ! _) = at"
+  , "operator (_ [ _ ]) = at"
   , ""
-  , "operator (_ ! _ <- _) = set"
+  , "operator (_ [ _ ] <- _) = set"
   ]
 
 initialOpContext :: OpContext

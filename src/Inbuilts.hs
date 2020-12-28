@@ -109,7 +109,7 @@ preludeOps = unlines $
   , ""
   , "operator (_ ! _) = at"
   , ""
-  , "operator (_ ! _ <- _) = set" -- TODO doesnt work
+  , "operator (_ ! _ <- _) = set"
   ]
 
 initialOpContext :: OpContext

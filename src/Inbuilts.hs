@@ -46,13 +46,13 @@ prelude =
       Fun (\Unit -> liftIO getContents >>= (\s -> Value.Array <$> (Value.fromString s)))) -- TODO need to make many of these functions strict?
   , ("putInt",      poly "Int -> ()",
       Fun (\(Int x) -> liftIO (print x >> pure Unit)))
-  , ("putStr",      poly "Array Char -> ()", -- FIXME REF? How to call with literal?
+  , ("putStr",      poly "&Array Char -> ()",
       Fun (\(Array a) -> Value.toString a >>= (\s -> liftIO (putStr s)) >> pure Unit))
-  , ("putStrLn",    poly "Array Char -> ()", -- FIXME REF? How to call with literal?
+  , ("putStrLn",    poly "&Array Char -> ()",
       Fun (\(Array a) -> Value.toString a >>= (\s -> liftIO (putStrLn s)) >> pure Unit))
   , ("compose",     poly "forall a b c. (b -> c, a -> b) -> a -> c",
       Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
-  , ("print",       poly "forall a. a -> ()",
+  , ("print",       poly "forall a. &a -> ()",
       Fun (\x -> liftIO (print x >> pure Unit))) -- TODO should have Show constraint
   , ("at",          poly "forall a. (&Array a, Int) -> a",
       Fun (\(Pair (Array a) (Int i)) -> Value.readArray a i))

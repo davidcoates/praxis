@@ -35,9 +35,9 @@ kind s = runInternal initialState (parse s :: Praxis (Annotated Kind))
 
 prelude :: [(Name, Annotated QType, Value)]
 prelude =
-  [ ("add" ,         poly "(Int, Int) -> Int", lift (+))
-  , ("subtract",     poly "(Int, Int) -> Int", lift (-))
-  , ("multiply",     poly "(Int, Int) -> Int", lift (*))
+  [ ("add" ,         poly "(Int, Int) -> Int", liftI (+))
+  , ("subtract",     poly "(Int, Int) -> Int", liftI (-))
+  , ("multiply",     poly "(Int, Int) -> Int", liftI (*))
   , ("negate",       poly "Int -> Int",
       Fun (\(Int x) -> pure (Int (negate x))))
   , ("get_int",      poly "() -> Int",
@@ -60,10 +60,14 @@ prelude =
       Fun (\(Array a) -> Value.Int <$> Value.len a))
   , ("set",          poly "forall a. (Array a, Int, a) -> Array a",
       Fun (\(Pair (Array a) (Pair (Int i) e)) -> Value.writeArray a i e >> pure (Array a)))
+  , ("or",           poly "(Bool, Bool) -> Bool", liftB (||))
+  , ("and",          poly "(Bool, Bool) -> Bool", liftB (&&))
   ]
   where
-    lift :: (Int -> Int -> Int) -> Value
-    lift f = Fun (\(Pair (Int a) (Int b)) -> pure (Int (f a b)))
+    liftI :: (Int -> Int -> Int) -> Value
+    liftI f = Fun (\(Pair (Int a) (Int b)) -> pure (Int (f a b)))
+    liftB :: (Bool -> Bool -> Bool) -> Value
+    liftB f = Fun (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
 
 preludeKinds :: [(Name, Annotated Kind)]
 preludeKinds =
@@ -110,6 +114,10 @@ preludeOps = unlines $
   , "operator (_ [ _ ]) = at"
   , ""
   , "operator (_ [ _ ] <- _) = set"
+  , ""
+  , "operator (_ || _) = or"
+  , ""
+  , "operator (_ && _) = and"
   ]
 
 initialOpContext :: OpContext

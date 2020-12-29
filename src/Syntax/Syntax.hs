@@ -83,3 +83,4 @@ prefix a (l, b) (r, c) = Prism f g <$> a <*> (_Left <$> b <|> _Right <$> c) wher
     (Just (a, x), Nothing) -> Just (a, Left x)
     (Nothing, Just (a, x)) -> Just (a, Right x)
     (Nothing, Nothing)     -> Nothing
+

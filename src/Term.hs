@@ -87,6 +87,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Do [Annotated Stmt]
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
+         | Let (Annotated Pat, Annotated Exp) (Annotated Exp) -- ^Parsing only TODO not parsing only?
          | Lit Lit
          | Mixfix [Annotated Tok] -- ^Parsing only
          | Read Name (Annotated Exp)
@@ -95,6 +96,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Unit
          | Var Name -- FIXME Qualified Name
          | VarBang Name -- ^Parsing only
+         | Where (Annotated Exp) [(Annotated Pat, Annotated Exp)]
   deriving (Eq, Ord)
 
 data Lit = Bool Bool

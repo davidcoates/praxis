@@ -202,7 +202,7 @@ exp = split $ \s -> \case
     x' <- exp x
     let xt = view ty x'
     op <- freshTyOpUni
-    alts' <- parallel (map (bind op) alts)
+    alts' <- parallel (map (alt op) alts)
     t1 <- equals (map ((\t -> (view source t, view ty t)) . fst) alts') CaseCongruence
     t2 <- equals (map ((\t -> (view source t, view ty t)) . snd) alts') CaseCongruence
     require $ newConstraint (TyOp op xt `as` phantom KindType `TEq` t1) CaseCongruence s -- TODO probably should pick a better name for this
@@ -210,7 +210,7 @@ exp = split $ \s -> \case
 
   Cases alts -> closure $ do
     op <- freshTyOpUni
-    alts' <- parallel (map (bind op) alts)
+    alts' <- parallel (map (alt op) alts)
     t1 <- equals (map ((\t -> (view source t, view ty t)) . fst) alts') CaseCongruence
     t2 <- equals (map ((\t -> (view source t, view ty t)) . snd) alts') CaseCongruence
     return (fun t1 t2 :< Cases alts')
@@ -238,7 +238,7 @@ exp = split $ \s -> \case
 
   Lambda p e -> closure $ do
     op <- freshTyOpUni
-    (p', e') <- bind op (p, e)
+    (p', e') <- alt op (p, e)
     return (fun (view ty p') (view ty e') :< Lambda p' e')
 
   Lit x -> do
@@ -278,12 +278,29 @@ exp = split $ \s -> \case
     t <- mark s n
     return (t :< Var n)
 
+  Where x bs -> do
+    (i, bs') <- binds bs
+    x' <- exp x
+    tEnv %= elimN i
+    return (view ty x' :< Where x' bs')
+
 
 equals :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
 equals ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
 
-bind :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
-bind op (p, e) = do
+-- TODO allow these to be (mutually) recursive?
+binds :: [(Annotated Pat, Annotated Exp)] -> Praxis (Int, [(Annotated Pat, Annotated Exp)])
+binds bs = over first (\(Sum x) -> x) <$> traverse (over first Sum) <$> traverse bind bs
+
+bind :: (Annotated Pat, Annotated Exp) -> Praxis (Int, (Annotated Pat, Annotated Exp))
+bind (p, e) = do
+  e' <- exp e
+  (i, p') <- pat (phantom TyOpId) p
+  equal (view ty p') (view ty e') (BindCongruence) (view source p <> view source e)
+  return (i, (p', e'))
+
+alt :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
+alt op (p, e) = do
   (i, p') <- pat op p
   e' <- exp e
   tEnv %= elimN i

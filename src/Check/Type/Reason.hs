@@ -5,6 +5,7 @@ module Check.Type.Reason
 import           Common
 
 data Reason = AppFun
+            | BindCongruence
             | Captured Name
             | CaseCongruence
             | Custom String
@@ -19,6 +20,7 @@ data Reason = AppFun
 instance Show Reason where
   show = \case
     AppFun           -> "Function application"
+    BindCongruence   -> "Binding must have same type on both sides"
     Captured n       -> "Variable '" ++ n ++ "' captured"
     CaseCongruence   -> "Alternatives of <case> expression must have the same type"
     Custom s         -> s

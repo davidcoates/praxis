@@ -114,12 +114,19 @@ expRec n (_ :< e) = case e of
     Just v <- vEnv `uses` lookup n
     return v
 
+  Where x bs -> do
+    i <- binds bs
+    x' <- exp x
+    vEnv %= elimN i
+    return x'
+
+
 exp :: Annotated Exp -> Praxis Value
 exp = expRec Nothing
 
 cases :: Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 cases x [] = error ("no matching pattern" ++ show x)
-cases x ((p,e):ps) = case bind x p of
+cases x ((p,e):ps) = case alt x p of
   Just c  -> do
     i <- c
     e' <- exp e
@@ -129,19 +136,28 @@ cases x ((p,e):ps) = case bind x p of
     cases x ps
 
 forceBind :: Value -> Annotated Pat -> Praxis Int
-forceBind v p = case bind v p of Just i  -> i
-                                 Nothing -> error "no matching pattern" -- TODO
+forceBind v p = case alt v p of Just i  -> i
+                                Nothing -> error "no matching pattern" -- TODO
 
-bind :: Value -> Annotated Pat -> Maybe (Praxis Int)
-bind v (_ :< p) = case p of
+binds :: [(Annotated Pat, Annotated Exp)] -> Praxis Int
+binds bs = sum <$> mapM bind bs
+
+bind :: (Annotated Pat, Annotated Exp) -> Praxis Int
+bind (p, x) = do
+  x' <- exp x
+  let Just i = alt x' p
+  i
+
+alt :: Value -> Annotated Pat -> Maybe (Praxis Int)
+alt v (_ :< p) = case p of
 
   PatAt n p
-    -> (\c -> do { vEnv %= intro n v; i <- c; return (i+1) }) <$> bind v p
+    -> (\c -> do { vEnv %= intro n v; i <- c; return (i+1) }) <$> alt v p
 
   PatCon n p | Value.Con m v <- v
     -> if n /= m then Nothing else case (p, v) of
       (Nothing, Nothing) -> Just (return 0)
-      (Just p, Just v)   -> bind v p
+      (Just p, Just v)   -> alt v p
 
   PatHole
     -> Just (return 0)
@@ -155,8 +171,8 @@ bind v (_ :< p) = case p of
 
   PatPair p q | Value.Pair p' q' <- v
     -> do
-      i <- bind p' p
-      j <- bind q' q
+      i <- alt p' p
+      j <- alt q' q
       return $ liftA2 (+) i j
 
   PatUnit

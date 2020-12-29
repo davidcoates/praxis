@@ -214,6 +214,7 @@ instance Term Exp where
     Do ss        -> Do <$> traverse f ss
     If a b c     -> If <$> f a <*> f b <*> f c
     Lambda a b   -> Lambda <$> f a <*> f b
+    Let (p, a) b -> Let <$> ((,) <$> f p <*> f a) <*> f b
     Lit l        -> pure (Lit l)
     Mixfix ts    -> Mixfix <$> traverse f ts
     Read n a     -> Read n <$> f a
@@ -222,6 +223,7 @@ instance Term Exp where
     Unit         -> pure Unit
     Var n        -> pure (Var n)
     VarBang n    -> pure (VarBang n)
+    Where a ps   -> Where <$> f a <*> traverse (\(a, b) -> (,) <$> f a <*> f b) ps
 
 instance Term Pat where
   witness = IPat

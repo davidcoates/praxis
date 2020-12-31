@@ -50,8 +50,8 @@ unlayout ts o = unlayout' False (-1) ts where
     []      -> Nil
     Layout t : ts
       | t == '{' -> (if depth == -1 then Nil else Value (indent (depth + 1))) <> unlayout' False (depth + 1) ts
-      | t == ';' -> Value (indent depth) <> unlayout' False depth ts
-      | t == '}' -> (if depth == 0 then Nil else Value "\n") <> unlayout' False (depth - 1) ts
+      | t == ';' -> (if depth == 0 then Value "\n" else Nil) <> Value (indent depth) <> unlayout' False depth ts
+      | t == '}' -> unlayout' False (depth - 1) ts
     t : ts -> let p = runPrintable (pretty t) o in if null p then unlayout' needsSpace depth ts else (if needsSpace then Value " " else Nil) <> p <> unlayout' True depth ts
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where

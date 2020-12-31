@@ -214,7 +214,7 @@ exp = split $ \s -> \case
     alts' <- parallel (map (alt op) alts)
     t1 <- equals (map ((\t -> (view source t, view ty t)) . fst) alts') CaseCongruence
     t2 <- equals (map ((\t -> (view source t, view ty t)) . snd) alts') CaseCongruence
-    require $ newConstraint (TyOp op xt `as` phantom KindType `TEq` t1) CaseCongruence s -- TODO probably should pick a better name for this
+    equal xt t1 CaseCongruence s -- TODO probably should pick a better name for this
     return (t2 :< Case x' alts')
 
   Cases alts -> closure $ do
@@ -319,55 +319,59 @@ alt op (p, e) = do
   (i, p') <- pat op p
   e' <- exp e
   tEnv %= elimN i
-  return (over ty (\t -> TyOp op t `as` phantom KindType) p', e')
+  return (p', e')
 
 pat :: Annotated TyOp -> Annotated Pat -> Praxis (Int, Annotated Pat)
-pat op = splitPair $ \s -> \case
+pat op = pat' True where
 
-  PatAt v p -> do
-    (i, p') <- pat op p
-    let t = view ty p'
-    tEnv %= intro v (mono t)
-    return (i + 1, t :< PatAt v p')
+  wrapIf p t = if p then TyOp op t `as` phantom KindType else t
 
-  PatCon n pt -> do
-    -- Lookup the data alternative with this name
-    DataAltInfo qt at rt <- getData s n
-    when (isJust at /= isJust pt) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
+  pat' top = splitPair $ \s -> \case
 
-    let Forall vs _ = view value qt
-    f <- ungeneralise vs
-    let rt' = f rt
+    PatAt v p -> do
+      (i, p') <- pat' top p
+      let t = view ty p'
+      tEnv %= intro v (mono t)
+      return (i + 1, t :< PatAt v p')
 
-    case pt of
-      Nothing -> return (0, rt' :< PatCon n Nothing)
-      Just pt -> do
-        (i, pt') <- pat op pt
-        let Just at' = at
-        require $ newConstraint (view ty pt' `TEq` f at') (Custom "TODO: PatCon") s
-        return (i, rt' :< PatCon n (Just pt'))
+    PatCon n pt -> do
+      -- Lookup the data alternative with this name
+      DataAltInfo qt at rt <- getData s n
+      when (isJust at /= isJust pt) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
 
-  PatHole -> do
-    t <- freshTyUni
-    return (0, t :< PatHole)
+      let Forall vs _ = view value qt
+      f <- ungeneralise vs
+      let rt' = wrapIf top (f rt)
 
-  PatLit l -> return (0, TyCon (lit l) Nothing `as` phantom KindType :< PatLit l)
-    where lit (Bool _)   = "Bool"
-          lit (Char _)   = "Char"
-          lit (Int _)    = "Int"
-          lit (String _) = "String"
+      case pt of
+        Nothing -> return (0, rt' :< PatCon n Nothing)
+        Just pt -> do
+          (i, pt') <- pat' False pt
+          let Just at' = at
+          require $ newConstraint (view ty pt' `TEq` f at') (Custom "TODO: PatCon") s
+          return (i, rt' :< PatCon n (Just pt'))
 
-  PatPair p q -> do
-    (i, p') <- pat op p
-    (j, q') <- pat op q
-    let t = TyPair (view ty p') (view ty q') `as` phantom KindType
-    return (i + j, t :< PatPair p' q')
+    PatHole -> do
+      t <- freshTyUni
+      return (0, t :< PatHole)
 
-  PatUnit -> do
-    let t = TyUnit `as` phantom KindType
-    return (0, t :< PatUnit)
+    PatLit l -> return (0, TyCon (lit l) Nothing `as` phantom KindType :< PatLit l)
+      where lit (Bool _)   = "Bool"
+            lit (Char _)   = "Char"
+            lit (Int _)    = "Int"
+            lit (String _) = "String"
 
-  PatVar v -> do
-    t <- freshTyUni
-    tEnv %= intro v (mono (TyOp op t `as` phantom KindType))
-    return (1, t :< PatVar v)
+    PatPair p q -> do
+      (i, p') <- pat' False p
+      (j, q') <- pat' False q
+      let t = TyPair (view ty p') (view ty q') `as` phantom KindType
+      return (i + j, wrapIf top t :< PatPair p' q')
+
+    PatUnit -> do
+      let t = TyUnit `as` phantom KindType
+      return (0, t :< PatUnit)
+
+    PatVar v -> do
+      t <- freshTyUni
+      tEnv %= intro v (mono (wrapIf (not top) t))
+      return (1, t :< PatVar v)

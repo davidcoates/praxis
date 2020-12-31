@@ -202,7 +202,7 @@ resolve c = checkAxioms c $ case view value c of
         | n `elem` ["Int", "Char", "Bool"] -> resolved p
         | n `elem` ["String"]              -> error "shouldnt get here questionable mark? FIXME"
         | n `elem` ["Array", "List"]       -> resolved (not p) -- FIXME make this general! The inclusion of List is a hack for the examples!
-        | n `elem` ["Fun"] -> resolved p -- FIXME
+        | n `elem` ["Fun", "Parser"]       -> resolved p -- FIXME
 
       TyVar n -> do
         isAxiom <- (c `elem`) <$> use (our . axioms)

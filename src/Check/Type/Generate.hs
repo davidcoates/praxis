@@ -23,9 +23,10 @@ import           Stage
 import           Term
 
 import           Control.Monad      (replicateM)
-import           Data.Foldable      (foldlM)
+import           Data.Foldable      (foldMap, foldlM)
 import           Data.List          (nub, sort)
 import           Data.Maybe         (isJust)
+import           Data.Set           (Set)
 import qualified Data.Set           as Set
 import           Prelude            hiding (exp, log, lookup, read)
 import qualified Prelude            (lookup)
@@ -139,32 +140,40 @@ parallel (x:xs) = do
 fun :: Annotated Type -> Annotated Type -> Annotated Type
 fun a b = TyFun a b `as` phantom KindType
 
-apply :: Annotated Type -> [Annotated Type] -> Annotated Type
-apply t []     = t
-apply s (t:ts) = let KindFun k1 k2 = view value (view (annotation . just) s) in apply (TyApply s t `as` k2) ts -- To be kind-correct it must be KindFun
-
 equal :: Annotated Type -> Annotated Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
+
+patToTy :: Annotated TyPat -> Annotated Type
+patToTy = over value patToTy' where
+  patToTy' = \case
+    TyPatVar n    -> TyVar n
+    TyPatPack a b -> TyPack (patToTy a) (patToTy b)
+
+-- TODO use introspection
+unis :: Annotated TyPat -> Set QTyVar
+unis = extract (embedMonoid f) where
+  f = \case
+    TyPatVar n -> Set.singleton (QTyVar n)
+    _          -> Set.empty
 
 decl :: Annotated Decl -> Praxis (Annotated Decl)
 decl = splitTrivial $ \s -> \case
 
   -- TODO Share constraints needed!
-  DeclData n ps alts -> do
+  DeclData n p alts -> do
     -- TODO could be kind annotated to avoid this lookup
     Just k <- kEnv `uses` Env.lookup n
-    let c = TyCon n `as` k
+    let rt = TyCon n (patToTy <$> p) `as` k
         f ((s, Nothing) :< DataAlt n at) = do
-          let rt = apply c $ map (over value (\(TyPatVar n) -> TyVar n)) ps -- Return type of the constructor
-              ut = case at of -- Type of the constructor (unqualified)
+          let ut = case at of -- Type of the constructor (unqualified)
                 Just at -> fun at rt
                 Nothing -> rt
-              qt = phantom $ Forall (map ((\(TyPatVar n) -> QTyVar n) . view value) ps) ut -- Type of the constructor (qualified)
+              qt = phantom $ Forall (Set.toList (foldMap unis p)) ut -- Type of the constructor (qualified)
               da = ((s, Just (DataAltInfo qt at rt)) :< DataAlt n at)
           daEnv %= Env.intro n da
           return da
     alts' <- traverse f alts
-    return $ DeclData n ps alts'
+    return $ DeclData n p alts'
 
   -- TODO safe recursion check
   -- TODO check no duplicate variables
@@ -232,7 +241,7 @@ exp = split $ \s -> \case
   If a b c -> do
     a' <- exp a
     (b', c') <- join (exp b) (exp c)
-    require $ newConstraint (view ty a' `TEq` TyCon "Bool" `as` phantom KindType) IfCondition s
+    require $ newConstraint (view ty a' `TEq` TyCon "Bool" Nothing `as` phantom KindType) IfCondition s
     require $ newConstraint (view ty b' `TEq` view ty c') IfCongruence s
     return (view ty b' :< If a' b' c')
 
@@ -243,10 +252,10 @@ exp = split $ \s -> \case
 
   Lit x -> do
     t <- case x of {
-      Int _    -> return $ TyCon "Int";
-      Bool _   -> return $ TyCon "Bool";
-      String _ -> (\o -> TyOp o (phantom $ TyApply (phantom $ TyCon "Array") (phantom $ TyCon "Char"))) <$> freshTyOpUni;
-      Char _   -> return $ TyCon "Char"}
+      Int _    -> return $ TyCon "Int" Nothing;
+      Bool _   -> return $ TyCon "Bool" Nothing;
+      String _ -> (\o -> TyOp o (phantom $ TyCon "Array" (Just (phantom $ TyCon "Char" Nothing)))) <$> freshTyOpUni;
+      Char _   -> return $ TyCon "Char" Nothing}
     return (t `as` phantom KindType :< Lit x)
 
   Read n e -> do
@@ -336,7 +345,7 @@ pat op = splitPair $ \s -> \case
     t <- freshTyUni
     return (0, t :< PatHole)
 
-  PatLit l -> return (0, TyCon (lit l) `as` phantom KindType :< PatLit l)
+  PatLit l -> return (0, TyCon (lit l) Nothing `as` phantom KindType :< PatLit l)
     where lit (Bool _)   = "Bool"
           lit (Char _)   = "Char"
           lit (Int _)    = "Int"

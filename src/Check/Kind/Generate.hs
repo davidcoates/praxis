@@ -47,17 +47,18 @@ generate x = case witness :: I a of
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty = split $ \s -> \case
 
-    TyApply f a -> do
-      k <- freshKindUni
-      f' <- ty f
-      a' <- ty a
-      require $ newConstraint (view kind f' `KEq` phantom (KindFun (view kind a') k)) AppType s
-      return (k :< TyApply f' a')
-
-    TyCon n -> do
+    TyCon n a -> do
+      a' <- traverse ty a
       e <- kEnv `uses` lookup n
-      case e of Nothing -> throwAt s (NotInScope n)
-                Just k  -> return (k :< TyCon n)
+      case e of
+        Nothing -> throwAt s (NotInScope n)
+        Just f  -> do
+          case a' of
+            Nothing -> return (f :< TyCon n Nothing)
+            Just a'' -> do
+              k <- freshKindUni
+              require $ newConstraint (f `KEq` phantom (KindFun (view kind a'') k)) AppType s
+              return (k :< TyCon n a')
 
     TyFun a b -> do
       a' <- ty a
@@ -76,6 +77,11 @@ ty = split $ \s -> \case
       q' <- ty q
       requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) (Custom "typ: TyPair TODO") s) [p', q']
       return (phantom KindType :< TyPair p' q')
+
+    TyPack p q -> do
+      p' <- ty p
+      q' <- ty q
+      return (phantom (KindPair (view kind p') (view kind q')) :< TyPack p' q')
 
     TyUnit -> do
       return (phantom KindType :< TyUnit)
@@ -101,6 +107,11 @@ tyPat = splitPair $ \s -> \case
         k <- freshKindUni
         kEnv %= intro v k
         return (1, k :< TyPatVar v)
+
+  TyPatPack a b -> do
+    (i, a') <- tyPat a
+    (j, b') <- tyPat b
+    return (i + j, phantom (KindPair (view kind a') (view kind b')) :< TyPatPack a' b')
 
 
 dataAlt :: Annotated DataAlt -> Praxis (Annotated DataAlt)
@@ -132,7 +143,9 @@ decl = splitTrivial $ \s -> \case
     (Sum i, ps') <- traverse (over first Sum) <$> traverse tyPat ps
     as' <- traverse dataAlt as
     kEnv %= elimN i
-    require $ newConstraint (k `KEq` foldr fun (phantom KindType) (map (view kind) ps')) (Custom "decl: TODO") s
+    case ps' of
+      Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (Custom "decl: TODO") s
+      Just ps' -> require $ newConstraint (k `KEq` phantom (KindFun (view kind ps') (phantom KindType))) (Custom "decl: TODO") s
     return $ DeclData n ps' as'
 
   x -> recurse generate x

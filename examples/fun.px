@@ -1,0 +1,13 @@
+
+-- Boxed function
+
+type Fun [a, b] = Fun (a -> b)
+
+unbox_fun : forall a b. Fun [a, b] -> a -> b
+unbox_fun (Fun f) x = f x
+
+id_fun : forall a. Fun [a, a]
+id_fun = Fun (\x -> x)
+
+x : Int
+x = (unbox_fun id_fun) 4

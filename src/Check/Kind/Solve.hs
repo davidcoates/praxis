@@ -59,23 +59,24 @@ spin solve = use (our . constraints) <&> (nub . sort) >>= \case
         []     -> return False
         (c:cs) -> (our . staging .= cs) >> liftA2 (||) (solve c) loop
 
+unis :: forall a. Term a => Annotated a -> Set Name
 unis = extract (embedMonoid f) where
   f = \case
-    KindUni n      -> [n]
-    KindConstraint -> []
-    KindFun a b    -> unis a ++ unis b
-    KindType       -> []
--- TODO find some way of combining traverseM and traverseA and use that here
+    KindUni n -> Set.singleton n
+    _         -> Set.empty
 
 progress :: Annotated KindConstraint -> Praxis Bool
 progress d = case view value d of
 
   KEq k1 k2 | k1 == k2  -> tautology
 
-  KEq (_ :< KindUni x) k -> if x `elem` unis k then contradiction else x `is` (view value k) -- Note: Occurs check here
-  KEq _ (_ :< KindUni _) -> swap
+  KEq (_ :< KindUni x) k -> if x `Set.member` unis k then contradiction else x `is` (view value k) -- Note: Occurs check here
 
-  KEq (_ :< KindFun t1 t2) (_ :< KindFun t3 t4) -> introduce [ KEq t1 t3, KEq t2 t4 ]
+  KEq _ (_ :< KindUni _) -> swap -- handled by the above case
+
+  KEq (_ :< KindFun s1 s2) (_ :< KindFun t1 t2) -> introduce [ KEq s1 t1, KEq s2 t2 ]
+
+  KEq (_ :< KindPair s1 s2) (_ :< KindPair t1 t2) -> introduce [ KEq s1 t1, KEq s2 t2 ]
 
   _ -> contradiction
 

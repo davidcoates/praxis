@@ -68,7 +68,7 @@ data Prec = Prec Ordering Op
   deriving (Eq, Ord)
 
 -- * DECLARATIONS *
-data Decl = DeclData Name [Annotated TyPat] [Annotated DataAlt]
+data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataAlt]
           | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
           | DeclSig Name (Annotated QType) -- ^Parsing only
@@ -140,15 +140,15 @@ data TyOp = TyOpUni Name
           | TyOpVar Name
   deriving (Eq, Ord)
 
--- TODO TyPatPack
-data TyPat = TyPatVar Name
+data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
+           | TyPatVar Name
   deriving (Eq, Ord)
 
 data Type = TyUni Name -- Compares less than all other types
-          | TyApply (Annotated Type) (Annotated Type)
-          | TyCon Name
+          | TyCon Name (Maybe (Annotated Type))
           | TyFun (Annotated Type) (Annotated Type)
           | TyOp (Annotated TyOp) (Annotated Type)
+          | TyPack (Annotated Type) (Annotated Type)
           | TyPair (Annotated Type) (Annotated Type)
           | TyUnit
           | TyVar Name
@@ -163,6 +163,7 @@ data QType = Forall [QTyVar] (Annotated Type)
 data Kind = KindUni Name
           | KindConstraint
           | KindFun (Annotated Kind) (Annotated Kind)
+          | KindPair (Annotated Kind) (Annotated Kind)
           | KindType
   deriving (Eq, Ord)
 

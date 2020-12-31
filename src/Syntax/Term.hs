@@ -164,6 +164,13 @@ tuple :: (Syntax f, Term a) => Prism a () -> Prism a (Annotated a, Annotated a) 
 tuple unit pair p = special '(' *> tuple' where
   tuple' = unit <$> special ')' *> pure () <|> rightWithSep (special ',') pair p <* special ')'
 
+tuple1 :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+tuple1 pair p = special '(' *> rightWithSep (special ',') pair p <* special ')'
+
+-- at least 2 elements
+pack :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+pack pair p = pair <$> (contextualOp "[" *> annotated p <* special ',') <*> (annotated (rightWithSep (special ',') pair p) <* contextualOp "]")
+
 join :: (Syntax f, Term a) => f a -> (Prism a (Annotated a, b), f b) -> f a
 join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p where
   f (_ :< p, Nothing) = p
@@ -208,15 +215,16 @@ declUsing :: Syntax f => f Decl
 declUsing = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
 
 declData :: Syntax f => f Decl
-declData = _DeclData <$> reservedId "type" *> conid <*> many (annotated tyPat) <*> reservedOp "=" *> alts where
+declData = _DeclData <$> reservedId "type" *> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where
   alts = _Singleton <$> annotated dataAlt <|> reservedId "cases" *> block (annotated dataAlt)
   _Singleton = Prism (\x -> [x]) (\case { [x] -> Just x; _ -> Nothing }) -- short definition for a single constructor
 
 dataAlt :: Syntax f => f DataAlt
-dataAlt = _DataAlt <$> conid <*> optional (annotated ty)
+dataAlt = _DataAlt <$> conid <*> optional (annotated ty1)
 
 tyPat :: Syntax f => f TyPat
-tyPat = _TyPatVar <$> varid
+tyPat = _TyPatVar <$> varid <|>
+        pack _TyPatPack tyPat
 
 fun :: Syntax f => f Decl
 fun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
@@ -240,7 +248,7 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
   kind0 = _KindType <$> reservedCon "Type" <|>
           _KindUni <$> uni <|>
           _KindConstraint <$> reservedCon "Constraint" <|>
-          special '(' *> kind <* special ')' <|>
+          tuple1 _KindPair kind <|>
           mark "kind(0)"
 
 qTy :: Syntax f => f QType
@@ -252,12 +260,14 @@ qTyVar = _QTyVar <$> varid <|>
           mark "type or type operator variable"
 
 ty :: Syntax f => f Type
-ty = ty2 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type" where
-  ty2 = _TyOp <$> annotated tyOp <*> annotated ty2 <|> ty1 <|> mark "type(2)"
-  ty1 = right _TyApply ty0 <|> mark "type(1)"
+ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type"
+
+ty1 :: Syntax f => f Type
+ty1 = _TyOp <$> annotated tyOp <*> annotated ty1 <|> ty0 <|> mark "type(1)" where
   ty0 = _TyVar <$> varid <|>
-        _TyCon <$> conid <|>
+        _TyCon <$> conid <*> optional (annotated ty1) <|>
         _TyUni <$> uni <|>
+        pack _TyPack ty <|>
         tuple _TyUnit _TyPair ty <|>
         mark "type(0)"
 
@@ -270,6 +280,7 @@ tyOp = _TyOpBang <$> reservedOp "&" <|>
 
 exp :: Syntax f => f Exp
 exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where
+  -- TODO should mixfix be at this high a level?
   exp4 = mixfix <$> some (annotated (_TOp <$> varsym <|> _TExp <$> annotated exp3)) <|> unparseable exp3 <|> mark "expression(4)" -- FIXME unparseable is a hack here
   mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> Mixfix ts }) (\case { Mixfix ts -> Just ts; _ -> Nothing })
   exp3 = optWhere <$> annotated exp2 <*> blockLike (reservedId "where") bind <|> unparseable exp2 <|> mark "expression(3)"

@@ -65,9 +65,11 @@ spin = use (our . constraints) <&> (nub . sort) >>= \case
         []     -> return False
         (c:cs) -> (our . staging .= cs) >> liftA2 (||) (progress c) loop
 
-unis = extract (embedMonoid f)
- where f (TyUni n) = [n]
-       f _         = []
+unis :: forall a. Term a => Annotated a -> Set Name
+unis = extract (embedMonoid f) where
+  f = \case
+    TyUni n -> Set.singleton n
+    _       -> Set.empty
 
 data Resolution = Proven
                 | Disproven { open :: Bool }
@@ -115,10 +117,13 @@ resolve c = checkAxioms c $ case view value c of
 
   TEq t1 t2 | t1 == t2 -> tautology
 
-  TEq (_ :< TyUni x) t -> if x `elem` unis t then contradiction else x `is` view value t >> solved -- Note: Occurs check here
-  TEq _ (_ :< TyUni _) -> swap
+  TEq (_ :< TyUni x) t -> if x `Set.member` unis t then contradiction else x `is` view value t >> solved -- Note: Occurs check here
 
-  TEq (_ :< TyApply n1 t1) (_ :< TyApply n2 t2) | n1 == n2 -> introduce [ TEq t1 t2 ]
+  TEq _ (_ :< TyUni _) -> swap -- handle by the above case
+
+  TEq (_ :< TyCon n1 (Just t1)) (_ :< TyCon n2 (Just t2)) | n1 == n2 -> introduce [ TEq t1 t2 ]
+
+  TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> introduce [ TEq s1 t1, TEq s2 t2 ]
 
   TEq (_ :< TyPair s1 s2) (_ :< TyPair t1 t2) -> introduce [ TEq s1 t1, TEq s2 t2 ]
 
@@ -145,7 +150,7 @@ resolve c = checkAxioms c $ case view value c of
             _ -> defer
       _                                  -> defer
 
-  TEq _ (_ :< TyOp _ _) -> swap
+  TEq _ (_ :< TyOp _ _) -> swap -- handled by the above case
 
   _ -> contradiction
 
@@ -193,14 +198,11 @@ resolve c = checkAxioms c $ case view value c of
 
       TyPair s t -> untrivialise <$> (\(s, t) -> (if p then (&&&) else (|||)) s t) <$> both (resolve . share) (s, t)
 
-      TyCon n
+      TyCon n _
         | n `elem` ["Int", "Char", "Bool"] -> resolved p
         | n `elem` ["String"]              -> error "shouldnt get here questionable mark? FIXME"
-
-      TyApply (_ :< TyCon "Array") _ -> resolved (not p)
-
-      -- FIXME make this general! This is a hack for the examples!
-      TyApply (_ :< TyCon "List") _ -> resolved (not p)
+        | n `elem` ["Array", "List"]       -> resolved (not p) -- FIXME make this general! The inclusion of List is a hack for the examples!
+        | n `elem` ["Fun"] -> resolved p -- FIXME
 
       TyVar n -> do
         isAxiom <- (c `elem`) <$> use (our . axioms)

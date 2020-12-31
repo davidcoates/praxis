@@ -54,6 +54,7 @@ desugar x = ($ x) $ case witness :: I a of
   IType    -> ty
   IKind    -> pure
   ITyOp    -> pure
+  ITyPat   -> pure
   IQType   -> qty
 
 program :: Annotated Program -> Praxis (Annotated Program)
@@ -256,11 +257,12 @@ pat (a :< x) = (a :<) <$> recurse desugar x
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty (a :< x) = case x of
 
-  TyCon n -> do
+  -- FIXME allow more generic type synonyms
+  TyCon n Nothing -> do
     syn <- tSynonyms `uses` Map.lookup n
     return $ case syn of
       Just t  -> t
-      Nothing -> a :< TyCon n
+      Nothing -> a :< TyCon n Nothing
 
   _           -> (a :<) <$> recurse desugar x
 

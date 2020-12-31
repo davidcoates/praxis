@@ -272,17 +272,18 @@ instance Term TyPat where
   witness = ITyPat
   complete _ f x = f x
   recurse f = \case
-    TyPatVar n  -> pure (TyPatVar n)
+    TyPatVar n    -> pure (TyPatVar n)
+    TyPatPack a b -> TyPatPack <$> f a <*> f b
 
 instance Term Type where
   witness = IType
   complete _ f x = f x
   recurse f = \case
     TyUni n     -> pure (TyUni n)
-    TyApply a b -> TyApply <$> f a <*> f b
-    TyCon n     -> pure (TyCon n)
+    TyCon n t   -> TyCon <$> pure n <*> traverse f t
     TyFun a b   -> TyFun <$> f a <*> f b
     TyOp op t   -> TyOp <$> f op <*> f t
+    TyPack a b  -> TyPack <$> f a <*> f b
     TyPair a b  -> TyPair <$> f a <*> f b
     TyUnit      -> pure TyUnit
     TyVar n     -> pure (TyVar n)
@@ -307,6 +308,7 @@ instance Term Kind where
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
     KindFun a b    -> KindFun <$> f a <*> f b
+    KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType
 
 -- | Solver

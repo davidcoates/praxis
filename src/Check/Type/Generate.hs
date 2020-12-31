@@ -250,6 +250,12 @@ exp = split $ \s -> \case
     (p', e') <- alt op (p, e)
     return (fun (view ty p') (view ty e') :< Lambda p' e')
 
+  Let b x -> do
+    (i, b) <- bind b
+    x' <- exp x
+    tEnv %= elimN i
+    return (view ty x' :< Let b x')
+
   Lit x -> do
     t <- case x of {
       Int _    -> return $ TyCon "Int" Nothing;

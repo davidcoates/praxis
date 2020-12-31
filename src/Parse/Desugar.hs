@@ -123,8 +123,6 @@ exp (a :< x) = case x of
         unwrap (n:ns) = (a :< Read n (unwrap ns))
     return (unwrap (Set.elems ns))
 
-  Let (p, x) y -> exp (a :< Where y [(p, x)])
-
   Do ss       -> do
     ss' <- stmts ss
     return (a :< Do ss')

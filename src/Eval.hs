@@ -96,6 +96,12 @@ expRec n (_ :< e) = case e of
     let f = Value.Fun $ \v -> save vEnv $ do { vEnv .= l; rec n f; i <- forceBind v p; exp e }
     return f
 
+  Let b x -> do
+    i <- bind b
+    x' <- exp x
+    vEnv %= elimN i
+    return x'
+
   Lit l -> case l of
     Bool b   -> pure $ Value.Bool b
     Char c   -> pure $ Value.Char c

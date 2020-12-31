@@ -87,7 +87,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Do [Annotated Stmt]
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
-         | Let (Annotated Pat, Annotated Exp) (Annotated Exp) -- ^Parsing only TODO not parsing only?
+         | Let (Annotated Pat, Annotated Exp) (Annotated Exp)
          | Lit Lit
          | Mixfix [Annotated Tok] -- ^Parsing only
          | Read Name (Annotated Exp)

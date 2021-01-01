@@ -57,25 +57,25 @@ ty = split $ \s -> \case
             Nothing -> return (f :< TyCon n Nothing)
             Just a'' -> do
               k <- freshKindUni
-              require $ newConstraint (f `KEq` phantom (KindFun (view kind a'') k)) AppType s
+              require $ newConstraint (f `KEq` phantom (KindFun (view kind a'') k)) (AppType n) s -- TODO should constraint just be equal to kind of data?
               return (k :< TyCon n a')
 
     TyFun a b -> do
       a' <- ty a
       b' <- ty b
-      require $ newConstraint (view kind a' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
-      require $ newConstraint (view kind b' `KEq` phantom KindType) (Custom "typ: TyFun TODO") s
+      require $ newConstraint (view kind a' `KEq` phantom KindType) FunType s
+      require $ newConstraint (view kind b' `KEq` phantom KindType) FunType s
       return (phantom KindType :< TyFun a' b')
 
     TyOp op t -> do
       t' <- ty t
-      require $ newConstraint (view kind t' `KEq` phantom KindType) (Custom "typ: TyOp TODO") s
+      require $ newConstraint (view kind t' `KEq` phantom KindType) OpType s
       return (phantom KindType :< TyOp op t')
 
     TyPair p q -> do
       p' <- ty p
       q' <- ty q
-      requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) (Custom "typ: TyPair TODO") s) [p', q']
+      requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) PairType s) [p', q']
       return (phantom KindType :< TyPair p' q')
 
     TyPack p q -> do
@@ -122,7 +122,7 @@ dataAlt = splitTrivial $ \s -> \case
       Nothing -> return $ DataAlt n Nothing
       Just at -> do
         at' <- ty at
-        require $ newConstraint (view kind at' `KEq` phantom KindType) (Custom "dataAlt: TODO") s
+        require $ newConstraint (view kind at' `KEq` phantom KindType) (DataAltType n) s -- TODO should just match kind of data type?
         return $ DataAlt n (Just at')
 
 
@@ -144,8 +144,8 @@ decl = splitTrivial $ \s -> \case
     as' <- traverse dataAlt as
     kEnv %= elimN i
     case ps' of
-      Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (Custom "decl: TODO") s
-      Just ps' -> require $ newConstraint (k `KEq` phantom (KindFun (view kind ps') (phantom KindType))) (Custom "decl: TODO") s
+      Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (DataType n) s
+      Just ps' -> require $ newConstraint (k `KEq` phantom (KindFun (view kind ps') (phantom KindType))) (DataType n) s
     return $ DeclData n ps' as'
 
   x -> recurse generate x

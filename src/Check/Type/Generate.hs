@@ -348,7 +348,7 @@ pat op = pat' True where
         Just pt -> do
           (i, pt') <- pat' False pt
           let Just at' = at
-          require $ newConstraint (view ty pt' `TEq` f at') (Custom "TODO: PatCon") s
+          require $ newConstraint (view ty pt' `TEq` f at') (ConPattern n) s
           return (i, rt' :< PatCon n (Just pt'))
 
     PatHole -> do

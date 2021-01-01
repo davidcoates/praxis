@@ -319,7 +319,8 @@ op = _Op <$> special '(' *> atLeast 2 atom <* special ')' where
 
 opRules :: Syntax f => f OpRules
 opRules = _OpMultiRules <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
-          unparseable (_OpRules <$> reservedId "where" *> special '{' *> optional (annotated assoc <* special ';') <*> precs <* special '}')
+          unparseable (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
+          unparseable (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
 
 -- FIXME contextul reservation is dirty
 assoc :: Syntax f => f Assoc

@@ -33,6 +33,9 @@ module Term
   -- | Solver
   , KindConstraint(..)
   , TypeConstraint(..)
+  , Prop(..)
+  , TypeProp
+  , KindProp
 
   , Annotation
   , Annotated
@@ -168,10 +171,9 @@ data Kind = KindUni Name
   deriving (Eq, Ord)
 
 data TypeConstraint = Class (Annotated Type)
-                    | Affine (Annotated Type)
                     | Share (Annotated Type)
                     | TEq (Annotated Type) (Annotated Type)
-                    | TOpEq Name Name
+                    | TOpEq (Annotated TyOp) (Annotated TyOp)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`
@@ -180,14 +182,25 @@ infixl 8 `TOpEq`
 data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
+-- TODO dont really want internal annotations
+data Prop a = Top
+            | Bottom
+            | Exactly (Annotated a)
+            | And (Annotated (Prop a)) (Annotated (Prop a))
+  deriving (Eq, Ord)
+
+type TypeProp = Prop TypeConstraint
+
+type KindProp = Prop KindConstraint
+
 type family Annotation a where
-  Annotation Exp            = Annotated Type
-  Annotation Pat            = Annotated Type
-  Annotation TyPat          = Annotated Kind
-  Annotation Type           = Annotated Kind
-  Annotation TypeConstraint = Derivation TypeConstraint
-  Annotation KindConstraint = Derivation KindConstraint
-  Annotation DataAlt        = DataAltInfo -- FIXME should just be a map?
+  Annotation Exp      = Annotated Type
+  Annotation Pat      = Annotated Type
+  Annotation TyPat    = Annotated Kind
+  Annotation Type     = Annotated Kind
+  Annotation DataAlt  = DataAltInfo -- FIXME should just be a map?
+  Annotation TypeProp = Derivation TypeProp
+  Annotation KindProp = Derivation KindProp
   Annotation a              = Void
 
 type Annotated a = Tag (Source, Maybe (Annotation a)) a

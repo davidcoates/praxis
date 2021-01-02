@@ -76,7 +76,6 @@ preludeKinds =
   , ("String", kind "Type")
   , ("Char",   kind "Type")
   , ("Array",  kind "Type -> Type")
-  , ("Affine", kind "Type -> Constraint")
   , ("Share",  kind "Type -> Constraint")
 --  , ("->",     kind "Type -> Type -> Type")
   ]

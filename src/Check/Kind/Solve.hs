@@ -8,9 +8,9 @@ module Check.Kind.Solve
   ( run
   ) where
 
-import           Check.Kind.Error
 import           Check.Kind.Require
 import           Check.Kind.System
+import           Check.Solve
 import           Common
 import           Introspect
 import           Praxis
@@ -25,39 +25,8 @@ import qualified Data.Set           as Set
 run :: Praxis [(Name, Kind)]
 run = save stage $ save our $ do
   stage .= KindCheck Solve
-  solve
+  solve (our . constraints) solveKind
   use (our . sol)
-
-data State = Cold
-           | Warm
-           | Done
-
-solve :: Praxis State
-solve = spin progress `chain` stuck where
-  chain :: Praxis State -> Praxis State -> Praxis State
-  chain p1 p2 = p1 >>= \case
-    Cold -> p2
-    Warm -> solve
-    Done -> return Done
-  stuck = do
-    cs <- (nub . sort) <$> use (our . constraints)
-    display (separate "\n\n" cs) `ifFlag` debug
-    throw Stuck
-
--- TODO reduce duplication with Type Solve spin
-spin :: (Annotated KindConstraint -> Praxis Bool) -> Praxis State
-spin solve = use (our . constraints) <&> (nub . sort) >>= \case
-  [] -> return Done
-  cs -> do
-    our . constraints .= []
-    our . staging .= cs
-    warm <- loop
-    return $ if warm then Warm else Cold
-  where
-    loop = do
-      use (our . staging) >>= \case
-        []     -> return False
-        (c:cs) -> (our . staging .= cs) >> liftA2 (||) (solve c) loop
 
 unis :: forall a. Term a => Annotated a -> Set Name
 unis = extract (embedMonoid f) where
@@ -65,42 +34,38 @@ unis = extract (embedMonoid f) where
     KindUni n -> Set.singleton n
     _         -> Set.empty
 
-progress :: Annotated KindConstraint -> Praxis Bool
-progress d = case view value d of
+type KindSolver = Solver KindConstraint KindConstraint
 
-  KEq k1 k2 | k1 == k2  -> tautology
+solveKind :: KindSolver
+solveKind = \case
 
-  KEq (_ :< KindUni x) k -> if x `Set.member` unis k then contradiction else x `is` (view value k) -- Note: Occurs check here
+  KEq k1 k2 | k1 == k2 -> tautology
 
-  KEq _ (_ :< KindUni _) -> swap -- handled by the above case
+  KEq (_ :< KindUni x) k -> if x `Set.member` unis k then contradiction else x `is` view value k -- Note: Occurs check here
 
-  KEq (_ :< KindFun s1 s2) (_ :< KindFun t1 t2) -> introduce [ KEq s1 t1, KEq s2 t2 ]
+  KEq k1 k2@(_ :< KindUni _) -> solveKind (k2 `KEq` k1) -- handled by the above case
 
-  KEq (_ :< KindPair s1 s2) (_ :< KindPair t1 t2) -> introduce [ KEq s1 t1, KEq s2 t2 ]
+  KEq (_ :< KindFun s1 s2) (_ :< KindFun t1 t2) -> intro [ KEq s1 t1, KEq s2 t2 ]
+
+  KEq (_ :< KindPair s1 s2) (_ :< KindPair t1 t2) -> intro [ KEq s1 t1, KEq s2 t2 ]
 
   _ -> contradiction
 
-  where
-    solved = return True
-    tautology = solved
-    defer = require d >> return False
-    contradiction = throw (Contradiction d)
-    introduce cs = requires (map (d `implies`) cs) >> return True
-    swap = case view value d of t1 `KEq` t2 -> progress (set value (t2 `KEq` t1) d)
+is :: Name -> Kind -> Praxis (Maybe KindProp)
+is n k = do
+  our . sol %= ((n, k):)
+  simplifyAll
+  solved
 
-    is :: Name -> Kind -> Praxis Bool
-    is n k = do
-      smap $ sub (embedSub (\case { KindUni n' | n == n' -> Just k; _ -> Nothing }))
-      our . sol %= ((n, k):)
-      reuse n
-      return True
+simplify :: forall a. Term a => Annotated a -> Praxis (Annotated a)
+simplify x = do
+  kinds <- use (our . sol)
+  return $ sub (embedSub (\case { KindUni n -> n `lookup` kinds; _ -> Nothing })) x
 
-smap :: (forall a. Term a => Annotated a -> Annotated a) -> Praxis ()
-smap f = do
-  let lower :: (Annotated Kind -> Annotated Kind) -> Kind -> Kind
-      lower f = view value . f . phantom
-  our . sol %= fmap (over second (lower f))
-  our . constraints %= fmap f
-  our . staging %= fmap f
-  our . axioms %= fmap f
-  kEnv %= over traverse f
+simplifyAll :: Praxis ()
+simplifyAll = do
+  let covalue :: Term a => (Annotated a -> Praxis (Annotated a)) -> a -> Praxis a
+      covalue f x = view value <$> f (phantom x)
+  our . sol %%= traverse (second (covalue simplify))
+  our . constraints %%= traverse simplify
+  kEnv %%= traverse simplify

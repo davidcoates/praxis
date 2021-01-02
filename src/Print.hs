@@ -34,12 +34,12 @@ instance Unparser Printer where
   mark s = Printer (error s)
   annotated f = Printer g where
     g x = Just $ case typeof (view value x) of
-      ITypeConstraint -> constraint
-      IKindConstraint -> constraint
-      i               -> [Print (mapIfNotNull (\c -> "[" <> c <> "]") (label i (view annotation x)))] ++ body
+      ITypeProp -> prop
+      IKindProp -> prop
+      i         -> [Print (mapIfNotNull (\c -> "[" <> c <> "]") (label i (view annotation x)))] ++ body
       where
-        body        = force f (view value x)
-        constraint = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof (view value x)) (view annotation x))]
+        body = force f (view value x)
+        prop = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof (view value x)) (view annotation x))]
 
 indent :: Int -> String
 indent n = '\n' : replicate (2*n) ' '
@@ -60,11 +60,11 @@ instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
 label :: Term a => I a -> Maybe (Annotation a) -> Printable String
 label _ Nothing  = blank
 label i (Just a) = case i of
-  IExp            -> prettyIf Types a
-  IPat            -> prettyIf Types a
-  ITyPat          -> prettyIf Kinds a
-  IType           -> prettyIf Kinds a
-  ITypeConstraint -> pretty a
-  IKindConstraint -> pretty a
-  IDataAlt        -> pretty a
-  _               -> blank
+  IExp      -> prettyIf Types a
+  IPat      -> prettyIf Types a
+  ITyPat    -> prettyIf Kinds a
+  IType     -> prettyIf Kinds a
+  ITypeProp -> pretty a
+  IKindProp -> pretty a
+  IDataAlt  -> pretty a
+  _         -> blank

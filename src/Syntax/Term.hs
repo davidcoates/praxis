@@ -131,6 +131,7 @@ definePrisms ''Kind
 
 definePrisms ''KindConstraint
 definePrisms ''TypeConstraint
+definePrisms ''Prop
 
 syntax :: (Term a, Syntax f) => I a -> f a
 syntax = \case
@@ -158,6 +159,8 @@ syntax = \case
   -- | Solver
   ITypeConstraint -> tyConstraint
   IKindConstraint -> kindConstraint
+  ITypeProp       -> unparseable tyProp
+  IKindProp       -> unparseable kindProp
 
 
 tuple :: (Syntax f, Term a) => Prism a () -> Prism a (Annotated a, Annotated a) -> f a -> f a
@@ -197,15 +200,27 @@ rightWithSep s _P p = Prism f g <$> annotated p <*> many (s *> annotated p) <|> 
 
 
 tyConstraint :: Syntax f => f TypeConstraint
-tyConstraint = _Affine <$> reservedCon "Affine" *> annotated ty <|>
-               _Share <$> reservedCon "Share" *> annotated ty <|>
+tyConstraint = _Share <$> reservedCon "Share" *> annotated ty <|>
                _Class <$> annotated ty <|>
                _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
+               _TOpEq <$> annotated tyOp <*> reservedOp "~" *> annotated tyOp <|>
                mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
 kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|>
                 mark "kind constraint"
+
+tyProp :: Syntax f => f TypeProp
+tyProp = _Exactly <$> annotated tyConstraint <|>
+         _Top <$> special '⊤' <|>
+         _Bottom <$> special '⊥' <|>
+         _And <$> annotated tyProp <*> special '∧' *> annotated tyProp
+
+kindProp :: Syntax f => f KindProp
+kindProp = _Exactly <$> annotated kindConstraint <|>
+           _Top <$> special '⊤' <|>
+           _Bottom <$> special '⊥' <|>
+           _And <$> annotated kindProp <*> special '∧' *> annotated kindProp
 
 program :: Syntax f => f Program
 program = _Program <$> block (annotated top) where -- TODO module

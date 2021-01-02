@@ -9,4 +9,5 @@ import           Common
 data Error = NotInScope Name
 
 instance Pretty Error where
-  pretty (NotInScope n) = "variable " <> quote (pretty n) <> " is not in scope"
+  pretty = \case
+    NotInScope n    -> "variable " <> quote (pretty n) <> " is not in scope"

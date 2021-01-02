@@ -71,6 +71,8 @@ data I a where
   -- | Solver
   ITypeConstraint :: I TypeConstraint
   IKindConstraint :: I KindConstraint
+  ITypeProp :: I TypeProp
+  IKindProp :: I KindProp
 
 
 typeof :: forall a. Term a => a -> I a
@@ -102,6 +104,8 @@ switch a b eq neq = case (a, b) of
   -- | Solver
   (ITypeConstraint, ITypeConstraint) -> eq
   (IKindConstraint, IKindConstraint) -> eq
+  (ITypeProp, ITypeProp)             -> eq
+  (IKindProp, IKindProp)             -> eq
   -- |
   _                                  -> neq
 
@@ -315,21 +319,37 @@ instance Term Kind where
 
 instance Term TypeConstraint where
   witness = ITypeConstraint
-  complete _ f = \case
-    Root r       -> pure (Root r)
-    Antecedent c -> Antecedent <$> f c
+  complete = trivial
   recurse f = \case
     Class t   -> Class <$> f t
-    Affine t  -> Affine <$> f t
     Share t   -> Share <$> f t
     TEq a b   -> TEq <$> f a <*> f b
-    TOpEq a b -> pure (TOpEq a b)
+    TOpEq a b -> TOpEq <$> f a <*> f b
 
 instance Term KindConstraint where
   witness = IKindConstraint
+  complete = trivial
+  recurse f = \case
+    KEq a b -> KEq <$> f a <*> f b
+
+instance Term TypeProp where
+  witness = ITypeProp
   complete _ f = \case
     Root r       -> pure (Root r)
     Antecedent c -> Antecedent <$> f c
   recurse f = \case
-    KEq a b -> KEq <$> f a <*> f b
+    Top       -> pure Top
+    Bottom    -> pure Bottom
+    Exactly c -> Exactly <$> f c
+    And p1 p2 -> And <$> f p1 <*> f p2
 
+instance Term KindProp where
+  witness = IKindProp
+  complete _ f = \case
+    Root r       -> pure (Root r)
+    Antecedent c -> Antecedent <$> f c
+  recurse f = \case
+    Top       -> pure Top
+    Bottom    -> pure Bottom
+    Exactly c -> Exactly <$> f c
+    And p1 p2 -> And <$> f p1 <*> f p2

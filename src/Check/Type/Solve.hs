@@ -182,7 +182,7 @@ resolve c = checkAxioms c $ case view value c of
       if isAxiom then solved else r
 
     shareImpl :: Annotated TypeConstraint -> Praxis Resolution
-    shareImpl c = checkAxioms c $ case view value t of
+    shareImpl c = case view value t of
 
       TyOp (_ :< op) t'
         | TyOpBang  <- op -> resolved p

@@ -77,7 +77,6 @@ preludeKinds =
   , ("Char",   kind "Type")
   , ("Array",  kind "Type -> Type")
   , ("Share",  kind "Type -> Constraint")
---  , ("->",     kind "Type -> Type -> Type")
   ]
 
 initialVEnv :: VEnv

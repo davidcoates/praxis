@@ -255,12 +255,12 @@ pat (a :< x) = (a :<) <$> recurse desugar x
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty (a :< x) = case x of
 
-  -- FIXME allow more generic type synonyms
-  TyCon n Nothing -> do
+  -- TODO allow more generic type synonyms
+  TyCon n -> do
     syn <- tSynonyms `uses` Map.lookup n
     return $ case syn of
       Just t  -> t
-      Nothing -> a :< TyCon n Nothing
+      Nothing -> a :< TyCon n
 
   _           -> (a :<) <$> recurse desugar x
 

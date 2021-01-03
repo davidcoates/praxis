@@ -284,9 +284,10 @@ instance Term Type where
   complete _ f x = f x
   recurse f = \case
     TyUni n     -> pure (TyUni n)
-    TyCon n t   -> TyCon <$> pure n <*> traverse f t
+    TyApply a b -> TyApply <$> f a <*> f b
+    TyCon n     -> pure (TyCon n)
     TyFun a b   -> TyFun <$> f a <*> f b
-    TyOp op t   -> TyOp <$> f op <*> f t
+    TyOp op     -> TyOp <$> f op
     TyPack a b  -> TyPack <$> f a <*> f b
     TyPair a b  -> TyPair <$> f a <*> f b
     TyUnit      -> pure TyUnit
@@ -312,6 +313,7 @@ instance Term Kind where
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
     KindFun a b    -> KindFun <$> f a <*> f b
+    KindOp         -> pure KindOp
     KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType
 

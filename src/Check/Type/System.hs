@@ -30,8 +30,8 @@ makeLenses ''System
 
 share :: Name -> Axiom
 share n = Axiom $ \case
-  Share  (_ :< TyCon m _) | m == n -> Just Top
-  _                                -> Nothing
+  Share  (_ :< TyCon m ) | m == n -> Just Top
+  _                               -> Nothing
 
 
 initialSystem :: System
@@ -43,6 +43,6 @@ initialSystem = System
     [ share "Int"
     , share "Bool"
     , share "Char"
-    , share "Parser" -- FIXME remove
+    , Axiom $ \case { Share (_ :< TyApply (_ :< TyCon "Parser") _) -> Just Top; _ -> Nothing } -- FIXME remove
     ]
   }

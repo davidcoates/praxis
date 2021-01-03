@@ -149,9 +149,10 @@ data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
   deriving (Eq, Ord)
 
 data Type = TyUni Name -- Compares less than all other types
-          | TyCon Name (Maybe (Annotated Type))
+          | TyApply (Annotated Type) (Annotated Type)
+          | TyCon Name
           | TyFun (Annotated Type) (Annotated Type)
-          | TyOp (Annotated TyOp) (Annotated Type)
+          | TyOp (Annotated TyOp)
           | TyPack (Annotated Type) (Annotated Type)
           | TyPair (Annotated Type) (Annotated Type)
           | TyUnit
@@ -167,6 +168,7 @@ data QType = Forall [QTyVar] (Annotated Type)
 data Kind = KindUni Name
           | KindConstraint
           | KindFun (Annotated Kind) (Annotated Kind)
+          | KindOp
           | KindPair (Annotated Kind) (Annotated Kind)
           | KindType
   deriving (Eq, Ord)

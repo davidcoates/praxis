@@ -260,7 +260,8 @@ pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern
 
 kind :: Syntax f => f Kind
 kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind" where
-  kind0 = _KindType <$> reservedCon "Type" <|>
+  kind0 = _KindOp <$> reservedCon "Op" <|>
+          _KindType <$> reservedCon "Type" <|>
           _KindUni <$> uni <|>
           _KindConstraint <$> reservedCon "Constraint" <|>
           tuple1 _KindPair kind <|>
@@ -278,9 +279,10 @@ ty :: Syntax f => f Type
 ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type"
 
 ty1 :: Syntax f => f Type
-ty1 = _TyOp <$> annotated tyOp <*> annotated ty1 <|> ty0 <|> mark "type(1)" where
-  ty0 = _TyVar <$> varid <|>
-        _TyCon <$> conid <*> optional (annotated ty1) <|>
+ty1 = right _TyApply ty0 <|> mark "type(1)" where
+  ty0 = _TyOp  <$> annotated tyOp <|>
+        _TyVar <$> varid <|>
+        _TyCon <$> conid <|>
         _TyUni <$> uni <|>
         pack _TyPack ty <|>
         tuple _TyUnit _TyPair ty <|>
@@ -289,7 +291,7 @@ ty1 = _TyOp <$> annotated tyOp <*> annotated ty1 <|> ty0 <|> mark "type(1)" wher
 tyOp :: Syntax f => f TyOp
 tyOp = _TyOpBang <$> reservedOp "&" <|>
        _TyOpUni <$> uni <|>
-       _TyOpId <$> reservedOp "<id>" <|>
+       _TyOpId <$> contextualId "id" <|>
        _TyOpVar <$> tyOpVar <|>
        mark "type operator"
 

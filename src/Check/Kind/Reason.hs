@@ -4,7 +4,8 @@ module Check.Kind.Reason
 
 import           Common
 
-data Reason = AppType Name
+data Reason = AppType
+            | AppOp
             | DataAltType Name
             | DataType Name
             | FunType
@@ -14,7 +15,8 @@ data Reason = AppType Name
 -- TODO Pretty
 instance Show Reason where
   show = \case
-    AppType n     -> "Application of constructor '" ++ n ++ "'"
+    AppType       -> "Type application"
+    AppOp         -> "Type operator application"
     DataAltType n -> "Data type constructor '" ++ n ++ "' must return a Type"
     DataType n    -> "Data type '" ++ n ++ "' must be a Type"
     FunType       -> "Function type"

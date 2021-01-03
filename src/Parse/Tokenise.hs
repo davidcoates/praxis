@@ -86,8 +86,8 @@ string = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminat
   inner = while (satisfy (/= '"')) ((char '\\' *> (escape <$> consume)) <|> consume)
 
 reservedIds = ["read", "in", "if", "then", "else", "using", "type", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator"]
-reservedCons = ["Type", "Constraint", "Share"]
-reservedOps = [":", "=>", "=", "\\", "->", "@", "&", "<id>", "?"]
+reservedCons = ["Type", "Constraint", "Share", "Op"]
+reservedOps = [":", "=>", "=", "\\", "->", "@", "&", "?"]
 
 -- Possibly qualified, possibly reserved conid / varid / consym / varsym
 stuff :: Tokeniser Token

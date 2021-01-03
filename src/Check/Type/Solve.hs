@@ -59,25 +59,29 @@ solveDeep s = \c -> do
 trySolveShare :: Solver (Annotated Type) TypeConstraint
 trySolveShare t = save our $ save tEnv $ solveDeep (trySolveShare') (Share t) where
   trySolveShare' = (solveFromAxioms <|>) $ \(Share t) -> case view value t of
-    TyUnit                 -> tautology
-    TyFun _ _              -> tautology
-    TyPair a b             -> intro [ Share a, Share b]
-    TyOp (_ :< TyOpBang) _ -> tautology
-    TyCon _ _              -> contradiction
-    _                      -> defer
+    TyUnit                                -> tautology
+    TyFun _ _                             -> tautology
+    TyPair a b                            -> intro [ Share a, Share b]
+    TyCon _                               -> contradiction
+    TyApply (_ :< TyCon _) _              -> contradiction
+    TyApply (_ :< TyOp (_ :< TyOpBang)) _ -> tautology
+    _                                     -> defer
 
 solveTy :: TypeSolver
 solveTy = (solveFromAxioms <|>) $ \c -> case c of
 
   Share t -> case view value t of
-      TyUnit                  -> tautology
-      TyFun _ _               -> tautology
-      TyPair a b              -> intro [ Share a, Share b]
-      TyOp (_ :< TyOpBang) _  -> tautology
-      TyOp (_ :< TyOpVar _) _ -> contradiction
-      TyVar _                 -> contradiction
-      TyCon _ _               -> contradiction -- not in axioms, so can be sure the type is not affine
-      _                       -> defer
+      TyUnit                   -> tautology
+      TyFun _ _                -> tautology
+      TyPair a b               -> intro [ Share a, Share b]
+      TyApply (_ :< TyOp o) _  -> case view value o of -- TODO go deeper?
+        TyOpBang  -> tautology
+        TyOpVar _ -> contradiction
+        _         -> defer
+      TyVar _                  -> contradiction
+      TyCon _                  -> contradiction -- not in axioms, so can be sure the type is not affine
+      TyApply (_ :< TyCon _) _ -> contradiction
+      _                        -> defer
 
   TEq t1 t2 | t1 == t2 -> tautology
 
@@ -85,7 +89,7 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
 
   TEq c1 c2@(_ :< TyUni _) -> solveTy (c2 `TEq` c1) -- handle by the above case
 
-  TEq (_ :< TyCon n1 (Just t1)) (_ :< TyCon n2 (Just t2)) | n1 == n2 -> intro [ TEq t1 t2 ]
+  TEq (_ :< TyApply (_ :< TyCon n1) t1) (_ :< TyApply (_ :< TyCon n2) t2) | n1 == n2 -> intro [ TEq t1 t2 ]
 
   TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> intro [ TEq s1 t1, TEq s2 t2 ]
 
@@ -93,9 +97,9 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
 
   TEq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> intro [ TEq t1 s1, TEq t2 s2 ]
 
-  TEq (_ :< TyOp (_ :< TyOpVar n1) t1) (_ :< TyOp (_ :< TyOpVar n2) t2) | n1 == n2 -> intro [ TEq t1 t2 ]
+  TEq (_ :< TyApply (_ :< TyOp (_ :< TyOpVar n1)) t1) (_ :< TyApply (_ :< TyOp (_ :< TyOpVar n2)) t2) | n1 == n2 -> intro [ TEq t1 t2 ]
 
-  TEq (_ :< TyOp op1 t1) t2 -> do
+  TEq (_ :< TyApply (_ :< TyOp op1) t1) t2 -> do
     s1 <- trySolveShare t1
     s2 <- trySolveShare t2
     case (view value op1, s1, s2) of
@@ -103,7 +107,7 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
       (TyOpUni n,           _, Just Bottom) -> n `isOp` TyOpId
       (TyOpBang,            _, Just Bottom) -> contradiction
       (_,                   _,    Just Top) | viewFree t2 -> intro [ TEq t1 t2 ]
-      _                                     | TyOp op2 t2 <- view value t2  -> do
+      _                                     | TyApply (_ :< TyOp op2) t2 <- view value t2 -> do
           s2 <- trySolveShare t2
           case (s1, s2) of
             (Just Bottom, Just Bottom) -> case (view value op1, view value op2) of
@@ -115,13 +119,11 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
             _ -> defer
       _                                  -> defer
 
-  TEq c1 c2@(_ :< TyOp _ _) -> solveTy (c2 `TEq` c1) -- handled by the above case
+  TEq c1 c2@(_ :< TyApply (_:< TyOp _) _) -> solveTy (c2 `TEq` c1) -- handled by the above case
 
-  TOpEq c1 c2 | c1 == c2 -> tautology
+  TEq (_ :< TyOp (_ :< TyOpUni x)) (_ :< TyOp o) -> if x `Set.member` tyOpUnis o then contradiction else x `isOp` view value o -- Note: Occur check here
 
-  TOpEq (_ :< TyOpUni x) o -> if x `Set.member` tyOpUnis o then contradiction else x `isOp` view value o -- Note: Occurs check here
-
-  TOpEq c1 c2@(_ :< TyOpUni _) -> solveTy (c2 `TOpEq` c1) -- handled by the above case
+  TEq c1 c2@(_ :< TyOp (_ :< TyOpUni _)) -> solveTy (c2 `TEq` c1) -- handled by the above case
 
   _ -> contradiction
 
@@ -134,11 +136,12 @@ solveFromAxioms c = use (our . axioms) >>= (\as -> solveFromAxioms' as c) where
     []             -> (\c -> pure Nothing)
     ((Axiom a):as) -> (\c -> pure (a c)) <|> solveFromAxioms' as
 
+-- Assumes the type is normalised
 viewFree :: Annotated Type -> Bool
 viewFree t = case view value t of
-  TyUni _  -> False
-  TyOp _ _ -> False
-  _        -> True
+  TyUni _                 -> False
+  TyApply (_ :< TyOp _) _ -> False
+  _                       -> True
 
 isOp :: Name -> TyOp -> Praxis (Maybe TypeProp)
 isOp n op = do
@@ -176,11 +179,11 @@ normalise :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 normalise x = introspect (embedVisit f) x where
   f :: Annotated Type -> Visit Praxis () Type
   f (a :< t) = case t of
-    TyOp (_ :< TyOpId) t -> Resolve (view value <$> normalise t)
-    TyOp (a :< op) t -> Resolve $ do
+    TyApply (_ :< TyOp (_ :< TyOpId)) t -> Resolve (view value <$> normalise t)
+    TyApply o@(_ :< TyOp (a :< op)) t -> Resolve $ do
       t' <- normalise t
-      r <- solveTy (Share t')
+      r <- trySolveShare t'
       return $ case r of
         Just Top -> view value t'
-        _        -> TyOp (a :< op) t'
+        _        -> TyApply o t'
     _ -> skip

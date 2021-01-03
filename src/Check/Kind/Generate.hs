@@ -47,18 +47,23 @@ generate x = case witness :: I a of
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty = split $ \s -> \case
 
-    TyCon n a -> do
-      a' <- traverse ty a
+    TyApply f a -> do
+      f' <- ty f
+      a' <- ty a
+      case view kind f' of
+        (_ :< KindOp) -> do
+          require $ newConstraint (view kind a' `KEq` phantom KindType) AppOp s
+          return (phantom KindType :< TyApply f' a')
+        fk -> do
+          k <- freshKindUni
+          require $ newConstraint (fk `KEq` phantom (KindFun (view kind a') k)) AppType s
+          return (k :< TyApply f' a')
+
+    TyCon n -> do
       e <- kEnv `uses` lookup n
       case e of
         Nothing -> throwAt s (NotInScope n)
-        Just f  -> do
-          case a' of
-            Nothing -> return (f :< TyCon n Nothing)
-            Just a'' -> do
-              k <- freshKindUni
-              require $ newConstraint (f `KEq` phantom (KindFun (view kind a'') k)) (AppType n) s -- TODO should constraint just be equal to kind of data?
-              return (k :< TyCon n a')
+        Just k  -> return (k :< TyCon n)
 
     TyFun a b -> do
       a' <- ty a
@@ -67,10 +72,8 @@ ty = split $ \s -> \case
       require $ newConstraint (view kind b' `KEq` phantom KindType) FunType s
       return (phantom KindType :< TyFun a' b')
 
-    TyOp op t -> do
-      t' <- ty t
-      require $ newConstraint (view kind t' `KEq` phantom KindType) OpType s
-      return (phantom KindType :< TyOp op t')
+    TyOp op -> do
+      return (phantom KindOp :< TyOp op)
 
     TyPair p q -> do
       p' <- ty p

@@ -85,7 +85,7 @@ read s n = do
       t <- ungeneraliseQType t
       requires [ newConstraint (Share t) (UnsafeView n) s | u ]
       requires [ newConstraint (Share t) (Captured n) s   | c ]
-      return $ phantom (TyOp (phantom TyOpBang) t)
+      return $ phantom (TyApply (phantom (TyOp (phantom TyOpBang))) t)
     Nothing     -> throwAt s (NotInScope n)
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
@@ -143,18 +143,28 @@ fun a b = TyFun a b `as` phantom KindType
 equal :: Annotated Type -> Annotated Type -> Reason -> Source -> Praxis ()
 equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 
+-- TODO use introspection?
 patToTy :: Annotated TyPat -> Annotated Type
 patToTy = over value patToTy' where
   patToTy' = \case
     TyPatVar n    -> TyVar n
     TyPatPack a b -> TyPack (patToTy a) (patToTy b)
 
--- TODO use introspection
 unis :: Annotated TyPat -> Set QTyVar
 unis = extract (embedMonoid f) where
   f = \case
     TyPatVar n -> Set.singleton (QTyVar n)
     _          -> Set.empty
+
+dataAlt :: [QTyVar] -> Annotated Type -> Annotated DataAlt -> Praxis (Annotated DataAlt)
+dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
+  let ct = phantom $ Forall vars $ case at of -- Type of the constructor
+        Just at -> fun at rt
+        Nothing -> rt
+      da = ((s, Just (DataAltInfo ct at rt)) :< DataAlt n at)
+  daEnv %= Env.intro n da
+  return da
+
 
 decl :: Annotated Decl -> Praxis (Annotated Decl)
 decl = splitTrivial $ \s -> \case
@@ -163,16 +173,14 @@ decl = splitTrivial $ \s -> \case
   DeclData n p alts -> do
     -- TODO could be kind annotated to avoid this lookup
     Just k <- kEnv `uses` Env.lookup n
-    let rt = TyCon n (patToTy <$> p) `as` k
-        f ((s, Nothing) :< DataAlt n at) = do
-          let ut = case at of -- Type of the constructor (unqualified)
-                Just at -> fun at rt
-                Nothing -> rt
-              qt = phantom $ Forall (Set.toList (foldMap unis p)) ut -- Type of the constructor (qualified)
-              da = ((s, Just (DataAltInfo qt at rt)) :< DataAlt n at)
-          daEnv %= Env.intro n da
-          return da
-    alts' <- traverse f alts
+
+    -- The return type of the constructors
+    let rt = case p of
+          Nothing                                -> TyCon n `as` k
+          Just p | KindFun k1 k2 <- view value k -> TyApply (TyCon n `as` k) (patToTy p) `as` k2
+        vars = Set.toList (foldMap unis p)
+
+    alts' <- traverse (dataAlt vars rt) alts
     return $ DeclData n p alts'
 
   -- TODO safe recursion check
@@ -241,7 +249,7 @@ exp = split $ \s -> \case
   If a b c -> do
     a' <- exp a
     (b', c') <- join (exp b) (exp c)
-    require $ newConstraint (view ty a' `TEq` TyCon "Bool" Nothing `as` phantom KindType) IfCondition s
+    require $ newConstraint (view ty a' `TEq` TyCon "Bool" `as` phantom KindType) IfCondition s
     require $ newConstraint (view ty b' `TEq` view ty c') IfCongruence s
     return (view ty b' :< If a' b' c')
 
@@ -256,13 +264,17 @@ exp = split $ \s -> \case
     tEnv %= elimN i
     return (view ty x' :< Let b x')
 
-  Lit x -> do
-    t <- case x of {
-      Int _    -> return $ TyCon "Int" Nothing;
-      Bool _   -> return $ TyCon "Bool" Nothing;
-      String _ -> (\o -> TyOp o (phantom $ TyCon "Array" (Just (phantom $ TyCon "Char" Nothing)))) <$> freshTyOpUni;
-      Char _   -> return $ TyCon "Char" Nothing}
-    return (t `as` phantom KindType :< Lit x)
+  -- TODO pull from environment?
+  Lit x -> ((\t -> t `as` phantom KindType :< Lit x) <$>) $ case x of
+    Int  _   -> return $ TyCon "Int"
+    Bool _   -> return $ TyCon "Bool"
+    Char _   -> return $ TyCon "Char"
+    String _ -> do
+      o <- freshTyOpUni
+      let ot = TyOp o `as` phantom KindOp
+          a = TyCon "Array" `as` phantom (KindFun (phantom KindType) (phantom KindType))
+          ac = TyApply a (TyCon "Char" `as` phantom KindType) `as` phantom KindType
+      return $ TyApply ot ac
 
   Read n e -> do
     t <- read s n
@@ -324,7 +336,7 @@ alt op (p, e) = do
 pat :: Annotated TyOp -> Annotated Pat -> Praxis (Int, Annotated Pat)
 pat op = pat' True where
 
-  wrapIf p t = if p then TyOp op t `as` phantom KindType else t
+  wrapIf p t = if p then TyApply (TyOp op `as` phantom KindOp) t `as` phantom KindType else t
 
   pat' top = splitPair $ \s -> \case
 
@@ -355,7 +367,7 @@ pat op = pat' True where
       t <- freshTyUni
       return (0, t :< PatHole)
 
-    PatLit l -> return (0, TyCon (lit l) Nothing `as` phantom KindType :< PatLit l)
+    PatLit l -> return (0, TyCon (lit l) `as` phantom KindType :< PatLit l)
       where lit (Bool _)   = "Bool"
             lit (Char _)   = "Char"
             lit (Int _)    = "Int"

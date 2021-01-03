@@ -39,9 +39,9 @@ contradiction :: Resolution a
 contradiction = return (Just Bottom)
 
 intro :: [a] -> Resolution a
-intro = return . Just . view value . all' . map (\c -> phantom (Exactly (phantom c))) where
+intro = return . Just . all' . map Exactly where
   all' [p]    = p
-  all' (p:ps) = phantom (p `And` all' ps)
+  all' (p:ps) = p `And` all' ps
 
 defer :: Resolution a
 defer = return Nothing
@@ -76,38 +76,38 @@ solve constraints solveConstraint = use constraints >>= (\cs -> solve' cs [] Fal
       Just p'     -> solve' ps' ((p `impliesProp` p') : rs') (w || True)
       Nothing     -> solve' ps' (p:rs') w
 
-push :: Lens' PraxisState [Annotated (Prop a)] -> Annotated (Prop a) -> Praxis ()
-push constraints p = constraints %= (p:)
+push :: Lens' PraxisState [Annotated (Prop a)] -> Prop a -> Praxis ()
+push constraints p = constraints %= (phantom p:)
 
-pop :: Lens' PraxisState [Annotated (Prop a)] -> Praxis (Annotated (Prop a))
+pop :: Lens' PraxisState [Annotated (Prop a)] -> Praxis (Prop a)
 pop constraints = do
   (p:ps) <- use constraints
   constraints .= ps
-  return p
+  return (view value p)
 
 solveProp :: Lens' PraxisState [Annotated (Prop a)] -> Solver a a -> Solver (Prop a) a
 solveProp constraints solveConstraint = \case
 
-  Exactly c -> solveConstraint (view value c)
+  Exactly c -> solveConstraint c
 
   p1 `And` p2 -> do
 
     -- push the subtree not being worked on to allow substitutions to be applied to them
     push constraints p2
-    r1 <- (solveProp constraints solveConstraint) (view value p1)
+    r1 <- solveProp constraints solveConstraint p1
     p2 <- pop constraints
 
-    let normalise r p = case r of { Nothing -> p; Just r -> phantom r }
+    let normalise r p = case r of { Nothing -> p; Just r -> r }
 
     push constraints (r1 `normalise` p1)
-    r2 <- (solveProp constraints solveConstraint) (view value p2)
+    r2 <- solveProp constraints solveConstraint p2
     p1 <- pop constraints
 
     return $ case (r1, r2) of
       (Nothing, Nothing) -> Nothing
-      _                  -> Just $ case (view value p1, view value (r2 `normalise` p2)) of
+      _                  -> Just $ case (p1, r2 `normalise` p2) of
         (Bottom, _) -> Bottom
         (_, Bottom) -> Bottom
         (x,    Top) -> x
         (Top,    y) -> y
-        (x,      y) -> phantom x `And` phantom y
+        (x,      y) -> x `And` y

@@ -166,8 +166,6 @@ simplify x = do
 
 simplifyAll :: Praxis ()
 simplifyAll = do
-  let covalue :: Term a => (Annotated a -> Praxis (Annotated a)) -> a -> Praxis a
-      covalue f x = view value <$> f (phantom x)
   our . sol %%= traverse (second (covalue simplify))
   our . ops %%= traverse (second (covalue simplify))
   our . constraints %%= traverse simplify

@@ -211,16 +211,16 @@ kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|
                 mark "kind constraint"
 
 tyProp :: Syntax f => f TypeProp
-tyProp = _Exactly <$> annotated tyConstraint <|>
+tyProp = _Exactly <$> tyConstraint <|>
          _Top <$> special '⊤' <|>
          _Bottom <$> special '⊥' <|>
-         _And <$> annotated tyProp <*> special '∧' *> annotated tyProp
+         _And <$> tyProp <*> special '∧' *> tyProp
 
 kindProp :: Syntax f => f KindProp
-kindProp = _Exactly <$> annotated kindConstraint <|>
+kindProp = _Exactly <$> kindConstraint <|>
            _Top <$> special '⊤' <|>
            _Bottom <$> special '⊥' <|>
-           _And <$> annotated kindProp <*> special '∧' *> annotated kindProp
+           _And <$> kindProp <*> special '∧' *> kindProp
 
 program :: Syntax f => f Program
 program = _Program <$> block (annotated top) where -- TODO module

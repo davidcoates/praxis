@@ -340,8 +340,8 @@ instance Term TypeProp where
   recurse f = \case
     Top       -> pure Top
     Bottom    -> pure Bottom
-    Exactly c -> Exactly <$> f c
-    And p1 p2 -> And <$> f p1 <*> f p2
+    Exactly c -> Exactly <$> covalue f c
+    And p1 p2 -> And <$> covalue f p1 <*> covalue f p2
 
 instance Term KindProp where
   witness = IKindProp
@@ -351,5 +351,5 @@ instance Term KindProp where
   recurse f = \case
     Top       -> pure Top
     Bottom    -> pure Bottom
-    Exactly c -> Exactly <$> f c
-    And p1 p2 -> And <$> f p1 <*> f p2
+    Exactly c -> Exactly <$> covalue f c
+    And p1 p2 -> And <$> covalue f p1 <*> covalue f p2

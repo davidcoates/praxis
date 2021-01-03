@@ -46,6 +46,7 @@ module Term
   , splitPair
   , phantom
   , as
+  , covalue
 
   , Derivation(..)
   , DataAltInfo(..)
@@ -182,11 +183,10 @@ infixl 8 `TOpEq`
 data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
--- TODO dont really want internal annotations
 data Prop a = Top
             | Bottom
-            | Exactly (Annotated a)
-            | And (Annotated (Prop a)) (Annotated (Prop a))
+            | Exactly a
+            | And (Prop a) (Prop a)
   deriving (Eq, Ord)
 
 type TypeProp = Prop TypeConstraint
@@ -225,6 +225,9 @@ phantom x = (Phantom, Nothing) :< x
 
 as :: a -> Annotation a -> Annotated a
 as x a = (Phantom, Just a) :< x
+
+covalue :: Functor f => (Annotated a -> f (Annotated a)) -> a -> f a
+covalue f x = view value <$> f (phantom x)
 
 -- TODO should this be somewhere else?
 data Derivation a = Root String

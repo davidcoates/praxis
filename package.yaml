@@ -4,7 +4,7 @@ github:              davidcoates/praxis
 license:             GPL-3
 author:              David Coates
 maintainer:          davidcoates95@gmail.com
-copyright:           2019 David Coates
+copyright:           2020 David Coates
 
 extra-source-files:
 - README.md
@@ -22,7 +22,6 @@ dependencies:
 - base >= 4.7 && < 5
 - containers >= 0.6
 - pretty-tree >= 0.1
-- Earley >= 0.12.0.1
 - transformers
 - lens >= 4.15.4 && <5
 - digits >= 0.3

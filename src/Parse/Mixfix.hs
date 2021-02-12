@@ -129,9 +129,9 @@ mixfix defns levels prec = exp where
   trim :: Fixity -> [Maybe Name] -> [Maybe Name]
   trim = \case
     Infix _ -> tail . init
-    Prefix -> init
+    Prefix  -> init
     Postfix -> tail
-    Closed -> id
+    Closed  -> id
 
   parts :: [Maybe Name] -> Parser [Annotated Exp]
   parts = \case

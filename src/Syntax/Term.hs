@@ -20,8 +20,8 @@ import           Token
 
 import           Data.List     (intersperse)
 import           Data.Maybe    (catMaybes)
-import           Prelude       hiding (exp, pure, until, (*>), (<$>), (<*),
-                                (<*>), _Just)
+import           Prelude       hiding (_Just, exp, pure, until, (*>), (<$>),
+                                (<*), (<*>))
 
 definePrisms ''Bool
 definePrisms ''Ordering
@@ -84,7 +84,7 @@ varsym :: Syntax f => f String
 varsym = match f (\s -> QVarSym (unqualified s)) where
   f = \case
     QVarSym n -> if null (qualification n) then Just (unqualify n) else Nothing
-    _          -> Nothing
+    _         -> Nothing
 
 lit :: Syntax f => f Lit
 lit = match f (\l -> Token.Lit l) where

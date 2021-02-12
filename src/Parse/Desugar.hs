@@ -25,15 +25,12 @@ import           Control.Monad       (unless)
 import           Data.Array          (array, assocs, bounds, elems, indices,
                                       listArray, (!), (//))
 import           Data.Graph          (Graph, reachable)
-import           Data.List           (intersperse, nub, partition)
-import           Data.List           (intersect, (\\))
-import           Data.List           (intersect, (\\))
+import           Data.List           (intersect, intersperse, nub, partition,
+                                      (\\))
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
-import           Data.Maybe          (fromJust)
-import           Data.Maybe          (catMaybes, isNothing, listToMaybe,
-                                      mapMaybe)
-import           Data.Maybe          (isNothing, listToMaybe, mapMaybe)
+import           Data.Maybe          (catMaybes, fromJust, isNothing,
+                                      listToMaybe, mapMaybe)
 import           Data.Monoid         ((<>))
 import           Data.Set            (Set)
 import qualified Data.Set            as Set

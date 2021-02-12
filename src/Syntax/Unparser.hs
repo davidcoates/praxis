@@ -12,8 +12,8 @@ import           Common
 import           Introspect
 import           Syntax.Prism
 import           Syntax.Syntax (Syntax)
-import qualified Syntax.Syntax as Syntax
 import qualified Syntax.Syntax
+import qualified Syntax.Syntax as Syntax
 import           Syntax.Term
 import           Term
 import           Token

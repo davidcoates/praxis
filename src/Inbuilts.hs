@@ -64,12 +64,20 @@ prelude =
       Fun (\(Pair (Array a) (Pair (Int i) e)) -> Value.writeArray a i e >> pure (Array a)))
   , ("or",           poly "(Bool, Bool) -> Bool", liftB (||))
   , ("and",          poly "(Bool, Bool) -> Bool", liftB (&&))
+  , ("eq",           poly "(Int, Int) -> Bool", liftE (==)) -- TODO replace with Eq, Ord interfaces
+  , ("neq",          poly "(Int, Int) -> Bool", liftE (/=))
+  , ("lt",           poly "(Int, Int) -> Bool", liftE (<))
+  , ("gt",           poly "(Int, Int) -> Bool", liftE (>))
+  , ("lte",          poly "(Int, Int) -> Bool", liftE (<=))
+  , ("gte",          poly "(Int, Int) -> Bool", liftE (>=))
   ]
   where
     liftI :: (Int -> Int -> Int) -> Value
     liftI f = Fun (\(Pair (Int a) (Int b)) -> pure (Int (f a b)))
     liftB :: (Bool -> Bool -> Bool) -> Value
     liftB f = Fun (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
+    liftE :: (Int -> Int -> Bool) -> Value
+    liftE f = Fun (\(Pair (Int a) (Int b)) -> pure (Bool (f a b)))
 
 preludeKinds :: [(Name, Annotated Kind)]
 preludeKinds =
@@ -121,6 +129,25 @@ preludeOps = unlines $
   , "operator (_ || _) = or"
   , ""
   , "operator (_ && _) = and"
+  , ""
+  , "operator (_ == _) = eq where"
+  , "  precedence below (_ + _)"
+  , ""
+  , "operator (_ != _) = neq where"
+  , "  precedence equal (_ == _)"
+  , ""
+  , "operator (_ < _) = lt where"
+  , "  precedence equal (_ == _)"
+  , ""
+  , "operator (_ > _) = gt where"
+  , "  precedence equal (_ == _)"
+  , ""
+  , "operator (_ <= _) = lte where"
+  , "  precedence equal (_ == _)"
+  , ""
+  , "operator (_ >= _) = gte where"
+  , "  precedence equal (_ == _)"
+  , ""
   ]
 
 initialOpContext :: OpContext

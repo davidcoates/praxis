@@ -40,6 +40,8 @@ prelude =
   , ("multiply",     poly "(Int, Int) -> Int", liftI (*))
   , ("negate",       poly "Int -> Int",
       Fun (\(Int x) -> pure (Int (negate x))))
+  , ("unary_plus",   poly "Int -> Int",
+      Fun (\(Int x) -> pure (Int x)))
   , ("get_int",      poly "() -> Int",
       Fun (\Unit -> liftIO (Int <$> readLn)))
   , ("get_contents", poly "() -> Array Char",
@@ -105,6 +107,9 @@ preludeOps = unlines $
   , ""
   , "operator (- _) = negate where"
   , "  precedence above (_ * _)"
+  , ""
+  , "operator (+ _) = unary_plus where"
+  , "  precedence equal (- _)"
   , ""
   , "operator (_ . _) = compose where"
   , "  associates right"

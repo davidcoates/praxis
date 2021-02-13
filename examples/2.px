@@ -1,0 +1,48 @@
+
+-- Examples from Section 2 of the Wiki
+
+type Suit = cases
+  Clubs
+  Diamonds
+  Hearts
+  Spades
+
+type Rank = cases
+  Ace
+  Numbered Int
+  Jack
+  Queen
+  King
+
+suit_to_str : forall ?v. Suit -> ?v String
+suit_to_str suit = case suit of
+    Clubs     -> "♣"
+    Diamonds  -> "♦"
+    Hearts    -> "♥"
+    Spades    -> "♠"
+
+rank_eq : (Rank, Rank) -> Bool
+rank_eq = cases
+    (Ace        , Ace        ) -> True
+    (King       , King       ) -> True
+    (Queen      , Queen      ) -> True
+    (Jack       , Jack       ) -> True
+    (Numbered n1, Numbered n2) -> n1 == n2
+    (_          , _          ) -> False
+
+factorial : Int -> Int
+factorial = cases
+    0 -> 1
+    n -> n * factorial (n - 1)
+
+min_cases (x, y) = case x < y of
+    True  -> x
+    False -> y
+
+min (x, y) = if x < y then x else y
+
+sign : Int -> Int
+sign n = switch
+  n  < 0 -> -1
+  n == 0 ->  0
+  n  > 0 -> +1

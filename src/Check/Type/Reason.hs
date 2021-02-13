@@ -11,6 +11,8 @@ data Reason = AppFun
             | ConPattern Name
             | IfCondition
             | IfCongruence
+            | SwitchCondition
+            | SwitchCongruence
             | Instance Name
             | Shared Name
             | UnsafeView Name
@@ -22,10 +24,12 @@ instance Show Reason where
     AppFun           -> "Function application"
     BindCongruence   -> "Binding must have same type on both sides"
     Captured n       -> "Variable '" ++ n ++ "' captured"
-    CaseCongruence   -> "Alternatives of <case> expression must have the same type"
+    CaseCongruence   -> "Alternatives of 'case' expression must have the same type"
     ConPattern n     -> "Constructor pattern '" ++ n ++ "'"
-    IfCondition      -> "Type of <if> condition must be Bool"
-    IfCongruence     -> "Branches of <if> expression must have the same type"
+    IfCondition      -> "Type of 'if' condition must be Bool"
+    IfCongruence     -> "Branches of 'if' expression must have the same type"
+    SwitchCondition  -> "Type of 'switch' condition must be Bool"
+    SwitchCongruence -> "Branches of 'switch' expression must have the same type"
     Instance n       -> "Monomorphic usage of '" ++ n ++ "'"
     Shared n         -> "Variable '" ++ n ++ "' used more than once"
     UserSignature n  | Just f <- n -> "User-supplied signature '" ++ f ++ "'"

@@ -97,6 +97,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Read Name (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
+         | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name -- FIXME Qualified Name
          | VarBang Name -- ^Parsing only

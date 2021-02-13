@@ -309,6 +309,7 @@ exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedOp "\\" *> alt <|>
          _Let <$> reservedId "let" *> bind <*> reservedId "in" *> annotated exp <|>
+         _Switch <$> reservedId "switch" *> block switch <|>
          exp1 <|> mark "expression(2)"
   exp1 = right _Apply exp0 <|> mark "expression(1)"
   exp0 = _VarBang <$> reservedOp "&" *> varid <|>
@@ -317,6 +318,9 @@ exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Lit <$> lit <|>
          tuple _Unit _Pair exp <|>
          mark "expression(0)"
+
+switch :: Syntax f => f (Annotated Exp, Annotated Exp)
+switch = annotated exp <*> reservedOp "->" *> annotated exp <|> mark "switch alternative"
 
 -- TODO allow "let ... in" in expression?
 stmt :: Syntax f => f Stmt

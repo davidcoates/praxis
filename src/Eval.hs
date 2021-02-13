@@ -114,6 +114,8 @@ expRec n (_ :< e) = case e of
 
   Sig e _ -> exp e
 
+  Switch alts -> switch alts
+
   Term.Unit -> return Value.Unit
 
   Var n -> do
@@ -129,6 +131,14 @@ expRec n (_ :< e) = case e of
 
 exp :: Annotated Exp -> Praxis Value
 exp = expRec Nothing
+
+switch :: [(Annotated Exp, Annotated Exp)] -> Praxis Value
+switch [] = error "no true switch alternative"
+switch ((c,e):as) = do
+  v <- exp c
+  case v of
+    Value.Bool True  -> exp e
+    Value.Bool False -> switch as
 
 cases :: Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 cases x [] = error ("no matching pattern" ++ show x)

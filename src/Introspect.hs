@@ -207,13 +207,20 @@ instance Term Decl where
     DeclSyn n t     -> DeclSyn n <$> f t
     DeclVar n t e   -> DeclVar n <$> traverse f t <*> f e
 
+
+pair :: (Term a, Term b) => Applicative f => (forall a. Term a => Annotated a -> f (Annotated a)) -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)
+pair f (a, b) = (,) <$> f a <*> f b
+
+pairs :: (Term a, Term b) => Applicative f => (forall a. Term a => Annotated a -> f (Annotated a)) -> [(Annotated a, Annotated b)] -> f [(Annotated a, Annotated b)]
+pairs f = traverse (pair f)
+
 instance Term Exp where
   witness = IExp
   complete _ f x = f x
   recurse f = \case
     Apply a b    -> Apply <$> f a <*> f b
-    Case a as    -> Case <$> f a <*> traverse (\(a, b) -> (,) <$> f a <*> f b) as
-    Cases as     -> Cases <$> traverse (\(a, b) -> (,) <$> f a <*> f b) as
+    Case a as    -> Case <$> f a <*> pairs f as
+    Cases as     -> Cases <$> pairs f as
     Con n        -> pure (Con n)
     Do ss        -> Do <$> traverse f ss
     If a b c     -> If <$> f a <*> f b <*> f c
@@ -224,10 +231,11 @@ instance Term Exp where
     Read n a     -> Read n <$> f a
     Pair a b     -> Pair <$> f a <*> f b
     Sig e t      -> Sig <$> f e <*> f t
+    Switch as    -> Switch <$> pairs f as
     Unit         -> pure Unit
     Var n        -> pure (Var n)
     VarBang n    -> pure (VarBang n)
-    Where a ps   -> Where <$> f a <*> traverse (\(a, b) -> (,) <$> f a <*> f b) ps
+    Where a ps   -> Where <$> f a <*> pairs f ps
 
 instance Term Pat where
   witness = IPat

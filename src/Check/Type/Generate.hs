@@ -220,16 +220,16 @@ exp = split $ \s -> \case
     let xt = view ty x'
     op <- freshTyOpUni
     alts' <- parallel (map (alt op) alts)
-    t1 <- equals (map ((\t -> (view source t, view ty t)) . fst) alts') CaseCongruence
-    t2 <- equals (map ((\t -> (view source t, view ty t)) . snd) alts') CaseCongruence
+    t1 <- equals (map fst alts') CaseCongruence
+    t2 <- equals (map snd alts') CaseCongruence
     equal xt t1 CaseCongruence s -- TODO probably should pick a better name for this
     return (t2 :< Case x' alts')
 
   Cases alts -> closure $ do
     op <- freshTyOpUni
     alts' <- parallel (map (alt op) alts)
-    t1 <- equals (map ((\t -> (view source t, view ty t)) . fst) alts') CaseCongruence
-    t2 <- equals (map ((\t -> (view source t, view ty t)) . snd) alts') CaseCongruence
+    t1 <- equals (map fst alts') CaseCongruence
+    t2 <- equals (map snd alts') CaseCongruence
     return (fun t1 t2 :< Cases alts')
 
   Con n -> do
@@ -297,6 +297,13 @@ exp = split $ \s -> \case
     return e'
 -}
 
+  Switch alts -> do
+    cs <- sequence (map (exp . fst) alts)
+    requires [ newConstraint (view ty c `TEq` TyCon "Bool" `as` phantom KindType) SwitchCondition (view source c) | c <- cs]
+    es <- parallel (map (exp . snd) alts)
+    t <- equals es SwitchCongruence
+    return (t :< Switch (zip cs es))
+
   Unit -> do
     let t = TyUnit `as` phantom KindType
     return (t :< Unit)
@@ -312,8 +319,10 @@ exp = split $ \s -> \case
     return (view ty x' :< Where x' bs')
 
 
-equals :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
-equals ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
+equals :: (Term a, Annotation a ~ Annotated Type) => [Annotated a] -> Reason -> Praxis (Annotated Type)
+equals es = equals' (map (\e -> (view source e, view ty e)) es) where
+  equals' :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
+  equals' ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
 
 -- TODO allow these to be (mutually) recursive?
 binds :: [(Annotated Pat, Annotated Exp)] -> Praxis (Int, [(Annotated Pat, Annotated Exp)])

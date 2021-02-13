@@ -306,6 +306,7 @@ exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Do <$> reservedId "do" *> block (annotated stmt) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
+         _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedOp "\\" *> alt <|>
          _Let <$> reservedId "let" *> bind <*> reservedId "in" *> annotated exp <|>
          exp1 <|> mark "expression(2)"

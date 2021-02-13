@@ -128,6 +128,10 @@ exp (a :< x) = case x of
 
   VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (pretty s) <> " is not in a valid read context"
 
+  Con "True"  -> pure (a :< Lit (Bool True))
+
+  Con "False" -> pure (a :< Lit (Bool False))
+
   _           -> (a :<) <$> recurse desugar x
 
 
@@ -247,7 +251,13 @@ dataAlt (a :< x) = (a :<) <$> case x of
 
 -- TODO check for overlapping patterns?
 pat :: Annotated Pat -> Praxis (Annotated Pat)
-pat (a :< x) = (a :<) <$> recurse desugar x
+pat (a :< x) = case x of
+
+  PatCon "True" Nothing  -> pure (a :< PatLit (Bool True))
+
+  PatCon "False" Nothing -> pure (a :< PatLit (Bool False))
+
+  _                      -> (a :<) <$> recurse desugar x
 
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty (a :< x) = case x of

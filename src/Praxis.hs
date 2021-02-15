@@ -41,6 +41,7 @@ module Praxis
   -- |Praxis lenses
   , filename
   , flags
+  , fresh
   , stage
   , opContext
   , kEnv
@@ -74,10 +75,13 @@ import           Control.Concurrent
 import           Control.Lens                 (Lens', makeLenses, traverseOf)
 import           Control.Monad.Trans.Class    (MonadTrans (..))
 import qualified Control.Monad.Trans.State    as State (get, modify, put)
+import           Data.Array                   (array)
 import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
+import qualified Data.Map.Strict              as Map (empty)
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
+import qualified Env                          as Env (Environment (..))
 import           Env.Env
 import           Env.LEnv
 import qualified System.Console.Terminal.Size as Terminal
@@ -163,15 +167,14 @@ emptyState = PraxisState
   , _flags        = defaultFlags
   , _fresh        = defaultFresh
   , _stage        = Unknown
-  , _opContext    = unset "opContext"
-  , _kEnv         = unset "kEnv"
-  , _tEnv         = unset "tEnv"
-  , _daEnv        = unset "daEnv"
-  , _vEnv         = unset "vEnv"
-  , _tSynonyms    = unset "tSynonyms"
-  , _system       = unset "system"
+  , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
+  , _kEnv         = Env.empty
+  , _tEnv         = Env.empty
+  , _daEnv        = Env.empty
+  , _vEnv         = Env.empty
+  , _tSynonyms    = Map.empty
+  , _system       = error ("unset system") -- FIXME Checkers are responsible for initialisating system
   }
-  where unset s = error ("unset " ++ s)
 
 makeLenses ''Flags
 makeLenses ''Fresh

@@ -223,8 +223,10 @@ kindProp = _Exactly <$> kindConstraint <|>
            _And <$> kindProp <*> special '∧' *> kindProp
 
 program :: Syntax f => f Program
-program = _Program <$> block (annotated top) where -- TODO module
-  top = declUsing <|> declData <|> declOp <|> decl -- TODO fixity declarations, imports
+program = _Program <$> block (annotated decl) where -- TODO module
+
+decl :: Syntax f => f Decl
+decl = declUsing <|> declData <|> declOp <|> declFun -- TODO imports
 
 declUsing :: Syntax f => f Decl
 declUsing = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
@@ -241,14 +243,11 @@ tyPat :: Syntax f => f TyPat
 tyPat = _TyPatVar <$> varid <|>
         pack _TyPatPack tyPat
 
-fun :: Syntax f => f Decl
-fun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
+declFun :: Syntax f => f Decl
+declFun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
   sig = reservedOp ":" *> annotated qTy
   def = annotated pat `until` reservedOp "=" <*> annotated exp
   var = _DeclVar <$> varid <*> (_Just <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
-
-decl :: Syntax f => f Decl
-decl = fun
 
 pat :: Syntax f => f Pat
 pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern" where
@@ -324,7 +323,7 @@ switch = annotated exp <*> reservedOp "->" *> annotated exp <|> mark "switch alt
 
 -- TODO allow "let ... in" in expression?
 stmt :: Syntax f => f Stmt
-stmt = _StmtDecl <$> reservedId "let" *> annotated decl <|> _StmtExp <$> annotated exp <|> mark "statement"
+stmt = _StmtDecl <$> reservedId "let" *> annotated declFun <|> _StmtExp <$> annotated exp <|> mark "statement"
 
 alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedOp "->" *> annotated exp <|> mark "case alternative"

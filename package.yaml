@@ -30,6 +30,7 @@ dependencies:
 - hspec >= 2.0
 - array >= 0.5
 - terminal-size
+- raw-strings-qq
 
 library:
   source-dirs: src

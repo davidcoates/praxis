@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs            #-}
+{-# LANGUAGE QuasiQuotes      #-}
 {-# LANGUAGE Rank2Types       #-}
 
 module Inbuilts
@@ -13,6 +14,7 @@ import           Introspect
 import           Parse                     (parse)
 import           Praxis
 import           Term                      hiding (Lit (..), Pair, Unit)
+import           Text.RawString.QQ
 import           Value
 
 import           Control.Monad.Trans.Class (MonadTrans (..))
@@ -107,53 +109,55 @@ initialKEnv :: KEnv
 initialKEnv = fromList inbuiltKinds
 
 -- TODO interfaces
-prelude = unlines $
-  [ "using String = Array Char"
-  , ""
-  , "operator (_ + _) = add_int where"
-  , "  associates left"
-  , ""
-  , "operator (_ - _) = subtract_int where"
-  , "  associates left"
-  , "  precedence equal (_ + _)"
-  , ""
-  , "operator (_ * _) = multiply_int where"
-  , "  associates left"
-  , "  precedence above (_ + _)"
-  , ""
-  , "operator (- _) = negate_int where"
-  , "  precedence above (_ * _)"
-  , ""
-  , "operator (+ _) = unary_plus_int where"
-  , "  precedence equal (- _)"
-  , ""
-  , "operator (_ . _) = compose where"
-  , "  associates right"
-  , ""
-  , "operator (_ [ _ ]) = at"
-  , ""
-  , "operator (_ [ _ ] <- _) = set"
-  , ""
-  , "operator (_ || _) = or"
-  , ""
-  , "operator (_ && _) = and"
-  , ""
-  , "operator (_ == _) = eq_int where"
-  , "  precedence below (_ + _)"
-  , ""
-  , "operator (_ != _) = neq_int where"
-  , "  precedence equal (_ == _)"
-  , ""
-  , "operator (_ < _) = lt_int where"
-  , "  precedence equal (_ == _)"
-  , ""
-  , "operator (_ > _) = gt_int where"
-  , "  precedence equal (_ == _)"
-  , ""
-  , "operator (_ <= _) = lte_int where"
-  , "  precedence equal (_ == _)"
-  , ""
-  , "operator (_ >= _) = gte_int where"
-  , "  precedence equal (_ == _)"
-  , ""
-  ]
+prelude = [r|
+
+-- Type synonyms
+using String = Array Char
+
+-- Operators
+operator (_ + _) = add_int where
+  associates left
+
+operator (_ - _) = subtract_int where
+  associates left
+  precedence equal (_ + _)
+
+operator (_ * _) = multiply_int where
+  associates left
+  precedence above (_ + _)
+
+operator (- _) = negate_int where
+  precedence above (_ * _)
+
+operator (+ _) = unary_plus_int where
+  precedence equal (- _)
+
+operator (_ . _) = compose where
+  associates right
+
+operator (_ [ _ ]) = at
+
+operator (_ [ _ ] <- _) = set
+
+operator (_ || _) = or
+
+operator (_ && _) = and
+
+operator (_ == _) = eq_int where
+  precedence below (_ + _)
+
+operator (_ != _) = neq_int where
+  precedence equal (_ == _)
+
+operator (_ < _) = lt_int where
+  precedence equal (_ == _)
+
+operator (_ > _) = gt_int where
+  precedence equal (_ == _)
+
+operator (_ <= _) = lte_int where
+  precedence equal (_ == _)
+
+operator (_ >= _) = gte_int where
+  precedence equal (_ == _)
+|]

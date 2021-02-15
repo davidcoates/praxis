@@ -7,40 +7,48 @@ module Inbuilts
   ) where
 
 import           Common
+import           Control.Lens              (set, view)
 import           Env
 import           Introspect
-import           Parse           (parse)
+import           Parse                     (parse)
 import           Praxis
-import           Term            hiding (Lit (..), Pair, Unit)
+import           Term                      hiding (Lit (..), Pair, Unit)
 import           Value
 
-import           Data.Array      (array)
-import           Data.List       (nub, sort)
-import           Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map (empty, fromList, singleton)
-import qualified Data.Set        as Set (empty)
+import           Control.Monad.Trans.Class (MonadTrans (..))
+import qualified Control.Monad.Trans.State as State (get)
+
+-- Include inbuilt kinds
+initialState0 :: PraxisState
+initialState0 = set kEnv initialKEnv $ emptyState
+
+-- Include inbuilts
+initialState1 :: PraxisState
+initialState1 = set vEnv initialVEnv $ set tEnv initialTEnv $ initialState0
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
-initialState = set tSynonyms initialTSynonyms $ set opContext initialOpContext $ set tEnv initialTEnv $ set vEnv initialVEnv $ set kEnv initialKEnv $ set daEnv initialDAEnv $ emptyState
+initialState = fixup (runInternal initialState1 ((parse prelude :: Praxis (Annotated Program)) >> lift State.get)) where
+  -- TODO a nicer way to do this. Undo all the things except the fields we care about.
+  fixup = set filename (view filename emptyState) . set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set system (view system emptyState)
 
 mono :: String -> Annotated Type
-mono s = runInternal initialState (parse s :: Praxis (Annotated Type))
+mono s = runInternal initialState0 (parse s :: Praxis (Annotated Type))
 
 poly :: String -> Annotated QType
-poly s = runInternal initialState (parse s :: Praxis (Annotated QType))
+poly s = runInternal initialState0 (parse s :: Praxis (Annotated QType))
 
 kind :: String -> Annotated Kind
-kind s = runInternal initialState (parse s :: Praxis (Annotated Kind))
+kind s = runInternal emptyState (parse s :: Praxis (Annotated Kind))
 
-prelude :: [(Name, Annotated QType, Value)]
-prelude =
-  [ ("add" ,         poly "(Int, Int) -> Int", liftI (+))
-  , ("subtract",     poly "(Int, Int) -> Int", liftI (-))
-  , ("multiply",     poly "(Int, Int) -> Int", liftI (*))
-  , ("negate",       poly "Int -> Int",
+inbuilts :: [(Name, Annotated QType, Value)]
+inbuilts =
+  [ ("add_int" ,     poly "(Int, Int) -> Int", liftI (+))
+  , ("subtract_int", poly "(Int, Int) -> Int", liftI (-))
+  , ("multiply_int", poly "(Int, Int) -> Int", liftI (*))
+  , ("negate_int",   poly "Int -> Int",
       Fun (\(Int x) -> pure (Int (negate x))))
-  , ("unary_plus",   poly "Int -> Int",
+  , ("unary_plus_int",   poly "Int -> Int",
       Fun (\(Int x) -> pure (Int x)))
   , ("get_int",      poly "() -> Int",
       Fun (\Unit -> liftIO (Int <$> readLn)))
@@ -64,12 +72,12 @@ prelude =
       Fun (\(Pair (Array a) (Pair (Int i) e)) -> Value.writeArray a i e >> pure (Array a)))
   , ("or",           poly "(Bool, Bool) -> Bool", liftB (||))
   , ("and",          poly "(Bool, Bool) -> Bool", liftB (&&))
-  , ("eq",           poly "(Int, Int) -> Bool", liftE (==)) -- TODO replace with Eq, Ord interfaces
-  , ("neq",          poly "(Int, Int) -> Bool", liftE (/=))
-  , ("lt",           poly "(Int, Int) -> Bool", liftE (<))
-  , ("gt",           poly "(Int, Int) -> Bool", liftE (>))
-  , ("lte",          poly "(Int, Int) -> Bool", liftE (<=))
-  , ("gte",          poly "(Int, Int) -> Bool", liftE (>=))
+  , ("eq_int",       poly "(Int, Int) -> Bool", liftE (==)) -- TODO use modules
+  , ("neq_int",      poly "(Int, Int) -> Bool", liftE (/=))
+  , ("lt_int",       poly "(Int, Int) -> Bool", liftE (<))
+  , ("gt_int",       poly "(Int, Int) -> Bool", liftE (>))
+  , ("lte_int",      poly "(Int, Int) -> Bool", liftE (<=))
+  , ("gte_int",      poly "(Int, Int) -> Bool", liftE (>=))
   ]
   where
     liftI :: (Int -> Int -> Int) -> Value
@@ -79,8 +87,8 @@ prelude =
     liftE :: (Int -> Int -> Bool) -> Value
     liftE f = Fun (\(Pair (Int a) (Int b)) -> pure (Bool (f a b)))
 
-preludeKinds :: [(Name, Annotated Kind)]
-preludeKinds =
+inbuiltKinds :: [(Name, Annotated Kind)]
+inbuiltKinds =
   [ ("Int",    kind "Type")
   , ("Bool",   kind "Type")
   , ("String", kind "Type")
@@ -90,33 +98,33 @@ preludeKinds =
   ]
 
 initialVEnv :: VEnv
-initialVEnv = fromList (map (\(n, _, v) -> (n, v)) prelude)
+initialVEnv = fromList (map (\(n, _, v) -> (n, v)) inbuilts)
 
 initialTEnv :: TEnv
-initialTEnv = fromList (map (\(n, t, _) -> (n, t)) prelude)
+initialTEnv = fromList (map (\(n, t, _) -> (n, t)) inbuilts)
 
 initialKEnv :: KEnv
-initialKEnv = fromList preludeKinds
+initialKEnv = fromList inbuiltKinds
 
-initialDAEnv :: DAEnv
-initialDAEnv = empty
-
-preludeOps = unlines $
-  [ "operator (_ + _) = add where"
+-- TODO interfaces
+prelude = unlines $
+  [ "using String = Array Char"
+  , ""
+  , "operator (_ + _) = add_int where"
   , "  associates left"
   , ""
-  , "operator (_ - _) = subtract where"
+  , "operator (_ - _) = subtract_int where"
   , "  associates left"
   , "  precedence equal (_ + _)"
   , ""
-  , "operator (_ * _) = multiply where"
+  , "operator (_ * _) = multiply_int where"
   , "  associates left"
   , "  precedence above (_ + _)"
   , ""
-  , "operator (- _) = negate where"
+  , "operator (- _) = negate_int where"
   , "  precedence above (_ * _)"
   , ""
-  , "operator (+ _) = unary_plus where"
+  , "operator (+ _) = unary_plus_int where"
   , "  precedence equal (- _)"
   , ""
   , "operator (_ . _) = compose where"
@@ -130,31 +138,22 @@ preludeOps = unlines $
   , ""
   , "operator (_ && _) = and"
   , ""
-  , "operator (_ == _) = eq where"
+  , "operator (_ == _) = eq_int where"
   , "  precedence below (_ + _)"
   , ""
-  , "operator (_ != _) = neq where"
+  , "operator (_ != _) = neq_int where"
   , "  precedence equal (_ == _)"
   , ""
-  , "operator (_ < _) = lt where"
+  , "operator (_ < _) = lt_int where"
   , "  precedence equal (_ == _)"
   , ""
-  , "operator (_ > _) = gt where"
+  , "operator (_ > _) = gt_int where"
   , "  precedence equal (_ == _)"
   , ""
-  , "operator (_ <= _) = lte where"
+  , "operator (_ <= _) = lte_int where"
   , "  precedence equal (_ == _)"
   , ""
-  , "operator (_ >= _) = gte where"
+  , "operator (_ >= _) = gte_int where"
   , "  precedence equal (_ == _)"
   , ""
   ]
-
-initialOpContext :: OpContext
-initialOpContext = runInternal (set opContext emptyOpContext $ set vEnv initialVEnv $ emptyState) ((parse preludeOps :: Praxis (Annotated Program)) >> use opContext)
-
-emptyOpContext :: OpContext
-emptyOpContext = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
-
-initialTSynonyms :: Map Name (Annotated Type)
-initialTSynonyms = Map.singleton "String" (mono "Array Char")

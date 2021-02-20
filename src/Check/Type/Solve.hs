@@ -62,6 +62,7 @@ trySolveShare t = save our $ save tEnv $ solveDeep (trySolveShare') (Share t) wh
     TyUnit                                -> tautology
     TyFun _ _                             -> tautology
     TyPair a b                            -> intro [ Share a, Share b]
+    TyVar _                               -> contradiction
     TyCon _                               -> contradiction
     TyApply (_ :< TyCon _) _              -> contradiction
     TyApply (_ :< TyOp (_ :< TyOpBang)) _ -> tautology

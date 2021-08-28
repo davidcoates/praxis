@@ -41,7 +41,7 @@ programs =
     unlines
       [ "fac = cases"
       , "  0 -> 1"
-      , "  n -> multiply ( n , fac subtract ( n , 1 ) )"
+      , "  n -> multiply_int ( n , fac subtract_int ( n , 1 ) )"
       ]
   ]
 

@@ -43,7 +43,6 @@ module Term
   , annotation
   , split
   , splitTrivial
-  , splitPair
   , phantom
   , as
   , covalue
@@ -219,9 +218,6 @@ split f ((s, _) :< x) = (\(a :< x) -> ((s, Just a)) :< x) <$> f s x
 
 splitTrivial :: Functor f => (Source -> a -> f a) -> Annotated a -> f (Annotated a)
 splitTrivial f ((s, _) :< x) = (\x -> ((s, Nothing) :< x)) <$> f s x
-
-splitPair :: Functor f => (Source -> a -> f (b, Tag (Annotation a) a)) -> Annotated a -> f (b, Annotated a)
-splitPair f = runPairT . split (\s a -> PairT (f s a))
 
 phantom :: a -> Annotated a
 phantom x = (Phantom, Nothing) :< x

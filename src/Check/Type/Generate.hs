@@ -237,11 +237,8 @@ exp = split $ \s -> \case
     t <- ungeneraliseQType qt
     return (t :< Con n)
 
-  Do ss -> do
+  Do ss -> save tEnv $ do
     ss' <- traverse generate ss
-    let f (StmtDecl _) = 1
-        f (StmtExp _)  = 0
-    tEnv %= elimN (sum (map (f . view value) ss'))
     case view value (last ss') of
       StmtExp ((_, Just t) :< _) -> return (t :< Do ss')
       _                          -> throwAt s $ ("do block must end in an expression" :: String)
@@ -258,11 +255,10 @@ exp = split $ \s -> \case
     (p', e') <- alt op (p, e)
     return (fun (view ty p') (view ty e') :< Lambda p' e')
 
-  Let b x -> do
-    (i, b) <- bind b
+  Let b x -> save tEnv $ do
+    b' <- bind b
     x' <- exp x
-    tEnv %= elimN i
-    return (view ty x' :< Let b x')
+    return (view ty x' :< Let b' x')
 
   -- TODO pull from environment?
   Lit x -> ((\t -> t `as` phantom KindType :< Lit x) <$>) $ case x of
@@ -312,10 +308,9 @@ exp = split $ \s -> \case
     t <- mark s n
     return (t :< Var n)
 
-  Where x bs -> do
-    (i, bs') <- binds bs
+  Where x bs -> save tEnv $ do
+    bs' <- binds bs
     x' <- exp x
-    tEnv %= elimN i
     return (view ty x' :< Where x' bs')
 
 
@@ -325,35 +320,34 @@ equals es = equals' (map (\e -> (view source e, view ty e)) es) where
   equals' ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
 
 -- TODO allow these to be (mutually) recursive?
-binds :: [(Annotated Pat, Annotated Exp)] -> Praxis (Int, [(Annotated Pat, Annotated Exp)])
-binds bs = over first (\(Sum x) -> x) <$> traverse (over first Sum) <$> traverse bind bs
+binds :: [(Annotated Pat, Annotated Exp)] -> Praxis [(Annotated Pat, Annotated Exp)]
+binds bs = traverse bind bs
 
-bind :: (Annotated Pat, Annotated Exp) -> Praxis (Int, (Annotated Pat, Annotated Exp))
+bind :: (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
 bind (p, e) = do
   e' <- exp e
-  (i, p') <- pat (phantom TyOpId) p
+  p' <- pat (phantom TyOpId) p
   equal (view ty p') (view ty e') (BindCongruence) (view source p <> view source e)
-  return (i, (p', e'))
-
-alt :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
-alt op (p, e) = do
-  (i, p') <- pat op p
-  e' <- exp e
-  tEnv %= elimN i
   return (p', e')
 
-pat :: Annotated TyOp -> Annotated Pat -> Praxis (Int, Annotated Pat)
+alt :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
+alt op (p, e) = save tEnv $ do
+  p' <- pat op p
+  e' <- exp e
+  return (p', e')
+
+pat :: Annotated TyOp -> Annotated Pat -> Praxis (Annotated Pat)
 pat op = pat' True where
 
   wrapIf p t = if p then TyApply (TyOp op `as` phantom KindOp) t `as` phantom KindType else t
 
-  pat' top = splitPair $ \s -> \case
+  pat' top = split $ \s -> \case
 
     PatAt v p -> do
-      (i, p') <- pat' top p
+      p' <- pat' top p
       let t = view ty p'
       tEnv %= intro v (mono t)
-      return (i + 1, t :< PatAt v p')
+      return (t :< PatAt v p')
 
     PatCon n pt -> do
       -- Lookup the data alternative with this name
@@ -365,34 +359,34 @@ pat op = pat' True where
       let rt' = wrapIf top (f rt)
 
       case pt of
-        Nothing -> return (0, rt' :< PatCon n Nothing)
+        Nothing -> return (rt' :< PatCon n Nothing)
         Just pt -> do
-          (i, pt') <- pat' False pt
+          pt' <- pat' False pt
           let Just at' = at
           require $ newConstraint (view ty pt' `TEq` f at') (ConPattern n) s
-          return (i, rt' :< PatCon n (Just pt'))
+          return (rt' :< PatCon n (Just pt'))
 
     PatHole -> do
       t <- freshTyUni
-      return (0, t :< PatHole)
+      return (t :< PatHole)
 
-    PatLit l -> return (0, TyCon (lit l) `as` phantom KindType :< PatLit l)
+    PatLit l -> return (TyCon (lit l) `as` phantom KindType :< PatLit l)
       where lit (Bool _)   = "Bool"
             lit (Char _)   = "Char"
             lit (Int _)    = "Int"
             lit (String _) = "String"
 
     PatPair p q -> do
-      (i, p') <- pat' False p
-      (j, q') <- pat' False q
+      p' <- pat' False p
+      q' <- pat' False q
       let t = TyPair (view ty p') (view ty q') `as` phantom KindType
-      return (i + j, wrapIf top t :< PatPair p' q')
+      return (wrapIf top t :< PatPair p' q')
 
     PatUnit -> do
       let t = TyUnit `as` phantom KindType
-      return (0, t :< PatUnit)
+      return (t :< PatUnit)
 
     PatVar v -> do
       t <- freshTyUni
       tEnv %= intro v (mono (wrapIf (not top) t))
-      return (1, t :< PatVar v)
+      return (t :< PatVar v)

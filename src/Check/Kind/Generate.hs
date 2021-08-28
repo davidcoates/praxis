@@ -99,22 +99,22 @@ ty = split $ \s -> \case
           return (k :< TyVar v)
 
 
-tyPat :: Annotated TyPat -> Praxis (Int, Annotated TyPat)
-tyPat = splitPair $ \s -> \case
+tyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
+tyPat = split $ \s -> \case
 
   TyPatVar v -> do
     e <- kEnv `uses` lookup v
     case e of
-      Just k  -> return (1, k :< TyPatVar v)
+      Just k  -> return (k :< TyPatVar v)
       Nothing -> do
         k <- freshKindUni
         kEnv %= intro v k
-        return (1, k :< TyPatVar v)
+        return (k :< TyPatVar v)
 
   TyPatPack a b -> do
-    (i, a') <- tyPat a
-    (j, b') <- tyPat b
-    return (i + j, phantom (KindPair (view kind a') (view kind b')) :< TyPatPack a' b')
+    a' <- tyPat a
+    b' <- tyPat b
+    return (phantom (KindPair (view kind a') (view kind b')) :< TyPatPack a' b')
 
 
 dataAlt :: Annotated DataAlt -> Praxis (Annotated DataAlt)
@@ -143,9 +143,10 @@ decl = splitTrivial $ \s -> \case
       Nothing -> pure ()
     k <- freshKindUni
     kEnv %= intro n k
-    (Sum i, ps') <- traverse (over first Sum) <$> traverse tyPat ps
-    as' <- traverse dataAlt as
-    kEnv %= elimN i
+    (ps', as') <- save kEnv $ do
+        ps' <- traverse tyPat ps
+        as' <- traverse dataAlt as
+        return (ps', as')
     case ps' of
       Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (DataType n) s
       Just ps' -> require $ newConstraint (k `KEq` phantom (KindFun (view kind ps') (phantom KindType))) (DataType n) s

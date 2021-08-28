@@ -15,7 +15,6 @@ import           Value         (Value)
 import qualified Value
 
 import           Data.Array.IO
-import           Data.Monoid   (Sum (..))
 import           Prelude       hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
@@ -44,12 +43,13 @@ decl (a :< e) = case e of
 
   _ -> return ()
 
-stmt :: Annotated Stmt -> Praxis (Sum Int)
+stmt :: Annotated Stmt -> Praxis ()
 stmt (_ :< s) = case s of
 
-  StmtDecl d -> decl d >> return (Sum 0)
+  StmtDecl d -> decl d
 
-  StmtExp e  -> exp e >> return (Sum 1)
+  StmtExp e  -> exp e >> return ()
+
 
 rec :: Maybe Name -> Value -> Praxis ()
 rec n v = case n of
@@ -80,11 +80,10 @@ expRec n (_ :< e) = case e of
       Nothing -> Value.Con n Nothing
       Just _  -> Value.Fun (\v -> return $ Value.Con n (Just v))
 
-  Do ss -> do
-    Sum i <- asum (map stmt (init ss))
+  Do ss -> save vEnv $ do
+    mapM stmt (init ss)
     let _ :< StmtExp e = last ss
     v <- exp e
-    vEnv %= elimN i
     return v
 
   If a b c -> do
@@ -93,14 +92,12 @@ expRec n (_ :< e) = case e of
 
   Lambda p e -> do
     l <- use vEnv
-    let f = Value.Fun $ \v -> save vEnv $ do { vEnv .= l; rec n f; i <- forceBind v p; exp e }
+    let f = Value.Fun $ \v -> save vEnv $ do { vEnv .= l; rec n f; forceBind v p; exp e }
     return f
 
-  Let b x -> do
-    i <- bind b
-    x' <- exp x
-    vEnv %= elimN i
-    return x'
+  Let b x -> save vEnv $ do
+    bind b
+    exp x
 
   Lit l -> case l of
     Bool b   -> pure $ Value.Bool b
@@ -122,11 +119,9 @@ expRec n (_ :< e) = case e of
     Just v <- vEnv `uses` lookup n
     return v
 
-  Where x bs -> do
-    i <- binds bs
-    x' <- exp x
-    vEnv %= elimN i
-    return x'
+  Where x bs -> save vEnv $ do
+    binds bs
+    exp x
 
 
 exp :: Annotated Exp -> Praxis Value
@@ -143,42 +138,40 @@ switch ((c,e):as) = do
 cases :: Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 cases x [] = error ("no matching pattern" ++ show x)
 cases x ((p,e):ps) = case alt x p of
-  Just c  -> do
-    i <- c
-    e' <- exp e
-    vEnv %= elimN i
-    return e'
+  Just c  -> save vEnv $ do
+    c
+    exp e
   Nothing ->
     cases x ps
 
-forceBind :: Value -> Annotated Pat -> Praxis Int
-forceBind v p = case alt v p of Just i  -> i
+forceBind :: Value -> Annotated Pat -> Praxis ()
+forceBind v p = case alt v p of Just c  -> c
                                 Nothing -> error "no matching pattern" -- TODO
 
-binds :: [(Annotated Pat, Annotated Exp)] -> Praxis Int
-binds bs = sum <$> mapM bind bs
+binds :: [(Annotated Pat, Annotated Exp)] -> Praxis ()
+binds bs = mapM_ bind bs
 
-bind :: (Annotated Pat, Annotated Exp) -> Praxis Int
+bind :: (Annotated Pat, Annotated Exp) -> Praxis ()
 bind (p, x) = do
   x' <- exp x
-  let Just i = alt x' p
-  i
+  let Just c = alt x' p
+  c
 
-alt :: Value -> Annotated Pat -> Maybe (Praxis Int)
+alt :: Value -> Annotated Pat -> Maybe (Praxis ())
 alt v (_ :< p) = case p of
 
   PatAt n p
-    -> (\c -> do { vEnv %= intro n v; i <- c; return (i+1) }) <$> alt v p
+    -> (\c -> do { vEnv %= intro n v; c }) <$> alt v p
 
   PatCon n p | Value.Con m v <- v
     -> if n /= m then Nothing else case (p, v) of
-      (Nothing, Nothing) -> Just (return 0)
+      (Nothing, Nothing) -> Just (return ())
       (Just p, Just v)   -> alt v p
 
   PatHole
-    -> Just (return 0)
+    -> Just (return ())
 
-  PatLit l -> if match then Just (return 0) else Nothing where
+  PatLit l -> if match then Just (return ()) else Nothing where
     match = case (l, v) of
       (Bool b,   Value.Bool b') -> b == b'
       (Char c,   Value.Char c') -> c == c'
@@ -187,15 +180,15 @@ alt v (_ :< p) = case p of
 
   PatPair p q | Value.Pair p' q' <- v
     -> do
-      i <- alt p' p
-      j <- alt q' q
-      return $ liftA2 (+) i j
+      alt p' p
+      alt q' q
+      Just $ return ()
 
   PatUnit
-    -> Just (return 0)
+    -> Just (return ())
 
   PatVar n
-    -> Just $ vEnv %= intro n v >> return 1
+    -> Just $ vEnv %= intro n v
 
   _
     -> Nothing

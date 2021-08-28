@@ -28,7 +28,6 @@ module Common
   , liftA2
   , Const(..)
   , Identity(..)
-  , Sum(..)
   , MaybeT(..)
   , StateT(..)
   , MonadTrans(..)
@@ -37,8 +36,6 @@ module Common
   , just
 
   , (<&>)
-
-  , PairT(..)
 
   , Void
   , absurd
@@ -64,7 +61,6 @@ import           Control.Monad.Trans.State (StateT (..))
 import           Data.Foldable             (fold)
 import           Data.Functor.Identity     (Identity (..))
 import           Data.List                 (intercalate)
-import           Data.Monoid               (Sum (..))
 import           Data.Traversable          (sequenceA)
 import           Data.Void                 (Void, absurd)
 
@@ -85,12 +81,6 @@ second = _2
 
 (<&>) :: Functor f => f a -> (a -> b) -> f b
 (<&>) = flip (<$>)
-
--- |Transformer version of ((,) a)
-newtype PairT f b a = PairT { runPairT :: f (b, a) }
-
-instance Functor f => Functor (PairT f b) where
-  fmap f (PairT x) = PairT (fmap (over second f) x)
 
 foldMapA :: (Foldable t, Applicative f, Monoid m) => (a -> f m) -> t a -> f m
 foldMapA f = foldr (liftA2 mappend . f) (pure mempty)

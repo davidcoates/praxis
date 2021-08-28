@@ -57,7 +57,7 @@ rec n v = case n of
   Nothing -> return ()
 
 expRec :: Maybe Name -> Annotated Exp -> Praxis Value
-expRec n (_ :< e) = case e of
+expRec n (_ :< e) = case e of -- TODO should expRec be in more cases below?
 
   Apply f x -> do
     Value.Fun f' <- exp f

@@ -20,8 +20,8 @@ import           Token
 
 import           Data.List     (intersperse)
 import           Data.Maybe    (catMaybes)
-import           Prelude       hiding (_Just, exp, pure, until, (*>), (<$>),
-                                (<*), (<*>))
+import           Prelude       hiding (exp, pure, until, (*>), (<$>), (<*),
+                                (<*>), _Just)
 
 definePrisms ''Bool
 definePrisms ''Ordering
@@ -226,10 +226,10 @@ program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) where -- TODO module
 
 decl :: Syntax f => f Decl
-decl = declUsing <|> declData <|> declOp <|> declFun -- TODO imports
+decl = declSyn <|> declData <|> declOp <|> declFun -- TODO imports
 
-declUsing :: Syntax f => f Decl
-declUsing = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
+declSyn :: Syntax f => f Decl
+declSyn = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
 
 declData :: Syntax f => f Decl
 declData = _DeclData <$> reservedId "type" *> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where

@@ -55,9 +55,8 @@ import           Common.Source
 import           Common.Tag
 
 import           Control.Applicative       (Const (..), liftA2)
-import           Control.Lens              (Lens', _1, _2, both, makeLenses,
-                                            over, set, use, uses, view, (%=),
-                                            (.=))
+import           Control.Lens              (Lens', both, makeLenses, over, set,
+                                            use, uses, view, (%=), (.=), _1, _2)
 import           Control.Monad             (unless, when)
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Maybe (MaybeT (..))

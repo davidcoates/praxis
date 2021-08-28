@@ -119,8 +119,8 @@ expRec n (_ :< e) = case e of
     Just v <- vEnv `uses` lookup n
     return v
 
-  Where x bs -> save vEnv $ do
-    binds bs
+  Where x ys -> save vEnv $ do
+    mapM_ decl ys
     exp x
 
 
@@ -147,9 +147,6 @@ cases x ((p,e):ps) = case alt x p of
 forceBind :: Value -> Annotated Pat -> Praxis ()
 forceBind v p = case alt v p of Just c  -> c
                                 Nothing -> error "no matching pattern" -- TODO
-
-binds :: [(Annotated Pat, Annotated Exp)] -> Praxis ()
-binds bs = mapM_ bind bs
 
 bind :: (Annotated Pat, Annotated Exp) -> Praxis ()
 bind (p, x) = do

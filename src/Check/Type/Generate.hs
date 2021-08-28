@@ -122,9 +122,10 @@ run x = save stage $ do
 
 generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 generate x = case witness :: I a of
-    IDecl -> decl x
-    IExp  -> exp x
-    _     -> value (recurse generate) x
+  IProgram -> program x
+  IDecl    -> decl x
+  IExp     -> exp x
+  _        -> value (recurse generate) x
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -165,6 +166,12 @@ dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
   daEnv %= Env.intro n da
   return da
 
+program :: Annotated Program -> Praxis (Annotated Program)
+program (a :< Program ds) = (\ds -> a :< Program ds) <$> decls ds
+
+-- TODO allow mutual recursion of decls
+decls :: [Annotated Decl] -> Praxis [Annotated Decl]
+decls = traverse decl
 
 decl :: Annotated Decl -> Praxis (Annotated Decl)
 decl = splitTrivial $ \s -> \case
@@ -309,7 +316,7 @@ exp = split $ \s -> \case
     return (t :< Var n)
 
   Where x bs -> save tEnv $ do
-    bs' <- binds bs
+    bs' <- decls bs
     x' <- exp x
     return (view ty x' :< Where x' bs')
 
@@ -318,10 +325,6 @@ equals :: (Term a, Annotation a ~ Annotated Type) => [Annotated a] -> Reason -> 
 equals es = equals' (map (\e -> (view source e, view ty e)) es) where
   equals' :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
   equals' ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
-
--- TODO allow these to be (mutually) recursive?
-binds :: [(Annotated Pat, Annotated Exp)] -> Praxis [(Annotated Pat, Annotated Exp)]
-binds bs = traverse bind bs
 
 bind :: (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
 bind (p, e) = do

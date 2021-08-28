@@ -244,10 +244,14 @@ tyPat = _TyPatVar <$> varid <|>
         pack _TyPatPack tyPat
 
 declFun :: Syntax f => f Decl
-declFun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "function declaration" where
+declFun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "variable/function declaration" where
   sig = reservedOp ":" *> annotated qTy
   def = annotated pat `until` reservedOp "=" <*> annotated exp
   var = _DeclVar <$> varid <*> (_Just <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
+
+-- TODO, merge with declFun? Need to handle parsing ambiguity with @ patterns
+bind :: Syntax f => f (Annotated Pat, Annotated Exp)
+bind = annotated pat <*> reservedOp "=" *> annotated exp <|> mark "binding"
 
 pat :: Syntax f => f Pat
 pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern" where
@@ -299,7 +303,7 @@ exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
   -- TODO should mixfix be at this high a level?
   exp4 = mixfix <$> some (annotated (_TOp <$> varsym <|> _TExp <$> annotated exp3)) <|> unparseable exp3 <|> mark "expression(4)" -- FIXME unparseable is a hack here
   mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> Mixfix ts }) (\case { Mixfix ts -> Just ts; _ -> Nothing })
-  exp3 = optWhere <$> annotated exp2 <*> blockLike (reservedId "where") bind <|> unparseable exp2 <|> mark "expression(3)"
+  exp3 = optWhere <$> annotated exp2 <*> blockLike (reservedId "where") (annotated declFun) <|> unparseable exp2 <|> mark "expression(3)"
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
   exp2 = _Read <$> reservedId "read" *> varid <*> reservedId "in" *> annotated exp <|>
          _Do <$> reservedId "do" *> block (annotated stmt) <|>
@@ -327,9 +331,6 @@ stmt = _StmtDecl <$> reservedId "let" *> annotated declFun <|> _StmtExp <$> anno
 
 alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedOp "->" *> annotated exp <|> mark "case alternative"
-
-bind :: Syntax f => f (Annotated Pat, Annotated Exp)
-bind = annotated pat <*> reservedOp "=" *> annotated exp <|> mark "binding"
 
 declOp :: Syntax f => f Decl
 declOp = _DeclOp <$> reservedId "operator" *> annotated op <*> reservedOp "=" *> varid <*> annotated opRules

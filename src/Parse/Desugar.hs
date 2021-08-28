@@ -132,6 +132,11 @@ exp (a :< x) = case x of
 
   Con "False" -> pure (a :< Lit (Bool False))
 
+  Where x ys -> do
+    x' <- exp x
+    ys' <- decls ys
+    return (a :< Where x' ys')
+
   _           -> (a :<) <$> recurse desugar x
 
 

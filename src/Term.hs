@@ -100,7 +100,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Unit
          | Var Name -- FIXME Qualified Name
          | VarBang Name -- ^Parsing only
-         | Where (Annotated Exp) [(Annotated Pat, Annotated Exp)]
+         | Where (Annotated Exp) [Annotated Decl]
   deriving (Eq, Ord)
 
 data Lit = Bool Bool

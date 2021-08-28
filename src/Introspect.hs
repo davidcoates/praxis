@@ -235,7 +235,7 @@ instance Term Exp where
     Unit         -> pure Unit
     Var n        -> pure (Var n)
     VarBang n    -> pure (VarBang n)
-    Where a ps   -> Where <$> f a <*> pairs f ps
+    Where a bs   -> Where <$> f a <*> traverse f bs
 
 instance Term Pat where
   witness = IPat

@@ -17,12 +17,12 @@ import           Common
 import           Introspect
 import           Term
 
-data Axiom = Axiom (TypeConstraint -> Maybe TypeProp)
+data Axiom = Axiom (TyConstraint -> Maybe TyProp)
 
 data System = System
   { _sol         :: [(Name, Type)]
   , _ops         :: [(Name, TyOp)]
-  , _constraints :: [Annotated TypeProp]
+  , _constraints :: [Annotated TyProp]
   , _axioms      :: [Axiom]
   }
 

@@ -34,7 +34,7 @@ instance Unparser Printer where
   mark s = Printer (error s)
   annotated f = Printer g where
     g x = Just $ case typeof (view value x) of
-      ITypeProp -> prop
+      ITyProp -> prop
       IKindProp -> prop
       i         -> [Print (mapIfNotNull (\c -> "[" <> c <> "]") (label i (view annotation x)))] ++ body
       where
@@ -64,7 +64,7 @@ label i (Just a) = case i of
   IPat      -> prettyIf Types a
   ITyPat    -> prettyIf Kinds a
   IType     -> prettyIf Kinds a
-  ITypeProp -> pretty a
+  ITyProp   -> pretty a
   IKindProp -> pretty a
   IDataAlt  -> pretty a
   _         -> blank

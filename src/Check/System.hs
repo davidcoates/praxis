@@ -2,7 +2,7 @@
 
 module Check.System
   ( System
-  , typeSystem
+  , tySystem
   , kindSystem
 
   , initialSystem
@@ -18,12 +18,12 @@ import           Control.Lens      (makeLenses)
 
 initialSystem :: System
 initialSystem = System
-  { _typeSystem = Type.initialSystem
+  { _tySystem = Type.initialSystem
   , _kindSystem = Kind.initialSystem
   }
 
 data System = System
-  { _typeSystem :: Type.System
+  { _tySystem   :: Type.System
   , _kindSystem :: Kind.System
   }
 

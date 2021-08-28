@@ -130,7 +130,7 @@ definePrisms ''QTyVar
 definePrisms ''Kind
 
 definePrisms ''KindConstraint
-definePrisms ''TypeConstraint
+definePrisms ''TyConstraint
 definePrisms ''Prop
 
 syntax :: (Term a, Syntax f) => I a -> f a
@@ -157,9 +157,9 @@ syntax = \case
   -- | T2
   IKind           -> kind
   -- | Solver
-  ITypeConstraint -> tyConstraint
+  ITyConstraint -> tyConstraint
   IKindConstraint -> kindConstraint
-  ITypeProp       -> unparseable tyProp
+  ITyProp       -> unparseable tyProp
   IKindProp       -> unparseable kindProp
 
 
@@ -199,7 +199,7 @@ rightWithSep s _P p = Prism f g <$> annotated p <*> many (s *> annotated p) <|> 
     Nothing     -> [x]
 
 
-tyConstraint :: Syntax f => f TypeConstraint
+tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Share <$> reservedCon "Share" *> annotated ty <|>
                _Class <$> annotated ty <|>
                _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
@@ -210,7 +210,7 @@ kindConstraint :: Syntax f => f KindConstraint
 kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|>
                 mark "kind constraint"
 
-tyProp :: Syntax f => f TypeProp
+tyProp :: Syntax f => f TyProp
 tyProp = _Exactly <$> tyConstraint <|>
          _Top <$> special '⊤' <|>
          _Bottom <$> special '⊥' <|>

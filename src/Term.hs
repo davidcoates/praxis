@@ -32,9 +32,9 @@ module Term
 
   -- | Solver
   , KindConstraint(..)
-  , TypeConstraint(..)
+  , TyConstraint(..)
   , Prop(..)
-  , TypeProp
+  , TyProp
   , KindProp
 
   , Annotation
@@ -174,7 +174,7 @@ data Kind = KindUni Name
           | KindType
   deriving (Eq, Ord)
 
-data TypeConstraint = Class (Annotated Type)
+data TyConstraint = Class (Annotated Type)
                     | Share (Annotated Type)
                     | TEq (Annotated Type) (Annotated Type)
                     | TOpEq (Annotated TyOp) (Annotated TyOp)
@@ -192,7 +192,7 @@ data Prop a = Top
             | And (Prop a) (Prop a)
   deriving (Eq, Ord)
 
-type TypeProp = Prop TypeConstraint
+type TyProp = Prop TyConstraint
 
 type KindProp = Prop KindConstraint
 
@@ -202,7 +202,7 @@ type family Annotation a where
   Annotation TyPat    = Annotated Kind
   Annotation Type     = Annotated Kind
   Annotation DataAlt  = DataAltInfo -- FIXME should just be a map?
-  Annotation TypeProp = Derivation TypeProp
+  Annotation TyProp = Derivation TyProp
   Annotation KindProp = Derivation KindProp
   Annotation a              = Void
 

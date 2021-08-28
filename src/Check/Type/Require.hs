@@ -16,11 +16,11 @@ import           Introspect
 import           Praxis
 import           Term
 
-require :: Annotated TypeProp -> Praxis ()
+require :: Annotated TyProp -> Praxis ()
 require c = our . constraints %= (c:)
 
-requires :: [Annotated TypeProp] -> Praxis ()
+requires :: [Annotated TyProp] -> Praxis ()
 requires = mapM_ require
 
 our :: Lens' PraxisState System
-our = system . typeSystem
+our = system . tySystem

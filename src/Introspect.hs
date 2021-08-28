@@ -69,9 +69,9 @@ data I a where
   -- | T2
   IKind :: I Kind
   -- | Solver
-  ITypeConstraint :: I TypeConstraint
+  ITyConstraint :: I TyConstraint
   IKindConstraint :: I KindConstraint
-  ITypeProp :: I TypeProp
+  ITyProp :: I TyProp
   IKindProp :: I KindProp
 
 
@@ -102,9 +102,9 @@ switch a b eq neq = case (a, b) of
   -- | T2
   (IKind, IKind)                     -> eq
   -- | Solver
-  (ITypeConstraint, ITypeConstraint) -> eq
+  (ITyConstraint, ITyConstraint)     -> eq
   (IKindConstraint, IKindConstraint) -> eq
-  (ITypeProp, ITypeProp)             -> eq
+  (ITyProp, ITyProp)                 -> eq
   (IKindProp, IKindProp)             -> eq
   -- |
   _                                  -> neq
@@ -327,8 +327,8 @@ instance Term Kind where
 
 -- | Solver
 
-instance Term TypeConstraint where
-  witness = ITypeConstraint
+instance Term TyConstraint where
+  witness = ITyConstraint
   complete = trivial
   recurse f = \case
     Class t   -> Class <$> f t
@@ -342,8 +342,8 @@ instance Term KindConstraint where
   recurse f = \case
     KEq a b -> KEq <$> f a <*> f b
 
-instance Term TypeProp where
-  witness = ITypeProp
+instance Term TyProp where
+  witness = ITyProp
   complete _ f = \case
     Root r       -> pure (Root r)
     Antecedent c -> Antecedent <$> f c

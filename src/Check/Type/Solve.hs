@@ -45,7 +45,7 @@ tyOpUnis = extract (embedMonoid f) where
     TyOpUni n -> Set.singleton n
     _         -> Set.empty
 
-type TypeSolver = Solver TypeConstraint TypeConstraint
+type TypeSolver = Solver TyConstraint TyConstraint
 
 solveDeep :: TypeSolver -> TypeSolver
 solveDeep s = \c -> do
@@ -56,7 +56,7 @@ solveDeep s = \c -> do
     Just Bottom -> return $ Just Bottom
     Just p      -> solveProp (our . constraints) (solveDeep s) p
 
-trySolveShare :: Solver (Annotated Type) TypeConstraint
+trySolveShare :: Solver (Annotated Type) TyConstraint
 trySolveShare t = save our $ save tEnv $ solveDeep (trySolveShare') (Share t) where
   trySolveShare' = (solveFromAxioms <|>) $ \(Share t) -> case view value t of
     TyUnit                                -> tautology
@@ -144,13 +144,13 @@ viewFree t = case view value t of
   TyApply (_ :< TyOp _) _ -> False
   _                       -> True
 
-isOp :: Name -> TyOp -> Praxis (Maybe TypeProp)
+isOp :: Name -> TyOp -> Praxis (Maybe TyProp)
 isOp n op = do
   our . ops %= ((n, op):)
   simplifyAll
   solved
 
-is :: Name -> Type -> Praxis (Maybe TypeProp)
+is :: Name -> Type -> Praxis (Maybe TyProp)
 is n t = do
   our . sol %= ((n, t):)
   simplifyAll

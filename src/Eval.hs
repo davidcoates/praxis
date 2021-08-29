@@ -168,10 +168,7 @@ alt v (_ :< p) = case p of
       _                         -> False
 
   PatPair p q | Value.Pair p' q' <- v
-    -> do
-      alt p' p
-      alt q' q
-      Just $ return ()
+    -> liftA2 (>>) (alt p' p) (alt q' q)
 
   PatUnit
     -> Just (return ())

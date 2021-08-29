@@ -49,30 +49,15 @@ desugar x = ($ x) $ case witness :: I a of
   IExp     -> exp
   IPat     -> pat
   IType    -> ty
-  IKind    -> pure
-  ITyOp    -> pure
-  ITyPat   -> pure
-  IQType   -> qty
+  IOp      -> operator
+  IOpRules -> error "standalone IOpRules"
+  IDecl    -> error "standalone Decl"
+  _        -> value (recurse desugar)
 
 program :: Annotated Program -> Praxis (Annotated Program)
 program (a :< Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
-
-stmts :: [Annotated Stmt] -> Praxis [Annotated Stmt]
-stmts     [] = pure []
-stmts (s:ss) | a :< StmtExp e <- s = do
-                e' <- exp e
-                ss' <- stmts ss
-                return (a :< StmtExp e' : ss')
-             | otherwise = do
-                let (ds, rs) = span isStmtDecl (s:ss)
-                ds' <- decls (map (\(_ :< StmtDecl d) -> d) ds)
-                rs' <- stmts rs
-                return $ map (\(a :< d) -> a :< StmtDecl (a :< d)) ds' ++ rs'
-                  where isStmtDecl (_ :< StmtDecl _) = True
-                        isStmtDecl _                 = False
-
 
 freeVars :: Annotated Exp -> Set Name
 freeVars = extractPartial f where
@@ -119,10 +104,6 @@ exp (a :< x) = case x of
     let unwrap []     = (a :< Apply x' y')
         unwrap (n:ns) = (a :< Read n (unwrap ns))
     return (unwrap (Set.elems ns))
-
-  Do ss       -> do
-    ss' <- stmts ss
-    return (a :< Do ss')
 
   Mixfix ts   -> Mixfix.parse (fst a) ts >>= exp -- Need to desguar after parsing
 
@@ -173,13 +154,13 @@ decls []            = pure []
 decls (a :< d : ds) = case d of
 
   DeclData n t as -> do
-    t' <- traverse tyPat t
-    as' <- traverse dataAlt as
+    t' <- traverse desugar t
+    as' <- traverse desugar as
     ds' <- decls ds
     return (a :< DeclData n t' as' : ds')
 
   DeclSig n t -> do
-    t <- qty t
+    t <- desugar t
     decls ds >>= \case
       (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
       _                                         -> throwAt (fst a) $ "declaration of " <> quote (pretty n) <> " lacks an accompanying binding"
@@ -198,7 +179,7 @@ decls (a :< d : ds) = case d of
 
   DeclOp op n rs -> do
 
-    op <- operator op
+    op <- desugar op
     rs' <- opRules op rs
 
     let OpRules assoc ps = view value rs'
@@ -248,12 +229,6 @@ decls (a :< d : ds) = case d of
     return (a :< DeclSyn n t' : ds')
 
 
-dataAlt :: Annotated DataAlt -> Praxis (Annotated DataAlt)
-dataAlt (a :< x) = (a :<) <$> case x of
-
-  DataAlt n ts ->  DataAlt n <$> traverse ty ts
-
-
 -- TODO check for overlapping patterns?
 pat :: Annotated Pat -> Praxis (Annotated Pat)
 pat (a :< x) = case x of
@@ -263,6 +238,7 @@ pat (a :< x) = case x of
   PatCon "False" Nothing -> pure (a :< PatLit (Bool False))
 
   _                      -> (a :<) <$> recurse desugar x
+
 
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty (a :< x) = case x of
@@ -276,13 +252,6 @@ ty (a :< x) = case x of
 
   _           -> (a :<) <$> recurse desugar x
 
-
-qty :: Annotated QType -> Praxis (Annotated QType)
-qty (a :< x) = (a :<) <$> recurse desugar x
-
--- TODO avoid al lthis repetition?
-tyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
-tyPat (a :< x) = (a :<) <$> recurse desugar x
 
 -- Repeatedly remove vertices with no outgoing edges, if we succeed the graph is acyclic
 acyclic :: Graph -> Bool

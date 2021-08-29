@@ -39,10 +39,12 @@ run x = save stage $ do
 
 -- TODO since we ignore annotation of input, could adjust this...
 generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-generate x = case witness :: I a of
-  IDecl -> decl x
-  IType -> ty x
-  _     -> value (recurse generate) x
+generate x = ($ x) $ case witness :: I a of
+  IDecl    -> decl
+  IType    -> ty
+  ITyPat   -> tyPat
+  IDataAlt -> dataAlt
+  _        -> value (recurse generate)
 
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty = split $ \s -> \case
@@ -124,7 +126,7 @@ dataAlt = splitTrivial $ \s -> \case
     case at of
       Nothing -> return $ DataAlt n Nothing
       Just at -> do
-        at' <- ty at
+        at' <- generate at
         require $ newConstraint (view kind at' `KEq` phantom KindType) (DataAltType n) s -- TODO should just match kind of data type?
         return $ DataAlt n (Just at')
 
@@ -144,8 +146,8 @@ decl = splitTrivial $ \s -> \case
     k <- freshKindUni
     kEnv %= intro n k
     (ps', as') <- save kEnv $ do
-        ps' <- traverse tyPat ps
-        as' <- traverse dataAlt as
+        ps' <- traverse generate ps
+        as' <- traverse generate as
         return (ps', as')
     case ps' of
       Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (DataType n) s

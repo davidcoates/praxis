@@ -11,6 +11,7 @@ module Term
   , Prec(..)
 
   -- | T0
+  , Bind(..)
   , DataAlt(..)
   , Decl(..)
   , Exp(..)
@@ -57,6 +58,7 @@ import           Data.Set (Set)
 
 
 -- * OPERATORS *
+
 data Assoc = AssocLeft | AssocRight
   deriving (Eq, Ord)
 
@@ -70,7 +72,15 @@ data OpRules = OpRules (Maybe (Annotated Assoc)) [Annotated Prec]
 data Prec = Prec Ordering Op
   deriving (Eq, Ord)
 
--- * DECLARATIONS *
+
+-- * DECLARATIONS & EXPRESSIONS *
+
+data Bind = Bind (Annotated Pat) (Annotated Exp)
+  deriving (Eq, Ord)
+
+data DataAlt = DataAlt Name (Maybe (Annotated Type))
+  deriving (Eq, Ord)
+
 data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataAlt]
           | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
@@ -79,10 +89,6 @@ data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataAlt]
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
 
-data DataAlt = DataAlt Name (Maybe (Annotated Type))
-  deriving (Eq, Ord)
-
--- * EXPRESSIONS *
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
@@ -90,7 +96,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Do [Annotated Stmt]
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
-         | Let (Annotated Pat, Annotated Exp) (Annotated Exp)
+         | Let (Annotated Bind) (Annotated Exp)
          | Lit Lit
          | Mixfix [Annotated Tok] -- ^Parsing only
          | Read Name (Annotated Exp)
@@ -129,7 +135,7 @@ data Pat = PatAt Name (Annotated Pat)
 data Program = Program [Annotated Decl]
   deriving (Eq, Ord)
 
-data Stmt = StmtDecl (Annotated Decl)
+data Stmt = StmtBind (Annotated Bind)
           | StmtExp (Annotated Exp)
   deriving (Eq, Ord)
 

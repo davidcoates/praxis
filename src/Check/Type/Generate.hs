@@ -121,11 +121,14 @@ run x = save stage $ do
   return x'
 
 generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-generate x = case witness :: I a of
-  IProgram -> program x
-  IDecl    -> decl x
-  IExp     -> exp x
-  _        -> value (recurse generate) x
+generate x = ($ x) $ case witness :: I a of
+  IProgram -> program
+  IExp     -> exp
+  IBind    -> bind
+  IDataAlt -> error "standalone DataAlt"
+  IDecl    -> error "standalone Decl"
+  IPat     -> error "standalone Pat"
+  _        -> value (recurse generate)
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -157,6 +160,11 @@ unis = extract (embedMonoid f) where
     TyPatVar n -> Set.singleton (QTyVar n)
     _          -> Set.empty
 
+program :: Annotated Program -> Praxis (Annotated Program)
+program (a :< Program ds) = do
+  ds <- decls ds
+  return (a :< Program ds)
+
 dataAlt :: [QTyVar] -> Annotated Type -> Annotated DataAlt -> Praxis (Annotated DataAlt)
 dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
   let ct = phantom $ Forall vars $ case at of -- Type of the constructor
@@ -165,9 +173,6 @@ dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
       da = ((s, Just (DataAltInfo ct at rt)) :< DataAlt n at)
   daEnv %= Env.intro n da
   return da
-
-program :: Annotated Program -> Praxis (Annotated Program)
-program (a :< Program ds) = (\ds -> a :< Program ds) <$> decls ds
 
 -- TODO allow mutual recursion of decls
 decls :: [Annotated Decl] -> Praxis [Annotated Decl]
@@ -326,12 +331,16 @@ equals es = equals' (map (\e -> (view source e, view ty e)) es) where
   equals' :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
   equals' ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
 
-bind :: (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
-bind (p, e) = do
-  e' <- exp e
-  p' <- pat (phantom TyOpId) p
-  equal (view ty p') (view ty e') (BindCongruence) (view source p <> view source e)
-  return (p', e')
+bind :: Annotated Bind -> Praxis (Annotated Bind)
+bind = splitTrivial $ \s -> \case
+
+  Bind p e -> do
+    e' <- exp e
+    op <- freshTyOpUni
+    p' <- pat op p
+    equal (view ty p') (view ty e') (BindCongruence) (view source p <> view source e)
+    return $ Bind p' e'
+
 
 alt :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
 alt op (p, e) = save tEnv $ do

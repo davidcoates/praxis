@@ -113,6 +113,7 @@ definePrisms ''Op
 definePrisms ''OpRules
 definePrisms ''Prec
 
+definePrisms ''Bind
 definePrisms ''DataAlt
 definePrisms ''Decl
 definePrisms ''Exp
@@ -249,9 +250,8 @@ declFun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> m
   def = annotated pat `until` reservedOp "=" <*> annotated exp
   var = _DeclVar <$> varid <*> (_Just <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
 
--- TODO, merge with declFun? Need to handle parsing ambiguity with @ patterns
-bind :: Syntax f => f (Annotated Pat, Annotated Exp)
-bind = annotated pat <*> reservedOp "=" *> annotated exp <|> mark "binding"
+bind :: Syntax f => f Bind
+bind = _Bind <$> annotated pat <*> reservedOp "=" *> annotated exp <|> mark "binding"
 
 pat :: Syntax f => f Pat
 pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern" where
@@ -311,7 +311,7 @@ exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedOp "\\" *> alt <|>
-         _Let <$> reservedId "let" *> bind <*> reservedId "in" *> annotated exp <|>
+         _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
          _Switch <$> reservedId "switch" *> block switch <|>
          exp1 <|> mark "expression(2)"
   exp1 = right _Apply exp0 <|> mark "expression(1)"
@@ -327,7 +327,7 @@ switch = annotated exp <*> reservedOp "->" *> annotated exp <|> mark "switch alt
 
 -- TODO allow "let ... in" in expression?
 stmt :: Syntax f => f Stmt
-stmt = _StmtDecl <$> reservedId "let" *> annotated declFun <|> _StmtExp <$> annotated exp <|> mark "statement"
+stmt = _StmtBind <$> reservedId "let" *> annotated bind <|> _StmtExp <$> annotated exp <|> mark "statement"
 
 alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedOp "->" *> annotated exp <|> mark "case alternative"

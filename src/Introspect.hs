@@ -53,6 +53,7 @@ data I a where
   IOpRules  :: I OpRules
   IPrec     :: I Prec
   -- | T0
+  IBind    :: I Bind
   IDataAlt :: I DataAlt
   IDecl    :: I Decl
   IExp     :: I Exp
@@ -86,6 +87,7 @@ switch a b eq neq = case (a, b) of
   (IOpRules, IOpRules)               -> eq
   (IPrec, IPrec)                     -> eq
   -- | T0
+  (IBind, IBind)                     -> eq
   (IDataAlt, IDataAlt)               -> eq
   (IDecl, IDecl)                     -> eq
   (IExp, IExp)                       -> eq
@@ -190,6 +192,12 @@ instance Term Prec where
 
 -- | T0
 
+instance Term Bind where
+  witness = IBind
+  complete = trivial
+  recurse f = \case
+    Bind a b -> Bind <$> f a <*> f b
+
 instance Term DataAlt where
   witness = IDataAlt
   complete _ f (DataAltInfo ct args rt) = DataAltInfo <$> f ct <*> traverse f args <*> f rt
@@ -225,7 +233,7 @@ instance Term Exp where
     Do ss        -> Do <$> traverse f ss
     If a b c     -> If <$> f a <*> f b <*> f c
     Lambda a b   -> Lambda <$> f a <*> f b
-    Let (p, a) b -> Let <$> ((,) <$> f p <*> f a) <*> f b
+    Let a b      -> Let <$> f a <*> f b
     Lit l        -> pure (Lit l)
     Mixfix ts    -> Mixfix <$> traverse f ts
     Read n a     -> Read n <$> f a
@@ -259,7 +267,7 @@ instance Term Stmt where
   witness = IStmt
   complete = trivial
   recurse f = \case
-    StmtDecl d -> StmtDecl <$> f d
+    StmtBind b -> StmtBind <$> f b
     StmtExp e  -> StmtExp <$> f e
 
 instance Term Tok where

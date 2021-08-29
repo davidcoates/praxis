@@ -48,7 +48,7 @@ decl (a :< e) = case e of
 stmt :: Annotated Stmt -> Praxis ()
 stmt (_ :< s) = case s of
 
-  StmtDecl d -> decl d
+  StmtBind b -> bind b
 
   StmtExp e  -> exp e >> return ()
 
@@ -140,8 +140,8 @@ forceBind :: Value -> Annotated Pat -> Praxis ()
 forceBind v p = case alt v p of Just c  -> c
                                 Nothing -> error "no matching pattern" -- TODO
 
-bind :: (Annotated Pat, Annotated Exp) -> Praxis ()
-bind (p, x) = do
+bind :: Annotated Bind -> Praxis ()
+bind (_ :< Bind p x) = do
   x' <- exp x
   let Just c = alt x' p
   c

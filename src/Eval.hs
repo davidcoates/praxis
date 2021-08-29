@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE RecursiveDo            #-}
 
 module Eval
   ( Evaluable(..)
@@ -38,10 +39,11 @@ decl :: Annotated Decl -> Praxis ()
 decl (a :< e) = case e of
 
   DeclVar n t e -> do
-    e' <- expRec (Just n) e
-    vEnv %= intro n e'
+    rec { vEnv %= intro n e'; e' <- exp e }
+    return ()
 
   _ -> return ()
+
 
 stmt :: Annotated Stmt -> Praxis ()
 stmt (_ :< s) = case s of
@@ -51,13 +53,8 @@ stmt (_ :< s) = case s of
   StmtExp e  -> exp e >> return ()
 
 
-rec :: Maybe Name -> Value -> Praxis ()
-rec n v = case n of
-  Just n  -> vEnv %= intro n v
-  Nothing -> return ()
-
-expRec :: Maybe Name -> Annotated Exp -> Praxis Value
-expRec n (_ :< e) = case e of -- TODO should expRec be in more cases below?
+exp :: Annotated Exp -> Praxis Value
+exp (_ :< e) = case e of
 
   Apply f x -> do
     Value.Fun f' <- exp f
@@ -70,8 +67,7 @@ expRec n (_ :< e) = case e of -- TODO should expRec be in more cases below?
 
   Cases ps -> do
     l <- use vEnv
-    let e = Value.Fun $ \v -> save vEnv $ do { vEnv .= l; rec n e; cases v ps }
-    return e
+    return $ Value.Fun $ \v -> save vEnv $ do { vEnv .= l; cases v ps }
 
   Con n -> do
     Just da <- daEnv `uses` lookup n
@@ -92,8 +88,7 @@ expRec n (_ :< e) = case e of -- TODO should expRec be in more cases below?
 
   Lambda p e -> do
     l <- use vEnv
-    let f = Value.Fun $ \v -> save vEnv $ do { vEnv .= l; rec n f; forceBind v p; exp e }
-    return f
+    return $ Value.Fun $ \v -> save vEnv $ do { vEnv .= l; forceBind v p; exp e }
 
   Let b x -> save vEnv $ do
     bind b
@@ -123,9 +118,6 @@ expRec n (_ :< e) = case e of -- TODO should expRec be in more cases below?
     mapM_ decl ys
     exp x
 
-
-exp :: Annotated Exp -> Praxis Value
-exp = expRec Nothing
 
 switch :: [(Annotated Exp, Annotated Exp)] -> Praxis Value
 switch [] = error "no true switch alternative"

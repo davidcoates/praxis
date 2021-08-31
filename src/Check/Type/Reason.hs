@@ -14,7 +14,8 @@ data Reason = AppFun
             | SwitchCondition
             | SwitchCongruence
             | Instance Name
-            | Shared Name
+            | MultiAlias Name
+            | MultiUse Name
             | UnsafeView Name
             | UserSignature (Maybe Name)
 
@@ -31,7 +32,8 @@ instance Show Reason where
     SwitchCondition  -> "Type of 'switch' condition must be Bool"
     SwitchCongruence -> "Branches of 'switch' expression must have the same type"
     Instance n       -> "Monomorphic usage of '" ++ n ++ "'"
-    Shared n         -> "Variable '" ++ n ++ "' used more than once"
+    MultiAlias n     -> "Variable '" ++ n ++ "' is not a unique alias"
+    MultiUse n       -> "Variable '" ++ n ++ "' used more than once"
     UserSignature n  | Just f <- n -> "User-supplied signature '" ++ f ++ "'"
                      | otherwise   -> "User-supplied signature"
     UnsafeView n     -> "Variable '" ++ n ++ "' viewed after being used"

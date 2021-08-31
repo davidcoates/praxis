@@ -204,7 +204,7 @@ tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Share <$> reservedCon "Share" *> annotated ty <|>
                _Class <$> annotated ty <|>
                _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
-               _TOpEq <$> annotated tyOp <*> reservedOp "~" *> annotated tyOp <|>
+               unparseable (_TOpEq <$> annotated ty <*> reservedOp "o~" *> annotated ty) <|>
                mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint

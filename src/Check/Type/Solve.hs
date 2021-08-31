@@ -56,41 +56,34 @@ solveDeep s = \c -> do
     Just Bottom -> return $ Just Bottom
     Just p      -> solveProp (our . constraints) (solveDeep s) p
 
-trySolveShare :: Solver (Annotated Type) TyConstraint
+
 trySolveShare t = save our $ save tEnv $ solveDeep (trySolveShare') (Share t) where
   trySolveShare' = (solveFromAxioms <|>) $ \(Share t) -> case view value t of
-    TyUnit                                -> tautology
-    TyFun _ _                             -> tautology
-    TyPair a b                            -> intro [ Share a, Share b]
-    TyVar _                               -> contradiction
-    TyCon _                               -> contradiction
-    TyApply (_ :< TyCon _) _              -> contradiction
-    TyApply (_ :< TyOp (_ :< TyOpBang)) _ -> tautology
-    _                                     -> defer
+    TyUnit                                 -> tautology
+    TyFun _ _                              -> tautology
+    TyPair a b                             -> intro [ Share a, Share b]
+    TyVar _                                -> contradiction
+    TyCon _                                -> contradiction
+    TyApply (_ :< TyCon _) _               -> contradiction
+    TyApply (_ :< TyOp (_ :< TyOpBang)) _  -> tautology
+    TyApply (_ :< TyOp (_ :< TyOpVar _)) _ -> contradiction
+    _                                      -> defer
+
 
 solveTy :: TypeSolver
 solveTy = (solveFromAxioms <|>) $ \c -> case c of
 
-  Share t -> case view value t of
-      TyUnit                   -> tautology
-      TyFun _ _                -> tautology
-      TyPair a b               -> intro [ Share a, Share b]
-      TyApply (_ :< TyOp o) _  -> case view value o of -- TODO go deeper?
-        TyOpBang  -> tautology
-        TyOpVar _ -> contradiction
-        _         -> defer
-      TyVar _                  -> contradiction
-      TyCon _                  -> contradiction -- not in axioms, so can be sure the type is not affine
-      TyApply (_ :< TyCon _) _ -> contradiction
-      _                        -> defer
+  Share t -> trySolveShare t
 
   TEq t1 t2 | t1 == t2 -> tautology
 
   TEq (_ :< TyUni x) t -> if x `Set.member` tyUnis t then contradiction else x `is` view value t -- Note: Occurs check here
 
-  TEq c1 c2@(_ :< TyUni _) -> solveTy (c2 `TEq` c1) -- handle by the above case
+  TEq t1 t2@(_ :< TyUni _) -> solveTy (t2 `TEq` t1) -- handle by the above case
 
-  TEq (_ :< TyApply (_ :< TyCon n1) t1) (_ :< TyApply (_ :< TyCon n2) t2) | n1 == n2 -> intro [ TEq t1 t2 ]
+  TEq (_ :< TyApply (_ :< TyCon n1) t1) (_ :< TyApply (_ :< TyCon n2) t2)
+    | n1 == n2 -> intro [ TEq t1 t2 ]
+    | otherwise -> contradiction
 
   TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> intro [ TEq s1 t1, TEq s2 t2 ]
 
@@ -98,33 +91,26 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
 
   TEq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> intro [ TEq t1 s1, TEq t2 s2 ]
 
-  TEq (_ :< TyApply (_ :< TyOp (_ :< TyOpVar n1)) t1) (_ :< TyApply (_ :< TyOp (_ :< TyOpVar n2)) t2) | n1 == n2 -> intro [ TEq t1 t2 ]
+  TEq t1@(_ :< TyApply (_ :< TyOp op1) t1') t2 -> intro [ TEq (stripOuterTyOps t1') (stripOuterTyOps t2), TOpEq t1 t2 ]
 
-  TEq (_ :< TyApply (_ :< TyOp op1) t1) t2 -> do
-    s1 <- trySolveShare t1
-    s2 <- trySolveShare t2
-    case (view value op1, s1, s2) of
-      (TyOpUni n, Just Bottom,    Just Top) -> n `isOp` TyOpBang
-      (TyOpUni n,           _, Just Bottom) -> n `isOp` TyOpId
-      (TyOpBang,            _, Just Bottom) -> contradiction
-      (_,                   _,    Just Top) | viewFree t2 -> intro [ TEq t1 t2 ]
-      _                                     | TyApply (_ :< TyOp op2) t2 <- view value t2 -> do
-          s2 <- trySolveShare t2
-          case (s1, s2) of
-            (Just Bottom, Just Bottom) -> case (view value op1, view value op2) of
-              (TyOpUni n1, TyOpUni n2) -> if n1 == n2 then intro [ TEq t1 t2 ] else n1 `isOp` TyOpUni n2
-              (TyOpUni n1, op)         -> n1 `isOp` op
-              (op, TyOpUni n2)         -> n2 `isOp` op
-              (TyOpBang, TyOpBang)     -> intro [ TEq t1 t2 ]
-              _                        -> contradiction
-            _ -> defer
-      _                                  -> defer
+  TEq t1 t2@(_ :< TyApply (_:< TyOp _) _) -> solveTy (t2 `TEq` t1) -- handled by the above case
 
-  TEq c1 c2@(_ :< TyApply (_:< TyOp _) _) -> solveTy (c2 `TEq` c1) -- handled by the above case
+  TOpEq t1 t2 | outerTyOps t1 == outerTyOps t2 -> tautology
 
-  TEq (_ :< TyOp (_ :< TyOpUni x)) (_ :< TyOp o) -> if x `Set.member` tyOpUnis o then contradiction else x `isOp` view value o -- Note: Occur check here
-
-  TEq c1 c2@(_ :< TyOp (_ :< TyOpUni _)) -> solveTy (c2 `TEq` c1) -- handled by the above case
+  TOpEq t1 t2 -> do
+    r <- trySolveShare (stripOuterTyOps t1) -- stripOuterTyOps t1 == stripOuterTyOps t2
+    case r of
+      Just Bottom -> do
+        let (ops1, ops2) = let f = Set.toList . outerTyOps in (f t1, f t2)
+        case (if ops1 < ops2 then (ops1, ops2) else (ops2, ops1)) of
+          ([], vs) -> do
+            if all (\v -> case view value v of { TyOpUni _ -> True; _ -> False }) vs
+            then mapM (\(_ :< TyOpUni n) -> n `isOp` TyOpId) vs >> solved
+            else contradiction
+          ([_ :< TyOpUni n], [_ :< TyOpUni m]) | n == m -> tautology
+          ([_ :< TyOpUni n], [_ :< op]) -> n `isOp` op
+          _ -> defer
+      _ -> defer
 
   _ -> contradiction
 
@@ -176,15 +162,49 @@ simplifyAll = do
   tEnv %%= traverse simplify
 
 
+outerTyOps :: Annotated Type -> Set (Annotated TyOp)
+outerTyOps t = case view value t of
+  TyApply (_ :< TyOp op) t -> Set.insert op (outerTyOps t)
+  _                        -> Set.empty
+
+stripOuterTyOps :: Annotated Type -> Annotated Type
+stripOuterTyOps t = case view value t of
+  TyApply (_ :< TyOp _) t -> stripOuterTyOps t
+  _                       -> t
+
+
+simplifyOuterTyOps :: Annotated Type -> Annotated Type
+simplifyOuterTyOps = simplifyOuterTyOps' [] where
+
+  simplifyOuterTyOps' :: [TyOp] -> Annotated Type -> Annotated Type
+  simplifyOuterTyOps' ops t = case view value t of
+
+    TyApply o@(_ :< TyOp (_ :< op)) t' -> case op of
+      TyOpId   -> simplifyOuterTyOps' ops t'
+      TyOpBang -> set value (TyApply o (stripOuterTyOps t')) t
+      _
+        | op `elem` ops -> simplifyOuterTyOps' ops t'
+        | otherwise     -> let t'' = simplifyOuterTyOps' (op:ops) t' in case view value t'' of
+          TyApply (_ :< TyOp (_ :< TyOpBang)) _ -> t''
+          _ -> set value (TyApply o t'') t
+
+    _ -> t
+
+
 normalise :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 normalise x = introspect (embedVisit f) x where
+
   f :: Annotated Type -> Visit Praxis () Type
-  f (a :< t) = case t of
-    TyApply (_ :< TyOp (_ :< TyOpId)) t -> Resolve (view value <$> normalise t)
-    TyApply o@(_ :< TyOp (a :< op)) t -> Resolve $ do
-      t' <- normalise t
-      r <- trySolveShare t'
-      return $ case r of
-        Just Top -> view value t'
-        _        -> TyApply o t'
+  f t = case view value t of
+
+    TyApply (_ :< TyOp _) _ -> case simplifyOuterTyOps t of
+
+      t@(_ :< TyApply o@(_ :< TyOp (_ :< op)) t') -> Resolve $ do
+        r <- trySolveShare t'
+        return $ case r of
+          Just Top -> view value t'
+          _        -> view value t
+
+      t -> Resolve (view value <$> normalise t)
+
     _ -> skip

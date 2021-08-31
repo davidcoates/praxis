@@ -43,6 +43,7 @@ module Term
   , source
   , annotation
   , split
+  , splitPair
   , splitTrivial
   , phantom
   , as
@@ -182,7 +183,7 @@ data Kind = KindUni Name
 data TyConstraint = Class (Annotated Type)
                     | Share (Annotated Type)
                     | TEq (Annotated Type) (Annotated Type)
-                    | TOpEq (Annotated TyOp) (Annotated TyOp)
+                    | TOpEq (Annotated Type) (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`
@@ -221,6 +222,9 @@ annotation = tag . second
 
 split :: Functor f => (Source -> a -> f (Tag (Annotation a) a)) -> Annotated a -> f (Annotated a)
 split f ((s, _) :< x) = (\(a :< x) -> ((s, Just a)) :< x) <$> f s x
+
+splitPair :: Functor f => (Source -> a -> f (b, Tag (Annotation a) a)) -> Annotated a -> f (b, Annotated a)
+splitPair f = runPairT . split (\s a -> PairT (f s a))
 
 splitTrivial :: Functor f => (Source -> a -> f a) -> Annotated a -> f (Annotated a)
 splitTrivial f ((s, _) :< x) = (\x -> ((s, Nothing) :< x)) <$> f s x

@@ -86,7 +86,7 @@ read s n = do
       requires [ newConstraint (Share t) (UnsafeView n) s | u ]
       requires [ newConstraint (Share t) (Captured n) s   | c ]
       return $ phantom (TyApply (phantom (TyOp (phantom TyOpBang))) t)
-    Nothing     -> throwAt s (NotInScope n)
+    Nothing -> throwAt s (NotInScope n)
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
 mark :: Source -> Name -> Praxis (Annotated Type)
@@ -94,12 +94,19 @@ mark s n = do
   l <- use tEnv
   case LEnv.lookupFull n l of
     Just (c, u, t) -> do
-      tEnv .= LEnv.mark n l
       t <- ungeneraliseQType t
+      tEnv %= LEnv.mark n
       requires [ newConstraint (Share t) (MultiUse n) s | u ]
       requires [ newConstraint (Share t) (Captured n) s | c ]
       return t
-    Nothing     -> throwAt s (NotInScope n)
+    Nothing -> throwAt s (NotInScope n)
+
+getType :: Source -> Name -> Praxis (Annotated QType)
+getType s n = do
+  l <- use tEnv
+  case lookup n l of
+    Just t  -> return t
+    Nothing -> throwAt s (NotInScope n)
 
 getData :: Source -> Name -> Praxis DataAltInfo
 getData s n = do
@@ -174,9 +181,14 @@ dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
   daEnv %= Env.intro n da
   return da
 
--- TODO allow mutual recursion of decls
 decls :: [Annotated Decl] -> Praxis [Annotated Decl]
-decls = traverse decl
+decls ds = mapM forwardDeclare ds >> mapM decl ds where
+  forwardDeclare d = case view value d of
+    DeclVar n sig e -> do
+      t <- case sig of Nothing -> mono <$> freshTyUni
+                       Just t  -> pure t
+      tEnv %= intro n t
+    _ -> return ()
 
 decl :: Annotated Decl -> Praxis (Annotated Decl)
 decl = splitTrivial $ \s -> \case
@@ -198,13 +210,10 @@ decl = splitTrivial $ \s -> \case
   -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n sig e -> do
-    t <- case sig of Nothing -> mono <$> freshTyUni
-                     Just t  -> pure t
-    tEnv %= intro n t
     e' <- exp e
-    -- TODO this won't work if we allow nested polymorphic definitions
-    let Forall _ t' = view value t
-    equal t' (view ty e') (UserSignature (Just n)) s
+    -- TODO this won't work for nested polymorphic definitions
+    Forall _ t <- view value <$> getType s n
+    equal t (view ty e') (UserSignature (Just n)) s
     return $ DeclVar n Nothing e'
 
   op@(DeclOp _ _ _) -> return op

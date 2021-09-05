@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE RecursiveDo            #-}
 
 module Eval
   ( Evaluable(..)
@@ -12,11 +11,13 @@ import           Env
 import           Praxis
 import           Stage
 import           Term
-import           Value         (Value)
+import           Value             (Value)
 import qualified Value
 
+import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
-import           Prelude       hiding (exp, lookup)
+import           Data.Maybe        (mapMaybe)
+import           Prelude           hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
   eval' :: Annotated a -> Praxis b
@@ -33,17 +34,26 @@ instance Evaluable Exp Value where
   eval' = exp
 
 program :: Annotated Program -> Praxis ()
-program (_ :< Program ds) = mapM_ decl ds
+program (_ :< Program ds) = decls ds
 
-decl :: Annotated Decl -> Praxis ()
-decl (a :< e) = case e of
+irrefMapM :: Monad m => ((a, b) -> m c) -> [a] -> [b] -> m [c]
+irrefMapM f as bs = case as of
+  []     -> return []
+  (a:as) -> case bs of
+    ~(b:bs) -> do
+      c <- f (a, b)
+      cs <- irrefMapM f as bs
+      return (c : cs)
 
-  DeclVar n t e -> do
-    rec { vEnv %= intro n e'; e' <- exp e }
-    return ()
-
-  _ -> return ()
-
+decls :: [Annotated Decl] -> Praxis ()
+decls ds = do
+  let (ns, es) = unzip $ mapMaybe declVar ds
+  mfix (\vs -> do { irrefMapM (\(n, v) -> vEnv %= intro n v) ns vs; irrefMapM (\(_, e) -> exp e) ns es })
+  return ()
+  where
+    declVar = \case
+      (_ :< DeclVar n _ e) -> Just (n, e)
+      _ -> Nothing
 
 stmt :: Annotated Stmt -> Praxis ()
 stmt (_ :< s) = case s of
@@ -115,7 +125,7 @@ exp (_ :< e) = case e of
     return v
 
   Where x ys -> save vEnv $ do
-    mapM_ decl ys
+    decls ys
     exp x
 
 

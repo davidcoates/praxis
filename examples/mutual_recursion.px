@@ -1,0 +1,8 @@
+
+f = cases
+  0 -> 1
+  n -> n - m f (n - 1)
+
+m = cases
+  0 -> 0
+  n -> n - f m (n - 1)

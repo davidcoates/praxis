@@ -10,6 +10,7 @@ module Common
   , asum
   , series
   , intercalate
+  , intersperse
 
   -- |Lenses
   , Lens'
@@ -62,7 +63,7 @@ import           Control.Monad.Trans.Maybe (MaybeT (..))
 import           Control.Monad.Trans.State (StateT (..))
 import           Data.Foldable             (fold)
 import           Data.Functor.Identity     (Identity (..))
-import           Data.List                 (intercalate)
+import           Data.List                 (intercalate, intersperse)
 import           Data.Traversable          (sequenceA)
 import           Data.Void                 (Void, absurd)
 

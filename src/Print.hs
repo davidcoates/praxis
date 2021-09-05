@@ -9,6 +9,7 @@ module Print
   ) where
 
 import           Common
+import qualified Data.Monoid.Colorful as Colorful
 import           Introspect
 import           Syntax.Unparser
 import           Term
@@ -34,7 +35,7 @@ instance Unparser Printer where
   mark s = Printer (error s)
   annotated f = Printer g where
     g x = Just $ case typeof (view value x) of
-      ITyProp -> prop
+      ITyProp   -> prop
       IKindProp -> prop
       i         -> [Print (mapIfNotNull (\c -> "[" <> c <> "]") (label i (view annotation x)))] ++ body
       where
@@ -42,20 +43,32 @@ instance Unparser Printer where
         prop = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof (view value x)) (view annotation x))]
 
 indent :: Int -> String
-indent n = '\n' : replicate (2*n) ' '
+indent n = replicate (2*n) ' '
 
-unlayout :: [Token] -> Option -> Colored String
-unlayout ts o = unlayout' False (-1) ts where
-  unlayout' needsSpace depth ts = case ts of
-    []      -> Nil
+layout :: [Token] -> Option -> Colored String
+layout ts o = foldLines (layout' False (-1) ts Nil) where
+
+  foldLines :: [Colored String] -> Colored String
+  foldLines ls = fold . intersperse (Value "\n") $ concatMap (\cs -> [cs | not (null cs)]) ls where
+
+  layout' :: Bool -> Int -> [Token] -> Colored String -> [Colored String]
+  layout' needsSpace depth ts line = case ts of
+
+    []      -> [line]
+
     Layout t : ts
-      | t == '{' -> (if depth == -1 then Nil else Value (indent (depth + 1))) <> unlayout' False (depth + 1) ts
-      | t == ';' -> (if depth == 0 then Value "\n" else Nil) <> Value (indent depth) <> unlayout' False depth ts
-      | t == '}' -> unlayout' False (depth - 1) ts
-    t : ts -> let p = runPrintable (pretty t) o in if null p then unlayout' needsSpace depth ts else (if needsSpace then Value " " else Nil) <> p <> unlayout' True depth ts
+      | t == '{' -> line : layout' False (depth + 1) ts (Value (indent (depth + 1)))
+      | t == ';' -> line : layout' False depth ts (Value (indent depth))
+      | t == '}' -> layout' False (depth - 1) ts line
+
+    t : ts -> let cs = runPrintable (pretty t) o in
+      if null cs
+      then layout' needsSpace depth ts line
+      else layout' True depth ts (line <> (if needsSpace then Value " " else Nil) <> cs)
+
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
-  pretty x = Printable (unlayout (force unparse x))
+  pretty x = Printable (layout (force unparse x))
 
 label :: Term a => I a -> Maybe (Annotation a) -> Printable String
 label _ Nothing  = blank

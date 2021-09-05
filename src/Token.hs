@@ -18,6 +18,7 @@ data Token = QVarId (Qualified Name)
            | Special Char
            | TyOpVar String
            | Uni String
+           | Annotation (Printable String)
   deriving Eq
 
 hint     = RGB 0xDE 0xFB 0xFF
@@ -34,7 +35,7 @@ purple   = RGB 0xF9 0xD4 0xFF
 
 instance Pretty Token where
   pretty (Print (Printable p)) = Printable (Style Italic . Fg hint . p)
-  pretty x = pretty $ case x of
+  pretty x = pretty $ Unstyle Italic $ case x of
     QVarId q      -> Fg white $ Value $ show q
     QConId q      -> Fg yellow $ Value $ show q
     QVarSym q     -> Fg white $ Value $ show q

@@ -3,9 +3,9 @@ module Parse.Tokenise
   ) where
 
 import           Common                   hiding (asum)
-import qualified Parse.Tokenise.Layout    as Layout
 import           Parse.Tokenise.Tokeniser hiding (run)
 import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
+import           Parse.Tokenise.Unlayout
 import           Praxis                   hiding (throw)
 import qualified Stage
 import           Term                     (Lit (..))
@@ -22,7 +22,7 @@ run top s = save stage $ do
   ts <- Tokeniser.run token s
   display (separate " " (map (view value) ts)) `ifFlag` debug
   stage .= Stage.Layout
-  let ts' = Layout.layout top ts
+  let ts' = unlayout top ts
   display (separate " " (map (view value) ts')) `ifFlag` debug
   return ts'
 

@@ -11,7 +11,8 @@ import           Praxis
 import           Term
 
 import           Control.Monad (forM_)
-import           Prelude       hiding (exp)
+import           Prelude       hiding (exp, unlines)
+import qualified Prelude       (unlines)
 import           Test.Hspec
 
 matches a b = (a, b)
@@ -31,6 +32,9 @@ tys =
   , "A B C" `matches` "A (B C)"
   , "Maybe Maybe a -> Maybe b" `matches` "(Maybe (Maybe a)) -> (Maybe b)"
   ]
+
+-- Drop trailing newline
+unlines = init . Prelude.unlines
 
 programs =
   [ unlines

@@ -116,14 +116,14 @@ using String = Array Char
 
 -- Operators
 operator (_ + _) = add_int where
-  associates left
+  left associative
 
 operator (_ - _) = subtract_int where
-  associates left
+  left associative
   precedence equal (_ + _)
 
 operator (_ * _) = multiply_int where
-  associates left
+  left associative
   precedence above (_ + _)
 
 operator (- _) = negate_int where
@@ -133,7 +133,7 @@ operator (+ _) = unary_plus_int where
   precedence equal (- _)
 
 operator (_ . _) = compose where
-  associates right
+  right associative
 
 operator (_ [ _ ]) = at
 

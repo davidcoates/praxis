@@ -38,12 +38,11 @@ special c = token (Special c) <|> mark ("special '" ++ [c] ++ "'")
 layout :: Syntax f => Char -> f ()
 layout c = token (Layout c) <|> mark ("layout '" ++ [c] ++ "'")
 
--- FIXME contextule reservation is dirty
 contextualOp :: Syntax f => Name -> f ()
-contextualOp op = token (QVarSym (unqualified op)) <|> mark ("contextually-reserved '" ++ op ++ "'")
+contextualOp op = token (QVarSym (unqualified op)) <|> mark ("contextually keyword '" ++ op ++ "'")
 
 contextualId :: Syntax f => Name -> f ()
-contextualId id = token (QVarId (unqualified id)) <|> mark ("contextually-reserved '" ++ id ++ "'")
+contextualId id = token (QVarId (unqualified id)) <|> mark ("contextual keyword '" ++ id ++ "'")
 
 dot :: Syntax f => f ()
 dot = contextualOp "."
@@ -344,9 +343,8 @@ opRules = _OpMultiRules <$> blockLike (reservedId "where") (_Left <$> annotated 
           unparseable (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
           unparseable (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
 
--- FIXME contextul reservation is dirty
 assoc :: Syntax f => f Assoc
-assoc = contextualId "associates" *> assoc' where
+assoc = assoc' <* contextualId "associative" where
   assoc' = _AssocLeft <$> contextualId "left" <|>
            _AssocRight <$> contextualId "right"
 

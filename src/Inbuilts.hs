@@ -160,4 +160,5 @@ operator (_ <= _) = lte_int where
 
 operator (_ >= _) = gte_int where
   precedence equal (_ == _)
+
 |]

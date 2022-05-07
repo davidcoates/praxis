@@ -106,4 +106,3 @@ instance Show (Qualified Name) where
 
 unqualified :: a -> Qualified a
 unqualified x = Qualified { qualification = [], unqualify = x }
-

@@ -23,6 +23,7 @@ module Praxis
 
   , throw
   , throwAt
+  , abort
 
   , save
   , try
@@ -185,6 +186,9 @@ throw x = displayBare (pretty (Style Bold (Fg DullRed ("error: " :: Colored Stri
 
 throwAt :: Pretty a => Source -> a -> Praxis b
 throwAt s x = displayBare (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
+
+abort :: Pretty a => a -> Praxis b
+abort x = displayBare x >> empty
 
 display :: Pretty a => a -> Praxis ()
 display x = do

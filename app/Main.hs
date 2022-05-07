@@ -31,13 +31,22 @@ parse xs = do
     [f] -> file f
     _   -> liftIO $ putStrLn "Too many arguments"
 
-data Arg = Arg { short :: String, long :: String, action :: Praxis () } -- TODO use long e.g., for help
+data Arg = Arg { short :: String, long :: String, action :: Praxis () }
+
+instance Show Arg where
+  show x = ("-" ++ short x ++ " " ++ long x)
 
 args :: [Arg]
 args =
   [ Arg "d" "debug" (flags . debug .= True)
   , Arg "i" "interactive" (flags . interactive .= True)
+  , Arg "h" "help" help
   ]
+
+help :: Praxis ()
+help = Praxis.abort helpStr where
+  helpStr :: String
+  helpStr = "usage: praxis [infile] [OPTION]...\n\n" ++ unlines (map show args)
 
 opts :: [String] -> Praxis [String]
 opts (x:xs)

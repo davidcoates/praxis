@@ -4,7 +4,7 @@ github:              davidcoates/praxis
 license:             GPL-3
 author:              David Coates
 maintainer:          davidcoates95@gmail.com
-copyright:           2020 David Coates
+copyright:           2022 David Coates
 
 extra-source-files:
 - README.md
@@ -31,6 +31,7 @@ dependencies:
 - array >= 0.5
 - terminal-size
 - raw-strings-qq
+- mtl >= 2.2.2
 
 library:
   source-dirs: src

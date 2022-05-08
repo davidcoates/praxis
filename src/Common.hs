@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module Common
   ( module Common.Pretty
@@ -20,6 +21,7 @@ module Common
   , over
   , (.=)
   , (%=)
+  , (%%=)
   , use
   , uses
   , first
@@ -58,6 +60,7 @@ import           Control.Applicative       (Const (..), liftA2)
 import           Control.Lens              (Lens', both, makeLenses, over, set,
                                             use, uses, view, (%=), (.=), _1, _2)
 import           Control.Monad             (unless, when)
+import           Control.Monad.State.Class (MonadState)
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Monad.Trans.Maybe (MaybeT (..))
 import           Control.Monad.Trans.State (StateT (..))
@@ -106,3 +109,12 @@ instance Show (Qualified Name) where
 
 unqualified :: a -> Qualified a
 unqualified x = Qualified { qualification = [], unqualify = x }
+
+
+(%%=) :: MonadState s m => Lens' s a -> (a -> m a) -> m ()
+(%%=) l f = do
+  x <- use l
+  x' <- f x
+  l .= x'
+
+infix 4 %%=

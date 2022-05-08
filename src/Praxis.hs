@@ -61,8 +61,6 @@ module Praxis
   , clearTerm
   , ifFlag
   , display
-
-  , (%%=)
   )
   where
 
@@ -279,12 +277,3 @@ reuse n@('?':c:_) = over (fresh . f c) (n:)
         f 'e' = freshTyOpUnis
         f 'k' = freshKindUnis
 -}
-
--- TODO this should be more general, in Common, and with a better name
-(%%=) :: Lens' PraxisState a -> (a -> Praxis a) -> Praxis ()
-(%%=) l f = do
-  x <- use l
-  x' <- f x
-  l .= x'
-
-infix 4 %%=

@@ -40,7 +40,8 @@ module Praxis
   , interactive
 
   -- |Praxis lenses
-  , filename
+  , infile
+  , outfile
   , flags
   , fresh
   , stage
@@ -124,7 +125,8 @@ data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Grap
 makeLenses ''OpContext
 
 data PraxisState = PraxisState
-  { _filename  :: String              -- ^File path (for error messages)
+  { _infile    :: Maybe String
+  , _outfile   :: Maybe String
   , _flags     :: Flags               -- ^Flags
   , _fresh     :: Fresh
   , _stage     :: Stage               -- ^Current stage of compilation
@@ -162,7 +164,8 @@ defaultFresh = Fresh
 
 emptyState :: PraxisState
 emptyState = PraxisState
-  { _filename     = "<stdin>"
+  { _infile       = Nothing
+  , _outfile      = Nothing
   , _flags        = defaultFlags
   , _fresh        = defaultFresh
   , _stage        = Unknown

@@ -25,11 +25,11 @@ main = hSetBuffering stdin LineBuffering >> do
 
 parse :: [String] -> Praxis ()
 parse xs = do
-  xs <- opts xs
-  case xs of
-    []  -> repl
-    [f] -> file f
-    _   -> liftIO $ putStrLn "Too many arguments"
+  opts xs
+  f <- use infile
+  case f of
+    Nothing -> repl
+    Just f  -> file f
 
 data Arg = Arg { short :: String, long :: String, action :: Praxis () }
 
@@ -46,13 +46,28 @@ args =
 help :: Praxis ()
 help = Praxis.abort helpStr where
   helpStr :: String
-  helpStr = "usage: praxis [infile] [OPTION]...\n\n" ++ unlines (map show args)
+  helpStr = "usage: praxis [infile] [-o outfile] [OPTION]...\n\n" ++ unlines (map show args)
 
-opts :: [String] -> Praxis [String]
-opts (x:xs)
-  | Just a <- find (\a -> ("-" ++ short a) == x) args = action a >> opts xs
-  | otherwise                                         = (x:) <$> opts xs
-opts []  = return []
+opts :: [String] -> Praxis ()
+opts (x : xs)
+  | x == "-o" = case xs of
+    (y:ys) -> do
+      f <- use outfile
+      case f of
+        Nothing -> (outfile .= Just y) >> opts ys
+        Just _  -> throw "multiple outfile"
+    []     -> throw "missing argument to -o"
+  | ('-':_) <- x = do
+    let opt = find (\a -> ("-" ++ short a) == x) args
+    case opt of
+      Just a  -> action a >> opts xs
+      Nothing -> throw (pretty "unknown option " <> quote (pretty x))
+  | otherwise = do
+    f <- use infile
+    case f of
+      Nothing -> (infile .= Just x) >> opts xs
+      Just _  -> throw "multiple infile"
+opts [] = return ()
 
 file :: String -> Praxis ()
 file f = (interpretFile f :: Praxis (Annotated Program, ())) >> onFileSuccess

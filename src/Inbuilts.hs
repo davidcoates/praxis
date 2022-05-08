@@ -32,7 +32,7 @@ initialState1 = set vEnv initialVEnv $ set tEnv initialTEnv $ initialState0
 initialState :: PraxisState
 initialState = fixup (runInternal initialState1 ((parse prelude :: Praxis (Annotated Program)) >> lift State.get)) where
   -- TODO a nicer way to do this. Undo all the things except the fields we care about.
-  fixup = set filename (view filename emptyState) . set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set system (view system emptyState)
+  fixup = set outfile (view outfile emptyState) . set infile (view infile emptyState) . set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set system (view system emptyState)
 
 mono :: String -> Annotated Type
 mono s = runInternal initialState0 (parse s :: Praxis (Annotated Type))

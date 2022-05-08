@@ -18,7 +18,7 @@ class Evaluable a b => Interpretable a b where
   interpret :: String -> Praxis (Annotated a, b)
   interpretFile :: FilePath -> Praxis (Annotated a, b)
   interpretFile f = do
-    filename .= f
+    infile .= Just f
     s <- liftIO (readFile f)
     interpret s
 

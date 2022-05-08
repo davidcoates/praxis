@@ -92,22 +92,21 @@ expRead (a :< x) = case x of
     return (x', Set.empty)
 
 
--- TODO clean up this 'fst a' nonsense
 exp :: Annotated Exp -> Praxis (Annotated Exp)
-exp (a :< x) = case x of
+exp (a@(s, _) :< x) = case x of
 
   Apply x y -> do
     x' <- exp x
     (y', ns) <- expRead y
     let mixedVars = freeVars y `Set.intersection` ns
-    when (not (null mixedVars)) $ throwAt (fst a) $ "variable(s) " <> separate ", " (map (quote . pretty) (Set.elems mixedVars)) <> " used in a read context"
+    when (not (null mixedVars)) $ throwAt s $ "variable(s) " <> separate ", " (map (quote . pretty) (Set.elems mixedVars)) <> " used in a read context"
     let unwrap []     = (a :< Apply x' y')
         unwrap (n:ns) = (a :< Read n (unwrap ns))
     return (unwrap (Set.elems ns))
 
-  Mixfix ts   -> Mixfix.parse (fst a) ts >>= exp -- Need to desguar after parsing
+  Mixfix ts   -> Mixfix.parse s ts >>= exp -- Need to desguar after parsing
 
-  VarBang s   -> throwAt (fst a) $ "observed variable " <> quote (pretty s) <> " is not in a valid read context"
+  VarBang v   -> throwAt s $ "observed variable " <> quote (pretty v) <> " is not in a valid read context"
 
   Con "True"  -> pure (a :< Lit (Bool True))
 
@@ -123,7 +122,7 @@ exp (a :< x) = case x of
 
 
 operator :: Annotated Op -> Praxis (Annotated Op)
-operator op@(a :< Op ns) = do
+operator op@(a@(s, _) :< Op ns) = do
 
   let consecutiveHoles :: [Maybe Name] -> Bool
       consecutiveHoles = \case
@@ -131,27 +130,27 @@ operator op@(a :< Op ns) = do
         []                   -> False
         (x:xs)               -> consecutiveHoles xs
 
-  when (consecutiveHoles ns) $ throwAt (fst a) $ "op " <> quote (pretty op) <> " has two consecutive holes"
+  when (consecutiveHoles ns) $ throwAt s $ "op " <> quote (pretty op) <> " has two consecutive holes"
   return op
 
 
 opRules :: Annotated Op -> Annotated OpRules -> Praxis (Annotated OpRules)
-opRules op (a :< OpMultiRules rs) = do
+opRules op (a@(s, _) :< OpMultiRules rs) = do
 
     -- FIXME check the precedence operators exist?
 
     let as = mapMaybe (\x -> case x of {Left a -> Just a; _ -> Nothing}) rs
         ps = mapMaybe (\x -> case x of {Right p -> Just p; _ -> Nothing}) rs
 
-    when (length as > 1) $ throwAt (fst a) ("more than one associativity specified for op " <> quote (pretty op))
-    when (length ps > 1) $ throwAt (fst a) ("more than one precedence block specified for op " <> quote (pretty op))
+    when (length as > 1) $ throwAt s ("more than one associativity specified for op " <> quote (pretty op))
+    when (length ps > 1) $ throwAt s ("more than one precedence block specified for op " <> quote (pretty op))
 
     return (a :< OpRules (listToMaybe as) (concat ps))
 
 
 decls :: [Annotated Decl] -> Praxis [Annotated Decl]
 decls []            = pure []
-decls (a :< d : ds) = case d of
+decls (a@(s, _) :< d : ds) = case d of
 
   DeclData n t as -> do
     t' <- traverse desugar t
@@ -163,7 +162,7 @@ decls (a :< d : ds) = case d of
     t <- desugar t
     decls ds >>= \case
       (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
-      _                                         -> throwAt (fst a) $ "declaration of " <> quote (pretty n) <> " lacks an accompanying binding"
+      _                                         -> throwAt s $ "declaration of " <> quote (pretty n) <> " lacks an accompanying binding"
 
   DeclFun n ps e -> do
     ps <- mapM pat ps
@@ -171,10 +170,10 @@ decls (a :< d : ds) = case d of
     let d = a :< DeclVar n Nothing (lambda ps e)
         lambda :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
         lambda     [] e = e
-        lambda (p:ps) e = (fst a, Nothing) :< Lambda p (lambda ps e)
+        lambda (p:ps) e = (s, Nothing) :< Lambda p (lambda ps e)
     decls ds >>= \case
       []                                       -> return $ [d]
-      (a' :< DeclVar m t as) : ds' | m == n    -> throwAt (fst a) $ "multiple definitions for " <> quote (pretty m)
+      (a' :< DeclVar m t as) : ds' | m == n    -> throwAt s $ "multiple definitions for " <> quote (pretty m)
       ds                                       -> return $ d:ds
 
   DeclOp op n rs -> do
@@ -186,7 +185,7 @@ decls (a :< d : ds) = case d of
 
     -- For simplicity of managing the op table, allow only one equal precedence relation
     let (eqPrecs, ps') = partition (\(_ :< Prec ord _) -> ord == EQ) ps
-    unless (length eqPrecs <= 1) $ throwAt (fst a) ("more than one equal precedence specified for op " <> quote (pretty op))
+    unless (length eqPrecs <= 1) $ throwAt s ("more than one equal precedence specified for op " <> quote (pretty op))
     let eq = listToMaybe eqPrecs
 
     -- Add operator to levels
@@ -198,7 +197,7 @@ decls (a :< d : ds) = case d of
         indexOf = Map.fromList [ (op, i) | (i, ops) <- zip [0..] opLevels', op <- ops ]
 
     -- Determine fixity
-    let noAssoc = unless (isNothing assoc) $ throwAt (fst a) ("associativity can not be specified for non-infix op " <> quote (pretty op))
+    let noAssoc = unless (isNothing assoc) $ throwAt s ("associativity can not be specified for non-infix op " <> quote (pretty op))
         Op ns = view value op
     fixity <- case (head ns, last ns) of
       (Nothing, Nothing) -> return (Infix (view value <$> assoc))
@@ -208,13 +207,13 @@ decls (a :< d : ds) = case d of
 
     -- Add operator to definitions
     opDefns <- use (opContext . defns)
-    when (view value op `Map.member` opDefns) $ throwAt (fst a) ("operator already defined" :: String)
+    when (view value op `Map.member` opDefns) $ throwAt s ("operator already defined" :: String)
     let opDefns' = Map.insert (view value op) (n, fixity) opDefns
 
     -- Add operator to precedence graph
     opPrec <- use (opContext . prec)
     let opPrec' = addOp (view value op) (map (view value) ps') indexOf opPrec
-    unless (acyclic opPrec') $ throwAt (fst a) ("operator precedence forms a cycle" :: String)
+    unless (acyclic opPrec') $ throwAt s ("operator precedence forms a cycle" :: String)
 
     opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
 

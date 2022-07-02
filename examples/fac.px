@@ -11,6 +11,6 @@ main () = do
   put_int fac x
 
 -- Without prompts
-main' : () -> ()
-main' = put_int . fac . get_int
+-- main' : () -> ()
+-- main' = put_int . fac . get_int
 

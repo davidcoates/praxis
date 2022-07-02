@@ -35,7 +35,7 @@ conFields (GadtC _ _ _)      =   gadtError
 conFields (RecGadtC _ _ _)   =   gadtError
 
 -- Data dec information
-data DecInfo = DecInfo Type [TyVarBndr] [Con]
+data DecInfo = DecInfo Type [TyVarBndrUnit] [Con]
 
 -- | Extract data or newtype declaration information
 decInfo :: Dec -> Q DecInfo
@@ -44,15 +44,17 @@ decInfo (NewtypeD _ name tyVars _ c _) =  return $ DecInfo (ConT name) tyVars [c
 decInfo _ = fail "partial prisms can only be derived for constructors of data type or newtype declarations."
 
 -- | Convert tyVarBndr to type
-tyVarBndrToType :: TyVarBndr -> Type
-tyVarBndrToType (PlainTV  n)   = VarT n
-tyVarBndrToType (KindedTV n k) = SigT (VarT n) k
+tyVarBndrToType :: TyVarBndrUnit -> Type
+tyVarBndrToType (PlainTV  n _)   = VarT n
+tyVarBndrToType (KindedTV n _ k) = SigT (VarT n) k
 
 -- | Create Prism type for specified type and conctructor fields (Prism (a, b) (CustomType a b c))
-prismType :: Type -> [TyVarBndr] -> [Type] -> Q Type
+prismType :: Type -> [TyVarBndrUnit] -> [Type] -> Q Type
 prismType typ tyVarBndrs fields = do
     prismCon <- [t| Prism |]
-    return $ ForallT tyVarBndrs [] $ prismCon `AppT` (applyAll typ $ map tyVarBndrToType tyVarBndrs) `AppT` (prismArgs fields)
+    return $ ForallT (map spec tyVarBndrs) [] $ prismCon `AppT` (applyAll typ $ map tyVarBndrToType tyVarBndrs) `AppT` (prismArgs fields) where
+        spec (PlainTV n _) = PlainTV n SpecifiedSpec
+        spec (KindedTV n _ k) = KindedTV n SpecifiedSpec k
 
 prismArgs :: [Type] -> Type
 prismArgs []     = TupleT 0
@@ -94,7 +96,7 @@ definePrisms d = do
 --   The name of the partial prism is constructed by
 --   spelling the constructor name with an initial lower-case
 --   letter.
-defFromCon :: [MatchQ] -> Type -> [TyVarBndr] -> Con -> DecsQ
+defFromCon :: [MatchQ] -> Type -> [TyVarBndrUnit] -> Con -> DecsQ
 defFromCon matches t tyVarBndrs con = do
     let funName = rename $ conName con
     sig <- SigD funName `fmap` prismType t tyVarBndrs (conFields con)

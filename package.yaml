@@ -23,7 +23,7 @@ dependencies:
 - containers >= 0.6
 - pretty-tree >= 0.1
 - transformers
-- lens >= 4.15.4 && <5
+- lens >= 5
 - digits >= 0.3
 - template-haskell >= 2.2
 - colorful-monoids >= 0.2 && < 0.3

@@ -53,7 +53,7 @@ prismType :: Type -> [TyVarBndrUnit] -> [Type] -> Q Type
 prismType typ tyVarBndrs fields = do
     prismCon <- [t| Prism |]
     return $ ForallT (map spec tyVarBndrs) [] $ prismCon `AppT` (applyAll typ $ map tyVarBndrToType tyVarBndrs) `AppT` (prismArgs fields) where
-        spec (PlainTV n _) = PlainTV n SpecifiedSpec
+        spec (PlainTV n _)    = PlainTV n SpecifiedSpec
         spec (KindedTV n _ k) = KindedTV n SpecifiedSpec k
 
 prismArgs :: [Type] -> Type

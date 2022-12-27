@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE OverloadedStrings      #-}
 
 module Eval
   ( Evaluable(..)
@@ -64,7 +65,7 @@ stmt (_ :< s) = case s of
 
 
 exp :: Annotated Exp -> Praxis Value
-exp (_ :< e) = case e of
+exp ((s, _) :< e) = case e of
 
   Apply f x -> do
     Value.Fun f' <- exp f
@@ -73,11 +74,11 @@ exp (_ :< e) = case e of
 
   Case e ps -> do
     v <- exp e
-    cases v ps
+    cases s v ps
 
   Cases ps -> do
     l <- use vEnv
-    return $ Value.Fun $ \v -> save vEnv $ do { vEnv .= l; cases v ps }
+    return $ Value.Fun $ \v -> save vEnv $ do { vEnv .= l; cases s v ps }
 
   Con n -> do
     Just da <- daEnv `uses` lookup n
@@ -98,7 +99,7 @@ exp (_ :< e) = case e of
 
   Lambda p e -> do
     l <- use vEnv
-    return $ Value.Fun $ \v -> save vEnv $ do { vEnv .= l; forceBind v p; exp e }
+    return $ Value.Fun $ \v -> save vEnv $ do { vEnv .= l; forceBind s v p; exp e }
 
   Let b x -> save vEnv $ do
     bind b
@@ -116,45 +117,46 @@ exp (_ :< e) = case e of
 
   Sig e _ -> exp e
 
-  Switch alts -> switch alts
+  Switch alts -> switch s alts
 
   Term.Unit -> return Value.Unit
 
   Var n -> do
-    Just v <- vEnv `uses` lookup n
-    return v
+    m <- vEnv `uses` lookup n
+    case m of
+       Just v  -> return v
+       Nothing -> throwAt s ("unknown variable " <> quote (pretty n))
 
   Where x ys -> save vEnv $ do
     decls ys
     exp x
 
 
-switch :: [(Annotated Exp, Annotated Exp)] -> Praxis Value
-switch [] = error "no true switch alternative"
-switch ((c,e):as) = do
+switch :: Source -> [(Annotated Exp, Annotated Exp)] -> Praxis Value
+switch s [] = throwAt s ("inexhaustive switch" :: String)
+switch s ((c,e):as) = do
   v <- exp c
   case v of
     Value.Bool True  -> exp e
-    Value.Bool False -> switch as
+    Value.Bool False -> switch s as
 
-cases :: Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
-cases x [] = error ("no matching pattern" ++ show x)
-cases x ((p,e):ps) = case alt x p of
+cases :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
+cases s x [] = throwAt s ("no matching pattern for value " <> quote (pretty (show x)))
+cases s x ((p,e):ps) = case alt x p of
   Just c  -> save vEnv $ do
     c
     exp e
   Nothing ->
-    cases x ps
+    cases s x ps
 
-forceBind :: Value -> Annotated Pat -> Praxis ()
-forceBind v p = case alt v p of Just c  -> c
-                                Nothing -> error "no matching pattern" -- TODO
+forceBind :: Source -> Value -> Annotated Pat -> Praxis ()
+forceBind s v p = case alt v p of Just c  -> c
+                                  Nothing -> throwAt s ("no matching pattern for value " <> quote (pretty (show v)))
 
 bind :: Annotated Bind -> Praxis ()
-bind (_ :< Bind p x) = do
+bind ((s, _) :< Bind p x) = do
   x' <- exp x
-  let Just c = alt x' p
-  c
+  forceBind s x' p
 
 alt :: Value -> Annotated Pat -> Maybe (Praxis ())
 alt v (_ :< p) = case p of

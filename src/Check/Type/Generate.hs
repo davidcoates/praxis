@@ -7,6 +7,7 @@
 
 module Check.Type.Generate
   ( run
+  , recursive
   ) where
 
 import           Check.Error
@@ -24,8 +25,8 @@ import           Term
 
 import           Control.Monad      (replicateM)
 import           Data.Foldable      (foldMap, foldlM)
-import           Data.List          (nub, sort)
-import           Data.Maybe         (isJust)
+import           Data.List          (nub, partition, sort)
+import           Data.Maybe         (isJust, mapMaybe)
 import           Data.Set           (Set)
 import qualified Data.Set           as Set
 import           Prelude            hiding (exp, log, lookup, read)
@@ -181,17 +182,29 @@ dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
   daEnv %= Env.intro n da
   return da
 
+recursive :: Annotated Exp -> Bool
+recursive x = case view value x of
+    Lambda _ _ -> True
+    Cases _    -> True
+    _          -> False
+
+
 decls :: [Annotated Decl] -> Praxis [Annotated Decl]
-decls ds = mapM forwardDeclare ds >> mapM decl ds where
-  forwardDeclare d = case view value d of
-    DeclVar n sig e -> do
+decls ds = do
+  ds' <- mapM preDeclare ds
+  mapM (\(t, d) -> decl t d) ds'
+  where
+    declare n sig = do
       t <- case sig of Nothing -> mono <$> freshTyUni
                        Just t  -> pure t
       tEnv %= intro n t
-    _ -> return ()
+      return t
+    preDeclare d = case d of
+      (_ :< DeclVar n sig e) | recursive e -> do { t <- declare n sig; return (Just t, d) }
+      _                                    -> return (Nothing, d)
 
-decl :: Annotated Decl -> Praxis (Annotated Decl)
-decl = splitTrivial $ \s -> \case
+decl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
+decl forwardT = splitTrivial $ \s -> \case
 
   -- TODO Share constraints needed!
   DeclData n p alts -> do
@@ -207,13 +220,21 @@ decl = splitTrivial $ \s -> \case
     alts' <- traverse (dataAlt vars rt) alts
     return $ DeclData n p alts'
 
-  -- TODO safe recursion check
   -- TODO check no duplicate variables
   DeclVar n sig e -> do
     e' <- exp e
     -- TODO this won't work for nested polymorphic definitions
-    Forall _ t <- view value <$> getType s n
-    equal t (view ty e') (UserSignature (Just n)) s
+    t <- do
+      case forwardT of
+        Just t  -> return t
+        Nothing -> case sig of
+          Just sigt -> return sigt
+          Nothing   -> mono <$> freshTyUni
+    let Forall _ t' = view value t
+    equal t' (view ty e') (UserSignature (Just n)) s -- TODO UserSignature isn't a good name for this if t isn't from sig
+    case forwardT of
+      Just _  -> return ()
+      Nothing -> tEnv %= intro n t
     return $ DeclVar n Nothing e'
 
   op@(DeclOp _ _ _) -> return op

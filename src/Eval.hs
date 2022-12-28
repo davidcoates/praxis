@@ -7,18 +7,20 @@ module Eval
   ( Evaluable(..)
   ) where
 
+import           Check.Type.Generate (recursive)
 import           Common
 import           Env
 import           Praxis
 import           Stage
 import           Term
-import           Value             (Value)
+import           Value               (Value)
 import qualified Value
 
-import           Control.Monad.Fix (mfix)
+import           Control.Monad.Fix   (mfix)
 import           Data.Array.IO
-import           Data.Maybe        (mapMaybe)
-import           Prelude           hiding (exp, lookup)
+import           Data.List           (partition)
+import           Data.Maybe          (mapMaybe)
+import           Prelude             hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
   eval' :: Annotated a -> Praxis b
@@ -48,9 +50,9 @@ irrefMapM f as bs = case as of
 
 decls :: [Annotated Decl] -> Praxis ()
 decls ds = do
-  let (ns, es) = unzip $ mapMaybe declVar ds
-  mfix (\vs -> do { irrefMapM (\(n, v) -> vEnv %= intro n v) ns vs; irrefMapM (\(_, e) -> exp e) ns es })
-  return ()
+  let (rec, nonrec) = partition (recursive . snd) (mapMaybe declVar ds)
+  mfix (\vs -> do { irrefMapM (\(n, v) -> vEnv %= intro n v) (map fst rec) vs; mapM exp (map snd rec) })
+  mapM_ (\(n, e) -> do { v <- exp e; vEnv %= intro n v }) nonrec
   where
     declVar = \case
       (_ :< DeclVar n _ e) -> Just (n, e)

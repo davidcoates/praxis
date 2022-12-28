@@ -188,7 +188,6 @@ recursive x = case view value x of
     Cases _    -> True
     _          -> False
 
-
 decls :: [Annotated Decl] -> Praxis [Annotated Decl]
 decls ds = do
   ds' <- mapM preDeclare ds
@@ -224,17 +223,13 @@ decl forwardT = splitTrivial $ \s -> \case
   DeclVar n sig e -> do
     e' <- exp e
     -- TODO this won't work for nested polymorphic definitions
-    t <- do
-      case forwardT of
-        Just t  -> return t
-        Nothing -> case sig of
-          Just sigt -> return sigt
-          Nothing   -> mono <$> freshTyUni
-    let Forall _ t' = view value t
-    equal t' (view ty e') (UserSignature (Just n)) s -- TODO UserSignature isn't a good name for this if t isn't from sig
+    let t = view ty e'
     case forwardT of
-      Just _  -> return ()
-      Nothing -> tEnv %= intro n t
+      Just (_ :< Forall _ t') -> equal t' t (FuncSignature n) s
+      Nothing                 -> tEnv %= intro n (mono t)
+    case sig of
+      Just (_ :< Forall _ t') -> equal t' t (FuncCongruence n) s
+      Nothing                 -> return ()
     return $ DeclVar n Nothing e'
 
   op@(DeclOp _ _ _) -> return op
@@ -254,7 +249,7 @@ exp = split $ \s -> \case
     x' <- exp x
     let ft = view ty f'
     let xt = view ty x'
-    require $ newConstraint (ft `TEq` fun xt yt) AppFun s
+    require $ newConstraint (ft `TEq` fun xt yt) FuncApplication s
     return (yt :< Apply f' x')
 
   Case x alts -> do
@@ -360,6 +355,7 @@ equals :: (Term a, Annotation a ~ Annotated Type) => [Annotated a] -> Reason -> 
 equals es = equals' (map (\e -> (view source e, view ty e)) es) where
   equals' :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
   equals' ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
+
 
 bind :: Annotated Bind -> Praxis (Annotated Bind)
 bind = splitTrivial $ \s -> \case

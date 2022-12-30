@@ -77,7 +77,6 @@ closure x = do
   tEnv %= LEnv.pop
   return r
 
--- TODO reduce duplication here
 read :: Source -> Name -> Praxis (Annotated Type)
 read s n = do
   l <- use tEnv

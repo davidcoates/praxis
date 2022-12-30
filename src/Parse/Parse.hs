@@ -4,8 +4,6 @@ module Parse.Parse
   ( run
   ) where
 
--- TODO this is a lot of imports for one function...
-
 import           Common
 import           Introspect
 import qualified Parse.Parse.Parser as Parser (run)

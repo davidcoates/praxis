@@ -192,7 +192,7 @@ rightWithSep s _P p = Prism f g <$> annotated p <*> many (s *> annotated p) <|> 
     []     -> p
     (q:qs) -> combine (empty :: f Void) (construct _P) (p, fold q qs)
   g x = case destruct _P x of
-    Just (x, y) -> Just (let z:zs = x : unfold y in (z, zs)) -- TODO tidy this up
+    Just (x, y) -> Just (x, unfold y)
     Nothing     -> Nothing
   unfold x = case destruct _P (view value x) of
     Just (x, y) -> x : unfold y

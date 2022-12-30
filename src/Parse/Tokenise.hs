@@ -14,6 +14,7 @@ import           Token
 import           Control.Applicative      (Alternative (..), Applicative (..))
 import           Data.Foldable            (asum)
 import           Data.List                (intercalate)
+import           Data.Maybe               (fromJust)
 import           Prelude                  hiding (until)
 
 run :: Bool -> String -> Praxis [Sourced Token]
@@ -60,30 +61,44 @@ special :: Tokeniser Token
 special = Special <$> match (`elem` "(),`_")
 
 literal :: Tokeniser Token
-literal = int <|> chara <|> string
+literal = intLiteral <|> charLiteral <|> stringLiteral
 
-int :: Tokeniser Token
-int = satisfy isDigit *> (Lit . Int <$> decimal)
+intLiteral :: Tokeniser Token
+intLiteral = satisfy isDigit *> (Lit . Int <$> decimal)
   where decimal :: Tokeniser Int
         decimal = read <$> while (satisfy isDigit) consume
 
 tyOpVar :: Tokeniser Token
 tyOpVar = char '?' *> (TyOpVar <$> (satisfy isLower *> while (satisfy isLetter) consume))
 
--- TODO
-escape :: Char -> Char
-escape 'n' = '\n'
-escape x   = x
+charEscapeSeqs = [
+  ('0', '\0'),
+  ('a', '\a'),
+  ('b', '\b'),
+  ('f', '\f'),
+  ('n', '\n'),
+  ('r', '\r'),
+  ('t', '\t'),
+  ('v', '\v'),
+  ('\"', '"'),
+  ('\'', '\''),
+  ('\\', '\\')]
 
-chara :: Tokeniser Token
-chara = char '\'' *> ((Lit . Char <$> inner) <* char '\'' <|> throw "unterminated character literal") where
+stringEscapeSeqs = ('&', "") : map (\(a, b) -> (a, b:[])) charEscapeSeqs
+
+escape :: [(Char, a)] -> Tokeniser a
+escape seqs = char '\\' *> (seq <|> throw "invalid escape sequence") where
+    seq = satisfy (\c -> c `elem` map fst seqs) *> ((\c -> fromJust (c `lookup` seqs)) <$> consume)
+
+charLiteral :: Tokeniser Token
+charLiteral = char '\'' *> ((Lit . Char <$> inner) <* char '\'' <|> throw "unterminated character literal") where
   inner :: Tokeniser Char
-  inner = (char '\\' *> (escape <$> consume)) <|> match (/= '\'')
+  inner = escape charEscapeSeqs <|> match (/= '\'')
 
-string :: Tokeniser Token
-string = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminated string literal") where
+stringLiteral :: Tokeniser Token
+stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unterminated string literal") where
   inner :: Tokeniser String
-  inner = while (satisfy (/= '"')) ((char '\\' *> (escape <$> consume)) <|> consume)
+  inner = concat <$> while (satisfy (/= '"')) (escape stringEscapeSeqs <|> ((:[]) <$> consume))
 
 reservedIds = ["read", "in", "if", "then", "else", "using", "type", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch"]
 reservedCons = ["Type", "Constraint", "Share", "Op"]

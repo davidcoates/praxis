@@ -57,6 +57,8 @@ module Praxis
   , freshKindUni
   , freshTyOpUni
   , freshVar
+  , freshTyVar
+  , freshTyOpVar
   , reuse
 
   , clearTerm
@@ -99,6 +101,8 @@ data Fresh = Fresh
   , _freshTyOpUnis :: [String]
   , _freshKindUnis :: [String]
   , _freshVars     :: [String]
+  , _freshTyVars   :: [String]
+  , _freshTyOpVars :: [String]
   }
 
 instance Show Fresh where
@@ -156,10 +160,12 @@ defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _interactive = False, _static = False }
 
 defaultFresh = Fresh
-  { _freshTyUnis   = map (("'t"++) . show) [0..]
-  , _freshTyOpUnis = map (("'v"++) . show) [0..]
-  , _freshKindUnis = map (("'k"++) . show) [0..]
-  , _freshVars     = map (("'x"++) . show) [0..]
+  { _freshTyUnis   = map (("?t"++) . show) [0..]
+  , _freshTyOpUnis = map (("?o"++) . show) [0..]
+  , _freshKindUnis = map (("?k"++) . show) [0..]
+  , _freshVars     = map (("?v"++) . show) [0..]
+  , _freshTyVars   = map (("'t"++) . show) [0..]
+  , _freshTyOpVars = map (("'o"++) . show) [0..]
   }
 
 emptyState :: PraxisState
@@ -270,6 +276,18 @@ freshVar = do
   (x:xs) <- use (fresh . freshVars)
   fresh . freshVars .= xs
   return x
+
+freshTyVar :: Praxis (Annotated Type)
+freshTyVar = do
+  (x:xs) <- use (fresh . freshTyVars)
+  fresh . freshTyVars .= xs
+  return (TyVar x `as` phantom KindType)
+
+freshTyOpVar :: Praxis (Annotated TyOp)
+freshTyOpVar = do
+  (o:os) <- use (fresh . freshTyOpVars)
+  fresh . freshTyOpVars .= os
+  return (phantom (TyOpVar o))
 
 -- This will fuck things up if the name is still used somewhere
 reuse :: Name -> Praxis ()

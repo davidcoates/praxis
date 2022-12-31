@@ -313,7 +313,7 @@ instance Term QType where
   witness = IQType
   complete = trivial
   recurse f = \case
-    Forall vs t -> Forall <$> pure vs <*> f t
+    Forall vs t -> Forall <$> traverse f vs <*> f t
 
 instance Term QTyVar where
   witness = IQTyVar

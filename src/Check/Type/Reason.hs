@@ -18,7 +18,7 @@ data Reason = BindCongruence
             | Instance Name
             | MultiAlias Name
             | MultiUse Name
-            | Signature
+            | UserSignature
             | UnsafeView Name
 
 -- TODO Pretty
@@ -38,5 +38,5 @@ instance Show Reason where
     Instance n       -> "Monomorphic usage of '" ++ n ++ "'"
     MultiAlias n     -> "Variable '" ++ n ++ "' is not a unique alias"
     MultiUse n       -> "Variable '" ++ n ++ "' used more than once"
-    Signature        -> "User-supplied signature"
+    UserSignature    -> "User-supplied signature"
     UnsafeView n     -> "Variable '" ++ n ++ "' viewed after being used"

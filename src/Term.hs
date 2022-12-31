@@ -169,7 +169,7 @@ data Type = TyUni Name -- Compares less than all other types
 data QTyVar = QTyVar Name | QTyOpVar Name
   deriving (Eq, Ord)
 
-data QType = Forall [QTyVar] (Annotated Type)
+data QType = Forall [Annotated QTyVar] (Annotated Type)
   deriving (Eq, Ord)
 
 data Kind = KindUni Name

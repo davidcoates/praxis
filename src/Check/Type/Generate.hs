@@ -35,22 +35,10 @@ import qualified Prelude            (lookup)
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
 
-{-
-TODO, want to allow things like:
-f : forall a. a -> a
-f x = x : a -- This a refers to the a introduced by f
-
-Which means we need some map from TyVars to TyUnis
-So that in-scope TyVars can use subbed.
-
-Alternative is to transform the source which would mess up error messages
-
-OR don't allow this, and don't allow explicit forall.
--}
-ungeneralise :: [QTyVar] -> Praxis (Annotated Type -> Annotated Type)
+ungeneralise :: [Annotated QTyVar] -> Praxis (Annotated Type -> Annotated Type)
 ungeneralise vs = do
-  vars <- series $ [ (\t -> (n, view value t)) <$> freshTyUni | QTyVar n <- vs ]
-  opVars <- series $ [ (\t -> (n, view value t)) <$> freshTyOpUni | QTyOpVar n <- vs ]
+  vars <- series $ [ (\t -> (n, view value t)) <$> freshTyUni | QTyVar n <- map (view value) vs ]
+  opVars <- series $ [ (\t -> (n, view value t)) <$> freshTyOpUni | QTyOpVar n <- map (view value) vs ]
   return $ sub $ \x -> case typeof x of
     IType |   TyVar n <- x -> n `Prelude.lookup` vars
     ITyOp | TyOpVar n <- x -> n `Prelude.lookup` opVars
@@ -161,10 +149,10 @@ patToTy = over value patToTy' where
     TyPatVar n    -> TyVar n
     TyPatPack a b -> TyPack (patToTy a) (patToTy b)
 
-unis :: Annotated TyPat -> Set QTyVar
+unis :: Annotated TyPat -> Set (Annotated QTyVar)
 unis = extract (embedMonoid f) where
   f = \case
-    TyPatVar n -> Set.singleton (QTyVar n)
+    TyPatVar n -> Set.singleton (phantom $ QTyVar n)
     _          -> Set.empty
 
 program :: Annotated Program -> Praxis (Annotated Program)
@@ -172,7 +160,7 @@ program (a :< Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-dataAlt :: [QTyVar] -> Annotated Type -> Annotated DataAlt -> Praxis (Annotated DataAlt)
+dataAlt :: [Annotated QTyVar] -> Annotated Type -> Annotated DataAlt -> Praxis (Annotated DataAlt)
 dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
   let ct = phantom $ Forall vars $ case at of -- Type of the constructor
         Just at -> fun at rt
@@ -187,6 +175,7 @@ recursive x = case view value x of
     Cases _    -> True
     _          -> False
 
+
 decls :: [Annotated Decl] -> Praxis [Annotated Decl]
 decls ds = do
   ds' <- mapM preDeclare ds
@@ -200,6 +189,13 @@ decls ds = do
     preDeclare d = case d of
       (_ :< DeclVar n sig e) | recursive e -> do { t <- declare n sig; return (Just t, d) }
       _                                    -> return (Nothing, d)
+
+
+qTyVarNames :: [Annotated QTyVar] -> [Name]
+qTyVarNames vs = [ n | QTyVar n <- map (view value) vs ]
+
+qTyVarOpNames :: [Annotated QTyVar] -> [Name]
+qTyVarOpNames vs = [ n | QTyOpVar n <- map (view value) vs ]
 
 decl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
 decl forwardT = splitTrivial $ \s -> \case
@@ -219,27 +215,54 @@ decl forwardT = splitTrivial $ \s -> \case
     return $ DeclData n p alts'
 
   -- TODO check no duplicate variables
-  -- TODO nested polymorphic definitions?
   DeclVar n sig e -> do
 
-    e' <- exp e
-    let t = view ty e'
-
-    -- If not already declared, then declare the var with type sig (preferred) otherwise t.
-    -- We prefer sig since it may be polymorphic.
-    case (forwardT, sig) of
-      (Just _, _)   -> return ()
-      (_, Just sig) -> tEnv %= intro n sig
-      _             -> tEnv %= intro n (mono t)
-
-    -- FIXME need to rename vars?!
-    case forwardT of
-      Just (_ :< Forall _ t') -> equal t' t (FuncCongruence n) s
-      Nothing                 -> return ()
+    {-
+    For polymorphic declarations, we rename the bound type vars to fresh type vars and substitute in the expression.
+    E.g.
+      foo : forall a. C a => a -> a
+      foo = ... where
+       bar : forall a. D a => a -> a
+       bar x = (x : a)
+    -->
+      foo : forall a1. C a1 => a1 -> a1   -- add C a1 to axioms, a1 -> a1 ~ type(body of foo)
+      foo = ... where
+        bar : forall a2. D a2 => a2 -> a2 -- add D a2 to axioms, a2 -> a2 ~ type(body of bar)
+        bar x = (x : a2)
+    -}
     case sig of
-      Just (_ :< Forall _ t') -> equal t' t (FuncSignature n) s
-      Nothing                 -> return ()
-    return $ DeclVar n Nothing e'
+
+      Nothing -> do
+        e' <- exp e
+        case forwardT of
+          Just (_ :< Forall [] t) -> equal t (view ty e') (FuncCongruence n) s
+          Nothing                 -> tEnv %= intro n (mono (view ty e'))
+        return $ DeclVar n Nothing e'
+
+      Just sig@(_ :< Forall vs t) -> do
+        vars <-   series $ [ (\(_ :< TyVar m) -> (n, m)) <$> freshTyVar | n <- qTyVarNames vs ]
+        opVars <- series $ [ (\(_ :< TyOpVar m) -> (n, m)) <$> freshTyOpVar | n <- qTyVarOpNames vs ]
+        let rewrite :: forall a. Term a => Annotated a -> Annotated a
+            rewrite = rewrite' vars opVars
+            rewrite' :: forall a. Term a => [(Name, Name)] -> [(Name, Name)] -> Annotated a -> Annotated a
+            rewrite' vars opVars = sub $ \x -> case typeof x of
+              IType   |     TyVar n <- x ->    TyVar <$> n `Prelude.lookup` vars
+              ITyOp   |   TyOpVar n <- x ->  TyOpVar <$> n `Prelude.lookup` opVars
+              IQTyVar |    QTyVar n <- x ->   QTyVar <$> n `Prelude.lookup` vars
+              IQTyVar |  QTyOpVar n <- x -> QTyOpVar <$> n `Prelude.lookup` opVars
+              IDecl   | DeclVar n (Just sig@(_ :< Forall ws _)) e <- x ->
+                let
+                  vars' = [ (n, m) | (n, m) <- vars, not (m `elem` qTyVarNames ws) ]
+                  opVars' = [ (n, m) | (n, m) <- opVars, not (m `elem` qTyVarOpNames ws) ]
+                in Just (DeclVar n (Just (rewrite' vars' opVars' sig)) (rewrite' vars' opVars' e))
+              _ -> Nothing
+        e' <- exp (rewrite e)
+        case forwardT of
+          Just _  -> return () -- forwardT is sig, so a FuncCongruence constraint is redundant (covered by the below FuncSignature constraint)
+          Nothing -> tEnv %= intro n sig
+        equal (rewrite t) (view ty e') (FuncSignature n) s
+        return $ DeclVar n (Just (rewrite sig)) e'
+
 
   op@(DeclOp _ _ _) -> return op
 
@@ -331,13 +354,10 @@ exp = split $ \s -> \case
     let t = TyPair (view ty p') (view ty q') `as` phantom KindType
     return (t :< Pair p' q')
 
-{-
   Sig e t -> do
     e' <- exp e
-    t <- impure t
-    equalI t (ty e') (UserSignature Nothing) s
-    return e'
--}
+    equal t (view ty e') UserSignature s
+    return (t :< Sig e' t)
 
   Switch alts -> do
     cs <- sequence (map (exp . fst) alts)

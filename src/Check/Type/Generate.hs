@@ -219,15 +219,25 @@ decl forwardT = splitTrivial $ \s -> \case
     return $ DeclData n p alts'
 
   -- TODO check no duplicate variables
+  -- TODO nested polymorphic definitions?
   DeclVar n sig e -> do
+
     e' <- exp e
-    -- TODO this won't work for nested polymorphic definitions
     let t = view ty e'
+
+    -- If not already declared, then declare the var with type sig (preferred) otherwise t.
+    -- We prefer sig since it may be polymorphic.
+    case (forwardT, sig) of
+      (Just _, _)   -> return ()
+      (_, Just sig) -> tEnv %= intro n sig
+      _             -> tEnv %= intro n (mono t)
+
+    -- FIXME need to rename vars?!
     case forwardT of
-      Just (_ :< Forall _ t') -> equal t' t (FuncSignature n) s
-      Nothing                 -> tEnv %= intro n (mono t)
-    case sig of
       Just (_ :< Forall _ t') -> equal t' t (FuncCongruence n) s
+      Nothing                 -> return ()
+    case sig of
+      Just (_ :< Forall _ t') -> equal t' t (FuncSignature n) s
       Nothing                 -> return ()
     return $ DeclVar n Nothing e'
 

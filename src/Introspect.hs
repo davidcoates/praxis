@@ -5,6 +5,7 @@
 {-# LANGUAGE Rank2Types                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE StandaloneDeriving        #-}
+{-# LANGUAGE TypeOperators             #-}
 
 module Introspect
   ( Visit(..)

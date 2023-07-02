@@ -11,6 +11,7 @@ data Stage = Unknown
            | KindCheck Check
            | TypeCheck Check
            | Evaluate
+           | CodeGen
 
 data Check = Warmup
            | Generate
@@ -26,6 +27,7 @@ instance Show Stage where
     KindCheck c -> "Kind Check" ++ show c
     TypeCheck c -> "Type Check" ++ show c
     Evaluate    -> "Evaluate"
+    CodeGen     -> "CodeGen"
 
 instance Show Check where
   show = \case

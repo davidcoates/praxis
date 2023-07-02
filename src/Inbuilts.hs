@@ -5,17 +5,18 @@
 
 module Inbuilts
   ( initialState
+  , inbuiltInclude
   ) where
 
 import           Common
 import           Control.Lens              (set, view)
 import           Env
+import           Interpret.Value           as Value
 import           Introspect
 import           Parse                     (parse)
 import           Praxis
 import           Term                      hiding (Lit (..), Pair, Unit)
 import           Text.RawString.QQ
-import           Value
 
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import qualified Control.Monad.Trans.State as State (get)
@@ -54,14 +55,14 @@ inbuilts =
       Fun (\(Int x) -> pure (Int x)))
   , ("get_int",      poly "() -> Int",
       Fun (\Unit -> liftIO (Int <$> readLn)))
-  , ("get_contents", poly "() -> Array Char",
-      Fun (\Unit -> liftIO getContents >>= (\s -> Value.Array <$> (Value.fromString s)))) -- TODO need to make many of these functions strict?
+  , ("get_contents", poly "() -> String",
+      Fun (\Unit -> liftIO (Value.String <$> getContents)))-- TODO need to make many of these functions strict?
   , ("put_int",      poly "Int -> ()",
       Fun (\(Int x) -> liftIO (print x >> pure Unit)))
-  , ("put_str",      poly "&Array Char -> ()",
-      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIO (putStr s)) >> pure Unit))
-  , ("put_str_ln",   poly "&Array Char -> ()",
-      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIO (putStrLn s)) >> pure Unit))
+  , ("put_str",      poly "&String -> ()",
+      Fun (\(String s) -> liftIO (putStr s) >> pure Unit))
+  , ("put_str_ln",   poly "&String -> ()",
+      Fun (\(String s) -> liftIO (putStrLn s) >> pure Unit))
   , ("compose",      poly "forall a b c. (b -> c, a -> b) -> a -> c",
       Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
   , ("print",        poly "forall a. &a -> ()",
@@ -89,6 +90,7 @@ inbuilts =
     liftE :: (Int -> Int -> Bool) -> Value
     liftE f = Fun (\(Pair (Int a) (Int b)) -> pure (Bool (f a b)))
 
+
 inbuiltKinds :: [(Name, Annotated Kind)]
 inbuiltKinds =
   [ ("Int",    kind "Type")
@@ -96,6 +98,7 @@ inbuiltKinds =
   , ("String", kind "Type")
   , ("Char",   kind "Type")
   , ("Array",  kind "Type -> Type")
+  , ("String", kind "Type") -- TODO make this a synonym
   , ("Share",  kind "Type -> Constraint")
   ]
 
@@ -110,9 +113,6 @@ initialKEnv = fromList inbuiltKinds
 
 -- TODO interfaces
 prelude = [r|
-
--- Type synonyms
-using String = Array Char
 
 -- Operators
 operator (_ + _) = add_int where
@@ -160,5 +160,24 @@ operator (_ <= _) = lte_int where
 
 operator (_ >= _) = gte_int where
   precedence equal (_ == _)
+
+|]
+
+-- TODO
+inbuiltInclude :: String
+inbuiltInclude = [r|
+
+#include <iostreamm>
+
+int add_int(int x, int y) { return x + y; }
+int subtract_int(int, x int y) { return x - y; }
+int eq_int(int, x int y) { return x == y; }
+
+int get_int() { int x; std::cin >> x; return x; }
+std::string get_contents() { std::string s; std::cin >> s; return s; }
+
+void put_int(int x) { std::cout << x; }
+void put_str(const std::string& s) { std::cout << s; }
+void put_str_ln(const std::string& s) { std::cout << s << std::endl; }
 
 |]

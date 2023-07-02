@@ -61,12 +61,12 @@ program (a :< Program ds) = do
 
 freeVars :: Annotated Exp -> Set Name
 freeVars = extractPartial f where
-  f :: forall a. Term a => a -> (Set Name, Bool)
+  f :: forall a. Term a => Annotated a -> (Set Name, Bool)
   f x = case witness :: I a of
-    IExp  -> case x of
+    IExp  -> case view value x of
       Var n -> (Set.singleton n, False)
       _     -> (Set.empty,        True)
-    IDecl -> case x of
+    IDecl -> case view value x of
       DeclVar n _ e -> (Set.delete n (freeVars e), False)
       _             -> (Set.empty,                  True)
     _     -> (Set.empty, True)

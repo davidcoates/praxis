@@ -1,6 +1,8 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE RankNTypes           #-}
+{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Praxis
   ( Praxis
@@ -37,7 +39,6 @@ module Praxis
 
   -- |Flag lenses
   , debug
-  , interactive
 
   -- |Praxis lenses
   , infile
@@ -86,14 +87,13 @@ import qualified Data.Set                     as Set
 import qualified Env                          as Env (Environment (..))
 import           Env.Env
 import           Env.LEnv
+import           Interpret.Value
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
-import           Value
 
 data Flags = Flags
-  { _debug       :: Bool
-  , _interactive :: Bool
-  , _static      :: Bool              -- ^Set for internal pure computations evaluated at compile time
+  { _debug  :: Bool
+  , _static :: Bool              -- ^Set for internal pure computations evaluated at compile time
   } deriving (Show)
 
 data Fresh = Fresh
@@ -156,8 +156,18 @@ instance MonadTrans PraxisT where
 instance Functor f => Functor (PraxisT f) where
   fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
 
+instance Semigroup m => Semigroup (Praxis m) where
+  px <> py = do
+    x <- px
+    y <- py
+    return $ x <> y
+
+instance Monoid m => Monoid (Praxis m) where
+  mempty = pure mempty
+
+
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = False, _interactive = False, _static = False }
+defaultFlags = Flags { _debug = False, _static = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("?t"++) . show) [0..]

@@ -1,12 +1,13 @@
 module Main where
 
 import           Common
+import           Compile
 import           Env
 import           Inbuilts             (initialState)
 import           Interpret
+import           Interpret.Value
 import           Praxis
 import           Term
-import           Value
 
 import           Control.Lens.Reified (ReifiedLens (..), ReifiedLens')
 import           Control.Monad        (void, when)
@@ -26,10 +27,13 @@ main = hSetBuffering stdin LineBuffering >> do
 parse :: [String] -> Praxis ()
 parse xs = do
   opts xs
-  f <- use infile
-  case f of
-    Nothing -> repl
-    Just f  -> file f
+  inF <- use infile
+  outF <- use outfile
+  case (inF, outF) of
+    (Nothing,  Nothing) -> repl
+    (Nothing,   Just _) -> throw "outfile specified with no infile"
+    (Just _,   Nothing) -> (interpretFile :: Praxis (Annotated Program, ())) >> repl
+    (Just _,    Just _) -> compileFile
 
 data Arg = Arg { short :: String, long :: String, action :: Praxis () }
 
@@ -39,7 +43,6 @@ instance Show Arg where
 args :: [Arg]
 args =
   [ Arg "d" "debug" (flags . debug .= True)
-  , Arg "i" "interactive" (flags . interactive .= True)
   , Arg "h" "help" help
   ]
 
@@ -68,18 +71,6 @@ opts (x : xs)
       Nothing -> (infile .= Just x) >> opts xs
       Just _  -> throw "multiple infile"
 opts [] = return ()
-
-file :: String -> Praxis ()
-file f = (interpretFile f :: Praxis (Annotated Program, ())) >> onFileSuccess
-  where onFileSuccess = use (flags . interactive) >>= (\i -> if i then repl else runMain)
-
-runMain :: Praxis ()
-runMain = do
-  t <- tEnv `uses` lookup "main"
-  case t of Nothing -> throw "missing main function"
-            Just (_ :< Forall [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) ->
-              do { Just (Fun f) <- vEnv `uses` lookup "main"; f Value.Unit; return () }
-            Just t -> throwAt (view source t) $ pretty "main function has bad type " <> quote (pretty t) <> pretty ", expected () -> ()"
 
 repl :: Praxis ()
 repl = forever $ do

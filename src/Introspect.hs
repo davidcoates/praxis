@@ -143,22 +143,22 @@ sub f x = runIdentity $ introspect f' x where
     Nothing -> Visit (Identity ())
     Just y' -> Resolve (Identity y')
 
-extract :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> m) -> Annotated a -> m
+extract :: forall a m. (Term a, Monoid m) => (forall b. Term b => Annotated b -> m) -> Annotated a -> m
 extract f = extractPartial (\x -> (f x, True))
 
 -- Similar to extract, but with control for whether or not to recurse
-extractPartial :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> (m, Bool)) -> Annotated a -> m
+extractPartial :: forall a m. (Term a, Monoid m) => (forall b. Term b => Annotated b -> (m, Bool)) -> Annotated a -> m
 extractPartial f x = getConst $ visit f' x where
   f' :: forall b. Term b => Annotated b -> Visit (Const m) (Maybe (Annotation b)) (Annotated b)
-  f' y = case f (view value y) of
+  f' y = case f y of
     (m, True)  -> Visit (Const m)
     (m, False) -> Resolve (Const m)
 
 embedSub :: forall a b. Term a => (a -> Maybe a) -> (forall a. Term a => a -> Maybe a)
 embedSub f x = transferM f x
 
-embedMonoid :: forall a b. (Monoid b, Term a) => (a -> b) -> (forall a. Term a => a -> b)
-embedMonoid f x = getConst $ transferA (Const . f) x
+embedMonoid :: forall a b. (Monoid b, Term a) => (a -> b) -> (forall a. Term a => Annotated a -> b)
+embedMonoid f x = getConst $ transferA (Const . f) (view value x)
 
 -- Implementations below here
 

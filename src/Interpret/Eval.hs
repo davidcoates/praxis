@@ -3,18 +3,19 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverloadedStrings      #-}
 
-module Eval
+module Interpret.Eval
   ( Evaluable(..)
   ) where
 
 import           Check.Type.Generate (recursive)
 import           Common
 import           Env
+import           Interpret.Value     (Value)
+import qualified Interpret.Value     as Value
+import           Introspect
 import           Praxis
 import           Stage
 import           Term
-import           Value               (Value)
-import qualified Value
 
 import           Control.Monad.Fix   (mfix)
 import           Data.Array.IO
@@ -22,7 +23,7 @@ import           Data.List           (partition)
 import           Data.Maybe          (mapMaybe)
 import           Prelude             hiding (exp, lookup)
 
-class Evaluable a b | a -> b where
+class Term a => Evaluable a b | a -> b where
   eval' :: Annotated a -> Praxis b
   eval  :: Annotated a -> Praxis b
   eval e = save stage $ do
@@ -107,11 +108,11 @@ exp ((s, _) :< e) = case e of
     bind b
     exp x
 
-  Lit l -> case l of
-    Bool b   -> pure $ Value.Bool b
-    Char c   -> pure $ Value.Char c
-    Int  i   -> pure $ Value.Int  i
-    String s -> Value.Array <$> Value.fromString s
+  Lit l -> return $ case l of
+    Bool b   -> Value.Bool b
+    Char c   -> Value.Char c
+    Int  i   -> Value.Int  i
+    String s -> Value.String s
 
   Read _ e -> exp e
 

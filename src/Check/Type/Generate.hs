@@ -337,10 +337,7 @@ exp = split $ \s -> \case
     Char _   -> return $ TyCon "Char"
     String _ -> do
       o <- freshTyOpUni
-      let ot = TyOp o `as` phantom KindOp
-          a = TyCon "Array" `as` phantom (KindFun (phantom KindType) (phantom KindType))
-          ac = TyApply a (TyCon "Char" `as` phantom KindType) `as` phantom KindType
-      return $ TyApply ot ac
+      return $ TyApply (TyOp o `as` phantom KindOp) (TyCon "String" `as` phantom KindType)
 
   Read n e -> do
     t <- read s n

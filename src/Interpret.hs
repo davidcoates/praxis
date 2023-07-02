@@ -1,37 +1,32 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
 module Interpret
-  ( Interpretable(..)
+  ( interpret
+  , interpretFile
   ) where
 
-import           Check  (check)
+import           Check           (check)
 import           Common
-import           Eval
-import           Parse  (parse)
+import           Interpret.Eval
+import           Interpret.Value (Value)
+import           Introspect
+import           Parse           (parse)
 import           Praxis
 import           Term
-import           Value  (Value)
 
-class Evaluable a b => Interpretable a b where
-  interpret :: String -> Praxis (Annotated a, b)
-  interpretFile :: FilePath -> Praxis (Annotated a, b)
-  interpretFile f = do
-    infile .= Just f
-    s <- liftIO (readFile f)
-    interpret s
+interpretFile :: Evaluable a b => Praxis (Annotated a, b)
+interpretFile = do
+  f <- use infile
+  case f of
+    Nothing -> throw "msising infile"
+    Just f  -> liftIO (readFile f) >>= interpret
 
-instance Interpretable Program () where
-  interpret s = do
-    x <- parse s :: Praxis (Annotated Program)
-    y <- check x
-    v <- eval y
-    return (y, v)
-
-instance Interpretable Exp Value where
-  interpret s = do
-    x <- parse s :: Praxis (Annotated Exp)
-    y <- check x
-    v <- eval y
-    return (y, v)
+interpret :: forall a b. Evaluable a b => String -> Praxis (Annotated a, b)
+interpret s = do
+  x <- parse s :: Praxis (Annotated a)
+  y <- check x
+  v <- eval y
+  return (y, v)

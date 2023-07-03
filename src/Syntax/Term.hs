@@ -270,7 +270,13 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
           mark "kind(0)"
 
 qTy :: Syntax f => f QType
-qTy = _Forall <$> (_Cons <$> (reservedId "forall" *> annotated qTyVar) <*> (many (annotated qTyVar) <* dot) <|> _Nil <$> pure ()) <*> annotated ty <|> mark "quantified type"
+qTy = _Forall <$> (_Cons <$> (reservedId "forall" *> annotated qTyVar) <*> (many (annotated qTyVar) <* dot) <|> _Nil <$> pure ()) <*> tyConstraints <*> annotated ty <|> mark "quantified type"
+
+tyConstraints :: Syntax f => f [Annotated TyConstraint]
+tyConstraints = _Cons <$> (contextualOp "[" *> annotated tyConstraint) <*> tyConstraints' <|> _Nil <$> pure () where
+  tyConstraints' :: Syntax f => f [Annotated TyConstraint]
+  tyConstraints' = _Cons <$> (annotated tyConstraint <* special ',') <*>  tyConstraints' <|>
+                   _Nil <$> (contextualOp "]" *> reservedOp "=>")
 
 qTyVar :: Syntax f => f QTyVar
 qTyVar = _QTyVar <$> varid <|>

@@ -3,6 +3,7 @@
 
 module Check.Type.System
   ( Axiom(..)
+  , axiom
 
   , System
   , sol
@@ -33,6 +34,8 @@ share n = Axiom $ \case
   Share  (_ :< TyCon m ) | m == n -> Just Top
   _                               -> Nothing
 
+axiom :: TyConstraint -> Axiom
+axiom c = Axiom $ \c' -> if c == c' then Just Top else Nothing
 
 initialSystem :: System
 initialSystem = System

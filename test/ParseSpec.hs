@@ -26,7 +26,9 @@ exps =
   , "1 - - 2" `matches` "1 - (- 2)"
   , "f x 1 + g y * z" `matches` "(f (x 1)) + ((g y) * z)"
   , "f x + f y + f z" `matches` "((f x) + (f y)) + (f z)"
-  , "(x, y, z)" `matches` "(x, (y, z))"]
+  , "(x, y, z)" `matches` "(x, (y, z))"
+  , "- 1 - - - 1" `matches` "(-1) - (- (-1))"
+  ]
 
 tys =
   [ "Int -> Int -> Int" `matches` "Int -> (Int -> Int)"
@@ -48,6 +50,16 @@ programs =
       , "  0 -> 1"
       , "  n -> multiply_int ( n , fac subtract_int ( n , 1 ) )"
       ]
+  , unlines
+    [ "type Either [a, b] = cases"
+    , "    Left(a)"
+    , "    Right(b)"
+    ] `matches`
+    unlines
+    [ "type Either [ a , b ] = cases"
+    , "  Left a"
+    , "  Right b"
+    ]
   ]
 
 
@@ -57,9 +69,6 @@ instance (Term a, x ~ Annotation a) => Show (Tag (Source, Maybe x) a) where
 parse :: Term a => String -> Annotated a
 parse s = runInternal initialState (Parse.parse s)
 
-unparse :: Term a => Annotated a -> String
-unparse = show
-
 spec :: Spec
 spec = do
   describe "Expressions" $ do
@@ -68,11 +77,11 @@ spec = do
         (parse a :: Annotated Exp) `shouldBe` parse b
   describe "Types" $ do
     forM_ tys $ \(a, b) -> do
-      it (a ++ " EQUALS " ++ b) $ do
+      it (a ++ " <equals> " ++ b) $ do
         (parse a :: Annotated Type) `shouldBe` parse b
   describe "Programs" $ do
     forM_ programs $ \(a, b) -> do
-      it ("\n" ++ a ++ "EQUALS\n" ++ b) $ do
+      it ("\n" ++ a ++ "\n<equals>\n" ++ b) $ do
         (parse a :: Annotated Program) `shouldBe` parse b
-      it ("\n" ++ b ++ "IS IN NORMAL FORM") $ do
-         unparse (parse b :: Annotated Program) `shouldBe` b
+      it ("\n" ++ b ++ "\n<is in normal form>") $ do
+         show (parse b :: Annotated Program) `shouldBe` b

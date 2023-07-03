@@ -36,17 +36,21 @@ import qualified Prelude            (lookup)
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
 
-ungeneralise :: [Annotated QTyVar] -> Praxis (Annotated Type -> Annotated Type)
-ungeneralise vs = do
+ungeneralise :: [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis (Annotated Type -> Annotated Type)
+ungeneralise vs cs = do
   vars <- series $ [ (\t -> (n, view value t)) <$> freshTyUni | QTyVar n <- map (view value) vs ]
   opVars <- series $ [ (\t -> (n, view value t)) <$> freshTyOpUni | QTyOpVar n <- map (view value) vs ]
-  return $ sub $ \x -> case typeof x of
-    IType |   TyVar n <- x -> n `Prelude.lookup` vars
-    ITyOp | TyOpVar n <- x -> n `Prelude.lookup` opVars
-    _                      -> Nothing
+  let f :: Term a => a -> Maybe a 
+      f = \x -> case typeof x of
+        IType |   TyVar n <- x -> n `Prelude.lookup` vars
+        ITyOp | TyOpVar n <- x -> n `Prelude.lookup` opVars
+        _                      -> Nothing
+  let axioms' = map (Axiom . view value . sub f) cs
+  (our . axioms) %= (++ axioms')
+  return (sub f)
 
 ungeneraliseQType :: Annotated QType -> Praxis (Annotated Type)
-ungeneraliseQType (_ :< Forall vs t) = ($ t) <$> ungeneralise vs
+ungeneraliseQType (_ :< Forall vs cs t) = ($ t) <$> ungeneralise vs cs
 
 join :: Praxis a -> Praxis b -> Praxis (a, b)
 join f1 f2 = do
@@ -163,7 +167,7 @@ program (a :< Program ds) = do
 
 dataAlt :: [Annotated QTyVar] -> Annotated Type -> Annotated DataAlt -> Praxis (Annotated DataAlt)
 dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
-  let ct = phantom $ Forall vars $ case at of -- Type of the constructor
+  let ct = phantom $ Forall vars [] $ case at of -- Type of the constructor -- TODO constraints
         Just at -> fun at rt
         Nothing -> rt
       da = ((s, Just (DataAltInfo ct at rt)) :< DataAlt n at)
@@ -236,11 +240,11 @@ decl forwardT = splitTrivial $ \s -> \case
       Nothing -> do
         e' <- exp e
         case forwardT of
-          Just (_ :< Forall [] t) -> equal t (view ty e') (FuncCongruence n) s
+          Just (_ :< Forall [] [] t) -> equal t (view ty e') (FuncCongruence n) s
           Nothing                 -> tEnv %= intro n (mono (view ty e'))
         return $ DeclVar n Nothing e'
 
-      Just sig@(_ :< Forall vs t) -> do
+      Just sig@(_ :< Forall vs cs t) -> do
         vars <-   series $ [ (\(_ :< TyVar m) -> (n, m)) <$> freshTyVar | n <- qTyVarNames vs ]
         opVars <- series $ [ (\(_ :< TyOpVar m) -> (n, m)) <$> freshTyOpVar | n <- qTyVarOpNames vs ]
         let rewrite :: forall a. Term a => Annotated a -> Annotated a
@@ -251,10 +255,10 @@ decl forwardT = splitTrivial $ \s -> \case
               ITyOp   |   TyOpVar n <- x ->  TyOpVar <$> n `Prelude.lookup` opVars
               IQTyVar |    QTyVar n <- x ->   QTyVar <$> n `Prelude.lookup` vars
               IQTyVar |  QTyOpVar n <- x -> QTyOpVar <$> n `Prelude.lookup` opVars
-              IDecl   | DeclVar n (Just sig@(_ :< Forall ws _)) e <- x ->
+              IDecl   | DeclVar n (Just sig@(_ :< Forall boundVs _ _)) e <- x -> -- See block comment above. Need to exclude boundVs to ensure we are only replacing free variables.
                 let
-                  vars' = [ (n, m) | (n, m) <- vars, not (m `elem` qTyVarNames ws) ]
-                  opVars' = [ (n, m) | (n, m) <- opVars, not (m `elem` qTyVarOpNames ws) ]
+                  vars' = [ (n, m) | (n, m) <- vars, not (m `elem` qTyVarNames boundVs) ]
+                  opVars' = [ (n, m) | (n, m) <- opVars, not (m `elem` qTyVarOpNames boundVs) ]
                 in Just (DeclVar n (Just (rewrite' vars' opVars' sig)) (rewrite' vars' opVars' e))
               _ -> Nothing
         e' <- exp (rewrite e)
@@ -271,7 +275,7 @@ decl forwardT = splitTrivial $ \s -> \case
 
 
 mono :: Annotated Type -> Annotated QType
-mono t = (view source t, Nothing) :< Forall [] t
+mono t = (view source t, Nothing) :< Forall [] [] t
 
 exp :: Annotated Exp -> Praxis (Annotated Exp)
 exp = split $ \s -> \case
@@ -424,8 +428,8 @@ pat op p = snd <$> pat' p where
       DataAltInfo qt at rt <- getData s n
       when (isJust at /= isJust p) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
 
-      let Forall vs _ = view value qt
-      f <- ungeneralise vs
+      let Forall vs cs _ = view value qt
+      f <- ungeneralise vs cs
       let rt' = f rt
 
       case p of

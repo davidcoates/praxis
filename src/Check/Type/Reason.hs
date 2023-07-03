@@ -20,6 +20,7 @@ data Reason = BindCongruence
             | MultiUse Name
             | UserSignature
             | UnsafeView Name
+            | Specialisation
 
 -- TODO Pretty
 instance Show Reason where
@@ -40,3 +41,4 @@ instance Show Reason where
     MultiUse n       -> "Variable '" ++ n ++ "' used more than once"
     UserSignature    -> "User-supplied signature"
     UnsafeView n     -> "Variable '" ++ n ++ "' viewed after being used"
+    Specialisation   -> "Specialisation"

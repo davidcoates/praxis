@@ -120,8 +120,8 @@ solveFromAxioms c = use (our . axioms) >>= (\as -> solveFromAxioms' as c) where
   -- TODO this is just an asum
   solveFromAxioms' :: [Axiom] -> TypeSolver
   solveFromAxioms' = \case
-    []     -> (\c -> pure Nothing)
-    (a:as) -> (\c -> pure (checkAxiom a c)) <|> solveFromAxioms' as
+    []             -> (\c -> pure Nothing)
+    ((Axiom a):as) -> (\c -> pure (a c)) <|> solveFromAxioms' as
 
 -- Assumes the type is normalised
 viewFree :: Annotated Type -> Bool
@@ -159,7 +159,6 @@ simplifyAll = do
   our . sol %%= traverse (second (covalue simplify))
   our . ops %%= traverse (second (covalue simplify))
   our . constraints %%= traverse simplify
-  our . axioms %%= traverse (\ax -> case ax of { Axiom c -> (Axiom . view value) <$> simplify (phantom c); _ -> pure ax })
   tEnv %%= traverse simplify
 
 

@@ -45,7 +45,7 @@ programs =
       , "copy x = (x, x)"
       ] `matches`
     unlines
-      []
+      [ "copy : forall 't0 . [ Share 't0 ] => 't0 -> ( 't0 , 't0 ) = ['t0 -> ( 't0 , 't0 )] \\ ['t0] x -> [( 't0 , 't0 )] ( ['t0] x , ['t0] x )" ]
   ]
 
 

@@ -1,11 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE TypeOperators     #-}
-{-# LANGUAGE QuasiQuotes       #-}
 
 module PraxisSpec where
-
-import Text.RawString.QQ
 
 import           Common
 import           Inbuilts
@@ -23,20 +20,25 @@ import           Prelude       hiding (exp, unlines)
 import qualified Prelude       (unlines)
 import           Test.Hspec
 
+
 instance (Term a, x ~ Annotation a) => Show (Tag (Source, Maybe x) a) where
   show x = fold (runPrintable (pretty x) Types)
 
-parse :: Term a => String -> Annotated a
-parse s = runInternal initialState (Parse.parse s)
+run :: Show a => Praxis a -> IO String
+run p = do
+  x <- runSilent initialState p
+  case x of
+    Just y  -> return (show y)
+    Nothing -> error "failure" -- TODO could retreive the throw message somehow :thinking:
 
-check :: Term a => String -> Annotated a
-check s = runInternal initialState (Parse.parse s >>= Check.check)
+check :: String -> IO String
+check s = run (Parse.parse s >>= Check.check :: Praxis (Annotated Program))
 
-interpret :: String -> String -> String
-interpret program exp = runInternal initialState $ do
+interpret :: String -> String -> IO String
+interpret program exp = run $ do
     Interpret.interpret program :: Praxis (Annotated Program, ())
     (_, v) <- Interpret.interpret exp :: Praxis (Annotated Exp, Value)
-    return (show v)
+    return v
 
 -- Drop trailing newline
 unlines = init . Prelude.unlines
@@ -45,6 +47,9 @@ spec :: Spec
 spec = do
 
   describe "simple expressions" $ do
+
+    let parse :: String -> IO String
+        parse s = run (Parse.parse s :: Praxis (Annotated Exp))
 
     let expressions =
           [ ("1 + 2", "1 + 2")
@@ -59,13 +64,20 @@ spec = do
           ]
 
     forM_ expressions $ \(a, b) -> do
-      it (show a ++ " parses") $ do
-        (parse a :: Annotated Exp) `shouldBe` parse b
-      it (show b ++ " parses (idempotent)") $ do
-        (parse b :: Annotated Exp) `shouldBe` parse b
+      it (show a ++ " parses like " ++ show b) $ do
+        x <- parse a
+        y <- parse b
+        x `shouldBe` y
+      it (show a ++ " parses idempotently") $ do
+        x <- parse a
+        y <- parse x
+        x `shouldBe` y
 
 
   describe "simple types" $ do
+
+    let parse :: String -> IO String
+        parse s = run (Parse.parse s :: Praxis (Annotated Type))
 
     let types =
           [ ("Int -> Int -> Int", "Int -> (Int -> Int)")
@@ -74,15 +86,52 @@ spec = do
           ]
 
     forM_ types $ \(a, b) -> do
-      it (show a ++ " parses") $ do
-        (parse a :: Annotated Type) `shouldBe` parse b
-      it (show b ++ " parses (idempotent)") $ do
-        (parse b :: Annotated Type) `shouldBe` parse b
+      it (show a ++ " parses like " ++ show b) $ do
+        x <- parse a
+        y <- parse b
+        x `shouldBe` y
+      it (show a ++ " parses idempotently") $ do
+        x <- parse a
+        y <- parse x
+        x `shouldBe` y
 
 
-  describe "simple programs" $ do
+  describe "simple monomorphic programs" $ do
 
-    describe "factorial (recursion)" $ do
+    describe "if then else (min)" $ do
+
+      let program = "min (x, y) = if x < y then x else y"
+
+      it "type checks" $ do
+        check program `shouldReturn` "min = [( Int , Int ) -> Int] \\ [( Int , Int )] ( [Int] x , [Int] y ) -> [Int] if [Bool] [( Int , Int ) -> Bool] lt_int [( Int , Int )] ( [Int] x , [Int] y ) then [Int] x else [Int] y"
+
+      it "evaluates" $ do
+        interpret program "min (1, 2)" `shouldReturn` "1"
+        interpret program "min (2, 1)" `shouldReturn` "1"
+        interpret program "min (1, 1)" `shouldReturn` "1"
+
+
+    describe "switch (sign)" $ do
+
+      let program = unlines
+            [ "sign : Int -> Int"
+            , "sign n = switch"
+            , "  n  < 0 -> -1"
+            , "  n == 0 ->  0"
+            , "  n  > 0 -> +1"
+            ]
+
+      it "type checks" $ do
+        check program `shouldReturn` "sign : Int -> Int = [Int -> Int] \\ [Int] n -> [Int] switch\n  [Bool] [( Int , Int ) -> Bool] lt_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] [Int -> Int] negate_int [Int] 1\n  [Bool] [( Int , Int ) -> Bool] eq_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] 0\n  [Bool] [( Int , Int ) -> Bool] gt_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] [Int -> Int] unary_plus_int [Int] 1"
+
+      it "evaluates" $ do
+        interpret program "sign 0"    `shouldReturn` "0"
+        interpret program "sign 10"   `shouldReturn` "1"
+        interpret program "sign (-5)" `shouldReturn` "-1"
+        interpret program "sign -5"   `shouldThrow` anyException -- Note: Parses as "sign - 5" (binary subtract)
+
+
+    describe "recursion (factorial)" $ do
 
       let program = unlines
             [ "fac = cases"
@@ -91,19 +140,21 @@ spec = do
             ]
 
       it "type checks" $ do
-        show (check program :: Annotated Program) `shouldBe` unlines
+        check program `shouldReturn` unlines
           [ "fac = [Int -> Int] cases"
           , "  [Int] 0 -> [Int] 1"
           , "  [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] fac [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )"
           ]
 
       it "evaluates" $ do
-        interpret program "fac 0"  `shouldBe` "1"
-        interpret program "fac 5"  `shouldBe` "120"
-        interpret program "fac 15" `shouldBe` "1307674368000"
+        interpret program "fac 0"  `shouldReturn` "1"
+        interpret program "fac 5"  `shouldReturn` "120"
+        interpret program "fac 15" `shouldReturn` "1307674368000"
 
 
-    describe "swap (polymorphic function)" $ do
+  describe "simple polymorphic programs" $ do
+
+    describe "polymorphic function (swap)" $ do
 
       let program = unlines
             [ "swap : forall a b. (a, b) -> (b, a)"
@@ -111,19 +162,19 @@ spec = do
             ]
 
       it "type checks" $ do
-        show (check program :: Annotated Program) `shouldBe` unlines
+        check program `shouldReturn` unlines
           [ "swap : forall 't0 't1 . ( 't0 , 't1 ) -> ( 't1 , 't0 ) = [( 't0 , 't1 ) -> ( 't1 , 't0 )] \\ [( 't0 , 't1 )] ( ['t0] a , ['t1] b ) -> [( 't1 , 't0 )] ( ['t1] b , ['t0] a )"
           ]
 
-      it "evaulates" $ do
-        interpret program "swap (0, 1)"      `shouldBe` "(1, 0)"
-        interpret program "swap (True, 1)"   `shouldBe` "(1, True)"
-        interpret program "swap (1, 2, 3)"   `shouldBe` "((2, 3), 1)"
-        interpret program "swap ((2, 3), 1)" `shouldBe` "(1, (2, 3))"
-        -- interpret program "swap (\"abc\", 0)" `shouldBe` "(0, \"abc\")"
+      it "evaluates" $ do
+        interpret program "swap (0, 1)"      `shouldReturn` "(1, 0)"
+        interpret program "swap (True, 1)"   `shouldReturn` "(1, True)"
+        interpret program "swap (1, 2, 3)"   `shouldReturn` "((2, 3), 1)"
+        interpret program "swap ((2, 3), 1)" `shouldReturn` "(1, (2, 3))"
+        -- interpret program "swap (\"abc\", 0)" `shouldReturn` "(0, \"abc\")"
 
 
-    describe "copy (polymorphic function with constraint)" $ do
+    describe "polymorphic function with constraint (copy)" $ do
 
       let program = unlines
             [ "copy : forall a. [Share a] => a -> (a, a)"
@@ -131,16 +182,16 @@ spec = do
             ]
 
       it "type checks" $ do
-        show (check program :: Annotated Program) `shouldBe` unlines
+        check program `shouldReturn` unlines
           [ "copy : forall 't0 . [ Share 't0 ] => 't0 -> ( 't0 , 't0 ) = ['t0 -> ( 't0 , 't0 )] \\ ['t0] x -> [( 't0 , 't0 )] ( ['t0] x , ['t0] x )"
           ]
 
-      it "evaulates" $ do
-        interpret program "copy 0"         `shouldBe` "(0, 0)"
-        interpret program "copy (0, True)" `shouldBe` "((0, True), (0, True))"
+      it "evaluates" $ do
+        interpret program "copy 0"         `shouldReturn` "(0, 0)"
+        interpret program "copy (0, True)" `shouldReturn` "((0, True), (0, True))"
 
 
-    describe "Either (polymorphic data type)" $ do
+    describe "polymorphic data type (Either)" $ do
 
       let program = unlines
             [ "type Either [a, b] = cases"
@@ -149,15 +200,15 @@ spec = do
             ]
 
       it "type checks" $ do
-        show (check program :: Annotated Program) `shouldBe` unlines
+        check program `shouldReturn` unlines
           [ "type Either [ a , b ] = cases"
           , "  [forall a b . a -> Either [ a , b ]] Left a"
           , "  [forall a b . b -> Either [ a , b ]] Right b"
           ]
 
-      it "evaulates" $ do
-        interpret program "Left 0"  `shouldBe` "Left 0"
-        interpret program "Right 1" `shouldBe` "Right 1"
+      it "evaluates" $ do
+        interpret program "Left 0"  `shouldReturn` "Left 0"
+        interpret program "Right 1" `shouldReturn` "Right 1"
 
 
   describe "complex programs" $ do
@@ -175,7 +226,7 @@ spec = do
             ]
 
       it "type checks" $ do
-        show (check program :: Annotated Program) `shouldBe` unlines
+        check program `shouldReturn` unlines
           [ "f = [Int -> Int] cases"
           , "  [Int] 0 -> [Int] 1"
           , "  [Int] n -> [Int] [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )"
@@ -185,23 +236,23 @@ spec = do
           ]
 
       it "evaluates" $ do
-        interpret program "f 0" `shouldBe` "1"
-        interpret program "f 1" `shouldBe` "1"
-        interpret program "f 2" `shouldBe` "2"
-        interpret program "f 3" `shouldBe` "2"
-        interpret program "f 4" `shouldBe` "3"
-        interpret program "f 5" `shouldBe` "3"
-        interpret program "f 6" `shouldBe` "4"
-        interpret program "m 0" `shouldBe` "0"
-        interpret program "m 1" `shouldBe` "0"
-        interpret program "m 2" `shouldBe` "1"
-        interpret program "m 3" `shouldBe` "2"
-        interpret program "m 4" `shouldBe` "2"
-        interpret program "m 5" `shouldBe` "3"
-        interpret program "m 6" `shouldBe` "4"
+        interpret program "f 0" `shouldReturn` "1"
+        interpret program "f 1" `shouldReturn` "1"
+        interpret program "f 2" `shouldReturn` "2"
+        interpret program "f 3" `shouldReturn` "2"
+        interpret program "f 4" `shouldReturn` "3"
+        interpret program "f 5" `shouldReturn` "3"
+        interpret program "f 6" `shouldReturn` "4"
+        interpret program "m 0" `shouldReturn` "0"
+        interpret program "m 1" `shouldReturn` "0"
+        interpret program "m 2" `shouldReturn` "1"
+        interpret program "m 3" `shouldReturn` "2"
+        interpret program "m 4" `shouldReturn` "2"
+        interpret program "m 5" `shouldReturn` "3"
+        interpret program "m 6" `shouldReturn` "4"
 
 
-    describe "list (quantified type operators)" $ do
+    describe "quantified type operators (list)" $ do
 
       let program = unlines
             [ "type List a = cases"
@@ -220,7 +271,7 @@ spec = do
             ]
 
       it "type checks" $ do
-        show (check program :: Annotated Program) `shouldBe` unlines
+        check program `shouldReturn` unlines
           [ "type List a = cases"
           , "  [forall a . List a] Nil"
           , "  [forall a . ( a , List a ) -> List a] Cons ( a , List a )"
@@ -232,9 +283,9 @@ spec = do
           , "  [& List Int] Cons [& ( Int , List Int )] ( [Int] x , [& List Int] xs ) -> [Int] [( Int , Int ) -> Int] add_int [( Int , Int )] ( [Int] x , [Int] [& List Int -> Int] sum [& List Int] xs )"
           ]
 
-      it "evaulates" $ do
-        interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in sum &xs" `shouldBe` "6"
-        interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in let ys = (map (\\x -> x * 2)) &xs in sum &ys" `shouldBe` "12"
+      it "evaluates" $ do
+        interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in sum &xs" `shouldReturn` "6"
+        interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in let ys = (map (\\x -> x * 2)) &xs in sum &ys" `shouldReturn` "12"
 
 
     describe "shadowing" $ do
@@ -251,7 +302,7 @@ spec = do
             ]
 
       it "type checks" $ do
-        show (check program :: Annotated Program) `shouldBe` unlines
+        check program `shouldReturn` unlines
           [ "f = [Int -> Int] \\ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where"
           , "  f : Int -> Int = [Int -> Int] \\ [Int] x -> [Int] x"
           , "g = [Int -> Int] \\ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where"
@@ -260,6 +311,6 @@ spec = do
           , "    [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) , [Int] n )"
           ]
 
-      it "evaulates" $ do
-        interpret program "f 5" `shouldBe` "5"
-        interpret program "g 5" `shouldBe` "120"
+      it "evaluates" $ do
+        interpret program "f 5" `shouldReturn` "5"
+        interpret program "g 5" `shouldReturn` "120"

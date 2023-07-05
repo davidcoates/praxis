@@ -29,6 +29,7 @@ module Praxis
   , try
 
   , runPraxis
+  , runSilent
   , runInternal
 
   -- |Lift an IO computation to the Praxis monad
@@ -93,7 +94,7 @@ import           Value
 data Flags = Flags
   { _debug       :: Bool
   , _interactive :: Bool
-  , _static      :: Bool              -- ^Set for internal pure computations evaluated at compile time
+  , _silent      :: Bool -- silence IO (for tests, and for internal runs which are guaranteed not to throw / use IO)
   } deriving (Show)
 
 data Fresh = Fresh
@@ -157,7 +158,7 @@ instance Functor f => Functor (PraxisT f) where
   fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
 
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = False, _interactive = False, _static = False }
+defaultFlags = Flags { _debug = False, _interactive = False, _silent = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("?t"++) . show) [0..]
@@ -233,18 +234,22 @@ try p = do
     Nothing -> lift (State.put s) >> return Nothing
     Just y  -> lift (State.put t) >> return (Just y)
 
+runSilent :: PraxisState -> Praxis a -> IO (Maybe a)
+runSilent s c = do
+  (x, _) <- runPraxis (flags . silent .= True >> c) s
+  return x
+
 runInternal :: PraxisState -> Praxis a -> a
-runInternal s c = case fst $ unsafePerformIO (runPraxis c' s) of
-  Nothing -> error "static computation failed"
+runInternal s c = case unsafePerformIO (runSilent s c) of
+  Nothing -> error "internal computation failed"
   Just x  -> x
-  where c' = (flags . static .= True) >> c
 
 liftIOUnsafe :: IO a -> Praxis a
 liftIOUnsafe io = lift (lift io)
 
 liftIO :: IO a -> Praxis a
 liftIO io = do
-  s <- use (flags . static)
+  s <- use (flags . silent)
   if s then empty else liftIOUnsafe io
 
 runPraxis :: Praxis a -> PraxisState -> IO (Maybe a, PraxisState)

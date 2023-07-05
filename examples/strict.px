@@ -1,6 +1,0 @@
-
-first : forall a b. (a, b) -> a
-first (x, _) = x
-
-main : () -> ()
-main () = first ((), put_str_ln "Praxis uses eager evaluation!")

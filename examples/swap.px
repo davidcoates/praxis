@@ -1,7 +1,0 @@
-
-swap : forall a b. (a, b) -> (b, a)
-swap (x, y) = (y, x)
-
-x = swap (1, 'a')
-
-y = x

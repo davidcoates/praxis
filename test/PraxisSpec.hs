@@ -211,6 +211,29 @@ spec = do
         interpret program "Right 1" `shouldReturn` "Right 1"
 
 
+    describe "polymorphic data type (Fun)" $ do
+
+      let program = unlines
+            [ "type Fun [a, b] = Fun (a -> b)"
+            , ""
+            , "unbox_fun : forall a b. Fun [a, b] -> a -> b"
+            , "unbox_fun (Fun f) x = f x"
+            , ""
+            , "id_fun : forall a. Fun [a, a]"
+            , "id_fun = Fun (\\x -> x)"
+            ]
+
+      it "type checks" $ do
+        check program `shouldReturn` unlines
+          [ "type Fun [ a , b ] = [forall a b . ( a -> b ) -> Fun [ a , b ]] Fun ( a -> b )"
+          , "unbox_fun : forall 't0 't1 . Fun [ 't0 , 't1 ] -> 't0 -> 't1 = [Fun [ 't0 , 't1 ] -> 't0 -> 't1] \\ [Fun [ 't0 , 't1 ]] Fun ['t0 -> 't1] f -> ['t0 -> 't1] \\ ['t0] x -> ['t1] ['t0 -> 't1] f ['t0] x"
+          , "id_fun : forall 't2 . Fun [ 't2 , 't2 ] = [Fun [ 't2 , 't2 ]] [( 't2 -> 't2 ) -> Fun [ 't2 , 't2 ]] Fun ['t2 -> 't2] ( \\ ['t2] x -> ['t2] x )"
+          ]
+
+      it "evaluates" $ do
+        interpret program "(unbox_fun id_fun) 4"  `shouldReturn` "4"
+
+
   describe "complex programs" $ do
 
     describe "mutual recursion" $ do

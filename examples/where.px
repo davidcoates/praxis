@@ -1,6 +1,0 @@
-
-main : () -> ()
-main () = put_int x where
-  y = 1
-  x = let z = 2 in y + z
-

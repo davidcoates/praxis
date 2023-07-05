@@ -241,6 +241,7 @@ spec = do
 
       let program = unlines
             [ "f x = f x where"
+            , "  f : Int -> Int"
             , "  f x = x"
             , ""
             , "g x = f x where"
@@ -249,7 +250,16 @@ spec = do
             , "    n -> f (n - 1) * n"
             ]
 
-      -- FIXME!
       it "type checks" $ do
-        show (check program :: Annotated Program) `shouldBe` ""
+        show (check program :: Annotated Program) `shouldBe` unlines
+          [ "f = [Int -> Int] \\ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where"
+          , "  f : Int -> Int = [Int -> Int] \\ [Int] x -> [Int] x"
+          , "g = [Int -> Int] \\ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where"
+          , "  f = [Int -> Int] cases"
+          , "    [Int] 0 -> [Int] 1"
+          , "    [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) , [Int] n )"
+          ]
 
+      it "evaulates" $ do
+        interpret program "f 5" `shouldBe` "5"
+        interpret program "g 5" `shouldBe` "120"

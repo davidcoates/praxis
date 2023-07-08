@@ -1,10 +1,12 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE NamedFieldPuns         #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeOperators          #-}
+
 
 module Check.Type.Generate
   ( run
@@ -165,11 +167,11 @@ program (a :< Program ds) = do
   return (a :< Program ds)
 
 dataCon :: [Annotated QTyVar] -> Annotated Type -> Annotated DataCon -> Praxis (Annotated DataCon)
-dataCon vars rt ((s, Nothing) :< DataCon n at) = do
-  let ct = phantom $ Forall vars [] $ case at of -- Type of the constructor -- FIXME constraints???
-        Just at -> fun at rt
-        Nothing -> rt
-      da = ((s, Just (DataConInfo ct at rt)) :< DataCon n at)
+dataCon vars retType ((s, Nothing) :< DataCon n argType) = do
+  let fullType = phantom $ Forall vars [] $ case argType of -- Type of the constructor -- FIXME constraints???
+        Just argType' -> fun argType' retType
+        Nothing       -> retType
+      da = ((s, Just (DataConInfo {fullType, argType, retType})) :< DataCon n argType)
   daEnv %= Env.intro n da
   return da
 
@@ -307,8 +309,8 @@ exp = split $ \s -> \case
     return (fun t1 t2 :< Cases alts')
 
   Con n -> do
-    DataConInfo qt _ _ <- getData s n
-    t <- specialiseQType s qt
+    DataConInfo { fullType } <- getData s n
+    t <- specialiseQType s fullType
     return (t :< Con n)
 
   Do ss -> save tEnv $ do
@@ -425,20 +427,20 @@ pat op p = snd <$> pat' p where
 
     PatCon n p -> do
       -- Lookup the data alternative with this name
-      DataConInfo qt at rt <- getData s n
-      when (isJust at /= isJust p) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
+      DataConInfo { fullType, argType, retType } <- getData s n
+      when (isJust argType /= isJust p) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
 
-      let Forall vs cs _ = view value qt
+      let Forall vs cs _ = view value fullType
       f <- specialise s vs cs
-      let rt' = f rt
+      let retType' = f retType
 
       case p of
-        Nothing -> return (rt', wrap rt' :< PatCon n Nothing)
+        Nothing -> return (retType', wrap retType' :< PatCon n Nothing)
         Just p -> do
-          (pt, p') <- pat' p
-          let Just at' = at
-          require $ newConstraint (pt `TEq` f at') (ConPattern n) s
-          return (rt', wrap rt' :< PatCon n (Just p'))
+          (patArgType, p') <- pat' p
+          let Just argType' = argType
+          require $ newConstraint (patArgType `TEq` f argType') (ConPattern n) s
+          return (retType', wrap retType' :< PatCon n (Just p'))
 
     PatHole -> do
       t <- freshTyUni

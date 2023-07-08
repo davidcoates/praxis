@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE NamedFieldPuns       #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -206,7 +207,7 @@ type family Annotation a where
   Annotation Pat      = Annotated Type
   Annotation TyPat    = Annotated Kind
   Annotation Type     = Annotated Kind
-  Annotation DataCon  = DataConInfo -- FIXME should just be a map?
+  Annotation DataCon  = DataConInfo
   Annotation TyProp   = Derivation TyProp
   Annotation KindProp = Derivation KindProp
   Annotation a        = Void
@@ -245,7 +246,15 @@ instance Pretty (Annotated a) => Pretty (Derivation a) where
   pretty (Root r)       = "\n|-> (" <> pretty r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
 
-data DataConInfo = DataConInfo (Annotated QType) (Maybe (Annotated Type)) (Annotated Type)
+-- A data constructor C for a type T, either has
+--
+-- C : forall vs. A -> T vs
+-- or
+-- C : forall vs. T vs
+--
+-- Here "A" is the argType, "T vs" is the retType.
+--
+data DataConInfo = DataConInfo { fullType :: Annotated QType, argType :: Maybe (Annotated Type), retType :: Annotated Type }
 
 instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataConInfo where
-  pretty (DataConInfo qt at rt) = pretty qt
+  pretty (DataConInfo { fullType }) = pretty fullType

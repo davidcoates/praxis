@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE Rank2Types                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE StandaloneDeriving        #-}
@@ -201,7 +202,7 @@ instance Term Bind where
 
 instance Term DataCon where
   witness = IDataCon
-  complete _ f (DataConInfo ct args rt) = DataConInfo <$> f ct <*> traverse f args <*> f rt
+  complete _ f (DataConInfo { fullType, argType, retType }) = (\fullType argType retType -> DataConInfo { fullType, argType, retType}) <$> f fullType <*> traverse f argType <*> f retType
   recurse f = \case
     DataCon n at -> DataCon n <$> traverse f at
 

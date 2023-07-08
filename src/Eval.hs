@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE NamedFieldPuns         #-}
 {-# LANGUAGE OverloadedStrings      #-}
 
 module Eval
@@ -84,8 +85,8 @@ exp ((s, _) :< e) = case e of
 
   Con n -> do
     Just da <- daEnv `uses` lookup n
-    let DataConInfo _ at _ = view (annotation . just) da
-    return $ case at of
+    let DataConInfo { argType } = view (annotation . just) da
+    return $ case argType of
       Nothing -> Value.Con n Nothing
       Just _  -> Value.Fun (\v -> return $ Value.Con n (Just v))
 

@@ -84,7 +84,7 @@ exp ((s, _) :< e) = case e of
 
   Con n -> do
     Just da <- daEnv `uses` lookup n
-    let DataAltInfo _ at _ = view (annotation . just) da
+    let DataConInfo _ at _ = view (annotation . just) da
     return $ case at of
       Nothing -> Value.Con n Nothing
       Just _  -> Value.Fun (\v -> return $ Value.Con n (Just v))

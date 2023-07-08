@@ -12,7 +12,7 @@ module Term
 
   -- | T0
   , Bind(..)
-  , DataAlt(..)
+  , DataCon(..)
   , Decl(..)
   , Exp(..)
   , Lit(..)
@@ -50,13 +50,12 @@ module Term
   , covalue
 
   , Derivation(..)
-  , DataAltInfo(..)
+  , DataConInfo(..)
   ) where
 
 import           Common
 
 import           Data.Set (Set)
-
 
 -- * OPERATORS *
 
@@ -79,10 +78,10 @@ data Prec = Prec Ordering Op
 data Bind = Bind (Annotated Pat) (Annotated Exp)
   deriving (Eq, Ord)
 
-data DataAlt = DataAlt Name (Maybe (Annotated Type))
+data DataCon = DataCon Name (Maybe (Annotated Type))
   deriving (Eq, Ord)
 
-data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataAlt]
+data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
           | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
           | DeclSig Name (Annotated QType) -- ^Parsing only
@@ -207,10 +206,10 @@ type family Annotation a where
   Annotation Pat      = Annotated Type
   Annotation TyPat    = Annotated Kind
   Annotation Type     = Annotated Kind
-  Annotation DataAlt  = DataAltInfo -- FIXME should just be a map?
-  Annotation TyProp = Derivation TyProp
+  Annotation DataCon  = DataConInfo -- FIXME should just be a map?
+  Annotation TyProp   = Derivation TyProp
   Annotation KindProp = Derivation KindProp
-  Annotation a              = Void
+  Annotation a        = Void
 
 type Annotated a = Tag (Source, Maybe (Annotation a)) a
 
@@ -246,7 +245,7 @@ instance Pretty (Annotated a) => Pretty (Derivation a) where
   pretty (Root r)       = "\n|-> (" <> pretty r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
 
-data DataAltInfo = DataAltInfo (Annotated QType) (Maybe (Annotated Type)) (Annotated Type)
+data DataConInfo = DataConInfo (Annotated QType) (Maybe (Annotated Type)) (Annotated Type)
 
-instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataAltInfo where
-  pretty (DataAltInfo qt at rt) = pretty qt
+instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataConInfo where
+  pretty (DataConInfo qt at rt) = pretty qt

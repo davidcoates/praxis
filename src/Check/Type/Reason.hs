@@ -8,9 +8,9 @@ data Reason = BindCongruence
             | Captured Name
             | CaseCongruence
             | ConPattern Name
-            | FuncApplication
-            | FuncCongruence Name
-            | FuncSignature Name
+            | FunApplication
+            | FunCongruence Name
+            | FunSignature Name
             | IfCondition
             | IfCongruence
             | SwitchCondition
@@ -25,20 +25,20 @@ data Reason = BindCongruence
 -- TODO Pretty
 instance Show Reason where
   show = \case
-    BindCongruence   -> "Binding must have same type on both sides"
-    Captured n       -> "Variable '" ++ n ++ "' captured"
-    CaseCongruence   -> "Alternatives of 'case' expression must have the same type"
-    ConPattern n     -> "Constructor pattern '" ++ n ++ "'"
-    FuncApplication  -> "Function application"
-    FuncCongruence n -> "Function '" ++ n ++ "'"
-    FuncSignature n  -> "Function signature for '" ++ n ++ "'"
-    IfCondition      -> "Type of 'if' condition must be Bool"
-    IfCongruence     -> "Branches of 'if' expression must have the same type"
-    SwitchCondition  -> "Type of 'switch' condition must be Bool"
-    SwitchCongruence -> "Branches of 'switch' expression must have the same type"
-    Instance n       -> "Monomorphic usage of '" ++ n ++ "'"
-    MultiAlias n     -> "Variable '" ++ n ++ "' is not a unique alias"
-    MultiUse n       -> "Variable '" ++ n ++ "' used more than once"
-    UserSignature    -> "User-supplied signature"
-    UnsafeView n     -> "Variable '" ++ n ++ "' viewed after being used"
-    Specialisation   -> "Specialisation"
+    BindCongruence   -> "binding must have same type on both sides"
+    Captured n       -> "variable '" ++ n ++ "' captured"
+    CaseCongruence   -> "alternatives of 'case' expression must have the same type"
+    ConPattern n     -> "constructor pattern '" ++ n ++ "'"
+    FunApplication   -> "function application"
+    FunCongruence n  -> "function '" ++ n ++ "'"
+    FunSignature n   -> "function signature for '" ++ n ++ "'"
+    IfCondition      -> "type of 'if' condition must be Bool"
+    IfCongruence     -> "branches of 'if' expression must have the same type"
+    SwitchCondition  -> "type of 'switch' condition must be Bool"
+    SwitchCongruence -> "branches of 'switch' expression must have the same type"
+    Instance n       -> "monomorphic usage of '" ++ n ++ "'"
+    MultiAlias n     -> "variable '" ++ n ++ "' is not a unique alias"
+    MultiUse n       -> "variable '" ++ n ++ "' used more than once"
+    UserSignature    -> "user-supplied signature"
+    UnsafeView n     -> "variable '" ++ n ++ "' viewed after being used"
+    Specialisation   -> "specialisation"

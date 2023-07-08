@@ -100,7 +100,7 @@ getType s n = do
     Just t  -> return t
     Nothing -> throwAt s (NotInScope n)
 
-getData :: Source -> Name -> Praxis DataAltInfo
+getData :: Source -> Name -> Praxis DataConInfo
 getData s n = do
   l <- use daEnv
   case lookup n l of
@@ -124,7 +124,7 @@ generate x = ($ x) $ case witness :: I a of
   IProgram -> program
   IExp     -> exp
   IBind    -> bind
-  IDataAlt -> error "standalone DataAlt"
+  IDataCon -> error "standalone DataCon"
   IDecl    -> error "standalone Decl"
   IPat     -> error "standalone Pat"
   _        -> value (recurse generate)
@@ -164,12 +164,12 @@ program (a :< Program ds) = do
   ds <- decls ds
   return (a :< Program ds)
 
-dataAlt :: [Annotated QTyVar] -> Annotated Type -> Annotated DataAlt -> Praxis (Annotated DataAlt)
-dataAlt vars rt ((s, Nothing) :< DataAlt n at) = do
+dataCon :: [Annotated QTyVar] -> Annotated Type -> Annotated DataCon -> Praxis (Annotated DataCon)
+dataCon vars rt ((s, Nothing) :< DataCon n at) = do
   let ct = phantom $ Forall vars [] $ case at of -- Type of the constructor -- FIXME constraints???
         Just at -> fun at rt
         Nothing -> rt
-      da = ((s, Just (DataAltInfo ct at rt)) :< DataAlt n at)
+      da = ((s, Just (DataConInfo ct at rt)) :< DataCon n at)
   daEnv %= Env.intro n da
   return da
 
@@ -215,7 +215,7 @@ decl forwardT = splitTrivial $ \s -> \case
           Just p | KindFun k1 k2 <- view value k -> TyApply (TyCon n `as` k) (patToTy p) `as` k2
         vars = Set.toList (foldMap unis p)
 
-    alts' <- traverse (dataAlt vars rt) alts
+    alts' <- traverse (dataCon vars rt) alts
     return $ DeclData n p alts'
 
   -- TODO check no duplicate variables
@@ -239,7 +239,7 @@ decl forwardT = splitTrivial $ \s -> \case
       Nothing -> do
         e' <- exp e
         case forwardT of
-          Just (_ :< Forall [] [] t) -> equal t (view ty e') (FuncCongruence n) s
+          Just (_ :< Forall [] [] t) -> equal t (view ty e') (FunCongruence n) s
           Nothing                    -> tEnv %= intro n (mono (view ty e'))
         return $ DeclVar n Nothing e'
 
@@ -263,9 +263,9 @@ decl forwardT = splitTrivial $ \s -> \case
         our . axioms %= (++ [ axiom (view value (rewrite c)) | c <- cs ]) -- Constraints in the signature are added as axioms
         e' <- exp (rewrite e)
         case forwardT of
-          Just _  -> return () -- forwardT is sig, so a FuncCongruence constraint is redundant (covered by the below FuncSignature constraint)
+          Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)
           Nothing -> tEnv %= intro n sig
-        equal (rewrite t) (view ty e') (FuncSignature n) s
+        equal (rewrite t) (view ty e') (FunSignature n) s
         return $ DeclVar n (Just (rewrite sig)) e'
 
 
@@ -286,7 +286,7 @@ exp = split $ \s -> \case
     x' <- exp x
     let ft = view ty f'
     let xt = view ty x'
-    require $ newConstraint (ft `TEq` fun xt yt) FuncApplication s
+    require $ newConstraint (ft `TEq` fun xt yt) FunApplication s
     return (yt :< Apply f' x')
 
   Case x alts -> do
@@ -307,7 +307,7 @@ exp = split $ \s -> \case
     return (fun t1 t2 :< Cases alts')
 
   Con n -> do
-    DataAltInfo qt _ _ <- getData s n
+    DataConInfo qt _ _ <- getData s n
     t <- specialiseQType s qt
     return (t :< Con n)
 
@@ -425,7 +425,7 @@ pat op p = snd <$> pat' p where
 
     PatCon n p -> do
       -- Lookup the data alternative with this name
-      DataAltInfo qt at rt <- getData s n
+      DataConInfo qt at rt <- getData s n
       when (isJust at /= isJust p) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
 
       let Forall vs cs _ = view value qt

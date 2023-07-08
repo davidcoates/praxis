@@ -4,9 +4,9 @@ module Check.Kind.Reason
 
 import           Common
 
-data Reason = AppType
-            | AppOp
-            | DataAltType Name
+data Reason = TyFunApplication
+            | TyOpApplication
+            | DataConType Name
             | DataType Name
             | FunType
             | OpType
@@ -15,10 +15,9 @@ data Reason = AppType
 -- TODO Pretty
 instance Show Reason where
   show = \case
-    AppType       -> "Type application"
-    AppOp         -> "Type operator application"
-    DataAltType n -> "Data type constructor '" ++ n ++ "' must return a Type"
-    DataType n    -> "Data type '" ++ n ++ "' must be a Type"
-    FunType       -> "Function type"
-    OpType        -> "Type operator"
-    PairType      -> "Type pair"
+    TyFunApplication -> "type function application"
+    TyOpApplication  -> "type operator application"
+    DataConType n    -> "data constructor '" ++ n ++ "' must return kind Type"
+    DataType n       -> "type constructor'" ++ n ++ "' must have kind Type"
+    FunType          -> "type function must have kind (Type -> Type)"
+    PairType         -> "type pair must have kind (Type, Type)"

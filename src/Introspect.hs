@@ -55,7 +55,7 @@ data I a where
   IPrec     :: I Prec
   -- | T0
   IBind    :: I Bind
-  IDataAlt :: I DataAlt
+  IDataCon :: I DataCon
   IDecl    :: I Decl
   IExp     :: I Exp
   IPat     :: I Pat
@@ -89,7 +89,7 @@ switch a b eq neq = case (a, b) of
   (IPrec, IPrec)                     -> eq
   -- | T0
   (IBind, IBind)                     -> eq
-  (IDataAlt, IDataAlt)               -> eq
+  (IDataCon, IDataCon)               -> eq
   (IDecl, IDecl)                     -> eq
   (IExp, IExp)                       -> eq
   (IPat, IPat)                       -> eq
@@ -199,11 +199,11 @@ instance Term Bind where
   recurse f = \case
     Bind a b -> Bind <$> f a <*> f b
 
-instance Term DataAlt where
-  witness = IDataAlt
-  complete _ f (DataAltInfo ct args rt) = DataAltInfo <$> f ct <*> traverse f args <*> f rt
+instance Term DataCon where
+  witness = IDataCon
+  complete _ f (DataConInfo ct args rt) = DataConInfo <$> f ct <*> traverse f args <*> f rt
   recurse f = \case
-    DataAlt n at -> DataAlt n <$> traverse f at
+    DataCon n at -> DataCon n <$> traverse f at
 
 instance Term Decl where
   witness = IDecl

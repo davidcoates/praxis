@@ -115,7 +115,7 @@ type TEnv = LEnv Name (Annotated QType)
 
 type KEnv = Env Name (Annotated Kind)
 
-type DAEnv = Env Name (Annotated DataAlt)
+type DAEnv = Env Name (Annotated DataCon)
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix

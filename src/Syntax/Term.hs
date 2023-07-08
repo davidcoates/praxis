@@ -113,7 +113,7 @@ definePrisms ''OpRules
 definePrisms ''Prec
 
 definePrisms ''Bind
-definePrisms ''DataAlt
+definePrisms ''DataCon
 definePrisms ''Decl
 definePrisms ''Exp
 definePrisms ''Pat
@@ -141,7 +141,7 @@ syntax = \case
   IOpRules        -> opRules
   IPrec           -> prec
   -- | T0
-  IDataAlt        -> dataAlt
+  IDataCon        -> dataAlt
   IDecl           -> decl
   IExp            -> exp
   IPat            -> pat
@@ -236,8 +236,8 @@ declData = _DeclData <$> reservedId "type" *> conid <*> optional (annotated tyPa
   alts = _Singleton <$> annotated dataAlt <|> reservedId "cases" *> block (annotated dataAlt)
   _Singleton = Prism (\x -> [x]) (\case { [x] -> Just x; _ -> Nothing }) -- short definition for a single constructor
 
-dataAlt :: Syntax f => f DataAlt
-dataAlt = _DataAlt <$> conid <*> optional (annotated ty1)
+dataAlt :: Syntax f => f DataCon
+dataAlt = _DataCon <$> conid <*> optional (annotated ty1)
 
 tyPat :: Syntax f => f TyPat
 tyPat = _TyPatVar <$> varid <|>

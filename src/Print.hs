@@ -80,5 +80,5 @@ label i (Just a) = case i of
   IType     -> prettyIf Kinds a
   ITyProp   -> pretty a
   IKindProp -> pretty a
-  IDataAlt  -> pretty a
+  IDataCon  -> pretty a
   _         -> blank

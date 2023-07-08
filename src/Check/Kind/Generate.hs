@@ -44,7 +44,7 @@ generate x = ($ x) $ case witness :: I a of
   IDecl    -> decl
   IType    -> ty
   ITyPat   -> tyPat
-  IDataAlt -> dataAlt
+  IDataCon -> dataCon
   _        -> value (recurse generate)
 
 ty :: Annotated Type -> Praxis (Annotated Type)
@@ -55,11 +55,11 @@ ty = split $ \s -> \case
       a' <- ty a
       case view kind f' of
         (_ :< KindOp) -> do
-          require $ newConstraint (view kind a' `KEq` phantom KindType) AppOp s
+          require $ newConstraint (view kind a' `KEq` phantom KindType) TyOpApplication s
           return (phantom KindType :< TyApply f' a')
         fk -> do
           k <- freshKindUni
-          require $ newConstraint (fk `KEq` phantom (KindFun (view kind a') k)) AppType s
+          require $ newConstraint (fk `KEq` phantom (KindFun (view kind a') k)) TyFunApplication s
           return (k :< TyApply f' a')
 
     TyCon n -> do
@@ -120,16 +120,16 @@ tyPat = split $ \s -> \case
     return (phantom (KindPair (view kind a') (view kind b')) :< TyPatPack a' b')
 
 
-dataAlt :: Annotated DataAlt -> Praxis (Annotated DataAlt)
-dataAlt = splitTrivial $ \s -> \case
+dataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
+dataCon = splitTrivial $ \s -> \case
 
-  DataAlt n at -> do
+  DataCon n at -> do
     case at of
-      Nothing -> return $ DataAlt n Nothing
+      Nothing -> return $ DataCon n Nothing
       Just at -> do
         at' <- generate at
-        require $ newConstraint (view kind at' `KEq` phantom KindType) (DataAltType n) s -- TODO should just match kind of data type?
-        return $ DataAlt n (Just at')
+        require $ newConstraint (view kind at' `KEq` phantom KindType) (DataConType n) s -- TODO should just match kind of data type?
+        return $ DataCon n (Just at')
 
 
 fun :: Annotated Kind -> Annotated Kind -> Annotated Kind

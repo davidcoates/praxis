@@ -4,16 +4,16 @@
 
 module PraxisSpec where
 
+import qualified Check         (check)
 import           Common
 import           Inbuilts
+import qualified Interpret     (interpret)
 import           Introspect
 import qualified Parse         (parse)
-import qualified Check         (check)
-import qualified Interpret     (interpret)
-import           Value (Value(..))
 import           Praxis
 import           Print
 import           Term
+import           Value         (Value (..))
 
 import           Control.Monad (forM_)
 import           Prelude       hiding (exp, unlines)

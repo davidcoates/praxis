@@ -18,17 +18,17 @@ data Check = Warmup
 
 instance Show Stage where
   show = \case
-    Unknown     -> "Unknown"
-    Tokenise    -> "Tokenise"
-    Layout      -> "Tokenise (Layout)"
-    Parse       -> "Parse"
-    Desugar     -> "Parse (Desugar)"
-    KindCheck c -> "Kind Check" ++ show c
-    TypeCheck c -> "Type Check" ++ show c
-    Evaluate    -> "Evaluate"
+    Unknown     -> "unknown"
+    Tokenise    -> "tokenise"
+    Layout      -> "tokenise (layout)"
+    Parse       -> "parse"
+    Desugar     -> "parse (desugar)"
+    KindCheck c -> "kind check" ++ show c
+    TypeCheck c -> "type check" ++ show c
+    Evaluate    -> "evaluate"
 
 instance Show Check where
   show = \case
     Warmup   -> ""
-    Generate -> " (Constraint Generator)"
-    Solve    -> " (Constraint Solver)"
+    Generate -> " (constraint generator)"
+    Solve    -> " (constraint solver)"

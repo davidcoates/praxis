@@ -155,6 +155,32 @@ fac = [Int -> Int] cases
         interpret program "fac 5"  `shouldReturn` "120"
         interpret program "fac 15" `shouldReturn` "1307674368000"
 
+
+    describe "mixfix operators" $ do
+
+      let program = [r|
+implies : (Bool, Bool) -> Bool
+implies (a, b) = b || !a
+
+operator (_ --> _) = implies
+
+iff : (Bool, Bool) -> Bool
+iff (a, b) = (a && b) || (!a && !b)
+
+operator (_ <-> _) = iff where
+  precedence below (_ --> _)
+
+ifthenelse : (Bool, Int, Int) -> Int
+ifthenelse (c, a, b) = if c then a else b
+
+operator (_ <?> _ <:> _) = ifthenelse where
+  precedence below (_ <-> _)
+|]
+
+      it "evaluates" $ do
+        interpret program "False <-> True <?> 1 <:> 0" `shouldReturn` "0"
+
+
   describe "simple polymorphic programs" $ do
 
     describe "polymorphic function (swap)" $ do

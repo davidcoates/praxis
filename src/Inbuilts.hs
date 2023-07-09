@@ -72,6 +72,7 @@ inbuilts =
       Fun (\(Array a) -> Value.Int <$> Value.len a))
   , ("set",          poly "forall a. (Array a, Int, a) -> Array a",
       Fun (\(Pair (Array a) (Pair (Int i) e)) -> Value.writeArray a i e >> pure (Array a)))
+  , ("not",          poly "Bool -> Bool", Fun (\(Bool a) -> pure (Bool (not a))))
   , ("or",           poly "(Bool, Bool) -> Bool", liftB (||))
   , ("and",          poly "(Bool, Bool) -> Bool", liftB (&&))
   , ("eq_int",       poly "(Int, Int) -> Bool", liftE (==)) -- TODO use modules
@@ -139,9 +140,15 @@ operator (_ [ _ ]) = at
 
 operator (_ [ _ ] <- _) = set
 
-operator (_ || _) = or
+operator (! _) = not
 
-operator (_ && _) = and
+operator (_ && _) = and where
+  left associative
+  precedence below (! _)
+
+operator (_ || _) = or where
+  left associative
+  precedence below (_ && _)
 
 operator (_ == _) = eq_int where
   precedence below (_ + _)

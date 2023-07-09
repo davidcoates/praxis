@@ -52,7 +52,7 @@ whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment
   where newline = match (`elem` "\r\n\f") *> pure ()
         space = match isSpace *> pure ()
-        comment = matches 2 (== "--") *> until newline consume *> pure ()
+        comment = satisfies 3 (\[a, b, c] -> a == '-' && b == '-' && not (isSymbol c)) *> until newline consume *> pure ()
 
 layout :: Tokeniser Token
 layout = Layout <$> match (`elem` "{};")

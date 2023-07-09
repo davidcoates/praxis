@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE TypeOperators     #-}
+{-# LANGUAGE QuasiQuotes     #-}
 
 module PraxisSpec where
 
@@ -14,10 +15,9 @@ import           Praxis
 import           Print
 import           Term
 import           Value         (Value (..))
+import           Text.RawString.QQ
 
 import           Control.Monad (forM_)
-import           Prelude       hiding (exp, unlines)
-import qualified Prelude       (unlines)
 import           Test.Hspec
 
 
@@ -40,8 +40,8 @@ interpret program exp = run $ do
     (_, v) <- Interpret.interpret exp :: Praxis (Annotated Exp, Value)
     return v
 
--- Drop trailing newline
-unlines = init . Prelude.unlines
+trim :: String -> String
+trim = init . tail
 
 spec :: Spec
 spec = do
@@ -103,7 +103,7 @@ spec = do
       let program = "min (x, y) = if x < y then x else y"
 
       it "type checks" $ do
-        check program `shouldReturn` "min = [( Int , Int ) -> Int] \\ [( Int , Int )] ( [Int] x , [Int] y ) -> [Int] if [Bool] [( Int , Int ) -> Bool] lt_int [( Int , Int )] ( [Int] x , [Int] y ) then [Int] x else [Int] y"
+        check program `shouldReturn` [r|min = [( Int , Int ) -> Int] \ [( Int , Int )] ( [Int] x , [Int] y ) -> [Int] if [Bool] [( Int , Int ) -> Bool] lt_int [( Int , Int )] ( [Int] x , [Int] y ) then [Int] x else [Int] y|]
 
       it "evaluates" $ do
         interpret program "min (1, 2)" `shouldReturn` "1"
@@ -113,16 +113,21 @@ spec = do
 
     describe "switch (sign)" $ do
 
-      let program = unlines
-            [ "sign : Int -> Int"
-            , "sign n = switch"
-            , "  n  < 0 -> -1"
-            , "  n == 0 ->  0"
-            , "  n  > 0 -> +1"
-            ]
+      let program = [r|
+sign : Int -> Int
+sign n = switch
+  n  < 0 -> -1
+  n == 0 ->  0
+  n  > 0 -> +1
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` "sign : Int -> Int = [Int -> Int] \\ [Int] n -> [Int] switch\n  [Bool] [( Int , Int ) -> Bool] lt_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] [Int -> Int] negate_int [Int] 1\n  [Bool] [( Int , Int ) -> Bool] eq_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] 0\n  [Bool] [( Int , Int ) -> Bool] gt_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] [Int -> Int] unary_plus_int [Int] 1"
+        check program `shouldReturn` trim [r|
+sign : Int -> Int = [Int -> Int] \ [Int] n -> [Int] switch
+  [Bool] [( Int , Int ) -> Bool] lt_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] [Int -> Int] negate_int [Int] 1
+  [Bool] [( Int , Int ) -> Bool] eq_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] 0
+  [Bool] [( Int , Int ) -> Bool] gt_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] [Int -> Int] unary_plus_int [Int] 1
+|]
 
       it "evaluates" $ do
         interpret program "sign 0"    `shouldReturn` "0"
@@ -130,41 +135,39 @@ spec = do
         interpret program "sign (-5)" `shouldReturn` "-1"
         interpret program "sign -5"   `shouldThrow` anyException -- Note: Parses as "sign - 5" (binary subtract)
 
-
     describe "recursion (factorial)" $ do
 
-      let program = unlines
-            [ "fac = cases"
-            , "  0 -> 1"
-            , "  n -> n * fac (n - 1)"
-            ]
+      let program = [r|
+fac = cases
+  0 -> 1
+  n -> n * fac (n - 1)
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` unlines
-          [ "fac = [Int -> Int] cases"
-          , "  [Int] 0 -> [Int] 1"
-          , "  [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] fac [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )"
-          ]
+        check program `shouldReturn` trim [r|
+fac = [Int -> Int] cases
+  [Int] 0 -> [Int] 1
+  [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] fac [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )
+|]
 
       it "evaluates" $ do
         interpret program "fac 0"  `shouldReturn` "1"
         interpret program "fac 5"  `shouldReturn` "120"
         interpret program "fac 15" `shouldReturn` "1307674368000"
 
-
   describe "simple polymorphic programs" $ do
 
     describe "polymorphic function (swap)" $ do
 
-      let program = unlines
-            [ "swap : forall a b. (a, b) -> (b, a)"
-            , "swap (a, b) = (b, a)"
-            ]
+      let program = [r|
+swap : forall a b. (a, b) -> (b, a)
+swap (a, b) = (b, a)
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` unlines
-          [ "swap : forall 't0 't1 . ( 't0 , 't1 ) -> ( 't1 , 't0 ) = [( 't0 , 't1 ) -> ( 't1 , 't0 )] \\ [( 't0 , 't1 )] ( ['t0] a , ['t1] b ) -> [( 't1 , 't0 )] ( ['t1] b , ['t0] a )"
-          ]
+        check program `shouldReturn` trim [r|
+swap : forall 't0 't1 . ( 't0 , 't1 ) -> ( 't1 , 't0 ) = [( 't0 , 't1 ) -> ( 't1 , 't0 )] \ [( 't0 , 't1 )] ( ['t0] a , ['t1] b ) -> [( 't1 , 't0 )] ( ['t1] b , ['t0] a )
+|]
 
       it "evaluates" $ do
         interpret program "swap (0, 1)"      `shouldReturn` "(1, 0)"
@@ -176,15 +179,15 @@ spec = do
 
     describe "polymorphic function with constraint (copy)" $ do
 
-      let program = unlines
-            [ "copy : forall a. [Share a] => a -> (a, a)"
-            , "copy x = (x, x)"
-            ]
+      let program = [r|
+copy : forall a. [Share a] => a -> (a, a)
+copy x = (x, x)
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` unlines
-          [ "copy : forall 't0 . [ Share 't0 ] => 't0 -> ( 't0 , 't0 ) = ['t0 -> ( 't0 , 't0 )] \\ ['t0] x -> [( 't0 , 't0 )] ( ['t0] x , ['t0] x )"
-          ]
+        check program `shouldReturn` trim [r|
+copy : forall 't0 . [ Share 't0 ] => 't0 -> ( 't0 , 't0 ) = ['t0 -> ( 't0 , 't0 )] \ ['t0] x -> [( 't0 , 't0 )] ( ['t0] x , ['t0] x )
+|]
 
       it "evaluates" $ do
         interpret program "copy 0"         `shouldReturn` "(0, 0)"
@@ -193,18 +196,18 @@ spec = do
 
     describe "polymorphic data type (Either)" $ do
 
-      let program = unlines
-            [ "type Either [a, b] = cases"
-            , "    Left a"
-            , "    Right b"
-            ]
+      let program = [r|
+type Either [a, b] = cases
+    Left a
+    Right b
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` unlines
-          [ "type Either [ a , b ] = cases"
-          , "  [forall a b . a -> Either [ a , b ]] Left a"
-          , "  [forall a b . b -> Either [ a , b ]] Right b"
-          ]
+        check program `shouldReturn` trim [r|
+type Either [ a , b ] = cases
+  [forall a b . a -> Either [ a , b ]] Left a
+  [forall a b . b -> Either [ a , b ]] Right b
+|]
 
       it "evaluates" $ do
         interpret program "Left 0"  `shouldReturn` "Left 0"
@@ -213,22 +216,22 @@ spec = do
 
     describe "polymorphic data type (Fun)" $ do
 
-      let program = unlines
-            [ "type Fun [a, b] = Fun (a -> b)"
-            , ""
-            , "unbox_fun : forall a b. Fun [a, b] -> a -> b"
-            , "unbox_fun (Fun f) x = f x"
-            , ""
-            , "id_fun : forall a. Fun [a, a]"
-            , "id_fun = Fun (\\x -> x)"
-            ]
+      let program = [r|
+type Fun [a, b] = Fun (a -> b)
+
+unbox_fun : forall a b. Fun [a, b] -> a -> b
+unbox_fun (Fun f) x = f x
+
+id_fun : forall a. Fun [a, a]
+id_fun = Fun (\x -> x)
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` unlines
-          [ "type Fun [ a , b ] = [forall a b . ( a -> b ) -> Fun [ a , b ]] Fun ( a -> b )"
-          , "unbox_fun : forall 't0 't1 . Fun [ 't0 , 't1 ] -> 't0 -> 't1 = [Fun [ 't0 , 't1 ] -> 't0 -> 't1] \\ [Fun [ 't0 , 't1 ]] Fun ['t0 -> 't1] f -> ['t0 -> 't1] \\ ['t0] x -> ['t1] ['t0 -> 't1] f ['t0] x"
-          , "id_fun : forall 't2 . Fun [ 't2 , 't2 ] = [Fun [ 't2 , 't2 ]] [( 't2 -> 't2 ) -> Fun [ 't2 , 't2 ]] Fun ['t2 -> 't2] ( \\ ['t2] x -> ['t2] x )"
-          ]
+        check program `shouldReturn` trim [r|
+type Fun [ a , b ] = [forall a b . ( a -> b ) -> Fun [ a , b ]] Fun ( a -> b )
+unbox_fun : forall 't0 't1 . Fun [ 't0 , 't1 ] -> 't0 -> 't1 = [Fun [ 't0 , 't1 ] -> 't0 -> 't1] \ [Fun [ 't0 , 't1 ]] Fun ['t0 -> 't1] f -> ['t0 -> 't1] \ ['t0] x -> ['t1] ['t0 -> 't1] f ['t0] x
+id_fun : forall 't2 . Fun [ 't2 , 't2 ] = [Fun [ 't2 , 't2 ]] [( 't2 -> 't2 ) -> Fun [ 't2 , 't2 ]] Fun ['t2 -> 't2] ( \ ['t2] x -> ['t2] x )
+|]
 
       it "evaluates" $ do
         interpret program "(unbox_fun id_fun) 4"  `shouldReturn` "4"
@@ -238,25 +241,25 @@ spec = do
 
     describe "mutual recursion" $ do
 
-      let program = unlines
-            [ "f = cases"
-            , "  0 -> 1"
-            , "  n -> n - m f (n - 1)"
-            , ""
-            , "m = cases"
-            , "  0 -> 0"
-            , "  n -> n - f m (n - 1)"
-            ]
+      let program = [r|
+f = cases
+  0 -> 1
+  n -> n - m f (n - 1)
+
+m = cases
+  0 -> 0
+  n -> n - f m (n - 1)
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` unlines
-          [ "f = [Int -> Int] cases"
-          , "  [Int] 0 -> [Int] 1"
-          , "  [Int] n -> [Int] [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )"
-          , "m = [Int -> Int] cases"
-          , "  [Int] 0 -> [Int] 0"
-          , "  [Int] n -> [Int] [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )"
-          ]
+        check program `shouldReturn` trim [r|
+f = [Int -> Int] cases
+  [Int] 0 -> [Int] 1
+  [Int] n -> [Int] [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )
+m = [Int -> Int] cases
+  [Int] 0 -> [Int] 0
+  [Int] n -> [Int] [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )
+|]
 
       it "evaluates" $ do
         interpret program "f 0" `shouldReturn` "1"
@@ -277,62 +280,62 @@ spec = do
 
     describe "quantified type operators (list)" $ do
 
-      let program = unlines
-            [ "type List a = cases"
-            , "  Nil"
-            , "  Cons (a, List a)"
-            , ""
-            , "map : forall ?v a b. (?v a -> b) -> ?v List a -> List b"
-            , "map f = cases"
-            , "  Nil          -> Nil"
-            , "  Cons (x, xs) -> Cons (f x, (map f) xs)"
-            , ""
-            , "sum : &List Int -> Int"
-            , "sum = cases"
-            , "  Nil          -> 0"
-            , "  Cons (x, xs) -> x + sum xs"
-            ]
+      let program = [r|
+type List a = cases
+  Nil
+  Cons (a, List a)
+
+map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
+map f = cases
+  Nil          -> Nil
+  Cons (x, xs) -> Cons (f x, (map f) xs)
+
+sum : &List Int -> Int
+sum = cases
+  Nil          -> 0
+  Cons (x, xs) -> x + sum xs
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` unlines
-          [ "type List a = cases"
-          , "  [forall a . List a] Nil"
-          , "  [forall a . ( a , List a ) -> List a] Cons ( a , List a )"
-          , "map : forall ?'o0 't0 't1 . ( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1 = [( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1] \\ [?'o0 't0 -> 't1] f -> [?'o0 List 't0 -> List 't1] cases"
-          , "  [?'o0 List 't0] Nil -> [List 't1] Nil"
-          , "  [?'o0 List 't0] Cons [?'o0 ( 't0 , List 't0 )] ( [?'o0 't0] x , [?'o0 List 't0] xs ) -> [List 't1] [( 't1 , List 't1 ) -> List 't1] Cons [( 't1 , List 't1 )] ( ['t1] [?'o0 't0 -> 't1] f [?'o0 't0] x , [List 't1] [?'o0 List 't0 -> List 't1] ( [( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1] map [?'o0 't0 -> 't1] f ) [?'o0 List 't0] xs )"
-          , "sum : & List Int -> Int = [& List Int -> Int] cases"
-          , "  [& List Int] Nil -> [Int] 0"
-          , "  [& List Int] Cons [& ( Int , List Int )] ( [Int] x , [& List Int] xs ) -> [Int] [( Int , Int ) -> Int] add_int [( Int , Int )] ( [Int] x , [Int] [& List Int -> Int] sum [& List Int] xs )"
-          ]
+        check program `shouldReturn` trim [r|
+type List a = cases
+  [forall a . List a] Nil
+  [forall a . ( a , List a ) -> List a] Cons ( a , List a )
+map : forall ?'o0 't0 't1 . ( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1 = [( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1] \ [?'o0 't0 -> 't1] f -> [?'o0 List 't0 -> List 't1] cases
+  [?'o0 List 't0] Nil -> [List 't1] Nil
+  [?'o0 List 't0] Cons [?'o0 ( 't0 , List 't0 )] ( [?'o0 't0] x , [?'o0 List 't0] xs ) -> [List 't1] [( 't1 , List 't1 ) -> List 't1] Cons [( 't1 , List 't1 )] ( ['t1] [?'o0 't0 -> 't1] f [?'o0 't0] x , [List 't1] [?'o0 List 't0 -> List 't1] ( [( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1] map [?'o0 't0 -> 't1] f ) [?'o0 List 't0] xs )
+sum : & List Int -> Int = [& List Int -> Int] cases
+  [& List Int] Nil -> [Int] 0
+  [& List Int] Cons [& ( Int , List Int )] ( [Int] x , [& List Int] xs ) -> [Int] [( Int , Int ) -> Int] add_int [( Int , Int )] ( [Int] x , [Int] [& List Int -> Int] sum [& List Int] xs )
+|]
 
       it "evaluates" $ do
-        interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in sum &xs" `shouldReturn` "6"
-        interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in let ys = (map (\\x -> x * 2)) &xs in sum &ys" `shouldReturn` "12"
+        interpret program [r|let xs = Cons (1, Cons (2, Cons (3, Nil))) in sum &xs|] `shouldReturn` "6"
+        interpret program [r|let xs = Cons (1, Cons (2, Cons (3, Nil))) in let ys = (map (\x -> x * 2)) &xs in sum &ys|] `shouldReturn` "12"
 
 
     describe "shadowing" $ do
 
-      let program = unlines
-            [ "f x = f x where"
-            , "  f : Int -> Int"
-            , "  f x = x"
-            , ""
-            , "g x = f x where"
-            , "  f = cases"
-            , "    0 -> 1"
-            , "    n -> f (n - 1) * n"
-            ]
+      let program = [r|
+f x = f x where
+  f : Int -> Int
+  f x = x
+
+g x = f x where
+  f = cases
+    0 -> 1
+    n -> f (n - 1) * n
+|]
 
       it "type checks" $ do
-        check program `shouldReturn` unlines
-          [ "f = [Int -> Int] \\ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where"
-          , "  f : Int -> Int = [Int -> Int] \\ [Int] x -> [Int] x"
-          , "g = [Int -> Int] \\ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where"
-          , "  f = [Int -> Int] cases"
-          , "    [Int] 0 -> [Int] 1"
-          , "    [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) , [Int] n )"
-          ]
+        check program `shouldReturn` trim [r|
+f = [Int -> Int] \ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where
+  f : Int -> Int = [Int -> Int] \ [Int] x -> [Int] x
+g = [Int -> Int] \ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where
+  f = [Int -> Int] cases
+    [Int] 0 -> [Int] 1
+    [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) , [Int] n )
+|]
 
       it "evaluates" $ do
         interpret program "f 5" `shouldReturn` "5"

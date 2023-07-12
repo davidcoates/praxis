@@ -1,24 +1,24 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE TypeOperators     #-}
-{-# LANGUAGE QuasiQuotes     #-}
 
 module PraxisSpec where
 
-import qualified Check         (check)
+import qualified Check             (check)
 import           Common
 import           Inbuilts
-import qualified Interpret     (interpret)
+import qualified Interpret         (interpret)
 import           Introspect
-import qualified Parse         (parse)
+import qualified Parse             (parse)
 import           Praxis
+import           Prelude           hiding (either)
 import           Print
 import           Term
-import           Value         (Value (..))
 import           Text.RawString.QQ
-import           Prelude hiding (either)
+import           Value             (Value (..))
 
-import           Control.Monad (forM_)
+import           Control.Monad     (forM_)
 import           Test.Hspec
 
 

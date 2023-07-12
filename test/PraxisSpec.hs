@@ -46,12 +46,24 @@ trim = init . tail
 
 
 
+tuple = describe "tuple" $ do
+
+  let program = "x = (1, True, \"abc\")"
+
+  -- FIXME! ?o0 should default to ! (?)
+  it "type checks" $ check program `shouldReturn` trim [r|
+x = ( [Int] 1 , [Bool] True , [?o0 Array Char] "abc" )
+|]
+
+
+
+
 ifThenElse = describe "if then else (min)" $ do
 
   let program = "min (x, y) = if x < y then x else y"
 
   it "type checks" $ do
-    check program `shouldReturn` [r|min = [( Int , Int ) -> Int] \ [( Int , Int )] ( [Int] x , [Int] y ) -> [Int] if [Bool] [( Int , Int ) -> Bool] lt_int [( Int , Int )] ( [Int] x , [Int] y ) then [Int] x else [Int] y|]
+    check program `shouldReturn` [r|min = \ ( [Int] x , [Int] y ) -> [Int] if [( Int , Int ) -> Bool] lt_int ( [Int] x , [Int] y ) then [Int] x else [Int] y|]
 
   it "evaluates" $ do
     interpret program "min (1, 2)" `shouldReturn` "1"
@@ -71,10 +83,10 @@ sign n = switch
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-sign : Int -> Int = [Int -> Int] \ [Int] n -> [Int] switch
-  [Bool] [( Int , Int ) -> Bool] lt_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] [Int -> Int] negate_int [Int] 1
-  [Bool] [( Int , Int ) -> Bool] eq_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] 0
-  [Bool] [( Int , Int ) -> Bool] gt_int [( Int , Int )] ( [Int] n , [Int] 0 ) -> [Int] [Int -> Int] unary_plus_int [Int] 1
+sign : Int -> Int = \ [Int] n -> [Int] switch
+  [( Int , Int ) -> Bool] lt_int ( [Int] n , [Int] 0 ) -> [Int -> Int] negate_int [Int] 1
+  [( Int , Int ) -> Bool] eq_int ( [Int] n , [Int] 0 ) -> [Int] 0
+  [( Int , Int ) -> Bool] gt_int ( [Int] n , [Int] 0 ) -> [Int -> Int] unary_plus_int [Int] 1
 |]
 
   it "evaluates" $ do
@@ -96,7 +108,7 @@ fac = cases
   it "type checks" $ check program `shouldReturn` trim [r|
 fac = [Int -> Int] cases
   [Int] 0 -> [Int] 1
-  [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] fac [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )
+  [Int] n -> [( Int , Int ) -> Int] multiply_int ( [Int] n , [Int -> Int] fac [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
 |]
 
   it "evaluates" $ do
@@ -139,7 +151,7 @@ swap (a, b) = (b, a)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-swap : forall 't0 't1 . ( 't0 , 't1 ) -> ( 't1 , 't0 ) = [( 't0 , 't1 ) -> ( 't1 , 't0 )] \ [( 't0 , 't1 )] ( ['t0] a , ['t1] b ) -> [( 't1 , 't0 )] ( ['t1] b , ['t0] a )
+swap : forall 't0 't1 . ( 't0 , 't1 ) -> ( 't1 , 't0 ) = \ ( ['t0] a , ['t1] b ) -> ( ['t1] b , ['t0] a )
 |]
 
   it "evaluates" $ do
@@ -159,7 +171,7 @@ copy x = (x, x)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-copy : forall 't0 . [ Share 't0 ] => 't0 -> ( 't0 , 't0 ) = ['t0 -> ( 't0 , 't0 )] \ ['t0] x -> [( 't0 , 't0 )] ( ['t0] x , ['t0] x )
+copy : forall 't0 . [ Share 't0 ] => 't0 -> ( 't0 , 't0 ) = \ ['t0] x -> ( ['t0] x , ['t0] x )
 |]
 
   it "evaluates" $ do
@@ -202,8 +214,8 @@ id_fun = Fun (\x -> x)
 
   it "type checks" $ check program `shouldReturn` trim [r|
 type Fun [ a , b ] = [forall a b . ( a -> b ) -> Fun [ a , b ]] Fun ( a -> b )
-unbox_fun : forall 't0 't1 . Fun [ 't0 , 't1 ] -> 't0 -> 't1 = [Fun [ 't0 , 't1 ] -> 't0 -> 't1] \ [Fun [ 't0 , 't1 ]] Fun ['t0 -> 't1] f -> ['t0 -> 't1] \ ['t0] x -> ['t1] ['t0 -> 't1] f ['t0] x
-id_fun : forall 't2 . Fun [ 't2 , 't2 ] = [Fun [ 't2 , 't2 ]] [( 't2 -> 't2 ) -> Fun [ 't2 , 't2 ]] Fun ['t2 -> 't2] ( \ ['t2] x -> ['t2] x )
+unbox_fun : forall 't0 't1 . Fun [ 't0 , 't1 ] -> 't0 -> 't1 = \ [Fun [ 't0 , 't1 ]] Fun ['t0 -> 't1] f -> \ ['t0] x -> ['t0 -> 't1] f ['t0] x
+id_fun : forall 't2 . Fun [ 't2 , 't2 ] = [( 't2 -> 't2 ) -> Fun [ 't2 , 't2 ]] Fun ( \ ['t2] x -> ['t2] x )
 |]
 
   it "evaluates" $ do
@@ -226,10 +238,10 @@ m = cases
   it "type checks" $ check program `shouldReturn` trim [r|
 f = [Int -> Int] cases
   [Int] 0 -> [Int] 1
-  [Int] n -> [Int] [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )
+  [Int] n -> [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
 m = [Int -> Int] cases
   [Int] 0 -> [Int] 0
-  [Int] n -> [Int] [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) )
+  [Int] n -> [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
 |]
 
   it "evaluates" $ do
@@ -272,12 +284,12 @@ sum = cases
 type List a = cases
   [forall a . List a] Nil
   [forall a . ( a , List a ) -> List a] Cons ( a , List a )
-map : forall ?'o0 't0 't1 . ( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1 = [( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1] \ [?'o0 't0 -> 't1] f -> [?'o0 List 't0 -> List 't1] cases
+map : forall ?'o0 't0 't1 . ( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1 = \ [?'o0 't0 -> 't1] f -> [?'o0 List 't0 -> List 't1] cases
   [?'o0 List 't0] Nil -> [List 't1] Nil
-  [?'o0 List 't0] Cons [?'o0 ( 't0 , List 't0 )] ( [?'o0 't0] x , [?'o0 List 't0] xs ) -> [List 't1] [( 't1 , List 't1 ) -> List 't1] Cons [( 't1 , List 't1 )] ( ['t1] [?'o0 't0 -> 't1] f [?'o0 't0] x , [List 't1] [?'o0 List 't0 -> List 't1] ( [( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1] map [?'o0 't0 -> 't1] f ) [?'o0 List 't0] xs )
+  [?'o0 List 't0] Cons ( [?'o0 't0] x , [?'o0 List 't0] xs ) -> [( 't1 , List 't1 ) -> List 't1] Cons ( [?'o0 't0 -> 't1] f [?'o0 't0] x , ( [( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1] map [?'o0 't0 -> 't1] f ) [?'o0 List 't0] xs )
 sum : & List Int -> Int = [& List Int -> Int] cases
   [& List Int] Nil -> [Int] 0
-  [& List Int] Cons [& ( Int , List Int )] ( [Int] x , [& List Int] xs ) -> [Int] [( Int , Int ) -> Int] add_int [( Int , Int )] ( [Int] x , [Int] [& List Int -> Int] sum [& List Int] xs )
+  [& List Int] Cons ( [Int] x , [& List Int] xs ) -> [( Int , Int ) -> Int] add_int ( [Int] x , [& List Int -> Int] sum [& List Int] xs )
 |]
 
   it "evaluates" $ do
@@ -300,12 +312,12 @@ g x = f x where
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-f = [Int -> Int] \ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where
-  f : Int -> Int = [Int -> Int] \ [Int] x -> [Int] x
-g = [Int -> Int] \ [Int] x -> [Int] [Int] [Int -> Int] f [Int] x where
+f = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
+  f : Int -> Int = \ [Int] x -> [Int] x
+g = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
   f = [Int -> Int] cases
     [Int] 0 -> [Int] 1
-    [Int] n -> [Int] [( Int , Int ) -> Int] multiply_int [( Int , Int )] ( [Int] [Int -> Int] f [( Int , Int ) -> Int] subtract_int [( Int , Int )] ( [Int] n , [Int] 1 ) , [Int] n )
+    [Int] n -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) , [Int] n )
 |]
 
   it "evaluates" $ do
@@ -371,6 +383,7 @@ spec = do
 
 
   describe "simple monomorphic programs" $ do
+    tuple
     ifThenElse
     switch
     recursion

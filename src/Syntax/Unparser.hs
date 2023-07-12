@@ -39,7 +39,6 @@ instance Unparser f => Syntax (T f) where
   mark = T . mark
   unparseable = id
   annotated (T p) = T (annotated p)
-  combine = error "<unparser combine>"
 
 unparse :: forall a f. (Term a, Unparser f) => f (Annotated a)
 unparse = unT (Syntax.annotated (syntax (witness :: I a)))

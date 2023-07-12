@@ -38,10 +38,10 @@ instance Unparser Printer where
     g x = Just $ case typeof (view value x) of
       ITyProp   -> prop
       IKindProp -> prop
-      i         -> [Print (mapIfNotNull (\c -> "[" <> c <> "]") (label i (view annotation x)))] ++ body
+      i         -> [Print (mapIfNotNull (\c -> "[" <> c <> "]") (label x))] ++ body
       where
         body = force f (view value x)
-        prop = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label (typeof (view value x)) (view annotation x))]
+        prop = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label x)]
 
 indent :: Int -> String
 indent n = replicate (2*n) ' '
@@ -71,14 +71,39 @@ layout ts o = foldLines (layout' False (-1) ts Nil) where
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
   pretty x = Printable (layout (force unparse x))
 
-label :: Term a => I a -> Maybe (Annotation a) -> Printable String
-label _ Nothing  = blank
-label i (Just a) = case i of
-  IExp      -> prettyIf Types a
-  IPat      -> prettyIf Types a
-  ITyPat    -> prettyIf Kinds a
-  IType     -> prettyIf Kinds a
-  ITyProp   -> pretty a
-  IKindProp -> pretty a
-  IDataCon  -> pretty a
-  _         -> blank
+-- Do not show the label for compositional structures where the label of the parent is obvious from the label of the children.
+-- I.e. ([a] a, ([b] b, [c] c)) instead of [(a, b, c)] ([a] a, [(b, c)] ([b] b, [c] c))
+hideLabel :: Term a => a -> Bool
+hideLabel x = case typeof x of
+  IExp -> case x of
+    Pair _ _   -> True
+    Apply _ _  -> True
+    Lambda _ _ -> True
+    _          -> False
+  IPat -> case x of
+    PatPair _ _ -> True -- Note: Not trivial due to view operators: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
+    _           -> False
+  ITyPat -> case x of
+    TyPatPack _ _ -> True
+    _             -> False
+  IType -> case x of
+    TyApply _ _ -> True
+    TyPack _ _  -> True
+    _           -> False
+  IKind -> case x of
+    KindPair _ _ -> True
+    _            -> False
+  _ -> False
+
+label :: Term a => Annotated a -> Printable String
+label ((s, a) :< x) = case a of
+  Just a | not (hideLabel x) -> case typeof x of
+    IExp      -> prettyIf Types a
+    IPat      -> prettyIf Types a
+    ITyPat    -> prettyIf Kinds a
+    IType     -> prettyIf Kinds a
+    ITyProp   -> pretty a
+    IKindProp -> pretty a
+    IDataCon  -> pretty a
+    _         -> blank
+  _ -> blank

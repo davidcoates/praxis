@@ -186,18 +186,12 @@ right :: forall f a. (Syntax f, Term a) => Prism a (Annotated a, Annotated a) ->
 right = rightWithSep (pure ())
 
 rightWithSep :: forall f a. (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
-rightWithSep s _P p = Prism f g <$> annotated p <*> many (s *> annotated p) <|> unparseable p where
-  f (p, ps)    = view value (fold p ps)
-  fold p = \case
-    []     -> p
-    (q:qs) -> combine (empty :: f Void) (construct _P) (p, fold q qs)
+rightWithSep s _P p = Prism f g <$> annotated p <*> (s *> (_Just <$> annotated (rightWithSep s _P p)) <|> _Nothing <$> pure ()) <|> unparseable p where
+  f (p, Just q)  = construct _P (p, q)
+  f (p, Nothing) = view value p
   g x = case destruct _P x of
-    Just (x, y) -> Just (x, unfold y)
+    Just (x, y) -> Just (x, Just y)
     Nothing     -> Nothing
-  unfold x = case destruct _P (view value x) of
-    Just (x, y) -> x : unfold y
-    Nothing     -> [x]
-
 
 tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Share <$> reservedCon "Share" *> annotated ty <|>

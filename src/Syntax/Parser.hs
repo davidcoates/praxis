@@ -35,7 +35,6 @@ instance Parser f => Syntax (T f) where
   mark = T . mark
   unparseable = const (T empty)
   annotated (T p) = T $ (\(s :< p) -> (s, Nothing) :< p) <$> sourced p
-  combine _ f (p, q) = (view source p <> view source q, Nothing) :< f (p, q)
 
 parse :: forall a f. (Term a, Parser f) => f (Annotated a)
 parse = unT (Syntax.annotated (syntax (witness :: I a)))

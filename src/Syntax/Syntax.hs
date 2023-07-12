@@ -48,7 +48,6 @@ class Syntax f where
   mark :: String -> f a
   unparseable :: f a -> f a
   annotated :: Term a => f a -> f (Annotated a)
-  combine :: f Void -> ((Annotated a, Annotated a) -> a) -> (Annotated a, Annotated a) -> Annotated a -- FIXME this is a hack
 
 _Cons :: Prism [a] (a, [a])
 _Cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})

@@ -1,1 +1,12 @@
-* disallow nullary operators
+Minor:
+- cleanup Desguar, fst a etc
+- Syntax:
+  * General tidy and alignment
+  * Construct as Maybe (a -> b) instead of unparseable
+  * Relook at combine
+
+Major:
+- Modules
+- Records
+- Ad-hoc polymorphism
+- Code generation

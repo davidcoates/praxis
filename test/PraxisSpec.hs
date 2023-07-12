@@ -147,7 +147,7 @@ swap : forall 't0 't1 . ( 't0 , 't1 ) -> ( 't1 , 't0 ) = [( 't0 , 't1 ) -> ( 't1
     interpret program "swap (True, 1)"   `shouldReturn` "(1, True)"
     interpret program "swap (1, 2, 3)"   `shouldReturn` "((2, 3), 1)"
     interpret program "swap ((2, 3), 1)" `shouldReturn` "(1, (2, 3))"
-    -- interpret program "swap (\"abc\", 0)" `shouldReturn` "(0, \"abc\")"
+    interpret program "swap (\"abc\", 0)" `shouldReturn` "(0, ['a', 'b', 'c'])"
 
 
 

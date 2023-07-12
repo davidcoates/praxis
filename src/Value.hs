@@ -12,6 +12,7 @@ import {-# SOURCE #-} Praxis        (Praxis, liftIOUnsafe)
 import           Common
 import           Data.Array.IO (IOArray)
 import qualified Data.Array.IO as ArrayIO
+import           System.IO.Unsafe             (unsafePerformIO)
 
 type Array = IOArray Int Value
 
@@ -41,15 +42,21 @@ readArray a i = liftIOUnsafe (ArrayIO.readArray a i)
 writeArray :: Array -> Int -> Value -> Praxis ()
 writeArray a i e = liftIOUnsafe (ArrayIO.writeArray a i e)
 
+showValue :: Value -> IO String
+showValue = \case
+  Con n v  -> (n ++) <$> case v of
+    Just x  -> (" " ++) <$> showValue x
+    Nothing -> return ""
+  Fun f    -> return "<function>"
+  Int i    -> return (show i)
+  Bool b   -> return (show b)
+  Char c   -> return (show c)
+  Array a  -> do
+    vs <- ArrayIO.getElems a
+    vs' <- mapM showValue vs
+    return ("[" ++ intercalate ", " vs' ++ "]")
+  Pair a b -> (\a b -> "(" ++ a ++ ", " ++ b ++ ")") <$> showValue a <*> showValue b
+  Unit     -> return "()"
+
 instance Show Value where
-  show v = case v of
-    Con n v  -> (n ++) $ case v of
-      Just x  -> " " ++ show x
-      Nothing -> ""
-    Fun f    -> "<function>"
-    Int i    -> show i
-    Bool b   -> show b
-    Char c   -> show c
-    Array a  -> "<array>"
-    Pair a b -> "(" ++ show a ++ ", " ++ show b ++ ")"
-    Unit     -> "()"
+  show v = unsafePerformIO (showValue v) -- eek!

@@ -46,6 +46,5 @@ initialSystem = System
     [ share "Int"
     , share "Bool"
     , share "Char"
-    , Axiom $ \case { Share (_ :< TyApply (_ :< TyCon "Parser") _) -> Just Top; _ -> Nothing } -- FIXME remove
     ]
   }

@@ -53,19 +53,19 @@ inbuilts =
   , ("unary_plus_int",   poly "Int -> Int",
       Fun (\(Int x) -> pure (Int x)))
   , ("get_int",      poly "() -> Int",
-      Fun (\Unit -> liftIO (Int <$> readLn)))
+      Fun (\Unit -> liftIOUnsafe (Int <$> readLn)))
   , ("get_contents", poly "() -> Array Char",
-      Fun (\Unit -> liftIO getContents >>= (\s -> Value.Array <$> (Value.fromString s)))) -- TODO need to make many of these functions strict?
+      Fun (\Unit -> liftIOUnsafe getContents >>= (\s -> Value.Array <$> (Value.fromString s)))) -- TODO need to make many of these functions strict?
   , ("put_int",      poly "Int -> ()",
-      Fun (\(Int x) -> liftIO (print x >> pure Unit)))
+      Fun (\(Int x) -> liftIOUnsafe (print x >> pure Unit)))
   , ("put_str",      poly "&Array Char -> ()",
-      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIO (putStr s)) >> pure Unit))
+      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIOUnsafe (putStr s)) >> pure Unit))
   , ("put_str_ln",   poly "&Array Char -> ()",
-      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIO (putStrLn s)) >> pure Unit))
+      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIOUnsafe (putStrLn s)) >> pure Unit))
   , ("compose",      poly "forall a b c. (b -> c, a -> b) -> a -> c",
       Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
   , ("print",        poly "forall a. &a -> ()",
-      Fun (\x -> liftIO (print x >> pure Unit))) -- TODO should have Show constraint
+      Fun (\x -> liftIOUnsafe (print x >> pure Unit))) -- TODO should have Show constraint
   , ("at",           poly "forall a. (&Array a, Int) -> a",
       Fun (\(Pair (Array a) (Int i)) -> Value.readArray a i))
   , ("len",          poly "forall a. &Array a -> Int",

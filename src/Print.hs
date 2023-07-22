@@ -15,6 +15,7 @@ import           Introspect
 import           Syntax.Unparser
 import           Term
 import           Token
+import           Data.Foldable (toList)
 
 newtype Printer a = Printer { runPrinter :: a -> Maybe [Token] }
 
@@ -62,10 +63,14 @@ layout ts o = foldLines (layout' False (-1) ts Nil) where
       | t == ';' -> line : layout' False depth ts (Value (indent depth))
       | t == '}' -> layout' False (depth - 1) ts line
 
-    t : ts -> let cs = runPrintable (pretty t) o in
-      if null cs
-      then layout' needsSpace depth ts line
-      else layout' True depth ts (line <> (if needsSpace then Value " " else Nil) <> cs)
+    t : ts -> let
+      cs = runPrintable (pretty t) o
+      endOfLine = case head (toList cs) of
+                    ('\n': _) -> True
+                    _         -> False
+      in if null cs
+         then layout' needsSpace depth ts line
+         else layout' True depth ts (line <> (if needsSpace && not endOfLine then Value " " else Nil) <> cs)
 
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where

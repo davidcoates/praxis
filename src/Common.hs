@@ -31,7 +31,8 @@ module Common
   , liftA2
   , Const(..)
   , Identity(..)
-  , MaybeT(..)
+  , ExceptT(..)
+  , runExceptT
   , StateT(..)
   , MonadTrans(..)
   , when
@@ -56,19 +57,20 @@ import           Common.Pretty
 import           Common.Source
 import           Common.Tag
 
-import           Control.Applicative       (Const (..), liftA2)
-import           Control.Lens              (Lens', both, makeLenses, over, set,
-                                            use, uses, view, (%=), (.=), _1, _2)
-import           Control.Monad             (unless, when)
-import           Control.Monad.State.Class (MonadState)
-import           Control.Monad.Trans.Class (MonadTrans (..))
-import           Control.Monad.Trans.Maybe (MaybeT (..))
-import           Control.Monad.Trans.State (StateT (..))
-import           Data.Foldable             (fold)
-import           Data.Functor.Identity     (Identity (..))
-import           Data.List                 (intercalate, intersperse)
-import           Data.Traversable          (sequenceA)
-import           Data.Void                 (Void, absurd)
+import           Control.Applicative        (Const (..), liftA2)
+import           Control.Lens               (Lens', both, makeLenses, over, set,
+                                             use, uses, view, (%=), (.=), _1,
+                                             _2)
+import           Control.Monad              (unless, when)
+import           Control.Monad.State.Class  (MonadState)
+import           Control.Monad.Trans.Class  (MonadTrans (..))
+import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
+import           Control.Monad.Trans.State  (StateT (..))
+import           Data.Foldable              (fold)
+import           Data.Functor.Identity      (Identity (..))
+import           Data.List                  (intercalate, intersperse)
+import           Data.Traversable           (sequenceA)
+import           Data.Void                  (Void, absurd)
 
 type Name = String
 

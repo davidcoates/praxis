@@ -11,6 +11,6 @@ import           Common
 
 data PraxisState
 
-type Praxis = MaybeT (StateT PraxisState IO)
+type Praxis = ExceptT String (StateT PraxisState IO)
 
 liftIOUnsafe :: IO a -> Praxis a

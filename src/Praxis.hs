@@ -33,8 +33,8 @@ module Praxis
   , runInternal
 
   -- |Lift an IO computation to the Praxis monad
-  , liftIOUnsafe
   , liftIO
+  , liftIOUnsafe
 
   -- |Flag lenses
   , debug
@@ -148,7 +148,7 @@ data PraxisState = PraxisState
 instance Show PraxisState where
   show s = "<praxis state>"
 
-type Praxis = MaybeT (StateT PraxisState IO)
+type Praxis = ExceptT String (StateT PraxisState IO)
 
 newtype PraxisT f a = PraxisT { runPraxisT :: f (Praxis a) }
 
@@ -190,31 +190,32 @@ makeLenses ''Flags
 makeLenses ''Fresh
 makeLenses ''PraxisState
 
+abort :: Pretty a => a -> Praxis b
+abort x = displayBare x >> ExceptT (return (Left err)) where
+  err = fold (runPrintable (pretty x) Plain)
+
 throw :: Pretty a => a -> Praxis b
-throw x = displayBare (pretty (Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
+throw x = abort (pretty (Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x)
 
 throwAt :: Pretty a => Source -> a -> Praxis b
-throwAt s x = displayBare (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x) >> empty
-
-abort :: Pretty a => a -> Praxis b
-abort x = displayBare x >> empty
+throwAt s x = abort (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x)
 
 display :: Pretty a => a -> Praxis ()
-display x = do
+display x = unlessSilent $ do
   t <- liftIO $ getTerm
   s <- use stage
   liftIO $ printColoredS t $ "\n{- " <> Style Italic (Value (show s)) <> " -}\n\n"
   displayBare x
 
 displayBare :: Pretty a => a -> Praxis ()
-displayBare x = do
+displayBare x = unlessSilent $ do
   t <- liftIO $ getTerm
   s <- use stage
   let o = case s of { KindCheck _ -> Kinds; TypeCheck _ -> Types; _ -> Plain }
   liftIO $ printColoredS t $ runPrintable (pretty x) o <> "\n"
 
 clearTerm :: Praxis ()
-clearTerm = liftIO $ do
+clearTerm = unlessSilent $ liftIO $ do
   putStrLn ""
   Terminal.size >>= \case
     Just (Terminal.Window _ w) -> putStrLn $ replicate w '='
@@ -232,29 +233,34 @@ try p = do
   s <- lift State.get
   (x, t) <- liftIO $ runPraxis p s
   case x of
-    Nothing -> lift (State.put s) >> return Nothing
-    Just y  -> lift (State.put t) >> return (Just y)
+    Left e  -> lift (State.put s) >> return Nothing
+    Right y -> lift (State.put t) >> return (Just y)
 
-runSilent :: PraxisState -> Praxis a -> IO (Maybe a)
+runSilent :: PraxisState -> Praxis a -> IO (Either String a)
 runSilent s c = do
   (x, _) <- runPraxis (flags . silent .= True >> c) s
   return x
 
 runInternal :: PraxisState -> Praxis a -> a
 runInternal s c = case unsafePerformIO (runSilent s c) of
-  Nothing -> error "internal computation failed"
-  Just x  -> x
+  Left e  -> error ("internal computation failed: " ++ e)
+  Right x -> x
 
-liftIOUnsafe :: IO a -> Praxis a
-liftIOUnsafe io = lift (lift io)
+unlessSilent :: Praxis () -> Praxis ()
+unlessSilent c = do
+  s <- use (flags . silent)
+  if s then pure () else c
 
 liftIO :: IO a -> Praxis a
 liftIO io = do
   s <- use (flags . silent)
-  if s then empty else liftIOUnsafe io
+  if s then error "attempted IO in silent mode" else lift (lift io)
 
-runPraxis :: Praxis a -> PraxisState -> IO (Maybe a, PraxisState)
-runPraxis = runStateT . runMaybeT
+liftIOUnsafe :: IO a -> Praxis a
+liftIOUnsafe io = lift (lift io)
+
+runPraxis :: Praxis a -> PraxisState -> IO (Either String a, PraxisState)
+runPraxis = runStateT . runExceptT
 
 ifFlag :: Praxis () -> Lens' Flags Bool -> Praxis ()
 ifFlag c f = use (flags . f) >>= (flip when) c

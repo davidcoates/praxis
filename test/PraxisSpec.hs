@@ -29,8 +29,8 @@ run :: Show a => Praxis a -> IO String
 run p = do
   x <- runSilent initialState p
   case x of
-    Just y  -> return (show y)
-    Nothing -> error "failure" -- TODO could retreive the throw message somehow :thinking:
+    Left e  -> return e
+    Right y -> return (show y)
 
 check :: String -> IO String
 check s = run (Parse.parse s >>= Check.check :: Praxis (Annotated Program))
@@ -93,7 +93,12 @@ sign : Int -> Int = \ [Int] n -> [Int] switch
     interpret program "sign 0"    `shouldReturn` "0"
     interpret program "sign 10"   `shouldReturn` "1"
     interpret program "sign (-5)" `shouldReturn` "-1"
-    interpret program "sign -5"   `shouldThrow` anyException -- Note: Parses as "sign - 5" (binary subtract)
+    interpret program "sign -5"   `shouldReturn` trim [r|
+error: found contradiction Int ~ Int -> Int ∧ Int ~ Int
+|-> ( Int , Int ) ~ ( Int -> Int , Int ) ∧ Int ~ ?t6
+|-> ( Int , Int ) -> Int ~ ( Int -> Int , Int ) -> ?t6
+|-> (function application)
+|]  -- Note: Parses as "sign - 5" (binary subtract)
 
 
 
@@ -328,24 +333,22 @@ g = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
 
 redeclVar = describe "variarble redeclaration" $ do
 
-  let program = [r|
+  let program = trim [r|
 fst : forall a. (a, a) -> a
 fst (a, a) = a
 |]
 
-  it "does not type check" $ check program `shouldThrow` anyException
-
+  it "does not type check" $ check program `shouldReturn` "2:9 error: variable 'a' redeclared (in the same scope)"
 
 
 redeclTyVar = describe "type variarble redeclaration" $ do
 
-  let program = [r|
+  let program = trim [r|
 type Foo [a, a] = cases
     Foo a
 |]
 
-  it "does not type check" $ check program `shouldThrow` anyException
-
+  it "does not type check" $ check program `shouldReturn` "1:14 error: type variable 'a' redeclared (in the same scope)"
 
 
 

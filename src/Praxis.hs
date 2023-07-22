@@ -87,6 +87,7 @@ import qualified Data.Set                     as Set
 import qualified Env                          as Env (Environment (..))
 import           Env.Env
 import           Env.LEnv
+import           Env.SEnv
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
 import           Value
@@ -113,7 +114,7 @@ type VEnv = Env Name Value
 
 type TEnv = LEnv Name (Annotated QType)
 
-type KEnv = Env Name (Annotated Kind)
+type KEnv = SEnv Name (Annotated Kind)
 
 type DAEnv = Env Name (Annotated DataCon)
 

@@ -326,6 +326,28 @@ g = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
 
 
 
+redeclVar = describe "variarble redeclaration" $ do
+
+  let program = [r|
+fst : forall a. (a, a) -> a
+fst (a, a) = a
+|]
+
+  it "does not type check" $ check program `shouldThrow` anyException
+
+
+
+redeclTyVar = describe "type variarble redeclaration" $ do
+
+  let program = [r|
+type Foo [a, a] = cases
+    Foo a
+|]
+
+  it "does not type check" $ check program `shouldThrow` anyException
+
+
+
 
 
 
@@ -399,3 +421,7 @@ spec = do
     mutualRecursion
     list
     shadowing
+
+  describe "invalid programs" $ do
+    redeclVar
+    redeclTyVar

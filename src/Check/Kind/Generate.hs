@@ -16,6 +16,7 @@ import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
 import           Env
+import qualified Env.SEnv           as SEnv
 import           Introspect
 import           Praxis
 import           Print
@@ -46,6 +47,13 @@ generate x = ($ x) $ case witness :: I a of
   ITyPat   -> tyPat
   IDataCon -> dataCon
   _        -> value (recurse generate)
+
+introKind :: Source -> Name -> Annotated Kind -> Praxis ()
+introKind s n k = do
+  l <- use kEnv
+  case SEnv.lookupTop n l of
+    Just _ -> throwAt s $ "type variable " <> quote (pretty n) <> " redeclared (in the same scope)"
+    _      -> kEnv %= intro n k
 
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty = split $ \s -> \case
@@ -98,7 +106,7 @@ ty = split $ \s -> \case
         Just k -> return (k :< TyVar v)
         Nothing -> do
           k <- freshKindUni
-          kEnv %= intro v k
+          introKind s v k
           return (k :< TyVar v)
 
 
@@ -106,13 +114,9 @@ tyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
 tyPat = split $ \s -> \case
 
   TyPatVar v -> do
-    e <- kEnv `uses` lookup v
-    case e of
-      Just k  -> return (k :< TyPatVar v)
-      Nothing -> do
-        k <- freshKindUni
-        kEnv %= intro v k
-        return (k :< TyPatVar v)
+    k <- freshKindUni
+    introKind s v k
+    return (k :< TyPatVar v)
 
   TyPatPack a b -> do
     a' <- tyPat a
@@ -145,7 +149,7 @@ decl = splitTrivial $ \s -> \case
       Just _  -> throwAt s $ "data declaration " <> quote (pretty n) <> " redefined"
       Nothing -> pure ()
     k <- freshKindUni
-    kEnv %= intro n k
+    introKind s n k
     (ps', as') <- save kEnv $ do
         ps' <- traverse generate ps
         as' <- traverse generate as

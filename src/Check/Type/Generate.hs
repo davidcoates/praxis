@@ -65,20 +65,24 @@ join f1 f2 = do
   return (x, y)
 
 closure :: Praxis a -> Praxis a
-closure x = do
+closure x = save tEnv $ do
+  tEnv %= LEnv.capture
   tEnv %= LEnv.push
-  r <- x
-  tEnv %= LEnv.pop
-  return r
+  x
+
+scope :: Praxis a -> Praxis a
+scope x = save tEnv $ do
+  tEnv %= LEnv.push
+  x
 
 read :: Source -> Name -> Praxis (Annotated Type)
 read s n = do
   l <- use tEnv
   case LEnv.lookupFull n l of
-    Just (c, u, t) -> do
-      t <- specialiseQType s t
-      requires [ newConstraint (Share t) (UnsafeView n) s | u ]
-      requires [ newConstraint (Share t) (Captured n) s   | c ]
+    Just entry -> do
+      t <- specialiseQType s (view LEnv.value entry)
+      requires [ newConstraint (Share t) (UnsafeView n) s | view LEnv.used entry ]
+      requires [ newConstraint (Share t) (Captured n) s   | view LEnv.captured entry  ]
       return $ phantom (TyApply (phantom (TyOp (phantom TyOpBang))) t)
     Nothing -> throwAt s (NotInScope n)
 
@@ -87,13 +91,20 @@ mark :: Source -> Name -> Praxis (Annotated Type)
 mark s n = do
   l <- use tEnv
   case LEnv.lookupFull n l of
-    Just (c, u, t) -> do
-      t <- specialiseQType s t
+    Just entry -> do
+      t <- specialiseQType s (view LEnv.value entry)
       tEnv %= LEnv.mark n
-      requires [ newConstraint (Share t) (MultiUse n) s | u ]
-      requires [ newConstraint (Share t) (Captured n) s | c ]
+      requires [ newConstraint (Share t) (MultiUse n) s | view LEnv.used entry ]
+      requires [ newConstraint (Share t) (Captured n) s | view LEnv.captured entry ]
       return t
     Nothing -> throwAt s (NotInScope n)
+
+introTy :: Source -> Name -> Annotated QType -> Praxis ()
+introTy s n t = do
+  l <- use tEnv
+  case LEnv.lookupTop n l of
+    Just _ -> throwAt s $ "variable " <> quote (pretty n) <> " redeclared (in the same scope)"
+    _      -> tEnv %= intro n t
 
 getType :: Source -> Name -> Praxis (Annotated QType)
 getType s n = do
@@ -187,14 +198,14 @@ decls ds = do
   ds' <- mapM preDeclare ds
   mapM (\(t, d) -> decl t d) ds'
   where
-    declare n sig = do
+    declare s n sig = do
       t <- case sig of Nothing -> mono <$> freshTyUni
                        Just t  -> pure t
-      tEnv %= intro n t
+      introTy s n t
       return t
     preDeclare d = case d of
-      (_ :< DeclVar n sig e) | recursive e -> do { t <- declare n sig; return (Just t, d) }
-      _                                    -> return (Nothing, d)
+      ((s, _) :< DeclVar n sig e) | recursive e -> do { t <- declare s n sig; return (Just t, d) }
+      _                                         -> return (Nothing, d)
 
 
 qTyVarNames :: [Annotated QTyVar] -> [Name]
@@ -220,7 +231,6 @@ decl forwardT = splitTrivial $ \s -> \case
     alts' <- traverse (dataCon vars rt) alts
     return $ DeclData n p alts'
 
-  -- TODO check no duplicate variables
   DeclVar n sig e -> do
 
     {-
@@ -242,7 +252,7 @@ decl forwardT = splitTrivial $ \s -> \case
         e' <- exp e
         case forwardT of
           Just (_ :< Forall [] [] t) -> equal t (view ty e') (FunCongruence n) s
-          Nothing                    -> tEnv %= intro n (mono (view ty e'))
+          Nothing                    -> introTy s n (mono (view ty e'))
         return $ DeclVar n Nothing e'
 
       Just sig@(_ :< Forall vs cs t) -> do
@@ -266,7 +276,7 @@ decl forwardT = splitTrivial $ \s -> \case
         e' <- exp (rewrite e)
         case forwardT of
           Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)
-          Nothing -> tEnv %= intro n sig
+          Nothing -> introTy s n sig
         equal (rewrite t) (view ty e') (FunSignature n) s
         return $ DeclVar n (Just (rewrite sig)) e'
 
@@ -313,7 +323,7 @@ exp = split $ \s -> \case
     t <- specialiseQType s fullType
     return (t :< Con n)
 
-  Do ss -> save tEnv $ do
+  Do ss -> scope $ do
     ss' <- traverse generate ss
     case view value (last ss') of
       StmtExp ((_, Just t) :< _) -> return (t :< Do ss')
@@ -331,7 +341,7 @@ exp = split $ \s -> \case
     (p', e') <- alt op (p, e)
     return (fun (view ty p') (view ty e') :< Lambda p' e')
 
-  Let b x -> save tEnv $ do
+  Let b x -> scope $ do
     b' <- bind b
     x' <- exp x
     return (view ty x' :< Let b' x')
@@ -348,9 +358,9 @@ exp = split $ \s -> \case
           ac = TyApply a (TyCon "Char" `as` phantom KindType) `as` phantom KindType
       return $ TyApply ot ac
 
-  Read n e -> do
+  Read n e -> scope $ do
     t <- read s n
-    tEnv %= intro n (mono t)
+    introTy s n (mono t)
     e' <- exp e
     tEnv %= elim
     return (view ty e' :< view value e')
@@ -381,7 +391,7 @@ exp = split $ \s -> \case
     t <- mark s n
     return (t :< Var n)
 
-  Where x bs -> save tEnv $ do
+  Where x bs -> scope $ do
     bs' <- decls bs
     x' <- exp x
     return (view ty x' :< Where x' bs')
@@ -405,7 +415,7 @@ bind = splitTrivial $ \s -> \case
 
 
 alt :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
-alt op (p, e) = save tEnv $ do
+alt op (p, e) = scope $ do
   p' <- pat op p
   e' <- exp e
   return (p', e')
@@ -421,7 +431,7 @@ pat op p = snd <$> pat' p where
 
     PatAt v p -> do
       (t, p') <- pat' p
-      tEnv %= intro v (mono t)
+      introTy s v (mono t)
       require $ newConstraint (Share t) (MultiAlias v) s
       return (t, wrap t :< PatAt v p')
 
@@ -466,5 +476,5 @@ pat op p = snd <$> pat' p where
 
     PatVar v -> do
       t <- freshTyUni
-      tEnv %= intro v (mono (wrap t))
+      introTy s v (mono (wrap t))
       return (t, wrap t :< PatVar v)

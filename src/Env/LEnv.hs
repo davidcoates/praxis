@@ -87,6 +87,8 @@ mark x (LEnv (SEnv l ls)) = let (m:ms) = f (l:ls) in LEnv (SEnv m ms)
 capture :: LEnv a b -> LEnv a b
 capture (LEnv s) = LEnv (fmap (\b -> b { _captured = True}) s)
 
+-- Join is used to unify branches with respect to usage and captured status.
+-- E.g. a variable is used/captured by an If expression iff it is used/captured by at least one branch.
 join :: LEnv a b -> LEnv a b -> LEnv a b
 join (LEnv (SEnv l1 l1s)) (LEnv (SEnv l2 l2s)) = LEnv (SEnv (join' l1 l2) (zipWith join' l1s l2s)) where
   join' (Env l1) (Env l2) = Env (zipWith (\(x, xb) (_, yb) -> (x, Entry { _value = view value xb, _used = view used xb || view used yb, _captured = view captured xb || view captured yb })) l1 l2)

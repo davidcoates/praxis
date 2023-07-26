@@ -25,13 +25,11 @@ import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
 import           Data.Traversable    (forM)
 
-run :: Praxis ([(Name, Type)], [(Name, TyOp)])
+run :: Praxis Solution
 run = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve (our . constraints) solveTy
-  ts <- use (our . sol)
-  ops <- use (our . ops)
-  return (ts, ops)
+  use (our . sol)
 
 tyUnis :: forall a. Term a => Annotated a -> Set Name
 tyUnis = extract (embedMonoid f) where
@@ -132,20 +130,20 @@ viewFree t = case view value t of
 
 isOp :: Name -> TyOp -> Praxis (Maybe TyProp)
 isOp n op = do
-  our . ops %= ((n, op):)
+  our . sol . tyOpSol %= ((n, op):)
   simplifyAll
   solved
 
 is :: Name -> Type -> Praxis (Maybe TyProp)
 is n t = do
-  our . sol %= ((n, t):)
+  our . sol . tySol %= ((n, t):)
   simplifyAll
   solved
 
 simplify :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 simplify x = do
-  tys <- use (our . sol)
-  tyOps <- use (our . ops)
+  tys <- use (our . sol . tySol)
+  tyOps <- use (our . sol . tyOpSol)
   let simplify' :: forall a. Term a => a -> Maybe a
       simplify' x = case witness :: I a of {
         IType -> case x of { TyUni   n -> n `lookup`   tys; _ -> Nothing };
@@ -156,8 +154,8 @@ simplify x = do
 
 simplifyAll :: Praxis ()
 simplifyAll = do
-  our . sol %%= traverse (second (covalue simplify))
-  our . ops %%= traverse (second (covalue simplify))
+  our . sol . tySol   %%= traverse (second (covalue simplify))
+  our . sol . tyOpSol %%= traverse (second (covalue simplify))
   our . constraints %%= traverse simplify
   tEnv %%= traverse simplify
 

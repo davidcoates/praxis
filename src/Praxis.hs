@@ -21,6 +21,7 @@ module Praxis
   , levels
   , prec
 
+  , warnAt
   , throw
   , throwAt
   , abort
@@ -193,6 +194,9 @@ makeLenses ''PraxisState
 abort :: Pretty a => a -> Praxis b
 abort x = displayBare x >> ExceptT (return (Left err)) where
   err = fold (runPrintable (pretty x) Plain)
+
+warnAt :: Pretty a => Source -> a -> Praxis ()
+warnAt s x = displayBare (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullYellow ("warning: " :: Colored String))) <> pretty x)
 
 throw :: Pretty a => a -> Praxis b
 throw x = abort (pretty (Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x)

@@ -5,9 +5,12 @@ module Check.Type.System
   ( Axiom(..)
   , axiom
 
+  , Solution
+  , tySol
+  , tyOpSol
+
   , System
   , sol
-  , ops
   , constraints
   , axioms
 
@@ -20,9 +23,12 @@ import           Term
 
 data Axiom = Axiom (TyConstraint -> Maybe TyProp)
 
+data Solution = Solution { _tySol :: [(Name, Type)], _tyOpSol :: [(Name, TyOp)] }
+
+makeLenses ''Solution
+
 data System = System
-  { _sol         :: [(Name, Type)]
-  , _ops         :: [(Name, TyOp)]
+  { _sol         :: Solution
   , _constraints :: [Annotated TyProp]
   , _axioms      :: [Axiom]
   }
@@ -39,8 +45,7 @@ axiom c = Axiom $ \c' -> if c == c' then Just Top else Nothing
 
 initialSystem :: System
 initialSystem = System
-  { _sol         = []
-  , _ops         = []
+  { _sol         = Solution { _tySol = [], _tyOpSol = [] }
   , _constraints = []
   , _axioms      =
     [ share "Int"

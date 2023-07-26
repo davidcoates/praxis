@@ -50,9 +50,8 @@ tuple = describe "tuple" $ do
 
   let program = "x = (1, True, \"abc\")"
 
-  -- FIXME! ?o0 should default to ! (?)
   it "type checks" $ check program `shouldReturn` trim [r|
-x = ( [Int] 1 , [Bool] True , [?o0 Array Char] "abc" )
+x = ( [Int] 1 , [Bool] True , [& Array Char] "abc" )
 |]
 
 
@@ -200,8 +199,8 @@ type Either [ a , b ] = cases
 |]
 
   it "evaluates" $ do
-    interpret program "Left 0"  `shouldReturn` "Left 0"
-    interpret program "Right 1" `shouldReturn` "Right 1"
+    interpret program "Left 0 : Either [Int, ()]"  `shouldReturn` "Left 0"
+    interpret program "Right 1 : Either [(), Int]" `shouldReturn` "Right 1"
 
 
 

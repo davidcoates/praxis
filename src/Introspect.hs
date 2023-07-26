@@ -22,6 +22,7 @@ module Introspect
   , sub
   , extract
   , extractPartial
+  , deepExtract
   ) where
 
 import           Common
@@ -154,6 +155,11 @@ extractPartial f x = getConst $ visit f' x where
   f' y = case f (view value y) of
     (m, True)  -> Visit (Const m)
     (m, False) -> Resolve (Const m)
+
+deepExtract :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> m) -> Annotated a -> m
+deepExtract f x = getConst $ introspect f' x where
+  f' :: forall c. Term c => Annotated c -> Visit (Const m) () c
+  f' y = Visit (Const (f (view value y)))
 
 embedSub :: forall a b. Term a => (a -> Maybe a) -> (forall a. Term a => a -> Maybe a)
 embedSub f x = transferM f x

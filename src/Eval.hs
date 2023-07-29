@@ -59,21 +59,15 @@ decls ds = do
       declVar = \case
         (_ :< DeclVar n _ e) -> Just (n, e)
         _ -> Nothing
-      ds' = mapMaybe declVar ds
+      (ns, es) = unzip (mapMaybe declVar ds)
 
-  -- Split values into potentially recursive & definitely not recursive
-  let (rec, nonRec) = partition (recursive . snd) ds'
-
-  -- Evaluate non-recursive values. This is simple as we can simply evaluate each one in turn.
-  mapM_ (\(n, e) -> do { v <- exp e; vEnv %= intro n v }) nonRec
-
-  -- Evaluate recursive values. This is not simple as we have to allow each value to see the evaluation of all other values (including itself).
+  -- To support mutual recursion, each value needs to see the evaluation of all other values (including itself).
   -- Leverage mfix to find the fixpoint (where vs stands for the list of evaluations).
   mfix $ \vs -> do
     -- Evaluate each of the values in turn, with all of the evaluations in the environment
     -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
-    irrefMapM (\(n, v) -> vEnv %= intro n v) (map fst rec) vs
-    mapM exp (map snd rec)
+    irrefMapM (\(n, v) -> vEnv %= intro n v) ns vs
+    mapM exp es
 
   return ()
 

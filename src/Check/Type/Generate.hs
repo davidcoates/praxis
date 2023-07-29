@@ -195,6 +195,8 @@ recursive x = case view value x of
 
 decls :: [Annotated Decl] -> Praxis [Annotated Decl]
 decls ds = do
+  -- Variable declarations are allowed to be (mutually) recursive.
+  -- So we first "pre declare" them by adding them to the context, so that each declaration sees all the others (and itself) in scope.
   ds' <- mapM preDeclare ds
   mapM (\(t, d) -> decl t d) ds'
   where
@@ -204,8 +206,8 @@ decls ds = do
       introTy s n t
       return t
     preDeclare d = case d of
-      ((s, _) :< DeclVar n sig e) | recursive e -> do { t <- declare s n sig; return (Just t, d) }
-      _                                         -> return (Nothing, d)
+      ((s, _) :< DeclVar n sig e) -> do { t <- declare s n sig; return (Just t, d) }
+      _                           -> return (Nothing, d)
 
 
 qTyVarNames :: [Annotated QTyVar] -> [Name]

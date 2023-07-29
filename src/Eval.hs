@@ -40,6 +40,7 @@ instance Evaluable Exp Value where
 program :: Annotated Program -> Praxis ()
 program (_ :< Program ds) = decls ds
 
+-- A helper for decls, irrefutably matching the [b] argument
 irrefMapM :: Monad m => ((a, b) -> m c) -> [a] -> [b] -> m [c]
 irrefMapM f as bs = case as of
   []     -> return []
@@ -49,15 +50,33 @@ irrefMapM f as bs = case as of
       cs <- irrefMapM f as bs
       return (c : cs)
 
+
 decls :: [Annotated Decl] -> Praxis ()
 decls ds = do
-  let (rec, nonrec) = partition (recursive . snd) (mapMaybe declVar ds)
-  mfix (\vs -> do { irrefMapM (\(n, v) -> vEnv %= intro n v) (map fst rec) vs; mapM exp (map snd rec) })
-  mapM_ (\(n, e) -> do { v <- exp e; vEnv %= intro n v }) nonrec
-  where
-    declVar = \case
-      (_ :< DeclVar n _ e) -> Just (n, e)
-      _ -> Nothing
+
+  -- Only variable declartions (values / functions) can be evaluated, so we only need to consider DeclVar
+  let declVar :: Annotated Decl -> Maybe (Name, Annotated Exp)
+      declVar = \case
+        (_ :< DeclVar n _ e) -> Just (n, e)
+        _ -> Nothing
+      ds' = mapMaybe declVar ds
+
+  -- Split values into potentially recursive & definitely not recursive
+  let (rec, nonRec) = partition (recursive . snd) ds'
+
+  -- Evaluate non-recursive values. This is simple as we can simply evaluate each one in turn.
+  mapM_ (\(n, e) -> do { v <- exp e; vEnv %= intro n v }) nonRec
+
+  -- Evaluate recursive values. This is not simple as we have to allow each value to see the evaluation of all other values (including itself).
+  -- Leverage mfix to find the fixpoint (where vs stands for the list of evaluations).
+  mfix $ \vs -> do
+    -- Evaluate each of the values in turn, with all of the evaluations in the environment
+    -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
+    irrefMapM (\(n, v) -> vEnv %= intro n v) (map fst rec) vs
+    mapM exp (map snd rec)
+
+  return ()
+
 
 stmt :: Annotated Stmt -> Praxis ()
 stmt (_ :< s) = case s of

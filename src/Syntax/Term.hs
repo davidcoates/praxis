@@ -39,10 +39,10 @@ layout :: Syntax f => Char -> f ()
 layout c = token (Layout c) <|> mark ("layout '" ++ [c] ++ "'")
 
 contextualOp :: Syntax f => Name -> f ()
-contextualOp op = token (QVarSym (unqualified op)) <|> mark ("contextually keyword '" ++ op ++ "'") <|> unparseable (reservedOp op)
+contextualOp op = token (QVarSym (unqualified op)) <|> unparseable (reservedOp op) <|> mark ("contextually keyword '" ++ op ++ "'")
 
 contextualId :: Syntax f => Name -> f ()
-contextualId id = token (QVarId (unqualified id)) <|> mark ("contextual keyword '" ++ id ++ "'") <|> unparseable (reservedId id)
+contextualId id = token (QVarId (unqualified id)) <|> unparseable (reservedId id) <|> mark ("contextual keyword '" ++ id ++ "'")
 
 dot :: Syntax f => f ()
 dot = contextualOp "."

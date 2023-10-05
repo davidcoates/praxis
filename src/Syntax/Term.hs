@@ -39,10 +39,10 @@ layout :: Syntax f => Char -> f ()
 layout c = token (Layout c) <|> mark ("layout '" ++ [c] ++ "'")
 
 contextualOp :: Syntax f => Name -> f ()
-contextualOp op = token (QVarSym (unqualified op)) <|> mark ("contextually keyword '" ++ op ++ "'")
+contextualOp op = token (QVarSym (unqualified op)) <|> mark ("contextually keyword '" ++ op ++ "'") <|> unparseable (reservedOp op)
 
 contextualId :: Syntax f => Name -> f ()
-contextualId id = token (QVarId (unqualified id)) <|> mark ("contextual keyword '" ++ id ++ "'")
+contextualId id = token (QVarId (unqualified id)) <|> mark ("contextual keyword '" ++ id ++ "'") <|> unparseable (reservedId id)
 
 dot :: Syntax f => f ()
 dot = contextualOp "."
@@ -157,9 +157,9 @@ syntax = \case
   -- | T2
   IKind           -> kind
   -- | Solver
-  ITyConstraint -> tyConstraint
+  ITyConstraint   -> tyConstraint
   IKindConstraint -> kindConstraint
-  ITyProp       -> unparseable tyProp
+  ITyProp         -> unparseable tyProp
   IKindProp       -> unparseable kindProp
 
 

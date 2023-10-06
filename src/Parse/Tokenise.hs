@@ -8,7 +8,7 @@ import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Parse.Tokenise.Unlayout
 import           Praxis                   hiding (throw)
 import qualified Stage
-import           Term                     (Lit (..))
+import           Term                     (Lit (..), TyOpDomain (..))
 import           Token
 
 import           Control.Applicative      (Alternative (..), Applicative (..))
@@ -46,7 +46,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> literal <|> tyOpVar <|> stuff)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> literal <|> stuff)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment
@@ -67,9 +67,6 @@ intLiteral :: Tokeniser Token
 intLiteral = satisfy isDigit *> (Lit . Int <$> decimal)
   where decimal :: Tokeniser Int
         decimal = read <$> while (satisfy isDigit) consume
-
-tyOpVar :: Tokeniser Token
-tyOpVar = char '?' *> (TyOpVar <$> (satisfy isLower *> while (satisfy isLetter) consume))
 
 charEscapeSeqs = [
   ('0', '\0'),

@@ -40,8 +40,8 @@ tyUnis = extract (embedMonoid f) where
 tyOpUnis :: forall a. Term a => Annotated a -> Set Name
 tyOpUnis = extract (embedMonoid f) where
   f = \case
-    TyOpUni n -> Set.singleton n
-    _         -> Set.empty
+    TyOpUni _ n -> Set.singleton n
+    _           -> Set.empty
 
 type TypeSolver = Solver TyConstraint TyConstraint
 
@@ -57,15 +57,15 @@ solveDeep s = \c -> do
 
 trySolveShare t = save our $ save tEnv $ solveDeep (trySolveShare') (Share t) where
   trySolveShare' = (solveFromAxioms <|>) $ \(Share t) -> case view value t of
-    TyUnit                                 -> tautology
-    TyFun _ _                              -> tautology
-    TyPair a b                             -> intro [ Share a, Share b]
-    TyVar _                                -> contradiction
-    TyCon _                                -> contradiction
-    TyApply (_ :< TyCon _) _               -> contradiction
-    TyApply (_ :< TyOp (_ :< TyOpBang)) _  -> tautology
-    TyApply (_ :< TyOp (_ :< TyOpVar _)) _ -> contradiction
-    _                                      -> defer
+    TyUnit                                   -> tautology
+    TyFun _ _                                -> tautology
+    TyPair a b                               -> intro [ Share a, Share b]
+    TyVar _                                  -> contradiction
+    TyCon _                                  -> contradiction
+    TyApply (_ :< TyCon _) _                 -> contradiction
+    TyApply (_ :< TyOp (_ :< TyOpRef _)) _   -> tautology
+    TyApply (_ :< TyOp (_ :< TyOpVar _ _)) _ -> contradiction
+    _                                        -> defer
 
 
 solveTy :: TypeSolver
@@ -102,11 +102,11 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
         let (ops1, ops2) = let f = Set.toList . outerTyOps in (f t1, f t2)
         case (if ops1 < ops2 then (ops1, ops2) else (ops2, ops1)) of
           ([], vs) -> do
-            if all (\v -> case view value v of { TyOpUni _ -> True; _ -> False }) vs
-            then mapM (\(_ :< TyOpUni n) -> n `isOp` TyOpId) vs >> solved
+            if all (\v -> case view value v of { TyOpUni _ _ -> True; _ -> False }) vs
+            then mapM (\(_ :< TyOpUni _ n) -> n `isOp` TyOpId) vs >> solved
             else contradiction
-          ([_ :< TyOpUni n], [_ :< TyOpUni m]) | n == m -> tautology
-          ([_ :< TyOpUni n], [_ :< op]) -> n `isOp` op
+          ([_ :< TyOpUni d1 n], [_ :< TyOpUni d2 m]) | d1 == d2 && n == m -> tautology
+          ([_ :< TyOpUni d  n], [_ :< op]) -> n `isOp` op
           _ -> defer
       _ -> defer
 
@@ -146,8 +146,8 @@ simplify x = do
   tyOps <- use (our . sol . tyOpSol)
   let simplify' :: forall a. Term a => a -> Maybe a
       simplify' x = case witness :: I a of {
-        IType -> case x of { TyUni   n -> n `lookup`   tys; _ -> Nothing };
-        ITyOp -> case x of { TyOpUni n -> n `lookup` tyOps; _ -> Nothing };
+        IType -> case x of { TyUni     n -> n `lookup`   tys; _ -> Nothing };
+        ITyOp -> case x of { TyOpUni _ n -> n `lookup` tyOps; _ -> Nothing };
         _     -> Nothing}
   normalise (sub simplify' x)
 
@@ -178,12 +178,12 @@ simplifyOuterTyOps = simplifyOuterTyOps' [] where
   simplifyOuterTyOps' ops t = case view value t of
 
     TyApply o@(_ :< TyOp (_ :< op)) t' -> case op of
-      TyOpId   -> simplifyOuterTyOps' ops t'
-      TyOpBang -> set value (TyApply o (stripOuterTyOps t')) t
+      TyOpId    -> simplifyOuterTyOps' ops t'
+      TyOpRef _ -> set value (TyApply o (stripOuterTyOps t')) t
       _
         | op `elem` ops -> simplifyOuterTyOps' ops t'
         | otherwise     -> let t'' = simplifyOuterTyOps' (op:ops) t' in case view value t'' of
-          TyApply (_ :< TyOp (_ :< TyOpBang)) _ -> t''
+          TyApply (_ :< TyOp (_ :< TyOpRef r)) _ -> t''
           _ -> set value (TyApply o t'') t
 
     _ -> t

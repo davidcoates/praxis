@@ -3,7 +3,7 @@ module Token
   ) where
 
 import           Common
-import           Term   (Lit (..))
+import           Term   (Lit (..), TyOpDomain (..))
 
 data Token = QVarId (Qualified Name)
            | QConId (Qualified Name)
@@ -16,7 +16,6 @@ data Token = QVarId (Qualified Name)
            | Lit Lit
            | Print (Printable String)
            | Special Char
-           | TyOpVar String
            | Uni String
            | Annotation (Printable String)
   deriving Eq
@@ -46,5 +45,4 @@ instance Pretty Token where
     Layout c      -> Fg darkGrey $ Value [c]
     Lit l         -> Fg green $ Value $ show l
     Special c     -> Fg grey $ Value [c]
-    TyOpVar s     -> Fg purple $ Value ('?' : s)
     Uni s         -> Fg orange $ Value s

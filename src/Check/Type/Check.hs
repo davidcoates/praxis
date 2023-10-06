@@ -29,8 +29,8 @@ check x = save stage $ do
       tyOps = view tyOpSol sol
   let f :: forall a. Term a => a -> Maybe a
       f x = case witness :: I a of
-        IType -> case x of {   TyUni n ->  lookup n  tys; _ -> Nothing }
-        ITyOp -> case x of { TyOpUni n -> lookup n tyOps; _ -> Nothing }
+        IType -> case x of {   TyUni n   ->  lookup n  tys; _ -> Nothing }
+        ITyOp -> case x of { TyOpUni _ n -> lookup n tyOps; _ -> Nothing }
         _     -> Nothing
   r <- normalise (sub f x)
   display r `ifFlag` debug
@@ -46,8 +46,8 @@ deepTyUnis = deepExtract (embedMonoid f) where
 deepTyOpUnis :: forall a. Term a => Annotated a -> Set Name
 deepTyOpUnis = deepExtract (embedMonoid f) where
   f = \case
-    TyOpUni n -> Set.singleton n
-    _         -> Set.empty
+    TyOpUni _ n -> Set.singleton n
+    _           -> Set.empty
 
 tryDefault :: Term a => Annotated a -> Solution -> Praxis Solution
 tryDefault x sol = do
@@ -60,6 +60,12 @@ tryDefault x sol = do
   flip mapM_ freeTyOps $ \tyOp -> do
     warnAt (view source x) $ "undertermined type operator: " <> quote (pretty tyOp) <> ", defaulting to &"
 
-  let sol' = over tyOpSol (++ map (\tyOp -> (tyOp, TyOpBang)) (Set.toList freeTyOps)) sol
+  let defaultTyOp n = do
+        r <- freshTyOpRef
+        return (n, view value r)
+
+  defaultedTyOps <- mapM defaultTyOp (Set.toList freeTyOps)
+
+  let sol' = over tyOpSol (++ defaultedTyOps) sol
 
   return sol'

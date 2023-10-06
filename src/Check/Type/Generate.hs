@@ -41,11 +41,11 @@ ty = annotation . just
 specialise :: Source -> [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis (Annotated Type -> Annotated Type)
 specialise s vs cs = do
   vars <- series $ [ (\t -> (n, view value t)) <$> freshTyUni | QTyVar n <- map (view value) vs ]
-  opVars <- series $ [ (\t -> (n, view value t)) <$> freshTyOpUni | QTyOpVar n <- map (view value) vs ]
+  opVars <- series $ [ (\t -> ((n, d), view value t)) <$> freshTyOpUni d | QTyOpVar d n <- map (view value) vs ]
   let f :: Term a => a -> Maybe a
       f x = case typeof x of
-        IType |   TyVar n <- x -> n `Prelude.lookup` vars
-        ITyOp | TyOpVar n <- x -> n `Prelude.lookup` opVars
+        IType |   TyVar n   <- x -> n `Prelude.lookup` vars
+        ITyOp | TyOpVar d n <- x -> (n, d) `Prelude.lookup` opVars
         _                      -> Nothing
   requires [ newConstraint (view value (sub f c)) Specialisation s | c <- cs ]
   return (sub f)
@@ -78,12 +78,13 @@ scope x = save tEnv $ do
 read :: Source -> Name -> Praxis (Annotated Type)
 read s n = do
   l <- use tEnv
+  r <- freshTyOpRef
   case LEnv.lookupFull n l of
     Just entry -> do
       t <- specialiseQType s (view LEnv.value entry)
       requires [ newConstraint (Share t) (UnsafeView n) s | view LEnv.used entry ]
       requires [ newConstraint (Share t) (Captured n) s   | view LEnv.captured entry  ]
-      return $ phantom (TyApply (phantom (TyOp (phantom TyOpBang))) t)
+      return $ phantom (TyApply (phantom (TyOp r)) t)
     Nothing -> throwAt s (NotInScope n)
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
@@ -214,7 +215,7 @@ qTyVarNames :: [Annotated QTyVar] -> [Name]
 qTyVarNames vs = [ n | QTyVar n <- map (view value) vs ]
 
 qTyVarOpNames :: [Annotated QTyVar] -> [Name]
-qTyVarOpNames vs = [ n | QTyOpVar n <- map (view value) vs ]
+qTyVarOpNames vs = [ n | QTyOpVar d n <- map (view value) vs ]
 
 decl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
 decl forwardT = splitTrivial $ \s -> \case
@@ -259,15 +260,15 @@ decl forwardT = splitTrivial $ \s -> \case
 
       Just sig@(_ :< Forall vs cs t) -> do
         vars <-   series $ [ (\(_ :< TyVar m) -> (n, m)) <$> freshTyVar | n <- qTyVarNames vs ]
-        opVars <- series $ [ (\(_ :< TyOpVar m) -> (n, m)) <$> freshTyOpVar | n <- qTyVarOpNames vs ]
+        opVars <- series $ [ (\(_ :< TyOpVar _ m) -> (n, m)) <$> freshTyOpVar undefined | n <- qTyVarOpNames vs ]
         let rewrite :: forall a. Term a => Annotated a -> Annotated a
             rewrite = rewrite' vars opVars
             rewrite' :: forall a. Term a => [(Name, Name)] -> [(Name, Name)] -> Annotated a -> Annotated a
             rewrite' vars opVars = sub $ \x -> case typeof x of
-              IType   |     TyVar n <- x ->    TyVar <$> n `Prelude.lookup` vars
-              ITyOp   |   TyOpVar n <- x ->  TyOpVar <$> n `Prelude.lookup` opVars
-              IQTyVar |    QTyVar n <- x ->   QTyVar <$> n `Prelude.lookup` vars
-              IQTyVar |  QTyOpVar n <- x -> QTyOpVar <$> n `Prelude.lookup` opVars
+              IType   |     TyVar n   <- x ->      TyVar <$> n `Prelude.lookup` vars
+              ITyOp   |   TyOpVar d n <- x ->  TyOpVar d <$> n `Prelude.lookup` opVars
+              IQTyVar |    QTyVar n   <- x ->     QTyVar <$> n `Prelude.lookup` vars
+              IQTyVar |  QTyOpVar d n <- x -> QTyOpVar d <$> n `Prelude.lookup` opVars
               IDecl   | DeclVar n (Just sig@(_ :< Forall boundVars _ _)) e <- x -> -- Per the above comment block, need to ignore any bound variables in nested declarations
                 let
                   vars' = [ (n, m) | (n, m) <- vars, not (m `elem` qTyVarNames boundVars) ]
@@ -306,7 +307,7 @@ exp = split $ \s -> \case
   Case x alts -> do
     x' <- exp x
     let xt = view ty x'
-    op <- freshTyOpUni
+    op <- freshTyOpUni RefOrId
     alts' <- parallel (map (alt op) alts)
     t1 <- equals (map fst alts') CaseCongruence
     t2 <- equals (map snd alts') CaseCongruence
@@ -314,7 +315,7 @@ exp = split $ \s -> \case
     return (t2 :< Case x' alts')
 
   Cases alts -> closure $ do
-    op <- freshTyOpUni
+    op <- freshTyOpUni RefOrId
     alts' <- parallel (map (alt op) alts)
     t1 <- equals (map fst alts') CaseCongruence
     t2 <- equals (map snd alts') CaseCongruence
@@ -339,7 +340,7 @@ exp = split $ \s -> \case
     return (view ty b' :< If a' b' c')
 
   Lambda p e -> closure $ do
-    op <- freshTyOpUni
+    op <- freshTyOpUni RefOrId
     (p', e') <- alt op (p, e)
     return (fun (view ty p') (view ty e') :< Lambda p' e')
 
@@ -354,7 +355,7 @@ exp = split $ \s -> \case
     Bool _   -> return $ TyCon "Bool"
     Char _   -> return $ TyCon "Char"
     String _ -> do
-      o <- freshTyOpUni
+      o <- freshTyOpUni RefOrId
       let ot = TyOp o `as` phantom KindOp
           a = TyCon "Array" `as` phantom (KindFun (phantom KindType) (phantom KindType))
           ac = TyApply a (TyCon "Char" `as` phantom KindType) `as` phantom KindType
@@ -410,7 +411,7 @@ bind = splitTrivial $ \s -> \case
 
   Bind p e -> do
     e' <- exp e
-    op <- freshTyOpUni
+    op <- freshTyOpUni RefOrId
     p' <- pat op p
     equal (view ty p') (view ty e') (BindCongruence) (view source p <> view source e)
     return $ Bind p' e'

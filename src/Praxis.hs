@@ -58,9 +58,9 @@ module Praxis
   , freshTyUni
   , freshKindUni
   , freshTyOpUni
-  , freshVar
   , freshTyVar
   , freshTyOpVar
+  , freshTyOpRef
   , reuse
 
   , clearTerm
@@ -103,9 +103,9 @@ data Fresh = Fresh
   { _freshTyUnis   :: [String]
   , _freshTyOpUnis :: [String]
   , _freshKindUnis :: [String]
-  , _freshVars     :: [String]
   , _freshTyVars   :: [String]
   , _freshTyOpVars :: [String]
+  , _freshTyOpRefs :: [String]
   }
 
 instance Show Fresh where
@@ -163,12 +163,12 @@ defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _interactive = False, _silent = False }
 
 defaultFresh = Fresh
-  { _freshTyUnis   = map (("?t"++) . show) [0..]
-  , _freshTyOpUnis = map (("?o"++) . show) [0..]
-  , _freshKindUnis = map (("?k"++) . show) [0..]
-  , _freshVars     = map (("?v"++) . show) [0..]
+  { _freshTyUnis   = map (("^t"++) . show) [0..]
+  , _freshTyOpUnis = map (("^o"++) . show) [0..]
+  , _freshKindUnis = map (("^k"++) . show) [0..]
   , _freshTyVars   = map (("'t"++) . show) [0..]
   , _freshTyOpVars = map (("'o"++) . show) [0..]
+  , _freshTyOpRefs = map (("'l"++) . show) [0..]
   }
 
 emptyState :: PraxisState
@@ -275,11 +275,11 @@ freshTyUni = do
   fresh . freshTyUnis .= xs
   return (TyUni x `as` phantom KindType)
 
-freshTyOpUni :: Praxis (Annotated TyOp)
-freshTyOpUni = do
+freshTyOpUni :: TyOpDomain -> Praxis (Annotated TyOp)
+freshTyOpUni domain = do
   (o:os) <- use (fresh . freshTyOpUnis)
   fresh . freshTyOpUnis .= os
-  return (phantom (TyOpUni o))
+  return (phantom (TyOpUni domain o))
 
 freshKindUni :: Praxis (Annotated Kind)
 freshKindUni = do
@@ -287,23 +287,23 @@ freshKindUni = do
   fresh . freshKindUnis .= ks
   return (phantom (KindUni k))
 
-freshVar :: Praxis Name
-freshVar = do
-  (x:xs) <- use (fresh . freshVars)
-  fresh . freshVars .= xs
-  return x
-
 freshTyVar :: Praxis (Annotated Type)
 freshTyVar = do
   (x:xs) <- use (fresh . freshTyVars)
   fresh . freshTyVars .= xs
   return (TyVar x `as` phantom KindType)
 
-freshTyOpVar :: Praxis (Annotated TyOp)
-freshTyOpVar = do
+freshTyOpVar :: TyOpDomain -> Praxis (Annotated TyOp)
+freshTyOpVar domain = do
   (o:os) <- use (fresh . freshTyOpVars)
   fresh . freshTyOpVars .= os
-  return (phantom (TyOpVar o))
+  return (phantom (TyOpVar domain o))
+
+freshTyOpRef :: Praxis (Annotated TyOp)
+freshTyOpRef = do
+  (l:ls) <- use (fresh . freshTyOpRefs)
+  fresh . freshTyOpRefs .= ls
+  return (phantom (TyOpRef l))
 
 -- This will fuck things up if the name is still used somewhere
 reuse :: Name -> Praxis ()

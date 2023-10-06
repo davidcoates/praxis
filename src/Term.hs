@@ -23,6 +23,7 @@ module Term
   , Tok(..)
 
   -- | T1
+  , TyOpDomain(..)
   , TyOp(..)
   , TyPat(..)
   , Type(..)
@@ -106,7 +107,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name -- FIXME Qualified Name
-         | VarBang Name -- ^Parsing only
+         | VarRef Name -- ^Parsing only
          | Where (Annotated Exp) [Annotated Decl]
   deriving (Eq, Ord)
 
@@ -145,10 +146,13 @@ data Tok = TExp (Annotated Exp)
          | TOp Name
   deriving (Eq, Ord)
 
-data TyOp = TyOpUni Name
-          | TyOpBang
+data TyOpDomain = Ref | RefOrId
+  deriving (Eq, Ord)
+
+data TyOp = TyOpUni TyOpDomain Name
           | TyOpId
-          | TyOpVar Name
+          | TyOpRef Name
+          | TyOpVar TyOpDomain Name
   deriving (Eq, Ord)
 
 data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
@@ -166,7 +170,7 @@ data Type = TyUni Name -- Compares less than all other types
           | TyVar Name
   deriving (Eq, Ord)
 
-data QTyVar = QTyVar Name | QTyOpVar Name
+data QTyVar = QTyVar Name | QTyOpVar TyOpDomain Name
   deriving (Eq, Ord)
 
 data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)

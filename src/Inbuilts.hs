@@ -58,17 +58,17 @@ inbuilts =
       Fun (\Unit -> liftIOUnsafe getContents >>= (\s -> Value.Array <$> (Value.fromString s)))) -- TODO need to make many of these functions strict?
   , ("put_int",      poly "Int -> ()",
       Fun (\(Int x) -> liftIOUnsafe (print x >> pure Unit)))
-  , ("put_str",      poly "&Array Char -> ()",
+  , ("put_str",      poly "forall &r. &r Array Char -> ()",
       Fun (\(Array a) -> Value.toString a >>= (\s -> liftIOUnsafe (putStr s)) >> pure Unit))
-  , ("put_str_ln",   poly "&Array Char -> ()",
+  , ("put_str_ln",   poly "forall &r. &r Array Char -> ()",
       Fun (\(Array a) -> Value.toString a >>= (\s -> liftIOUnsafe (putStrLn s)) >> pure Unit))
   , ("compose",      poly "forall a b c. (b -> c, a -> b) -> a -> c",
       Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
-  , ("print",        poly "forall a. &a -> ()",
+  , ("print",        poly "forall &r a. &r a -> ()",
       Fun (\x -> liftIOUnsafe (print x >> pure Unit))) -- TODO should have Show constraint
-  , ("at",           poly "forall a. (&Array a, Int) -> a",
+  , ("at",           poly "forall &r a. (&r Array a, Int) -> a",
       Fun (\(Pair (Array a) (Int i)) -> Value.readArray a i))
-  , ("len",          poly "forall a. &Array a -> Int",
+  , ("len",          poly "forall &r a. &r Array a -> Int",
       Fun (\(Array a) -> Value.Int <$> Value.len a))
   , ("set",          poly "forall a. (Array a, Int, a) -> Array a",
       Fun (\(Pair (Array a) (Pair (Int i) e)) -> Value.writeArray a i e >> pure (Array a)))

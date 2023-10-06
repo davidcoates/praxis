@@ -64,12 +64,6 @@ varid = match f (\s -> QVarId (unqualified s)) where
     QVarId n -> if null (qualification n) then Just (unqualify n) else Nothing
     _        -> Nothing
 
-tyOpVar :: Syntax f => f String
-tyOpVar = match f (\s -> Token.TyOpVar s) where
-  f = \case
-    Token.TyOpVar s -> Just s
-    _               -> Nothing
-
 uni :: Syntax f => f String
 uni = match (const Nothing) (\s -> Uni s)
 
@@ -121,6 +115,7 @@ definePrisms ''Program
 definePrisms ''Stmt
 definePrisms ''Tok
 
+definePrisms ''TyOpDomain
 definePrisms ''TyOp
 definePrisms ''TyPat
 definePrisms ''Type
@@ -258,7 +253,7 @@ kind :: Syntax f => f Kind
 kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind" where
   kind0 = _KindOp <$> reservedCon "Op" <|>
           _KindType <$> reservedCon "Type" <|>
-          _KindUni <$> uni <|>
+          unparseable (_KindUni <$> uni) <|>
           _KindConstraint <$> reservedCon "Constraint" <|>
           tuple1 _KindPair kind <|>
           mark "kind(0)"
@@ -274,27 +269,32 @@ tyConstraints = _Cons <$> (contextualOp "[" *> annotated tyConstraint) <*> tyCon
 
 qTyVar :: Syntax f => f QTyVar
 qTyVar = _QTyVar <$> varid <|>
-         _QTyOpVar <$> tyOpVar <|>
+         _QTyOpVar <$> tyOpDomain <*> varid  <|>
           mark "type or type operator variable"
 
 ty :: Syntax f => f Type
 ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type"
+
+tyOpDomain :: Syntax f => f TyOpDomain
+tyOpDomain = _Ref <$> reservedOp "&" <|>
+             _RefOrId <$> reservedOp "?" <|>
+             mark "type operater domain"
 
 ty1 :: Syntax f => f Type
 ty1 = right _TyApply ty0 <|> mark "type(1)" where
   ty0 = _TyOp  <$> annotated tyOp <|>
         _TyVar <$> varid <|>
         _TyCon <$> conid <|>
-        _TyUni <$> uni <|>
+        unparseable (_TyUni <$> uni) <|>
         pack _TyPack ty <|>
         tuple _TyUnit _TyPair ty <|>
         mark "type(0)"
 
 tyOp :: Syntax f => f TyOp
-tyOp = _TyOpBang <$> reservedOp "&" <|>
-       _TyOpUni <$> uni <|>
-       _TyOpId <$> contextualId "id" <|>
-       _TyOpVar <$> tyOpVar <|>
+tyOp = unparseable (_TyOpUni <$> tyOpDomain <*> uni) <|>
+       unparseable (_TyOpRef <$> reservedOp "&" *> varid) <|>
+       unparseable (_TyOpId <$> contextualId "id") <|>
+       _TyOpVar <$> tyOpDomain <*> varid <|>
        mark "type operator"
 
 exp :: Syntax f => f Exp
@@ -314,7 +314,7 @@ exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Switch <$> reservedId "switch" *> block switch <|>
          exp1 <|> mark "expression(2)"
   exp1 = right _Apply exp0 <|> mark "expression(1)"
-  exp0 = _VarBang <$> reservedOp "&" *> varid <|>
+  exp0 = _VarRef <$> reservedOp "&" *> varid <|>
          _Var <$> varid <|> -- TODO qualified
          _Con <$> conid <|>
          _Lit <$> lit <|>

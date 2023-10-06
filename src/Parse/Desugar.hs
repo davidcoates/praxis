@@ -72,7 +72,7 @@ freeVars = extractPartial f where
     _     -> (Set.empty, True)
 
 -- Helper for desugaring &
--- Turns top-level VarBang into Var and returns the name of such variables
+-- Turns top-level VarRef into Var and returns the name of such variables
 expRead :: Annotated Exp -> Praxis (Annotated Exp, Set Name)
 expRead (a :< x) = case x of
 
@@ -85,7 +85,7 @@ expRead (a :< x) = case x of
     (y', ms) <- expRead y
     return (a :< Pair x' y', ns `Set.union` ms)
 
-  VarBang n -> return (a :< Var n, Set.singleton n)
+  VarRef n -> return (a :< Var n, Set.singleton n)
 
   _ -> do
     x' <- exp (a :< x)
@@ -106,7 +106,7 @@ exp (a@(s, _) :< x) = case x of
 
   Mixfix ts   -> Mixfix.parse s ts >>= exp -- Need to desguar after parsing
 
-  VarBang v   -> throwAt s $ "observed variable " <> quote (pretty v) <> " is not in a valid read context"
+  VarRef v    -> throwAt s $ "observed variable " <> quote (pretty v) <> " is not in a valid read context"
 
   Con "True"  -> pure (a :< Lit (Bool True))
 

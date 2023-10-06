@@ -250,7 +250,7 @@ instance Term Exp where
     Switch as    -> Switch <$> pairs f as
     Unit         -> pure Unit
     Var n        -> pure (Var n)
-    VarBang n    -> pure (VarBang n)
+    VarRef n     -> pure (VarRef n)
     Where a bs   -> Where <$> f a <*> traverse f bs
 
 instance Term Pat where
@@ -290,11 +290,7 @@ instance Term Tok where
 instance Term TyOp where
   witness = ITyOp
   complete = trivial
-  recurse f = \case
-    TyOpUni n -> pure (TyOpUni n)
-    TyOpBang  -> pure TyOpBang
-    TyOpId    -> pure TyOpId
-    TyOpVar n -> pure (TyOpVar n)
+  recurse _ = pure
 
 instance Term TyPat where
   witness = ITyPat

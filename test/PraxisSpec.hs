@@ -51,7 +51,7 @@ tuple = describe "tuple" $ do
   let program = "x = (1, True, \"abc\")"
 
   it "type checks" $ check program `shouldReturn` trim [r|
-x = ( [Int] 1 , [Bool] True , [& Array Char] "abc" )
+x = ( [Int] 1 , [Bool] True , [& 'l0 Array Char] "abc" )
 |]
 
 
@@ -94,8 +94,8 @@ sign : Int -> Int = \ [Int] n -> [Int] switch
     interpret program "sign (-5)" `shouldReturn` "-1"
     interpret program "sign -5"   `shouldReturn` trim [r|
 error: found contradiction Int ~ Int -> Int ∧ Int ~ Int
-|-> ( Int , Int ) ~ ( Int -> Int , Int ) ∧ Int ~ ?t6
-|-> ( Int , Int ) -> Int ~ ( Int -> Int , Int ) -> ?t6
+|-> ( Int , Int ) ~ ( Int -> Int , Int ) ∧ Int ~ ^t6
+|-> ( Int , Int ) -> Int ~ ( Int -> Int , Int ) -> ^t6
 |-> (function application)
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
@@ -278,7 +278,7 @@ map f = cases
   Nil          -> Nil
   Cons (x, xs) -> Cons (f x, (map f) xs)
 
-sum : &List Int -> Int
+sum : forall &r. &r List Int -> Int
 sum = cases
   Nil          -> 0
   Cons (x, xs) -> x + sum xs
@@ -288,12 +288,12 @@ sum = cases
 type List a = cases
   [forall a . List a] Nil
   [forall a . ( a , List a ) -> List a] Cons ( a , List a )
-map : forall ?'o0 't0 't1 . ( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1 = \ [?'o0 't0 -> 't1] f -> [?'o0 List 't0 -> List 't1] cases
-  [?'o0 List 't0] Nil -> [List 't1] Nil
-  [?'o0 List 't0] Cons ( [?'o0 't0] x , [?'o0 List 't0] xs ) -> [( 't1 , List 't1 ) -> List 't1] Cons ( [?'o0 't0 -> 't1] f [?'o0 't0] x , ( [( ?'o0 't0 -> 't1 ) -> ?'o0 List 't0 -> List 't1] map [?'o0 't0 -> 't1] f ) [?'o0 List 't0] xs )
-sum : & List Int -> Int = [& List Int -> Int] cases
-  [& List Int] Nil -> [Int] 0
-  [& List Int] Cons ( [Int] x , [& List Int] xs ) -> [( Int , Int ) -> Int] add_int ( [Int] x , [& List Int -> Int] sum [& List Int] xs )
+map : forall ? 'o0 't0 't1 . ( ? 'o0 't0 -> 't1 ) -> ? 'o0 List 't0 -> List 't1 = \ [? 'o0 't0 -> 't1] f -> [? 'o0 List 't0 -> List 't1] cases
+  [? 'o0 List 't0] Nil -> [List 't1] Nil
+  [? 'o0 List 't0] Cons ( [? 'o0 't0] x , [? 'o0 List 't0] xs ) -> [( 't1 , List 't1 ) -> List 't1] Cons ( [? 'o0 't0 -> 't1] f [? 'o0 't0] x , ( [( ? 'o0 't0 -> 't1 ) -> ? 'o0 List 't0 -> List 't1] map [? 'o0 't0 -> 't1] f ) [? 'o0 List 't0] xs )
+sum : forall & 'o1 . & 'o1 List Int -> Int = [& 'o1 List Int -> Int] cases
+  [& 'o1 List Int] Nil -> [Int] 0
+  [& 'o1 List Int] Cons ( [Int] x , [& 'o1 List Int] xs ) -> [( Int , Int ) -> Int] add_int ( [Int] x , [& 'o1 List Int -> Int] sum [& 'o1 List Int] xs )
 |]
 
   it "evaluates" $ do
@@ -387,12 +387,14 @@ spec = do
   describe "simple types" $ do
 
     let parse :: String -> IO String
-        parse s = run (Parse.parse s :: Praxis (Annotated Type))
+        parse s = run (Parse.parse s :: Praxis (Annotated QType))
 
     let types =
           [ ("Int -> Int -> Int", "Int -> (Int -> Int)")
           , ("A B C", "A (B C)")
           , ("Maybe Maybe a -> Maybe b", "(Maybe (Maybe a)) -> (Maybe b)")
+          , ("forall a b. (a, b)", "forall a b . ( a, b )")
+          , ("forall &r. &r Array Char -> ()", "forall &r . &r Array Char -> ()")
           ]
 
     forM_ types $ \(a, b) -> do

@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TemplateHaskell   #-}
@@ -52,7 +53,8 @@ module Praxis
   , tEnv
   , daEnv
   , vEnv
-  , tSynonyms
+  , tyVarMap
+  , tySynonyms
   , system
 
   , freshTyUni
@@ -66,6 +68,7 @@ module Praxis
   , clearTerm
   , ifFlag
   , display
+  , sanitise
   )
   where
 
@@ -82,13 +85,14 @@ import qualified Control.Monad.Trans.State    as State (get, modify, put)
 import           Data.Array                   (array)
 import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
-import qualified Data.Map.Strict              as Map (empty)
+import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
 import qualified Env                          as Env (Environment (..))
 import           Env.Env
 import           Env.LEnv
 import           Env.SEnv
+import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
 import           Value
@@ -115,7 +119,7 @@ type VEnv = Env Name Value
 
 type TEnv = LEnv Name (Annotated QType)
 
-type KEnv = SEnv Name (Annotated Kind)
+type KEnv = Env Name (Annotated Kind)
 
 type DAEnv = Env Name (Annotated DataCon)
 
@@ -132,18 +136,19 @@ data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Grap
 makeLenses ''OpContext
 
 data PraxisState = PraxisState
-  { _infile    :: Maybe String
-  , _outfile   :: Maybe String
-  , _flags     :: Flags               -- ^Flags
-  , _fresh     :: Fresh
-  , _stage     :: Stage               -- ^Current stage of compilation
-  , _opContext :: OpContext
-  , _kEnv      :: KEnv                -- ^Kind environment
-  , _tEnv      :: TEnv                -- ^Type environment
-  , _daEnv     :: DAEnv               -- ^Data alternative environment
-  , _vEnv      :: VEnv                -- ^Value environment for interpreter
-  , _tSynonyms :: Map Name (Annotated Type) -- ^Type synonyms TODO encapsulate within desugarer?
-  , _system    :: Check.System        -- ^ TODO rename?
+  { _infile     :: Maybe String
+  , _outfile    :: Maybe String
+  , _flags      :: Flags               -- ^Flags
+  , _fresh      :: Fresh
+  , _stage      :: Stage               -- ^Current stage of compilation
+  , _opContext  :: OpContext
+  , _kEnv       :: KEnv                -- ^Kind environment
+  , _tEnv       :: TEnv                -- ^Type environment
+  , _daEnv      :: DAEnv               -- ^Data alternative environment
+  , _vEnv       :: VEnv                -- ^Value environment for interpreter
+  , _tySynonyms :: Map Name (Annotated Type) -- ^Type synonyms TODO encapsulate within desugarer?
+  , _tyVarMap   :: Map Name Name       -- Substitutions to apply to TyVar / TyVarOp when printing
+  , _system     :: Check.System        -- ^ TODO rename?
   }
 
 instance Show PraxisState where
@@ -160,7 +165,7 @@ instance Functor f => Functor (PraxisT f) where
   fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
 
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = False, _interactive = False, _silent = False }
+defaultFlags = Flags { _debug = True, _interactive = False, _silent = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("^t"++) . show) [0..]
@@ -183,7 +188,8 @@ emptyState = PraxisState
   , _tEnv         = Env.empty
   , _daEnv        = Env.empty
   , _vEnv         = Env.empty
-  , _tSynonyms    = Map.empty
+  , _tySynonyms   = Map.empty
+  , _tyVarMap     = Map.empty
   , _system       = error ("unset system") -- FIXME Checkers are responsible for initialisating system
   }
 
@@ -314,3 +320,15 @@ reuse n@('?':c:_) = over (fresh . f c) (n:)
         f 'e' = freshTyOpUnis
         f 'k' = freshKindUnis
 -}
+
+sanitise :: Term a => Annotated a -> Praxis (Annotated a)
+sanitise x = do
+  m <- use tyVarMap
+  let rewriteTyVars :: Term a => Annotated a -> Annotated a
+      rewriteTyVars = sub $ \x -> case typeof x of
+        IType   |     TyVar n   <- x ->      TyVar <$> n `Map.lookup` m
+        ITyOp   |   TyOpVar d n <- x ->  TyOpVar d <$> n `Map.lookup` m
+        IQTyVar |    QTyVar n   <- x ->     QTyVar <$> n `Map.lookup` m
+        IQTyVar |  QTyOpVar d n <- x -> QTyOpVar d <$> n `Map.lookup` m
+        _                            -> Nothing
+  return (rewriteTyVars x)

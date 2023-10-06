@@ -33,7 +33,7 @@ run p = do
     Right y -> return (show y)
 
 check :: String -> IO String
-check s = run (Parse.parse s >>= Check.check :: Praxis (Annotated Program))
+check s = run (Parse.parse s >>= Check.check >>= sanitise :: Praxis (Annotated Program))
 
 interpret :: String -> String -> IO String
 interpret program exp = run $ do
@@ -155,7 +155,7 @@ swap (a, b) = (b, a)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-swap : forall 't0 't1 . ( 't0 , 't1 ) -> ( 't1 , 't0 ) = \ ( ['t0] a , ['t1] b ) -> ( ['t1] b , ['t0] a )
+swap : forall a b . ( a , b ) -> ( b , a ) = \ ( [a] a , [b] b ) -> ( [b] b , [a] a )
 |]
 
   it "evaluates" $ do
@@ -175,7 +175,7 @@ copy x = (x, x)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-copy : forall 't0 . [ Share 't0 ] => 't0 -> ( 't0 , 't0 ) = \ ['t0] x -> ( ['t0] x , ['t0] x )
+copy : forall a . [ Share a ] => a -> ( a , a ) = \ [a] x -> ( [a] x , [a] x )
 |]
 
   it "evaluates" $ do
@@ -218,8 +218,8 @@ id_fun = Fun (\x -> x)
 
   it "type checks" $ check program `shouldReturn` trim [r|
 type Fun [ a , b ] = [forall a b . ( a -> b ) -> Fun [ a , b ]] Fun ( a -> b )
-unbox_fun : forall 't0 't1 . Fun [ 't0 , 't1 ] -> 't0 -> 't1 = \ [Fun [ 't0 , 't1 ]] Fun ['t0 -> 't1] f -> \ ['t0] x -> ['t0 -> 't1] f ['t0] x
-id_fun : forall 't2 . Fun [ 't2 , 't2 ] = [( 't2 -> 't2 ) -> Fun [ 't2 , 't2 ]] Fun ( \ ['t2] x -> ['t2] x )
+unbox_fun : forall a b . Fun [ a , b ] -> a -> b = \ [Fun [ a , b ]] Fun [a -> b] f -> \ [a] x -> [a -> b] f [a] x
+id_fun : forall a . Fun [ a , a ] = [( a -> a ) -> Fun [ a , a ]] Fun ( \ [a] x -> [a] x )
 |]
 
   it "evaluates" $ do
@@ -288,12 +288,12 @@ sum = cases
 type List a = cases
   [forall a . List a] Nil
   [forall a . ( a , List a ) -> List a] Cons ( a , List a )
-map : forall ? 'o0 't0 't1 . ( ? 'o0 't0 -> 't1 ) -> ? 'o0 List 't0 -> List 't1 = \ [? 'o0 't0 -> 't1] f -> [? 'o0 List 't0 -> List 't1] cases
-  [? 'o0 List 't0] Nil -> [List 't1] Nil
-  [? 'o0 List 't0] Cons ( [? 'o0 't0] x , [? 'o0 List 't0] xs ) -> [( 't1 , List 't1 ) -> List 't1] Cons ( [? 'o0 't0 -> 't1] f [? 'o0 't0] x , ( [( ? 'o0 't0 -> 't1 ) -> ? 'o0 List 't0 -> List 't1] map [? 'o0 't0 -> 't1] f ) [? 'o0 List 't0] xs )
-sum : forall & 'o1 . & 'o1 List Int -> Int = [& 'o1 List Int -> Int] cases
-  [& 'o1 List Int] Nil -> [Int] 0
-  [& 'o1 List Int] Cons ( [Int] x , [& 'o1 List Int] xs ) -> [( Int , Int ) -> Int] add_int ( [Int] x , [& 'o1 List Int -> Int] sum [& 'o1 List Int] xs )
+map : forall ? v a b . ( ? v a -> b ) -> ? v List a -> List b = \ [? v a -> b] f -> [? v List a -> List b] cases
+  [? v List a] Nil -> [List b] Nil
+  [? v List a] Cons ( [? v a] x , [? v List a] xs ) -> [( b , List b ) -> List b] Cons ( [? v a -> b] f [? v a] x , ( [( ? v a -> b ) -> ? v List a -> List b] map [? v a -> b] f ) [? v List a] xs )
+sum : forall & r . & r List Int -> Int = [& r List Int -> Int] cases
+  [& r List Int] Nil -> [Int] 0
+  [& r List Int] Cons ( [Int] x , [& r List Int] xs ) -> [( Int , Int ) -> Int] add_int ( [Int] x , [& r List Int -> Int] sum [& r List Int] xs )
 |]
 
   it "evaluates" $ do
@@ -347,7 +347,7 @@ type Foo [a, a] = cases
     Foo a
 |]
 
-  it "does not type check" $ check program `shouldReturn` "1:14 error: type variable 'a' redeclared (in the same scope)"
+  it "does not type check" $ check program `shouldReturn` "1:14 error: type 'a' redeclared (in the same scope)"
 
 
 
@@ -395,17 +395,31 @@ spec = do
           , ("Maybe Maybe a -> Maybe b", "(Maybe (Maybe a)) -> (Maybe b)")
           , ("forall a b. (a, b)", "forall a b . ( a, b )")
           , ("forall &r. &r Array Char -> ()", "forall &r . &r Array Char -> ()")
+          , ("forall ?r. ?r Array Char -> ()", "forall ?r . ?r Array Char -> ()")
           ]
 
     forM_ types $ \(a, b) -> do
       it (show a ++ " parses like " ++ show b) $ do
-        x <- parse a
-        y <- parse b
-        x `shouldBe` y
-      it (show a ++ " parses idempotently") $ do
-        x <- parse a
-        y <- parse x
-        x `shouldBe` y
+        a <- parse a
+        b <- parse b
+        a `shouldBe` b
+
+    let check :: String -> IO String
+        check s = run (Parse.parse s >>= Check.check :: Praxis (Annotated QType))
+
+    let types =
+          [ "forall r &r. ()"
+          , "forall r ?r. ()"
+          , "forall r r. ()"
+          , "forall &r &r. ()"
+          , "forall ?r ?r. ()"
+          , "forall &r ?r. ()"
+          ]
+
+    forM_ types $ \t -> do
+      it (show t ++ " is not valid") $ do
+        t' <- check t
+        t' `shouldBe` "1:1 error: quantified type variables are not distinct"
 
 
   describe "simple monomorphic programs" $ do

@@ -46,7 +46,7 @@ specialise s vs cs = do
       f x = case typeof x of
         IType |   TyVar n   <- x -> n `Prelude.lookup` vars
         ITyOp | TyOpVar d n <- x -> (n, d) `Prelude.lookup` opVars
-        _                      -> Nothing
+        _                        -> Nothing
   requires [ newConstraint (view value (sub f c)) Specialisation s | c <- cs ]
   return (sub f)
 
@@ -259,29 +259,13 @@ decl forwardT = splitTrivial $ \s -> \case
         return $ DeclVar n Nothing e'
 
       Just sig@(_ :< Forall vs cs t) -> do
-        vars <-   series $ [ (\(_ :< TyVar m) -> (n, m)) <$> freshTyVar | n <- qTyVarNames vs ]
-        opVars <- series $ [ (\(_ :< TyOpVar _ m) -> (n, m)) <$> freshTyOpVar undefined | n <- qTyVarOpNames vs ]
-        let rewrite :: forall a. Term a => Annotated a -> Annotated a
-            rewrite = rewrite' vars opVars
-            rewrite' :: forall a. Term a => [(Name, Name)] -> [(Name, Name)] -> Annotated a -> Annotated a
-            rewrite' vars opVars = sub $ \x -> case typeof x of
-              IType   |     TyVar n   <- x ->      TyVar <$> n `Prelude.lookup` vars
-              ITyOp   |   TyOpVar d n <- x ->  TyOpVar d <$> n `Prelude.lookup` opVars
-              IQTyVar |    QTyVar n   <- x ->     QTyVar <$> n `Prelude.lookup` vars
-              IQTyVar |  QTyOpVar d n <- x -> QTyOpVar d <$> n `Prelude.lookup` opVars
-              IDecl   | DeclVar n (Just sig@(_ :< Forall boundVars _ _)) e <- x -> -- Per the above comment block, need to ignore any bound variables in nested declarations
-                let
-                  vars' = [ (n, m) | (n, m) <- vars, not (m `elem` qTyVarNames boundVars) ]
-                  opVars' = [ (n, m) | (n, m) <- opVars, not (m `elem` qTyVarOpNames boundVars) ]
-                in Just (DeclVar n (Just (rewrite' vars' opVars' sig)) (rewrite' vars' opVars' e))
-              _ -> Nothing
-        our . axioms %= (++ [ axiom (view value (rewrite c)) | c <- cs ]) -- Constraints in the signature are added as axioms
-        e' <- exp (rewrite e)
+        our . axioms %= (++ [ axiom (view value c) | c <- cs ]) -- Constraints in the signature are added as axioms
+        e' <- exp e
         case forwardT of
           Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)
           Nothing -> introTy s n sig
-        equal (rewrite t) (view ty e') (FunSignature n) s
-        return $ DeclVar n (Just (rewrite sig)) e'
+        equal t (view ty e') (FunSignature n) s
+        return $ DeclVar n (Just sig) e'
 
 
   op@(DeclOp _ _ _) -> return op

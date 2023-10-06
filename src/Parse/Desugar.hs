@@ -39,9 +39,10 @@ import           Prelude             hiding (exp)
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run x = save stage $ do
   stage .= Desugar
-  x' <- desugar x
-  display x' `ifFlag` debug
-  return x'
+  x <- desugar x
+  x <- rewrite x
+  display x `ifFlag` debug
+  return x
 
 desugar :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 desugar x = ($ x) $ case witness :: I a of
@@ -53,6 +54,86 @@ desugar x = ($ x) $ case witness :: I a of
   IOpRules -> error "standalone IOpRules"
   IDecl    -> error "standalone Decl"
   _        -> value (recurse desugar)
+
+rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
+rewrite x = ($ x) $ case witness :: I a of
+  IDecl  -> rewriteDecl
+  IQType -> rewriteQType
+  _      -> value (recurse rewrite)
+
+qTyVarNames :: [Annotated QTyVar] -> [Name]
+qTyVarNames vs = [ n | QTyVar n <- map (view value) vs ]
+
+qTyVarOpNames :: [Annotated QTyVar] -> [Name]
+qTyVarOpNames vs = [ n | QTyOpVar d n <- map (view value) vs ]
+
+genTyVarMap :: Annotated QType -> Praxis ([(Name, Name)], [(Name, Name)])
+genTyVarMap ((s, _) :< Forall vs cs t) = do
+
+  vars <-   series $ [ (\(_ :< TyVar m) -> (n, m)) <$> freshTyVar | n <- qTyVarNames vs ]
+  opVars <- series $ [ (\(_ :< TyOpVar _ m) -> (n, m)) <$> freshTyOpVar undefined | n <- qTyVarOpNames vs ]
+
+  let all = vars ++ opVars
+      unique xs = length (nub xs) == length xs
+  when (not (unique (map fst all))) $ throwAt s $ ("quantified type variables are not distinct" :: String)
+
+  -- Map from generated name (freshTyVar / freshTyOpVar) to the original name
+  tyVarMap %= Map.union (Map.fromList (map (\(a, b) -> (b, a)) all))
+
+  return (vars, opVars)
+
+
+rewriteTyVars :: Term a => ([(Name, Name)], [(Name, Name)]) -> Annotated a -> Annotated a
+rewriteTyVars (vars, opVars) = sub $ \x -> case typeof x of
+  IType   |     TyVar n   <- x ->      TyVar <$> n `Prelude.lookup` vars
+  ITyOp   |   TyOpVar d n <- x ->  TyOpVar d <$> n `Prelude.lookup` opVars
+  IQTyVar |    QTyVar n   <- x ->     QTyVar <$> n `Prelude.lookup` vars
+  IQTyVar |  QTyOpVar d n <- x -> QTyOpVar d <$> n `Prelude.lookup` opVars
+  _                            -> Nothing
+
+
+rewriteQType :: Annotated QType -> Praxis (Annotated QType)
+rewriteQType t = do
+  m <- genTyVarMap t
+  return (rewriteTyVars m t)
+
+rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
+rewriteDecl (a@(s, _) :< x) = case x of
+
+  DeclVar n sig e -> do
+
+    {-
+    Type variables need to be renamed to be globally unqiue, because the type solver acts globally.
+
+    E.g.
+      foo : forall a. C a => a -> a
+      foo = ... where
+       bar : forall a. D a => a -> a
+       bar x = (x : a)
+    -->
+      foo : forall a1. C a1 => a1 -> a1
+      foo = ... where
+        bar : forall a2. D a2 => a2 -> a2
+        bar x = (x : a2)
+    -}
+
+    case sig of
+
+      Nothing -> do -- Lack of type signature implies a monomorphic function, so just recurse
+        value (recurse rewrite) (a :< x)
+
+      Just sig -> do
+        -- Recursiively rewrite first to handle nested declarations
+        e <- value (recurse rewrite) e
+        -- Now rewrite for the top level tyVars
+        m <- genTyVarMap sig
+        return (a :< DeclVar n (Just (rewriteTyVars m sig)) (rewriteTyVars m e))
+
+  -- FIXME !!! As per above, type pattern variables (in DeclData) need to be renamed
+
+  _ -> value (recurse rewrite) (a :< x)
+
+
 
 program :: Annotated Program -> Praxis (Annotated Program)
 program (a :< Program ds) = do
@@ -223,7 +304,7 @@ decls (a@(s, _) :< d : ds) = case d of
 
   DeclSyn n t -> do
     t' <- ty t
-    tSynonyms %= Map.insert n t'
+    tySynonyms %= Map.insert n t'
     ds' <- decls ds
     return (a :< DeclSyn n t' : ds')
 
@@ -244,7 +325,7 @@ ty (a :< x) = case x of
 
   -- TODO allow more generic type synonyms
   TyCon n -> do
-    syn <- tSynonyms `uses` Map.lookup n
+    syn <- tySynonyms `uses` Map.lookup n
     return $ case syn of
       Just t  -> t
       Nothing -> a :< TyCon n

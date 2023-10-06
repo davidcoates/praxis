@@ -16,7 +16,6 @@ import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
 import           Env
-import qualified Env.SEnv           as SEnv
 import           Introspect
 import           Praxis
 import           Print
@@ -44,16 +43,44 @@ generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 generate x = ($ x) $ case witness :: I a of
   IDecl    -> decl
   IType    -> ty
+  ITyOp    -> tyOp
   ITyPat   -> tyPat
+  IQTyVar  -> qTyVar
   IDataCon -> dataCon
   _        -> value (recurse generate)
 
 introKind :: Source -> Name -> Annotated Kind -> Praxis ()
 introKind s n k = do
   l <- use kEnv
-  case SEnv.lookupTop n l of
-    Just _ -> throwAt s $ "type variable " <> quote (pretty n) <> " redeclared (in the same scope)"
+  case lookup n l of
+    Just _ -> throwAt s $ "type " <> quote (pretty n) <> " redeclared (in the same scope)"
     _      -> kEnv %= intro n k
+
+
+qTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
+qTyVar = splitTrivial $ \s -> \case
+
+  QTyVar n -> do
+    k <- freshKindUni
+    introKind s n k
+    return (QTyVar n)
+
+  QTyOpVar d n -> do
+    introKind s n undefined -- Note: The kind doesn't matter here, just introducting for in-scope checking.
+    return (QTyOpVar d n)
+
+
+tyOp :: Annotated TyOp -> Praxis (Annotated TyOp)
+tyOp = splitTrivial $ \s -> \case
+
+  op@(TyOpVar _ n) -> do
+    e <- kEnv `uses` lookup n
+    case e of
+      Just k  -> return op
+      Nothing -> throwAt s (NotInScope n)
+
+  op -> return op
+
 
 ty :: Annotated Type -> Praxis (Annotated Type)
 ty = split $ \s -> \case
@@ -73,8 +100,8 @@ ty = split $ \s -> \case
     TyCon n -> do
       e <- kEnv `uses` lookup n
       case e of
-        Nothing -> throwAt s (NotInScope n)
         Just k  -> return (k :< TyCon n)
+        Nothing -> throwAt s (NotInScope n)
 
     TyFun a b -> do
       a' <- ty a
@@ -84,7 +111,8 @@ ty = split $ \s -> \case
       return (phantom KindType :< TyFun a' b')
 
     TyOp op -> do
-      return (phantom KindOp :< TyOp op)
+      op' <- tyOp op
+      return (phantom KindOp :< TyOp op')
 
     TyPair p q -> do
       p' <- ty p
@@ -103,11 +131,8 @@ ty = split $ \s -> \case
     TyVar v -> do
       e <- kEnv `uses` lookup v
       case e of
-        Just k -> return (k :< TyVar v)
-        Nothing -> do
-          k <- freshKindUni
-          introKind s v k
-          return (k :< TyVar v)
+        Just k  -> return (k :< TyVar v)
+        Nothing -> throwAt s (NotInScope v)
 
 
 tyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
@@ -144,10 +169,6 @@ decl = splitTrivial $ \s -> \case
 
   -- TODO check no duplicated patterns
   DeclData n ps as -> do
-    e <- kEnv `uses` lookup n
-    case e of
-      Just _  -> throwAt s $ "data declaration " <> quote (pretty n) <> " redefined"
-      Nothing -> pure ()
     k <- freshKindUni
     introKind s n k
     (ps', as') <- save kEnv $ do

@@ -58,7 +58,7 @@ desugar x = ($ x) $ case witness :: I a of
 rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 rewrite x = ($ x) $ case witness :: I a of
   IDecl  -> rewriteDecl
-  IQType -> rewriteQType
+  IQType -> rewriteQType -- for standalone QTypes (used in tests)
   _      -> value (recurse rewrite)
 
 qTyVarNames :: [Annotated QTyVar] -> [Name]

@@ -156,7 +156,7 @@ data TyOp = TyOpUni TyOpDomain Name
   deriving (Eq, Ord)
 
 data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
-           | TyPatVar Name
+           | TyPatVar Name -- TODO should allow operators here too
   deriving (Eq, Ord)
 
 data Type = TyUni Name -- Compares less than all other types

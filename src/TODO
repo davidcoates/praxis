@@ -2,6 +2,8 @@ Minor:
 - cleanup Desguar, fst a etc
 - Syntax:
   * General tidy and alignment
+- Prefer rebinding with the same name
+- type operator variables in packs
 
 Major:
 - Modules

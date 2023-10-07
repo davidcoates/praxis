@@ -350,7 +350,20 @@ type Foo [a, a] = cases
   it "does not type check" $ check program `shouldReturn` "1:14 error: type 'a' redeclared (in the same scope)"
 
 
+readUnsafe = describe "read safety" $ do
 
+  let program = trim [r|
+type List a = cases
+  Nil
+  Cons (a, List a)
+
+x = Cons (1, Cons (2, Cons (3, Nil)))
+
+y = read x in (1, x)
+
+|]
+
+  it "does not type check" $ check program `shouldReturn` "error: found contradiction [7:5] 'l0 ref-free ( Int , & 'l0 ^t0 )\n|-> (safe read)"
 
 
 spec :: Spec
@@ -434,6 +447,7 @@ spec = do
     copy
     either
     fun
+    readUnsafe
 
   describe "complex programs" $ do
     mutualRecursion

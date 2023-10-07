@@ -13,14 +13,15 @@ data Reason = BindCongruence
             | FunSignature Name
             | IfCondition
             | IfCongruence
-            | SwitchCondition
-            | SwitchCongruence
             | Instance Name
             | MultiAlias Name
             | MultiUse Name
-            | UserSignature
-            | UnsafeView Name
+            | SafeRead
             | Specialisation
+            | SwitchCondition
+            | SwitchCongruence
+            | UnsafeView Name
+            | UserSignature
 
 -- TODO Pretty
 instance Show Reason where
@@ -34,11 +35,12 @@ instance Show Reason where
     FunSignature n   -> "function signature for '" ++ n ++ "'"
     IfCondition      -> "type of 'if' condition must be Bool"
     IfCongruence     -> "branches of 'if' expression must have the same type"
-    SwitchCondition  -> "type of 'switch' condition must be Bool"
-    SwitchCongruence -> "branches of 'switch' expression must have the same type"
     Instance n       -> "monomorphic usage of '" ++ n ++ "'"
     MultiAlias n     -> "variable '" ++ n ++ "' is not a unique alias"
     MultiUse n       -> "variable '" ++ n ++ "' used more than once"
-    UserSignature    -> "user-supplied signature"
-    UnsafeView n     -> "variable '" ++ n ++ "' viewed after being used"
+    SafeRead         -> "safe read"
     Specialisation   -> "specialisation"
+    SwitchCondition  -> "type of 'switch' condition must be Bool"
+    SwitchCongruence -> "branches of 'switch' expression must have the same type"
+    UnsafeView n     -> "variable '" ++ n ++ "' viewed after being used"
+    UserSignature    -> "user-supplied signature"

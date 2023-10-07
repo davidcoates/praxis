@@ -43,6 +43,12 @@ tyOpUnis = extract (embedMonoid f) where
     TyOpUni _ n -> Set.singleton n
     _           -> Set.empty
 
+tyOpRefs :: forall a. Term a => Annotated a -> Set Name
+tyOpRefs = extract (embedMonoid f) where
+  f = \case
+    TyOpRef n -> Set.singleton n
+    _         -> Set.empty
+
 type TypeSolver = Solver TyConstraint TyConstraint
 
 solveDeep :: TypeSolver -> TypeSolver
@@ -110,6 +116,11 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
           _ -> defer
       _ -> defer
 
+  RefFree refName t
+    | refName `Set.member` tyOpRefs t -> contradiction
+    | Set.null (tyUnis t) && Set.null (tyOpUnis t) -> tautology
+    | otherwise -> defer
+
   _ -> contradiction
 
 
@@ -122,6 +133,7 @@ solveFromAxioms c = use (our . axioms) >>= (\as -> solveFromAxioms' as c) where
     ((Axiom a):as) -> (\c -> pure (a c)) <|> solveFromAxioms' as
 
 -- Assumes the type is normalised
+-- FIXME unused
 viewFree :: Annotated Type -> Bool
 viewFree t = case view value t of
   TyUni _                 -> False

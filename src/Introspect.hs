@@ -343,10 +343,11 @@ instance Term TyConstraint where
   witness = ITyConstraint
   complete = trivial
   recurse f = \case
-    Class t   -> Class <$> f t
-    Share t   -> Share <$> f t
-    TEq a b   -> TEq <$> f a <*> f b
-    TOpEq a b -> TOpEq <$> f a <*> f b
+    Class t      -> Class <$> f t
+    RefFree n t  -> RefFree n <$> f t
+    Share t      -> Share <$> f t
+    TEq a b      -> TEq <$> f a <*> f b
+    TOpEq a b    -> TOpEq <$> f a <*> f b
 
 instance Term KindConstraint where
   witness = IKindConstraint

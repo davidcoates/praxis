@@ -188,6 +188,7 @@ data TyConstraint = Class (Annotated Type)
                   | Share (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated Type) (Annotated Type)
+                  | RefFree Name (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`

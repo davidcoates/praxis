@@ -75,16 +75,16 @@ scope x = save tEnv $ do
   tEnv %= LEnv.push
   x
 
-read :: Source -> Name -> Praxis (Annotated Type)
+read :: Source -> Name -> Praxis (Name, Annotated Type)
 read s n = do
   l <- use tEnv
-  r <- freshTyOpRef
+  r@(_ :< TyOpRef refName) <- freshTyOpRef
   case LEnv.lookupFull n l of
     Just entry -> do
       t <- specialiseQType s (view LEnv.value entry)
       requires [ newConstraint (Share t) (UnsafeView n) s | view LEnv.used entry ]
       requires [ newConstraint (Share t) (Captured n) s   | view LEnv.captured entry  ]
-      return $ phantom (TyApply (phantom (TyOp r)) t)
+      return $ (refName, phantom (TyApply (phantom (TyOp r)) t))
     Nothing -> throwAt s (NotInScope n)
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
@@ -346,10 +346,11 @@ exp = split $ \s -> \case
       return $ TyApply ot ac
 
   Read n e -> scope $ do
-    t <- read s n
+    (refName, t) <- read s n
     introTy s n (mono t)
     e' <- exp e
     tEnv %= elim
+    require $ newConstraint (RefFree refName (view ty e')) SafeRead s
     return (view ty e' :< view value e')
 
   Pair p q -> do

@@ -37,26 +37,30 @@ import qualified Data.Set            as Set
 import           Prelude             hiding (exp)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run x = save stage $ do
+run term = save stage $ do
   stage .= Desugar
-  x <- desugar x
-  x <- rewrite x
-  display x `ifFlag` debug
-  return x
+  term <- desugar term
+  term <- rewrite term
+  display term `ifFlag` debug
+  return term
 
 desugar :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-desugar x = ($ x) $ case witness :: I a of
-  IProgram -> program
-  IExp     -> exp
-  IPat     -> pat
-  IType    -> ty
-  IOp      -> operator
+desugar term = ($ term) $ case witness :: I a of
+  IProgram -> desugarProgram
+  IExp     -> desugarExp
+  IPat     -> desugarPat
+  IType    -> desugarTy
+  IOp      -> desugarOp
   IOpRules -> error "standalone IOpRules"
   IDecl    -> error "standalone Decl"
   _        -> value (recurse desugar)
 
+
+-- Term rewriting. This is used to rewrite type-level variables to guarantee uniqueness which is needed for the solver.
+-- The rewrite mapping is stored so it can be applied in reverse when displaying diagnostics to the user.
+
 rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-rewrite x = ($ x) $ case witness :: I a of
+rewrite term = ($ term) $ case witness :: I a of
   IDecl  -> rewriteDecl
   IQType -> rewriteQType -- for standalone QTypes (used in tests)
   _      -> value (recurse rewrite)
@@ -65,42 +69,45 @@ qTyVarNames :: [Annotated QTyVar] -> [Name]
 qTyVarNames vs = [ n | QTyVar n <- map (view value) vs ]
 
 qTyVarOpNames :: [Annotated QTyVar] -> [Name]
-qTyVarOpNames vs = [ n | QTyOpVar d n <- map (view value) vs ]
+qTyVarOpNames vs = [ n | QTyOpVar _ n <- map (view value) vs ]
 
-genTyVarMap :: Annotated QType -> Praxis ([(Name, Name)], [(Name, Name)])
-genTyVarMap ((s, _) :< Forall vs cs t) = do
+-- Substitions are generated and applied in a piece-meal way (i.e. per declaration)
+-- So we expect them to be individually fairly small, which is why we're just using assoc lists here rather than a Map.
+data RewriteMap = RewriteMap { _tyVars :: [(Name, Name)], _tyOpVars :: [(Name, Name)] }
 
-  vars <-   series $ [ (\(_ :< TyVar m) -> (n, m)) <$> freshTyVar | n <- qTyVarNames vs ]
-  opVars <- series $ [ (\(_ :< TyOpVar _ m) -> (n, m)) <$> freshTyOpVar undefined | n <- qTyVarOpNames vs ]
+rewriteMapFromQType :: Annotated QType -> Praxis RewriteMap
+rewriteMapFromQType ((src, _) :< Forall boundVars _ _) = do
 
-  let all = vars ++ opVars
-      unique xs = length (nub xs) == length xs
-  when (not (unique (map fst all))) $ throwAt s $ ("quantified type variables are not distinct" :: String)
+  tyVars <-   series $ [ (\(_ :< TyVar m) -> (n, m)) <$> freshTyVar | n <- qTyVarNames boundVars ]
+  tyOpVars <- series $ [ (\(_ :< TyOpVar _ m) -> (n, m)) <$> freshTyOpVar undefined | n <- qTyVarOpNames boundVars ]
+
+  let allTyVars = tyVars ++ tyOpVars
+      isUnique xs = length (nub xs) == length xs
+  when (not (isUnique (map fst allTyVars))) $ throwAt src $ ("quantified type variables are not distinct" :: String)
 
   -- Map from generated name (freshTyVar / freshTyOpVar) to the original name
-  tyVarMap %= Map.union (Map.fromList (map (\(a, b) -> (b, a)) all))
+  tyVarMap %= Map.union (Map.fromList (map (\(a, b) -> (b, a)) allTyVars))
 
-  return (vars, opVars)
+  return RewriteMap { _tyVars = tyVars, _tyOpVars = tyOpVars }
 
 
-rewriteTyVars :: Term a => ([(Name, Name)], [(Name, Name)]) -> Annotated a -> Annotated a
-rewriteTyVars (vars, opVars) = sub $ \x -> case typeof x of
-  IType   |     TyVar n   <- x ->      TyVar <$> n `Prelude.lookup` vars
-  ITyOp   |   TyOpVar d n <- x ->  TyOpVar d <$> n `Prelude.lookup` opVars
-  IQTyVar |    QTyVar n   <- x ->     QTyVar <$> n `Prelude.lookup` vars
-  IQTyVar |  QTyOpVar d n <- x -> QTyOpVar d <$> n `Prelude.lookup` opVars
-  _                            -> Nothing
-
+applyRewriteMap :: Term a => RewriteMap -> Annotated a -> Annotated a
+applyRewriteMap RewriteMap { _tyVars = tyVars, _tyOpVars = tyOpVars } = sub $ \term -> case typeof term of
+  IType   |     TyVar n   <- term ->      TyVar <$> n `Prelude.lookup` tyVars
+  ITyOp   |   TyOpVar d n <- term ->  TyOpVar d <$> n `Prelude.lookup` tyOpVars
+  IQTyVar |    QTyVar n   <- term ->     QTyVar <$> n `Prelude.lookup` tyVars
+  IQTyVar |  QTyOpVar d n <- term -> QTyOpVar d <$> n `Prelude.lookup` tyOpVars
+  _                               -> Nothing
 
 rewriteQType :: Annotated QType -> Praxis (Annotated QType)
-rewriteQType t = do
-  m <- genTyVarMap t
-  return (rewriteTyVars m t)
+rewriteQType qTy = do
+  rwMap <- rewriteMapFromQType qTy
+  return (applyRewriteMap rwMap qTy)
 
 rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
-rewriteDecl (a@(s, _) :< x) = case x of
+rewriteDecl (ann@(src, _) :< decl) = case decl of
 
-  DeclVar n sig e -> do
+  DeclVar name sig exp -> do
 
     {-
     Type variables need to be renamed to be globally unqiue, because the type solver acts globally.
@@ -120,153 +127,156 @@ rewriteDecl (a@(s, _) :< x) = case x of
     case sig of
 
       Nothing -> do -- Lack of type signature implies a monomorphic function, so just recurse
-        value (recurse rewrite) (a :< x)
+        value (recurse rewrite) (ann :< decl)
 
       Just sig -> do
         -- Recursiively rewrite first to handle nested declarations
-        e <- value (recurse rewrite) e
+        exp <- value (recurse rewrite) exp
         -- Now rewrite for the top level tyVars
-        m <- genTyVarMap sig
-        return (a :< DeclVar n (Just (rewriteTyVars m sig)) (rewriteTyVars m e))
+        rwMap <- rewriteMapFromQType sig
+        return (ann :< DeclVar name (Just (applyRewriteMap rwMap sig)) (applyRewriteMap rwMap exp))
 
   -- FIXME !!! As per above, type pattern variables (in DeclData) need to be renamed
 
-  _ -> value (recurse rewrite) (a :< x)
+  _ -> value (recurse rewrite) (ann :< decl)
 
 
 
-program :: Annotated Program -> Praxis (Annotated Program)
-program (a :< Program ds) = do
-  ds <- decls ds
-  return (a :< Program ds)
+-- Desugaring proper
 
-freeVars :: Annotated Exp -> Set Name
-freeVars = extractPartial f where
+desugarProgram :: Annotated Program -> Praxis (Annotated Program)
+desugarProgram (ann :< Program decls) = do
+  decls <- desugarDecls decls
+  return (ann :< Program decls)
+
+collectFreeVars :: Annotated Exp -> Set Name
+collectFreeVars = extractPartial f where
   f :: forall a. Term a => a -> (Set Name, Bool)
   f x = case witness :: I a of
     IExp  -> case x of
       Var n -> (Set.singleton n, False)
       _     -> (Set.empty,        True)
     IDecl -> case x of
-      DeclVar n _ e -> (Set.delete n (freeVars e), False)
-      _             -> (Set.empty,                  True)
+      DeclVar n _ e -> (Set.delete n (collectFreeVars e), False)
+      _             -> (Set.empty,                         True)
     _     -> (Set.empty, True)
 
--- Helper for desugaring &
--- Turns top-level VarRef into Var and returns the name of such variables
-expRead :: Annotated Exp -> Praxis (Annotated Exp, Set Name)
-expRead (a :< x) = case x of
+-- Helper for desugaring "&". It turns top-level VarRef into Var and returns the name of such variables
+desugarExpRef :: Annotated Exp -> Praxis (Annotated Exp, Set Name)
+desugarExpRef (ann :< exp) = case exp of
 
-  Sig e t -> do
-    (e', ns) <- expRead e
-    return (a :< Sig e' t, ns)
+  Sig exp ty -> do
+    (exp, readVars) <- desugarExpRef exp
+    return (ann :< Sig exp ty, readVars)
 
-  Pair x y -> do
-    (x', ns) <- expRead x
-    (y', ms) <- expRead y
-    return (a :< Pair x' y', ns `Set.union` ms)
+  Pair exp1 exp2 -> do
+    (exp1, readVars1) <- desugarExpRef exp1
+    (exp2, readVars2) <- desugarExpRef exp2
+    return (ann :< Pair exp1 exp2, readVars1 `Set.union` readVars2)
 
-  VarRef n -> return (a :< Var n, Set.singleton n)
+  VarRef var -> return (ann :< Var var, Set.singleton var)
 
   _ -> do
-    x' <- exp (a :< x)
-    return (x', Set.empty)
+    exp <- desugar (ann :< exp)
+    return (exp, Set.empty)
 
 
-exp :: Annotated Exp -> Praxis (Annotated Exp)
-exp (a@(s, _) :< x) = case x of
+desugarExp :: Annotated Exp -> Praxis (Annotated Exp)
+desugarExp (ann@(src, _) :< exp) = case exp of
 
-  Apply x y -> do
-    x' <- exp x
-    (y', ns) <- expRead y
-    let mixedVars = freeVars y `Set.intersection` ns
-    when (not (null mixedVars)) $ throwAt s $ "variable(s) " <> separate ", " (map (quote . pretty) (Set.elems mixedVars)) <> " used in a read context"
-    let unwrap []     = (a :< Apply x' y')
-        unwrap (n:ns) = (a :< Read n (unwrap ns))
-    return (unwrap (Set.elems ns))
+  Apply f x -> do
+    f <- desugar f
+    let freeVars = collectFreeVars x
+    (x, readVars) <- desugarExpRef x
+    let mixedVars = freeVars `Set.intersection` readVars
+    when (not (null mixedVars)) $ throwAt src $ "variable(s) " <> separate ", " (map (quote . pretty) (Set.elems mixedVars)) <> " used in a read context"
+    let unrollReads []     = (ann :< Apply f x)
+        unrollReads (v:vs) = (ann :< Read v (unrollReads vs))
+    return (unrollReads (Set.elems readVars))
 
-  Mixfix ts   -> Mixfix.parse s ts >>= exp -- Need to desguar after parsing
+    -- Call Mixfix.parse to fold the token sequence into a single expression, then desugar that expression
+  Mixfix tokens -> Mixfix.parse src tokens >>= desugar
 
-  VarRef v    -> throwAt s $ "observed variable " <> quote (pretty v) <> " is not in a valid read context"
+  VarRef var -> throwAt src $ "observed variable " <> quote (pretty var) <> " is not in a valid read context"
 
-  Con "True"  -> pure (a :< Lit (Bool True))
+  Con "True" -> pure (ann :< Lit (Bool True))
 
-  Con "False" -> pure (a :< Lit (Bool False))
+  Con "False" -> pure (ann :< Lit (Bool False))
 
-  Where x ys -> do
-    x' <- exp x
-    ys' <- decls ys
-    return (a :< Where x' ys')
+  Where exp decls -> do
+    exp <- desugar exp
+    decls <- desugarDecls decls
+    return (ann :< Where exp decls)
 
-  _           -> (a :<) <$> recurse desugar x
+  _           -> (ann :<) <$> recurse desugar exp
 
 
 
-operator :: Annotated Op -> Praxis (Annotated Op)
-operator op@(a@(s, _) :< Op ns) = do
+desugarOp :: Annotated Op -> Praxis (Annotated Op)
+desugarOp op@((src, _) :< Op parts) = do
 
-  let consecutiveHoles :: [Maybe Name] -> Bool
-      consecutiveHoles = \case
-        (Nothing:Nothing:xs) -> True
+  let hasConsecutiveHoles :: [Maybe Name] -> Bool
+      hasConsecutiveHoles = \case
+        (Nothing:Nothing:ps) -> True
         []                   -> False
-        (x:xs)               -> consecutiveHoles xs
+        (p:ps)               -> hasConsecutiveHoles ps
 
-  when (consecutiveHoles ns) $ throwAt s $ "op " <> quote (pretty op) <> " has two consecutive holes"
+  when (hasConsecutiveHoles parts) $ throwAt src $ "op " <> quote (pretty op) <> " has two consecutive holes"
   return op
 
 
-opRules :: Annotated Op -> Annotated OpRules -> Praxis (Annotated OpRules)
-opRules op (a@(s, _) :< OpMultiRules rs) = do
+desugarOpRules :: Annotated Op -> Annotated OpRules -> Praxis (Annotated OpRules)
+desugarOpRules op (ann@(src, _) :< OpMultiRules rules) = do
 
     -- FIXME check the precedence operators exist?
 
-    let as = mapMaybe (\x -> case x of {Left a -> Just a; _ -> Nothing}) rs
-        ps = mapMaybe (\x -> case x of {Right p -> Just p; _ -> Nothing}) rs
+    let assocs = mapMaybe (\r -> case r of { Left a -> Just a; _ -> Nothing}) rules
+        precs  = mapMaybe (\r -> case r of {Right p -> Just p; _ -> Nothing}) rules
 
-    when (length as > 1) $ throwAt s ("more than one associativity specified for op " <> quote (pretty op))
-    when (length ps > 1) $ throwAt s ("more than one precedence block specified for op " <> quote (pretty op))
+    when (length assocs > 1) $ throwAt src ("more than one associativity specified for op " <> quote (pretty op))
+    when (length  precs > 1) $ throwAt src ("more than one precedence block specified for op " <> quote (pretty op))
 
-    return (a :< OpRules (listToMaybe as) (concat ps))
+    return (ann :< OpRules (listToMaybe assocs) (concat precs))
 
 
-decls :: [Annotated Decl] -> Praxis [Annotated Decl]
-decls []            = pure []
-decls (a@(s, _) :< d : ds) = case d of
+desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
+desugarDecls []            = pure []
+desugarDecls (ann@(src, _) :< decl : decls) = case decl of
 
-  DeclData n t as -> do
-    t' <- traverse desugar t
-    as' <- traverse desugar as
-    ds' <- decls ds
-    return (a :< DeclData n t' as' : ds')
+  DeclData name ty args -> do
+    ty <- traverse desugar ty
+    args <- traverse desugar args
+    decls <- desugarDecls decls
+    return (ann :< DeclData name ty args : decls)
 
-  DeclSig n t -> do
-    t <- desugar t
-    decls ds >>= \case
-      (a' :< DeclVar m Nothing e) : ds | m == n -> return $ ((a <> a') :< DeclVar n (Just t) e) : ds
-      _                                         -> throwAt s $ "declaration of " <> quote (pretty n) <> " lacks an accompanying binding"
+  DeclSig name ty -> do
+    ty <- desugar ty
+    desugarDecls decls >>= \case
+      (ann' :< DeclVar name' Nothing exp) : decls
+        | name == name' -> return $ ((ann <> ann') :< DeclVar name (Just ty) exp) : decls
+      _ -> throwAt src $ "declaration of " <> quote (pretty name) <> " lacks an accompanying binding"
 
-  DeclFun n ps e -> do
-    ps <- mapM pat ps
-    e  <- exp e
-    let d = a :< DeclVar n Nothing (lambda ps e)
-        lambda :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
-        lambda     [] e = e
-        lambda (p:ps) e = (s, Nothing) :< Lambda p (lambda ps e)
-    decls ds >>= \case
-      []                                       -> return $ [d]
-      (a' :< DeclVar m t as) : ds' | m == n    -> throwAt s $ "multiple definitions for " <> quote (pretty m)
-      ds                                       -> return $ d:ds
+  DeclFun name args exp -> do
+    args <- mapM desugar args
+    exp <- desugar exp
+    let decl = ann :< DeclVar name Nothing (curry args exp)
+        curry :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
+        curry     [] e = e
+        curry (p:ps) e = (src, Nothing) :< Lambda p (curry ps e)
+    desugarDecls decls >>= \case
+      [] -> return $ [decl]
+      (_ :< DeclVar name' _ _) : _
+        | name == name' -> throwAt src $ "multiple definitions for " <> quote (pretty name)
+      decls -> return $ decl:decls
 
-  DeclOp op n rs -> do
+  DeclOp op name rules -> do
 
-    op <- desugar op
-    rs' <- opRules op rs
-
-    let OpRules assoc ps = view value rs'
+    op@(_ :< Op parts) <- desugar op
+    rules@(_ :< OpRules assoc precs) <- desugarOpRules op rules
 
     -- For simplicity of managing the op table, allow only one equal precedence relation
-    let (eqPrecs, ps') = partition (\(_ :< Prec ord _) -> ord == EQ) ps
-    unless (length eqPrecs <= 1) $ throwAt s ("more than one equal precedence specified for op " <> quote (pretty op))
+    let (eqPrecs, precs') = partition (\(_ :< Prec ord _) -> ord == EQ) precs
+    unless (length eqPrecs <= 1) $ throwAt src ("more than one equal precedence specified for op " <> quote (pretty op))
     let eq = listToMaybe eqPrecs
 
     -- Add operator to levels
@@ -278,9 +288,8 @@ decls (a@(s, _) :< d : ds) = case d of
         indexOf = Map.fromList [ (op, i) | (i, ops) <- zip [0..] opLevels', op <- ops ]
 
     -- Determine fixity
-    let noAssoc = unless (isNothing assoc) $ throwAt s ("associativity can not be specified for non-infix op " <> quote (pretty op))
-        Op ns = view value op
-    fixity <- case (head ns, last ns) of
+    let noAssoc = unless (isNothing assoc) $ throwAt src ("associativity can not be specified for non-infix op " <> quote (pretty op))
+    fixity <- case (head parts, last parts) of
       (Nothing, Nothing) -> return (Infix (view value <$> assoc))
       (Nothing,  Just _) -> noAssoc >> return Postfix
       (Just _,  Nothing) -> noAssoc >> return Prefix
@@ -288,56 +297,58 @@ decls (a@(s, _) :< d : ds) = case d of
 
     -- Add operator to definitions
     opDefns <- use (opContext . defns)
-    when (view value op `Map.member` opDefns) $ throwAt s ("operator already defined" :: String)
-    let opDefns' = Map.insert (view value op) (n, fixity) opDefns
+    when (view value op `Map.member` opDefns) $ throwAt src ("operator already defined" :: String)
+    let opDefns' = Map.insert (view value op) (name, fixity) opDefns
 
     -- Add operator to precedence graph
     opPrec <- use (opContext . prec)
-    let opPrec' = addOp (view value op) (map (view value) ps') indexOf opPrec
-    unless (acyclic opPrec') $ throwAt s ("operator precedence forms a cycle" :: String)
+    let opPrec' = addOp (view value op) (map (view value) precs') indexOf opPrec
+    unless (isAcyclic opPrec') $ throwAt src ("operator precedence forms a cycle" :: String)
 
     opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
 
-    ds' <- decls ds
-    return (a :< DeclOp op n rs' : ds')
+    decls <- desugarDecls decls
+    return (ann :< DeclOp op name rules : decls)
 
 
-  DeclSyn n t -> do
-    t' <- ty t
-    tySynonyms %= Map.insert n t'
-    ds' <- decls ds
-    return (a :< DeclSyn n t' : ds')
+  DeclSyn name ty -> do
+    ty <- desugar ty
+    tySynonyms %= Map.insert name ty
+    decls <- desugarDecls decls
+    return (ann :< DeclSyn name ty : decls)
 
 
 -- TODO check for overlapping patterns?
-pat :: Annotated Pat -> Praxis (Annotated Pat)
-pat (a :< x) = case x of
+desugarPat :: Annotated Pat -> Praxis (Annotated Pat)
+desugarPat (ann :< pat) = case pat of
 
-  PatCon "True" Nothing  -> pure (a :< PatLit (Bool True))
+  PatCon "True" Nothing  -> pure (ann :< PatLit (Bool True))
 
-  PatCon "False" Nothing -> pure (a :< PatLit (Bool False))
+  PatCon "False" Nothing -> pure (ann :< PatLit (Bool False))
 
-  _                      -> (a :<) <$> recurse desugar x
+  _                      -> (ann :<) <$> recurse desugar pat
 
 
-ty :: Annotated Type -> Praxis (Annotated Type)
-ty (a :< x) = case x of
+desugarTy :: Annotated Type -> Praxis (Annotated Type)
+desugarTy (ann :< ty) = case ty of
 
   -- TODO allow more generic type synonyms
-  TyCon n -> do
-    syn <- tySynonyms `uses` Map.lookup n
+  TyCon name -> do
+    syn <- tySynonyms `uses` Map.lookup name
     return $ case syn of
-      Just t  -> t
-      Nothing -> a :< TyCon n
+      Just ty  -> ty
+      Nothing  -> ann :< TyCon name
 
-  _           -> (a :<) <$> recurse desugar x
+  _           -> (ann :<) <$> recurse desugar ty
 
+
+-- (Operator precedence) graph helpers
 
 -- Repeatedly remove vertices with no outgoing edges, if we succeed the graph is acyclic
-acyclic :: Graph -> Bool
-acyclic g = acyclic' (map fst (assocs g)) where
-  acyclic' [] = True
-  acyclic' ns = if null leaves then False else acyclic' (ns \\ leaves) where
+isAcyclic :: Graph -> Bool
+isAcyclic g = isAcyclic' (map fst (assocs g)) where
+  isAcyclic' [] = True
+  isAcyclic' ns = if null leaves then False else isAcyclic' (ns \\ leaves) where
     leaves = filter (\n -> null (g ! n `intersect` ns)) ns
 
 addVertex :: Op -> Int -> Graph -> Graph

@@ -58,7 +58,7 @@ tryDefault x sol = do
 
   let freeTyOps = deepTyOpUnis x `Set.difference` Set.fromList (map fst (view tyOpSol sol))
   flip mapM_ freeTyOps $ \tyOp -> do
-    warnAt (view source x) $ "undertermined type operator: " <> quote (pretty tyOp) <> ", defaulting to &"
+    warnAt (view source x) $ "underdetermined type operator: " <> quote (pretty tyOp) <> ", defaulting to &"
 
   let defaultTyOp n = do
         r <- freshTyOpRef

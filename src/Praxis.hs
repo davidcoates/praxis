@@ -204,7 +204,7 @@ abort x = displayBare x >> ExceptT (return (Left err)) where
   err = fold (runPrintable (pretty x) Plain)
 
 warnAt :: Pretty a => Source -> a -> Praxis ()
-warnAt s x = displayBare (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullYellow ("warning: " :: Colored String))) <> pretty x)
+warnAt s x = displayBare (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullYellow ("warning: " :: Colored String))) <> pretty x) `ifFlag` debug
 
 throw :: Pretty a => a -> Praxis b
 throw x = abort (pretty (Style Bold (Fg DullRed ("error: " :: Colored String))) <> pretty x)

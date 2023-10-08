@@ -167,7 +167,7 @@ instance Functor f => Functor (PraxisT f) where
   fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
 
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = True, _interactive = False, _silent = False }
+defaultFlags = Flags { _debug = False, _interactive = False, _silent = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("^t"++) . show) [0..]

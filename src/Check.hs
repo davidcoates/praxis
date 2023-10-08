@@ -11,6 +11,6 @@ import           Praxis
 import           Term
 
 check :: Term a => Annotated a -> Praxis (Annotated a)
-check x = do
+check term = do
   system .= initialSystem
-  Kind.check x >>= Type.check
+  Kind.check term >>= Type.check

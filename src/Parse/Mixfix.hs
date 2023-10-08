@@ -22,6 +22,8 @@ import qualified Data.Map.Strict     as Map
 
 import           Control.Applicative (Alternative (..))
 
+-- Helper for parsing mixfix operators, respecting associativity and the precedence graph
+
 newtype Parser a = Parser { runParser :: [Annotated Tok] -> [(a, [Annotated Tok])] }
 
 eof :: Parser ()

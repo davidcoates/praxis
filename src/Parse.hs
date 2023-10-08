@@ -17,9 +17,10 @@ import qualified Parse.Tokenise as Tokenise
 import           Praxis
 import           Term
 
+-- Tokenise, layout, parse, desugar
 parse :: forall a. Term a => String -> Praxis (Annotated a)
-parse s = do
-  let top = case witness :: I a of { IProgram -> True; _ -> False }
-  ts <- Tokenise.run top s
-  p <- Parse.run ts
-  Desugar.run p
+parse text = do
+  let topLevel = case witness :: I a of { IProgram -> True; _ -> False }
+  tokens <- Tokenise.run topLevel text
+  term <- Parse.run tokens
+  Desugar.run term

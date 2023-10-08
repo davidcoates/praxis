@@ -26,19 +26,19 @@ import           Prelude             hiding (exp, lookup)
 class Evaluable a b | a -> b where
   eval' :: Annotated a -> Praxis b
   eval  :: Annotated a -> Praxis b
-  eval e = save stage $ do
+  eval term = save stage $ do
     stage .= Evaluate
     clearTerm `ifFlag` debug
-    eval' e
+    eval' term
 
 instance Evaluable Program () where
-  eval' = program
+  eval' = evalProgram
 
 instance Evaluable Exp Value where
-  eval' = exp
+  eval' = evalExp
 
-program :: Annotated Program -> Praxis ()
-program (_ :< Program ds) = decls ds
+evalProgram :: Annotated Program -> Praxis ()
+evalProgram (_ :< Program decls) = evalDecls decls
 
 -- A helper for decls, irrefutably matching the [b] argument
 irrefMapM :: Monad m => ((a, b) -> m c) -> [a] -> [b] -> m [c]
@@ -51,158 +51,157 @@ irrefMapM f as bs = case as of
       return (c : cs)
 
 
-decls :: [Annotated Decl] -> Praxis ()
-decls ds = do
+evalDecls :: [Annotated Decl] -> Praxis ()
+evalDecls decls = do
 
   -- Only variable declartions (values / functions) can be evaluated, so we only need to consider DeclVar
   let declVar :: Annotated Decl -> Maybe (Name, Annotated Exp)
       declVar = \case
-        (_ :< DeclVar n _ e) -> Just (n, e)
+        (_ :< DeclVar var _ exp) -> Just (var, exp)
         _ -> Nothing
-      (ns, es) = unzip (mapMaybe declVar ds)
+      (vars, exps) = unzip (mapMaybe declVar decls)
 
   -- To support mutual recursion, each value needs to see the evaluation of all other values (including itself).
   -- Leverage mfix to find the fixpoint (where vs stands for the list of evaluations).
-  mfix $ \vs -> do
+  mfix $ \values -> do
     -- Evaluate each of the values in turn, with all of the evaluations in the environment
     -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
-    irrefMapM (\(n, v) -> vEnv %= intro n v) ns vs
-    mapM exp es
+    irrefMapM (\(var, value) -> vEnv %= intro var value) vars values
+    mapM evalExp exps
 
   return ()
 
 
-stmt :: Annotated Stmt -> Praxis ()
-stmt (_ :< s) = case s of
+evalStmt :: Annotated Stmt -> Praxis ()
+evalStmt (_ :< stmt) = case stmt of
 
-  StmtBind b -> bind b
+  StmtBind bind -> evalBind bind
 
-  StmtExp e  -> exp e >> return ()
+  StmtExp exp -> evalExp exp >> return ()
 
 
-exp :: Annotated Exp -> Praxis Value
-exp ((s, _) :< e) = case e of
+evalExp :: Annotated Exp -> Praxis Value
+evalExp ((src, _) :< exp) = case exp of
 
   Apply f x -> do
-    Value.Fun f' <- exp f
-    x' <- exp x
-    f' x'
+    Value.Fun f <- evalExp f
+    x <- evalExp x
+    f x
 
-  Case e ps -> do
-    v <- exp e
-    cases s v ps
+  Case exp alts -> do
+    val <- evalExp exp
+    evalCases src val alts
 
-  Cases ps -> do
+  Cases alts -> do
     l <- use vEnv
-    return $ Value.Fun $ \v -> save vEnv $ do { vEnv .= l; cases s v ps }
+    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; evalCases src val alts }
 
-  Con n -> do
-    Just da <- daEnv `uses` lookup n
-    let DataConInfo { argType } = view (annotation . just) da
+  Con name -> do
+    Just dataAlt <- daEnv `uses` lookup name
+    let DataConInfo { argType } = view (annotation . just) dataAlt
     return $ case argType of
-      Nothing -> Value.Con n Nothing
-      Just _  -> Value.Fun (\v -> return $ Value.Con n (Just v))
+      Nothing -> Value.Con name Nothing
+      Just _  -> Value.Fun (\val -> return $ Value.Con name (Just val))
 
-  Do ss -> save vEnv $ do
-    mapM stmt (init ss)
-    let _ :< StmtExp e = last ss
-    v <- exp e
-    return v
+  Do stmts -> save vEnv $ do
+    mapM evalStmt (init stmts)
+    let _ :< StmtExp lastExp = last stmts
+    evalExp lastExp
 
-  If a b c -> do
-    Value.Bool a' <- exp a
-    if a' then exp b else exp c
+  If condExp thenExp elseExp -> do
+    Value.Bool cond <- evalExp condExp
+    if cond then evalExp thenExp else evalExp elseExp
 
-  Lambda p e -> do
+  Lambda pat exp -> do
     l <- use vEnv
-    return $ Value.Fun $ \v -> save vEnv $ do { vEnv .= l; forceBind s v p; exp e }
+    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; forceBind src val pat; evalExp exp }
 
-  Let b x -> save vEnv $ do
-    bind b
-    exp x
+  Let bind exp -> save vEnv $ do
+    evalBind bind
+    evalExp exp
 
-  Lit l -> case l of
-    Bool b   -> pure $ Value.Bool b
-    Char c   -> pure $ Value.Char c
-    Int  i   -> pure $ Value.Int  i
-    String s -> Value.Array <$> Value.fromString s
+  Lit lit -> case lit of
+    Bool val   -> pure $ Value.Bool val
+    Char val   -> pure $ Value.Char val
+    Int val    -> pure $ Value.Int  val
+    String val -> Value.Array <$> Value.fromString val
 
-  Read _ e -> exp e
+  Read _ exp -> evalExp exp
 
-  Pair a b -> Value.Pair <$> exp a <*> exp b
+  Pair exp1 exp2 -> Value.Pair <$> evalExp exp1 <*> evalExp exp2
 
-  Sig e _ -> exp e
+  Sig exp _ -> evalExp exp
 
-  Switch alts -> switch s alts
+  Switch alts -> evalSwitch src alts
 
   Term.Unit -> return Value.Unit
 
-  Var n -> do
-    m <- vEnv `uses` lookup n
-    case m of
-       Just v  -> return v
-       Nothing -> throwAt s ("unknown variable " <> quote (pretty n))
+  Var var -> do
+    entry <- vEnv `uses` lookup var
+    case entry of
+       Just val -> return val
+       Nothing -> throwAt src ("unknown variable " <> quote (pretty var))
 
-  Where x ys -> save vEnv $ do
-    decls ys
-    exp x
+  Where exp decls -> save vEnv $ do
+    evalDecls decls
+    evalExp exp
 
 
-switch :: Source -> [(Annotated Exp, Annotated Exp)] -> Praxis Value
-switch s [] = throwAt s ("inexhaustive switch" :: String)
-switch s ((c,e):as) = do
-  v <- exp c
-  case v of
-    Value.Bool True  -> exp e
-    Value.Bool False -> switch s as
+evalSwitch :: Source -> [(Annotated Exp, Annotated Exp)] -> Praxis Value
+evalSwitch src [] = throwAt src ("inexhaustive switch" :: String)
+evalSwitch src ((condExp,bodyExp):alts) = do
+  cond <- evalExp condExp
+  case cond of
+    Value.Bool True  -> evalExp bodyExp
+    Value.Bool False -> evalSwitch src alts
 
-cases :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
-cases s x [] = throwAt s ("no matching pattern for value " <> quote (pretty (show x)))
-cases s x ((p,e):ps) = case alt x p of
-  Just c  -> save vEnv $ do
-    c
-    exp e
+evalCases :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
+evalCases src val [] = throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
+evalCases src val ((pat,exp):alts) = case tryBind val pat of
+  Just doBind -> save vEnv $ do
+    doBind
+    evalExp exp
   Nothing ->
-    cases s x ps
+    evalCases src val alts
 
 forceBind :: Source -> Value -> Annotated Pat -> Praxis ()
-forceBind s v p = case alt v p of Just c  -> c
-                                  Nothing -> throwAt s ("no matching pattern for value " <> quote (pretty (show v)))
+forceBind src val pat = case tryBind val pat of
+  Just doBind -> doBind
+  Nothing -> throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
 
-bind :: Annotated Bind -> Praxis ()
-bind ((s, _) :< Bind p x) = do
-  x' <- exp x
-  forceBind s x' p
+evalBind :: Annotated Bind -> Praxis ()
+evalBind ((src, _) :< Bind pat exp) = do
+  exp <- evalExp exp
+  forceBind src exp pat
 
-alt :: Value -> Annotated Pat -> Maybe (Praxis ())
-alt v (_ :< p) = case p of
+tryBind :: Value -> Annotated Pat -> Maybe (Praxis ())
+tryBind val (_ :< pat) = case pat of
 
-  PatAt n p
-    -> (\c -> do { vEnv %= intro n v; c }) <$> alt v p
+  PatAt name pat
+    -> (\doBind -> do { vEnv %= intro name val; doBind }) <$> tryBind val pat
 
-  PatCon n p | Value.Con m v <- v
-    -> if n /= m then Nothing else case (p, v) of
+  PatCon patCon pat | Value.Con valCon val <- val
+    -> if patCon /= valCon then Nothing else case (pat, val) of
       (Nothing, Nothing) -> Just (return ())
-      (Just p, Just v)   -> alt v p
+      (Just pat, Just val) -> tryBind val pat
 
   PatHole
     -> Just (return ())
 
-  PatLit l -> if match then Just (return ()) else Nothing where
-    match = case (l, v) of
-      (Bool b,   Value.Bool b') -> b == b'
-      (Char c,   Value.Char c') -> c == c'
-      (Int i,     Value.Int i') -> i == i'
-      _                         -> False
+  PatLit pat -> if match then Just (return ()) else Nothing where
+    match = case (pat, val) of
+      (Bool v, Value.Bool v') -> v == v'
+      (Char v, Value.Char v') -> v == v'
+      (Int v,  Value.Int  v') -> v == v'
+      _                       -> False
 
-  PatPair p q | Value.Pair p' q' <- v
-    -> liftA2 (>>) (alt p' p) (alt q' q)
+  PatPair pat1 pat2 | Value.Pair val1 val2 <- val
+    -> liftA2 (>>) (tryBind val1 pat1) (tryBind val2 pat2)
 
   PatUnit
     -> Just (return ())
 
-  PatVar n
-    -> Just $ vEnv %= intro n v
-
+  PatVar name
+    -> Just $ vEnv %= intro name val
   _
     -> Nothing

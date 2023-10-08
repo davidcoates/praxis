@@ -15,8 +15,8 @@ import           Term
 import           Token
 
 run :: forall a. Term a => [Sourced Token] -> Praxis (Annotated a)
-run ts = save stage $ do
+run tokens = save stage $ do
   stage .= Parse
-  p <- Parser.run parse ts
-  display p `ifFlag` debug
-  return p
+  term <- Parser.run parse tokens
+  display term `ifFlag` debug
+  return term

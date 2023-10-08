@@ -16,7 +16,7 @@ data Token = QVarId (Qualified Name)
            | Lit Lit
            | Print (Printable String)
            | Special Char
-           | Uni String
+           | Uni String -- A unification variable
            | Annotation (Printable String)
   deriving Eq
 

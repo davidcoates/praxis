@@ -16,7 +16,7 @@ semi :: Sourced Token
 semi = Phantom :< Layout ';'
 
 unlayout :: Bool -> [Sourced Token] -> [Sourced Token]
-unlayout block ts = if block then [lbrace] ++ ts' ++ [rbrace] else ts' where ts' = unlayout' [] (lines ts)
+unlayout wrapInBlock tokens = if wrapInBlock then [lbrace] ++ tokens' ++ [rbrace] else tokens' where tokens' = unlayout' [] (lines tokens)
 
 lines :: [Sourced Token] -> [[Sourced Token]]
 lines []     = []

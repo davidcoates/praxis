@@ -18,14 +18,14 @@ import           Data.Maybe               (fromJust)
 import           Prelude                  hiding (until)
 
 run :: Bool -> String -> Praxis [Sourced Token]
-run top s = save stage $ do
+run topLevel text = save stage $ do
   stage .= Stage.Tokenise
-  ts <- Tokeniser.run token s
-  display (separate " " (map (view value) ts)) `ifFlag` debug
+  tokens <- Tokeniser.run token text
+  display (separate " " (map (view value) tokens)) `ifFlag` debug
   stage .= Stage.Layout
-  let ts' = unlayout top ts
-  display (separate " " (map (view value) ts')) `ifFlag` debug
-  return ts'
+  let tokens' = unlayout topLevel tokens
+  display (separate " " (map (view value) tokens')) `ifFlag` debug
+  return tokens'
 
 -- Helper functions
 until :: Tokeniser a -> Tokeniser b -> Tokeniser [b]

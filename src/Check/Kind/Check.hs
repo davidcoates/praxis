@@ -19,14 +19,14 @@ import           Stage
 import           Term
 
 check :: Term a => Annotated a -> Praxis (Annotated a)
-check x = save stage $ do
+check term = save stage $ do
   stage .= KindCheck Warmup
   our .= initialSystem
-  x <- Generate.run x
-  ks <- Solve.run >>= tryDefault x
-  let r = sub (embedSub (\k -> case k of { KindUni n -> lookup n ks; _ -> Nothing })) x
-  display r `ifFlag` debug
-  return r
+  term <- Generate.run term
+  kindSol <- Solve.run >>= tryDefault term
+  let term' = sub (embedSub (\k -> case k of { KindUni n -> lookup n kindSol; _ -> Nothing })) term
+  display term' `ifFlag` debug
+  return term'
 
 
 deepKindUnis :: forall a. Term a => Annotated a -> Set Name
@@ -36,10 +36,10 @@ deepKindUnis = deepExtract (embedMonoid f) where
     _         -> Set.empty
 
 tryDefault :: Term a => Annotated a -> [(Name, Kind)] -> Praxis [(Name, Kind)]
-tryDefault x ks = do
+tryDefault x kindSol = do
 
   -- TODO could just be a warning, and default to Type?
-  let freeKinds = deepKindUnis   x `Set.difference` Set.fromList (map fst ks)
+  let freeKinds = deepKindUnis   x `Set.difference` Set.fromList (map fst kindSol)
   when (not (null freeKinds)) $ throwAt (view source x) $ "underdetermined kind: " <> quote (pretty (Set.elemAt 0 freeKinds))
 
-  return ks
+  return kindSol

@@ -10,7 +10,6 @@
 
 module Check.Type.Generate
   ( run
-  , recursive
   ) where
 
 import           Check.Error
@@ -37,6 +36,9 @@ import qualified Prelude            (lookup)
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
+
+mono :: Annotated Type -> Annotated QType
+mono t = (view source t, Nothing) :< Forall [] [] t
 
 specialise :: Source -> [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis (Annotated Type -> Annotated Type)
 specialise s vs cs = do
@@ -122,22 +124,22 @@ getData s n = do
     Nothing -> throwAt s $ "data constructor " <> quote (pretty n) <> " is not in scope"
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run x = save stage $ do
+run term = save stage $ do
   stage .= TypeCheck Generate
-  x' <- generate x
-  display x' `ifFlag` debug
+  term <- generate term
+  display term `ifFlag` debug
   cs <- use (our . constraints)
   (`ifFlag` debug) $ do
     display (separate "\n\n" (nub . sort $ cs))
     use tEnv >>= display
     use daEnv >>= display
-  return x'
+  return term
 
 generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-generate x = ($ x) $ case witness :: I a of
-  IProgram -> program
-  IExp     -> exp
-  IBind    -> bind
+generate term = ($ term) $ case witness :: I a of
+  IProgram -> generateProgram
+  IExp     -> generateExp
+  IBind    -> generateBind
   IDataCon -> error "standalone DataCon"
   IDecl    -> error "standalone Decl"
   IPat     -> error "standalone Pat"
@@ -173,216 +175,188 @@ unis = extract (embedMonoid f) where
     TyPatVar n -> Set.singleton (phantom $ QTyVar n)
     _          -> Set.empty
 
-program :: Annotated Program -> Praxis (Annotated Program)
-program (a :< Program ds) = do
-  ds <- decls ds
-  return (a :< Program ds)
+generateProgram :: Annotated Program -> Praxis (Annotated Program)
+generateProgram (ann :< Program decls) = do
+  decls <- generateDecls decls
+  return (ann :< Program decls)
 
-dataCon :: [Annotated QTyVar] -> Annotated Type -> Annotated DataCon -> Praxis (Annotated DataCon)
-dataCon vars retType ((s, Nothing) :< DataCon n argType) = do
+generateDataCon :: [Annotated QTyVar] -> Annotated Type -> Annotated DataCon -> Praxis (Annotated DataCon)
+generateDataCon vars retType ((src, Nothing) :< DataCon name argType) = do
   let fullType = phantom $ Forall vars [] $ case argType of -- Type of the constructor -- FIXME constraints???
-        Just argType' -> fun argType' retType
-        Nothing       -> retType
-      da = ((s, Just (DataConInfo {fullType, argType, retType})) :< DataCon n argType)
-  daEnv %= Env.intro n da
-  return da
+        Just argType -> fun argType retType
+        Nothing      -> retType
+      dataCon = ((src, Just (DataConInfo {fullType, argType, retType})) :< DataCon name argType)
+  daEnv %= Env.intro name dataCon
+  return dataCon
 
-recursive :: Annotated Exp -> Bool
-recursive x = case view value x of
-    Lambda _ _ -> True
-    Cases _    -> True
-    _          -> False
-
-
-decls :: [Annotated Decl] -> Praxis [Annotated Decl]
-decls ds = do
+generateDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
+generateDecls decls = do
   -- Variable declarations are allowed to be (mutually) recursive.
   -- So we first "pre declare" them by adding them to the context, so that each declaration sees all the others (and itself) in scope.
-  ds' <- mapM preDeclare ds
-  mapM (\(t, d) -> decl t d) ds'
+  decls <- mapM preDeclare decls
+  mapM (\(t, d) -> generateDecl t d) decls
   where
-    declare s n sig = do
+    declare src name sig = do
       t <- case sig of Nothing -> mono <$> freshTyUni
                        Just t  -> pure t
-      introTy s n t
+      introTy src name t
       return t
-    preDeclare d = case d of
-      ((s, _) :< DeclVar n sig e) -> do { t <- declare s n sig; return (Just t, d) }
-      _                           -> return (Nothing, d)
+    preDeclare decl = case decl of
+      ((src, _) :< DeclVar name sig exp) -> do { t <- declare src name sig; return (Just t, decl) }
+      _                                  -> return (Nothing, decl)
 
 
-qTyVarNames :: [Annotated QTyVar] -> [Name]
-qTyVarNames vs = [ n | QTyVar n <- map (view value) vs ]
-
-qTyVarOpNames :: [Annotated QTyVar] -> [Name]
-qTyVarOpNames vs = [ n | QTyOpVar d n <- map (view value) vs ]
-
-decl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
-decl forwardT = splitTrivial $ \s -> \case
+generateDecl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
+generateDecl forwardT = splitTrivial $ \src -> \case
 
   -- TODO Share constraints needed!
-  DeclData n p alts -> do
+  DeclData name arg alts -> do
     -- TODO could be kind annotated to avoid this lookup
-    Just k <- kEnv `uses` Env.lookup n
+    Just k <- kEnv `uses` Env.lookup name
 
     -- The return type of the constructors
-    let rt = case p of
-          Nothing                                -> TyCon n `as` k
-          Just p | KindFun k1 k2 <- view value k -> TyApply (TyCon n `as` k) (patToTy p) `as` k2
-        vars = Set.toList (foldMap unis p)
+    let returnTy = case arg of
+          Nothing -> TyCon name `as` k
+          Just arg
+            | KindFun k1 k2 <- view value k -> TyApply (TyCon name `as` k) (patToTy arg) `as` k2
 
-    alts' <- traverse (dataCon vars rt) alts
-    return $ DeclData n p alts'
+        vars = Set.toList (foldMap unis arg)
 
-  DeclVar n sig e -> do
+    alts <- traverse (generateDataCon vars returnTy) alts
+    return $ DeclData name arg alts
 
-    {-
-    For polymorphic declarations, we rename the bound type vars to fresh type vars and substitute in the expression.
-    E.g.
-      foo : forall a. C a => a -> a
-      foo = ... where
-       bar : forall a. D a => a -> a
-       bar x = (x : a)
-    -->
-      foo : forall a1. C a1 => a1 -> a1   -- add C a1 to axioms, a1 -> a1 ~ type(body of foo)
-      foo = ... where
-        bar : forall a2. D a2 => a2 -> a2 -- add D a2 to axioms, a2 -> a2 ~ type(body of bar)
-        bar x = (x : a2)
-    -}
+  DeclVar name sig exp -> do
+
     case sig of
 
       Nothing -> do
-        e' <- exp e
+        exp <- generateExp exp
         case forwardT of
-          Just (_ :< Forall [] [] t) -> equal t (view ty e') (FunCongruence n) s
-          Nothing                    -> introTy s n (mono (view ty e'))
-        return $ DeclVar n Nothing e'
+          Just (_ :< Forall [] [] t) -> equal t (view ty exp) (FunCongruence name) src
+          Nothing                    -> introTy src name (mono (view ty exp))
+        return $ DeclVar name Nothing exp
 
-      Just sig@(_ :< Forall vs cs t) -> do
-        our . axioms %= (++ [ axiom (view value c) | c <- cs ]) -- Constraints in the signature are added as axioms
-        e' <- exp e
+      Just sig@(_ :< Forall boundVars cosntraints t) -> do
+        our . axioms %= (++ [ axiom (view value c) | c <- cosntraints ]) -- Constraints in the signature are added as axioms
+        exp <- generateExp exp
         case forwardT of
           Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)
-          Nothing -> introTy s n sig
-        equal t (view ty e') (FunSignature n) s
-        return $ DeclVar n (Just sig) e'
+          Nothing -> introTy src name sig
+        equal t (view ty exp) (FunSignature name) src
+        return $ DeclVar name (Just sig) exp
 
 
   op@(DeclOp _ _ _) -> return op
 
-  DeclSyn s t -> return $ DeclSyn s t
+  DeclSyn name t -> return $ DeclSyn name t
 
 
-mono :: Annotated Type -> Annotated QType
-mono t = (view source t, Nothing) :< Forall [] [] t
-
-exp :: Annotated Exp -> Praxis (Annotated Exp)
-exp = split $ \s -> \case
+generateExp :: Annotated Exp -> Praxis (Annotated Exp)
+generateExp = split $ \src -> \case
 
   Apply f x -> do
-    yt <- freshTyUni
-    f' <- exp f
-    x' <- exp x
-    let ft = view ty f'
-    let xt = view ty x'
-    require $ newConstraint (ft `TEq` fun xt yt) FunApplication s
-    return (yt :< Apply f' x')
+    rTy <- freshTyUni
+    f <- generateExp f
+    x <- generateExp x
+    let fTy = view ty f
+    let xTy = view ty x
+    require $ newConstraint (fTy `TEq` fun xTy rTy) FunApplication src
+    return (rTy :< Apply f x)
 
-  Case x alts -> do
-    x' <- exp x
-    let xt = view ty x'
+  Case exp alts -> do
+    exp <- generateExp exp
+    let expTy = view ty exp
     op <- freshTyOpUni RefOrId
-    alts' <- parallel (map (alt op) alts)
-    t1 <- equals (map fst alts') CaseCongruence
-    t2 <- equals (map snd alts') CaseCongruence
-    equal xt t1 CaseCongruence s -- TODO probably should pick a better name for this
-    return (t2 :< Case x' alts')
+    alts <- parallel (map (generateAlt op) alts)
+    ty1 <- equals (map fst alts) CaseCongruence
+    ty2 <- equals (map snd alts) CaseCongruence
+    equal expTy ty1 CaseCongruence src -- TODO probably should pick a better name for this
+    return (ty2 :< Case exp alts)
 
   Cases alts -> closure $ do
     op <- freshTyOpUni RefOrId
-    alts' <- parallel (map (alt op) alts)
-    t1 <- equals (map fst alts') CaseCongruence
-    t2 <- equals (map snd alts') CaseCongruence
-    return (fun t1 t2 :< Cases alts')
+    alts <- parallel (map (generateAlt op) alts)
+    ty1 <- equals (map fst alts) CaseCongruence
+    ty2 <- equals (map snd alts) CaseCongruence
+    return (fun ty1 ty2 :< Cases alts)
 
-  Con n -> do
-    DataConInfo { fullType } <- getData s n
-    t <- specialiseQType s fullType
-    return (t :< Con n)
+  Con name -> do
+    DataConInfo { fullType } <- getData src name
+    t <- specialiseQType src fullType
+    return (t :< Con name)
 
-  Do ss -> scope $ do
-    ss' <- traverse generate ss
-    case view value (last ss') of
-      StmtExp ((_, Just t) :< _) -> return (t :< Do ss')
-      _                          -> throwAt s $ ("do block must end in an expression" :: String)
+  Do stmts -> scope $ do
+    stmts <- traverse generate stmts
+    case view value (last stmts) of
+      StmtExp ((_, Just t) :< _) -> return (t :< Do stmts)
+      _                          -> throwAt src $ ("do block must end in an expression" :: String)
 
-  If a b c -> do
-    a' <- exp a
-    (b', c') <- join (exp b) (exp c)
-    require $ newConstraint (view ty a' `TEq` TyCon "Bool" `as` phantom KindType) IfCondition s
-    require $ newConstraint (view ty b' `TEq` view ty c') IfCongruence s
-    return (view ty b' :< If a' b' c')
+  If condExp thenExp elseExp -> do
+    condExp <- generateExp condExp
+    (thenExp, elseExp) <- join (generateExp thenExp) (generateExp elseExp)
+    require $ newConstraint (view ty condExp `TEq` TyCon "Bool" `as` phantom KindType) IfCondition src
+    require $ newConstraint (view ty thenExp `TEq` view ty elseExp) IfCongruence src
+    return (view ty thenExp :< If condExp thenExp elseExp)
 
-  Lambda p e -> closure $ do
+  Lambda pat exp -> closure $ do
     op <- freshTyOpUni RefOrId
-    (p', e') <- alt op (p, e)
-    return (fun (view ty p') (view ty e') :< Lambda p' e')
+    (pat, exp) <- generateAlt op (pat, exp)
+    return (fun (view ty pat) (view ty exp) :< Lambda pat exp)
 
-  Let b x -> scope $ do
-    b' <- bind b
-    x' <- exp x
-    return (view ty x' :< Let b' x')
+  Let bind exp -> scope $ do
+    bind <- generateBind bind
+    exp <- generateExp exp
+    return (view ty exp :< Let bind exp)
 
   -- TODO pull from environment?
-  Lit x -> ((\t -> t `as` phantom KindType :< Lit x) <$>) $ case x of
+  Lit lit -> ((\t -> t `as` phantom KindType :< Lit lit) <$>) $ case lit of
     Int  _   -> return $ TyCon "Int"
     Bool _   -> return $ TyCon "Bool"
     Char _   -> return $ TyCon "Char"
     String _ -> do
-      o <- freshTyOpUni RefOrId
-      let ot = TyOp o `as` phantom KindOp
-          a = TyCon "Array" `as` phantom (KindFun (phantom KindType) (phantom KindType))
-          ac = TyApply a (TyCon "Char" `as` phantom KindType) `as` phantom KindType
-      return $ TyApply ot ac
+      op <- freshTyOpUni RefOrId
+      let arr = TyCon "Array" `as` phantom (KindFun (phantom KindType) (phantom KindType))
+          str = TyApply arr (TyCon "Char" `as` phantom KindType) `as` phantom KindType
+      return $ TyApply (TyOp op `as` phantom KindOp) str
 
-  Read n e -> scope $ do
-    (refName, t) <- read s n
-    introTy s n (mono t)
-    e' <- exp e
+  Read var exp -> scope $ do
+    (refName, t) <- read src var
+    introTy src var (mono t)
+    exp <- generateExp exp
     tEnv %= elim
-    require $ newConstraint (RefFree refName (view ty e')) SafeRead s
-    return (view ty e' :< view value e')
+    require $ newConstraint (RefFree refName (view ty exp)) SafeRead src
+    return (view ty exp :< view value exp)
 
-  Pair p q -> do
-    p' <- exp p
-    q' <- exp q
-    let t = TyPair (view ty p') (view ty q') `as` phantom KindType
-    return (t :< Pair p' q')
+  Pair exp1 exp2 -> do
+    exp1 <- generateExp exp1
+    exp2 <- generateExp exp2
+    let t = TyPair (view ty exp1) (view ty exp2) `as` phantom KindType
+    return (t :< Pair exp1 exp2)
 
-  Sig e t -> do
-    e' <- exp e
-    equal t (view ty e') UserSignature s
-    return (t :< Sig e' t)
+  Sig exp t -> do
+    exp <- generateExp exp
+    equal t (view ty exp) UserSignature src
+    return (t :< Sig exp t)
 
   Switch alts -> do
-    cs <- sequence (map (exp . fst) alts)
-    requires [ newConstraint (view ty c `TEq` TyCon "Bool" `as` phantom KindType) SwitchCondition (view source c) | c <- cs]
-    es <- parallel (map (exp . snd) alts)
-    t <- equals es SwitchCongruence
-    return (t :< Switch (zip cs es))
+    constraints <- sequence (map (generateExp . fst) alts)
+    requires [ newConstraint (view ty c `TEq` TyCon "Bool" `as` phantom KindType) SwitchCondition (view source c) | c <- constraints]
+    exps <- parallel (map (generateExp . snd) alts)
+    t <- equals exps SwitchCongruence
+    return (t :< Switch (zip constraints exps))
 
   Unit -> do
     let t = TyUnit `as` phantom KindType
     return (t :< Unit)
 
-  Var n -> do
-    t <- mark s n
-    return (t :< Var n)
+  Var name -> do
+    t <- mark src name
+    return (t :< Var name)
 
-  Where x bs -> scope $ do
-    bs' <- decls bs
-    x' <- exp x
-    return (view ty x' :< Where x' bs')
+  Where exp decls -> scope $ do
+    decls <- generateDecls decls
+    exp <- generateExp exp
+    return (view ty exp :< Where exp decls)
 
 
 equals :: (Term a, Annotation a ~ Annotated Type) => [Annotated a] -> Reason -> Praxis (Annotated Type)
@@ -391,78 +365,78 @@ equals es = equals' (map (\e -> (view source e, view ty e)) es) where
   equals' ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
 
 
-bind :: Annotated Bind -> Praxis (Annotated Bind)
-bind = splitTrivial $ \s -> \case
+generateBind :: Annotated Bind -> Praxis (Annotated Bind)
+generateBind = splitTrivial $ \src -> \case
 
-  Bind p e -> do
-    e' <- exp e
+  Bind pat exp -> do
+    exp <- generateExp exp
     op <- freshTyOpUni RefOrId
-    p' <- pat op p
-    equal (view ty p') (view ty e') (BindCongruence) (view source p <> view source e)
-    return $ Bind p' e'
+    pat <- generatePat op pat
+    equal (view ty pat) (view ty exp) (BindCongruence) (view source pat <> view source exp)
+    return $ Bind pat exp
 
 
-alt :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
-alt op (p, e) = scope $ do
-  p' <- pat op p
-  e' <- exp e
-  return (p', e')
+generateAlt :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
+generateAlt op (pat, exp) = scope $ do
+  pat <- generatePat op pat
+  exp <- generateExp exp
+  return (pat, exp)
 
 
-pat :: Annotated TyOp -> Annotated Pat -> Praxis (Annotated Pat)
-pat op p = snd <$> pat' p where
+generatePat :: Annotated TyOp -> Annotated Pat -> Praxis (Annotated Pat)
+generatePat op pat = snd <$> generatePat' pat where
 
   wrap t = TyApply (TyOp op `as` phantom KindOp) t `as` phantom KindType
 
-  pat' :: Annotated Pat -> Praxis (Annotated Type, Annotated Pat)
-  pat' = splitPair $ \s -> \case
+  generatePat' :: Annotated Pat -> Praxis (Annotated Type, Annotated Pat)
+  generatePat' = splitPair $ \src -> \case
 
-    PatAt v p -> do
-      (t, p') <- pat' p
-      introTy s v (mono t)
-      require $ newConstraint (Share t) (MultiAlias v) s
-      return (t, wrap t :< PatAt v p')
+    PatAt name pat -> do
+      (t, pat) <- generatePat' pat
+      introTy src name (mono t)
+      require $ newConstraint (Share t) (MultiAlias name) src
+      return (t, wrap t :< PatAt name pat)
 
-    PatCon n p -> do
+    PatCon name pat -> do
       -- Lookup the data alternative with this name
-      DataConInfo { fullType, argType, retType } <- getData s n
-      when (isJust argType /= isJust p) $ throwAt s $ "wrong number of arguments applied to data constructor " <> quote (pretty n)
+      DataConInfo { fullType, argType, retType } <- getData src name
+      when (isJust argType /= isJust pat) $ throwAt src $ "wrong number of arguments applied to data constructor " <> quote (pretty name)
 
-      let Forall vs cs _ = view value fullType
-      f <- specialise s vs cs
+      let Forall boundVars constraints _ = view value fullType
+      f <- specialise src boundVars constraints
       let retType' = f retType
 
-      case p of
-        Nothing -> return (retType', wrap retType' :< PatCon n Nothing)
-        Just p -> do
-          (patArgType, p') <- pat' p
+      case pat of
+        Nothing -> return (retType', wrap retType' :< PatCon name Nothing)
+        Just pat -> do
+          (patArgType, pat) <- generatePat' pat
           let Just argType' = argType
-          require $ newConstraint (patArgType `TEq` f argType') (ConPattern n) s
-          return (retType', wrap retType' :< PatCon n (Just p'))
+          require $ newConstraint (patArgType `TEq` f argType') (ConPattern name) src
+          return (retType', wrap retType' :< PatCon name (Just pat))
 
     PatHole -> do
       t <- freshTyUni
       return (t, wrap t :< PatHole)
 
     -- TODO think about how view literals would work, e.g. x@"abc"
-    PatLit l -> let t = TyCon (lit l) `as` phantom KindType in return (t, t :< PatLit l) where
-      lit = \case
+    PatLit lit -> let t = TyCon (litName lit) `as` phantom KindType in return (t, t :< PatLit lit) where
+      litName = \case
         Bool _   -> "Bool"
         Char _   -> "Char"
         Int _    -> "Int"
         String _ -> "String"
 
-    PatPair p q -> do
-      (pt, p') <- pat' p
-      (qt, q') <- pat' q
-      let t = TyPair pt qt `as` phantom KindType
-      return (t, wrap t :< PatPair p' q')
+    PatPair pat1 pat2 -> do
+      (t1, pat1) <- generatePat' pat1
+      (t2, pat2) <- generatePat' pat2
+      let t = TyPair t1 t2 `as` phantom KindType
+      return (t, wrap t :< PatPair pat1 pat2)
 
     PatUnit -> do
       let t = TyUnit `as` phantom KindType
       return (t, t :< PatUnit)
 
-    PatVar v -> do
+    PatVar var -> do
       t <- freshTyUni
-      introTy s v (mono (wrap t))
-      return (t, wrap t :< PatVar v)
+      introTy src var (mono (wrap t))
+      return (t, wrap t :< PatVar var)

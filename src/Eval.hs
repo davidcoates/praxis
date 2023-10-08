@@ -8,20 +8,19 @@ module Eval
   ( Evaluable(..)
   ) where
 
-import           Check.Type.Generate (recursive)
 import           Common
 import           Env
 import           Praxis
 import           Stage
 import           Term
-import           Value               (Value)
+import           Value             (Value)
 import qualified Value
 
-import           Control.Monad.Fix   (mfix)
+import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
-import           Data.List           (partition)
-import           Data.Maybe          (mapMaybe)
-import           Prelude             hiding (exp, lookup)
+import           Data.List         (partition)
+import           Data.Maybe        (mapMaybe)
+import           Prelude           hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
   eval' :: Annotated a -> Praxis b

@@ -173,48 +173,55 @@ simplifyAll = do
 
 
 outerTyOps :: Annotated Type -> Set (Annotated TyOp)
-outerTyOps t = case view value t of
-  TyApply (_ :< TyOp op) t -> Set.insert op (outerTyOps t)
-  _                        -> Set.empty
+outerTyOps ty = case view value ty of
+  TyApply (_ :< TyOp op) ty -> Set.insert op (outerTyOps ty)
+  _                         -> Set.empty
 
 stripOuterTyOps :: Annotated Type -> Annotated Type
-stripOuterTyOps t = case view value t of
-  TyApply (_ :< TyOp _) t -> stripOuterTyOps t
-  _                       -> t
+stripOuterTyOps ty = case view value ty of
+  TyApply (_ :< TyOp _) ty -> stripOuterTyOps ty
+  _                        -> ty
 
 
 simplifyOuterTyOps :: Annotated Type -> Annotated Type
 simplifyOuterTyOps = simplifyOuterTyOps' [] where
 
   simplifyOuterTyOps' :: [TyOp] -> Annotated Type -> Annotated Type
-  simplifyOuterTyOps' ops t = case view value t of
+  simplifyOuterTyOps' ops ty = case view value ty of
 
-    TyApply o@(_ :< TyOp (_ :< op)) t' -> case op of
-      TyOpId    -> simplifyOuterTyOps' ops t'
-      TyOpRef _ -> set value (TyApply o (stripOuterTyOps t')) t
+    TyApply f@(_ :< TyOp (_ :< op)) innerTy -> case op of
+
+      TyOpId    -> simplifyOuterTyOps' ops innerTy
+
+      TyOpRef _ -> set value (TyApply f (stripOuterTyOps innerTy)) ty
+
       _
-        | op `elem` ops -> simplifyOuterTyOps' ops t'
-        | otherwise     -> let t'' = simplifyOuterTyOps' (op:ops) t' in case view value t'' of
-          TyApply (_ :< TyOp (_ :< TyOpRef r)) _ -> t''
-          _ -> set value (TyApply o t'') t
 
-    _ -> t
+        | op `elem` ops -> simplifyOuterTyOps' ops innerTy
+
+        | otherwise     ->
+          let innerTy' = simplifyOuterTyOps' (op:ops) innerTy in
+                case view value innerTy' of
+                  TyApply (_ :< TyOp (_ :< TyOpRef r)) _ -> innerTy'
+                  _ -> set value (TyApply f innerTy') ty
+
+    _ -> ty
 
 
 normalise :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-normalise x = introspect (embedVisit f) x where
+normalise = introspect (embedVisit f) where
 
   f :: Annotated Type -> Visit Praxis () Type
-  f t = case view value t of
+  f ty = case view value ty of
 
-    TyApply (_ :< TyOp _) _ -> case simplifyOuterTyOps t of
+    TyApply (_ :< TyOp _) _ -> case simplifyOuterTyOps ty of
 
-      t@(_ :< TyApply o@(_ :< TyOp (_ :< op)) t') -> Resolve $ do
-        r <- trySolveShare t'
-        return $ case r of
-          Just Top -> view value t'
-          _        -> view value t
+      ty@(_ :< TyApply (_ :< TyOp _) innerTy) -> Resolve $ do
+        share <- trySolveShare innerTy
+        return $ case share of
+          Just Top -> view value innerTy
+          _        -> view value ty
 
-      t -> Resolve (view value <$> normalise t)
+      ty -> Resolve (view value <$> normalise ty)
 
     _ -> skip

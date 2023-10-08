@@ -30,23 +30,23 @@ kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind ->
 kind = annotation . just
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run x = save stage $ do
+run term = save stage $ do
   stage .= KindCheck Generate
-  x' <- generate x
-  display x' `ifFlag` debug
+  term <- generate term
+  display term `ifFlag` debug
   cs <- use (our . constraints)
   display (separate "\n\n" (nub . sort $ cs)) `ifFlag` debug
-  return x'
+  return term
 
 -- TODO since we ignore annotation of input, could adjust this...
 generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-generate x = ($ x) $ case witness :: I a of
-  IDecl    -> decl
-  IType    -> ty
-  ITyOp    -> tyOp
-  ITyPat   -> tyPat
-  IQTyVar  -> qTyVar
-  IDataCon -> dataCon
+generate term = ($ term) $ case witness :: I a of
+  IDecl    -> generateDecl
+  IType    -> generateTy
+  ITyOp    -> generateTyOp
+  ITyPat   -> generateTyPat
+  IQTyVar  -> generateQTyVar
+  IDataCon -> generateDataCon
   _        -> value (recurse generate)
 
 introKind :: Source -> Name -> Annotated Kind -> Praxis ()
@@ -57,128 +57,128 @@ introKind s n k = do
     _      -> kEnv %= intro n k
 
 
-qTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
-qTyVar = splitTrivial $ \s -> \case
+generateQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
+generateQTyVar = splitTrivial $ \src -> \case
 
-  QTyVar n -> do
+  QTyVar var -> do
     k <- freshKindUni
-    introKind s n k
-    return (QTyVar n)
+    introKind src var k
+    return (QTyVar var)
 
-  QTyOpVar d n -> do
-    introKind s n undefined -- Note: The kind doesn't matter here, just introducting for in-scope checking.
-    return (QTyOpVar d n)
+  QTyOpVar domain var -> do
+    introKind src var undefined -- Note: The kind doesn't matter here, just introducting for in-scope checking.
+    return (QTyOpVar domain var)
 
 
-tyOp :: Annotated TyOp -> Praxis (Annotated TyOp)
-tyOp = splitTrivial $ \s -> \case
+generateTyOp :: Annotated TyOp -> Praxis (Annotated TyOp)
+generateTyOp = splitTrivial $ \src -> \case
 
-  op@(TyOpVar _ n) -> do
-    e <- kEnv `uses` lookup n
-    case e of
-      Just k  -> return op
-      Nothing -> throwAt s (NotInScope n)
+  op@(TyOpVar _ var) -> do
+    entry <- kEnv `uses` lookup var
+    case entry of
+      Just _  -> return op
+      Nothing -> throwAt src (NotInScope var)
 
   op -> return op
 
 
-ty :: Annotated Type -> Praxis (Annotated Type)
-ty = split $ \s -> \case
+generateTy :: Annotated Type -> Praxis (Annotated Type)
+generateTy = split $ \src -> \case
 
-    TyApply f a -> do
-      f' <- ty f
-      a' <- ty a
-      case view kind f' of
+    TyApply f x -> do
+      f <- generateTy f
+      x <- generateTy x
+      case view kind f of
         (_ :< KindOp) -> do
-          require $ newConstraint (view kind a' `KEq` phantom KindType) TyOpApplication s
-          return (phantom KindType :< TyApply f' a')
-        fk -> do
+          require $ newConstraint (view kind x `KEq` phantom KindType) TyOpApplication src
+          return (phantom KindType :< TyApply f x)
+        funKind -> do
           k <- freshKindUni
-          require $ newConstraint (fk `KEq` phantom (KindFun (view kind a') k)) TyFunApplication s
-          return (k :< TyApply f' a')
+          require $ newConstraint (funKind `KEq` phantom (KindFun (view kind x) k)) TyFunApplication src
+          return (k :< TyApply f x)
 
-    TyCon n -> do
-      e <- kEnv `uses` lookup n
-      case e of
-        Just k  -> return (k :< TyCon n)
-        Nothing -> throwAt s (NotInScope n)
+    TyCon con -> do
+      entry <- kEnv `uses` lookup con
+      case entry of
+        Just k  -> return (k :< TyCon con)
+        Nothing -> throwAt src (NotInScope con)
 
-    TyFun a b -> do
-      a' <- ty a
-      b' <- ty b
-      require $ newConstraint (view kind a' `KEq` phantom KindType) FunType s
-      require $ newConstraint (view kind b' `KEq` phantom KindType) FunType s
-      return (phantom KindType :< TyFun a' b')
+    TyFun ty1 ty2 -> do
+      ty1 <- generateTy ty1
+      ty2 <- generateTy ty2
+      require $ newConstraint (view kind ty1 `KEq` phantom KindType) FunType src
+      require $ newConstraint (view kind ty2 `KEq` phantom KindType) FunType src
+      return (phantom KindType :< TyFun ty1 ty2)
 
     TyOp op -> do
-      op' <- tyOp op
-      return (phantom KindOp :< TyOp op')
+      op <- generateTyOp op
+      return (phantom KindOp :< TyOp op)
 
-    TyPair p q -> do
-      p' <- ty p
-      q' <- ty q
-      requires $ map (\t -> newConstraint (view kind t `KEq` phantom KindType) PairType s) [p', q']
-      return (phantom KindType :< TyPair p' q')
+    TyPair ty1 ty2 -> do
+      ty1 <- generateTy ty1
+      ty2 <- generateTy ty2
+      require $ newConstraint (view kind ty1 `KEq` phantom KindType) PairType src
+      require $ newConstraint (view kind ty2 `KEq` phantom KindType) PairType src
+      return (phantom KindType :< TyPair ty1 ty2)
 
-    TyPack p q -> do
-      p' <- ty p
-      q' <- ty q
-      return (phantom (KindPair (view kind p') (view kind q')) :< TyPack p' q')
+    TyPack ty1 ty2 -> do
+      ty1 <- generateTy ty1
+      ty2 <- generateTy ty2
+      return (phantom (KindPair (view kind ty1) (view kind ty2)) :< TyPack ty1 ty2)
 
     TyUnit -> do
       return (phantom KindType :< TyUnit)
 
-    TyVar v -> do
-      e <- kEnv `uses` lookup v
-      case e of
-        Just k  -> return (k :< TyVar v)
-        Nothing -> throwAt s (NotInScope v)
+    TyVar var -> do
+      entry <- kEnv `uses` lookup var
+      case entry of
+        Just k  -> return (k :< TyVar var)
+        Nothing -> throwAt src (NotInScope var)
 
 
-tyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
-tyPat = split $ \s -> \case
+generateTyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
+generateTyPat = split $ \src -> \case
 
-  TyPatVar v -> do
+  TyPatVar var -> do
     k <- freshKindUni
-    introKind s v k
-    return (k :< TyPatVar v)
+    introKind src var k
+    return (k :< TyPatVar var)
 
-  TyPatPack a b -> do
-    a' <- tyPat a
-    b' <- tyPat b
-    return (phantom (KindPair (view kind a') (view kind b')) :< TyPatPack a' b')
+  TyPatPack tyPat1 tyPat2 -> do
+    tyPat1 <- generateTyPat tyPat1
+    tyPat2 <- generateTyPat tyPat2
+    return (phantom (KindPair (view kind tyPat1) (view kind tyPat2)) :< TyPatPack tyPat1 tyPat2)
 
 
-dataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
-dataCon = splitTrivial $ \s -> \case
+generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
+generateDataCon = splitTrivial $ \src -> \case
 
-  DataCon n at -> do
-    case at of
-      Nothing -> return $ DataCon n Nothing
-      Just at -> do
-        at' <- generate at
-        require $ newConstraint (view kind at' `KEq` phantom KindType) (DataConType n) s -- TODO should just match kind of data type?
-        return $ DataCon n (Just at')
+  DataCon name arg -> do
+    case arg of
+      Nothing -> return $ DataCon name Nothing
+      Just arg -> do
+        arg <- generate arg
+        require $ newConstraint (view kind arg `KEq` phantom KindType) (DataConType name) src -- TODO should just match kind of data type?
+        return $ DataCon name (Just arg)
 
 
 fun :: Annotated Kind -> Annotated Kind -> Annotated Kind
 fun a b = phantom (KindFun a b)
 
-decl :: Annotated Decl -> Praxis (Annotated Decl)
-decl = splitTrivial $ \s -> \case
+generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
+generateDecl = splitTrivial $ \src -> \case
 
   -- TODO check no duplicated patterns
-  DeclData n ps as -> do
+  DeclData name arg alts -> do
     k <- freshKindUni
-    introKind s n k
-    (ps', as') <- save kEnv $ do
-        ps' <- traverse generate ps
-        as' <- traverse generate as
-        return (ps', as')
-    case ps' of
-      Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (DataType n) s
-      Just ps' -> require $ newConstraint (k `KEq` phantom (KindFun (view kind ps') (phantom KindType))) (DataType n) s
-    return $ DeclData n ps' as'
+    introKind src name k
+    (arg, alts) <- save kEnv $ do
+        arg <- traverse generate arg
+        alts <- traverse generate alts
+        return (arg, alts)
+    case arg of
+      Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (DataType name) src
+      Just arg -> require $ newConstraint (k `KEq` phantom (KindFun (view kind arg) (phantom KindType))) (DataType name) src
+    return $ DeclData name arg alts
 
-  x -> recurse generate x
-
+  decl -> recurse generate decl

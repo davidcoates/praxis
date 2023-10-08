@@ -84,10 +84,10 @@ data DataCon = DataCon Name (Maybe (Annotated Type))
   deriving (Eq, Ord)
 
 data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
-          | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^Parsing only
+          | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
-          | DeclSig Name (Annotated QType) -- ^Parsing only
-          | DeclSyn Name (Annotated Type) -- ^Parsing only
+          | DeclSig Name (Annotated QType) -- ^ Parsing only
+          | DeclSyn Name (Annotated Type) -- ^ Parsing only
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
 
@@ -100,14 +100,14 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
          | Let (Annotated Bind) (Annotated Exp)
          | Lit Lit
-         | Mixfix [Annotated Tok] -- ^Parsing only
+         | Mixfix [Annotated Tok] -- ^ Parsing only
          | Read Name (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name -- FIXME Qualified Name
-         | VarRef Name -- ^Parsing only
+         | VarRef Name -- ^ Parsing only
          | Where (Annotated Exp) [Annotated Decl]
   deriving (Eq, Ord)
 
@@ -251,14 +251,14 @@ instance Pretty (Annotated a) => Pretty (Derivation a) where
   pretty (Root r)       = "\n|-> (" <> pretty r <> ")"
   pretty (Antecedent a) = "\n|-> " <> pretty a
 
--- A data constructor C for a type T, either has
---
--- C : forall vs. A -> T vs
--- or
--- C : forall vs. T vs
---
--- Here "A" is the argType, "T vs" is the retType.
---
+{- | A data constructor C for a type T, either has:
+
+C : forall vs. A -> T vs
+or
+C : forall vs. T vs
+
+Here "A" is the argType, "T vs" is the retType.
+-}
 data DataConInfo = DataConInfo { fullType :: Annotated QType, argType :: Maybe (Annotated Type), retType :: Annotated Type }
 
 instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataConInfo where

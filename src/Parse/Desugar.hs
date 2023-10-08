@@ -336,8 +336,8 @@ desugarTy (ann :< ty) = case ty of
   TyCon name -> do
     syn <- tySynonyms `uses` Map.lookup name
     return $ case syn of
-      Just ty  -> ty
-      Nothing  -> ann :< TyCon name
+      Just ty -> ty
+      Nothing -> ann :< TyCon name
 
   _           -> (ann :<) <$> recurse desugar ty
 

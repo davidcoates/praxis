@@ -74,7 +74,7 @@ import           Data.Void                  (Void, absurd)
 
 type Name = String
 
--- |Similar to msum but works over an applicative (not to be confused with Data.Foldable.asum)
+-- | asum is similar to msum but works over an applicative (not to be confused with Data.Foldable.asum)
 asum :: (Monoid a, Applicative f, Traversable t) => t (f a) -> f a
 asum xs = fold <$> series xs
 
@@ -90,7 +90,7 @@ second = _2
 (<&>) :: Functor f => f a -> (a -> b) -> f b
 (<&>) = flip (<$>)
 
--- |Transformer version of ((,) a)
+-- | Transformer version of ((,) a)
 newtype PairT f b a = PairT { runPairT :: f (b, a) }
 
 instance Functor f => Functor (PairT f b) where

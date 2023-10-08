@@ -40,7 +40,7 @@ instance Evaluable Exp Value where
 evalProgram :: Annotated Program -> Praxis ()
 evalProgram (_ :< Program decls) = evalDecls decls
 
--- A helper for decls, irrefutably matching the [b] argument
+-- | A helper for decls, irrefutably matching the [b] argument
 irrefMapM :: Monad m => ((a, b) -> m c) -> [a] -> [b] -> m [c]
 irrefMapM f as bs = case as of
   []     -> return []
@@ -77,7 +77,7 @@ evalStmt (_ :< stmt) = case stmt of
 
   StmtBind bind -> evalBind bind
 
-  StmtExp exp -> evalExp exp >> return ()
+  StmtExp exp   -> evalExp exp >> return ()
 
 
 evalExp :: Annotated Exp -> Praxis Value
@@ -140,7 +140,7 @@ evalExp ((src, _) :< exp) = case exp of
     entry <- vEnv `uses` lookup var
     case entry of
        Just val -> return val
-       Nothing -> throwAt src ("unknown variable " <> quote (pretty var))
+       Nothing  -> throwAt src ("unknown variable " <> quote (pretty var))
 
   Where exp decls -> save vEnv $ do
     evalDecls decls
@@ -182,7 +182,7 @@ tryBind val (_ :< pat) = case pat of
 
   PatCon patCon pat | Value.Con valCon val <- val
     -> if patCon /= valCon then Nothing else case (pat, val) of
-      (Nothing, Nothing) -> Just (return ())
+      (Nothing, Nothing)   -> Just (return ())
       (Just pat, Just val) -> tryBind val pat
 
   PatHole

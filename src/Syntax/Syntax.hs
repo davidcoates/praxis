@@ -34,6 +34,8 @@ infixr 4 *>
 infixr 4 <*
 infixl 3 <|>
 
+-- | Syntax abstracts over Parsers and Unparsers (pretty printers).
+-- It uses "Prisms" to extend parser combinators (applicative, alternative) to be contravariant as well as covariant.
 class Syntax f where
   (<$>) :: Prism b a -> f a -> f b
   (<*>) :: f a -> f b -> f (a, b)
@@ -46,8 +48,8 @@ class Syntax f where
   pure :: a -> f a
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   mark :: String -> f a
-  unparseable :: f a -> f a
   annotated :: Term a => f a -> f (Annotated a)
+  unparseable :: f a -> f a -- Allows printing but not parsing (for internal constructs, like unification variables)
 
 _Cons :: Prism [a] (a, [a])
 _Cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})

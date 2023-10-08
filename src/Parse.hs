@@ -17,7 +17,7 @@ import qualified Parse.Tokenise as Tokenise
 import           Praxis
 import           Term
 
--- Tokenise, layout, parse, desugar
+-- | A wrapper which runs tokenise, layout, parse & desugar
 parse :: forall a. Term a => String -> Praxis (Annotated a)
 parse text = do
   let topLevel = case witness :: I a of { IProgram -> True; _ -> False }

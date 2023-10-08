@@ -6,6 +6,8 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
+-- | The grammar definition for Praxis terms.
+
 module Syntax.Term
   ( syntax
   ) where
@@ -128,6 +130,7 @@ definePrisms ''KindConstraint
 definePrisms ''TyConstraint
 definePrisms ''Prop
 
+-- | The syntax for a given term type.
 syntax :: (Term a, Syntax f) => I a -> f a
 syntax = \case
   -- | Operators

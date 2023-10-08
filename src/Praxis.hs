@@ -14,7 +14,7 @@ module Praxis
   , DAEnv(..)
   , VEnv(..)
 
-  -- |Operators
+  -- | Operators
   , Fixity(..)
   , OpDefns
   , OpContext(..)
@@ -34,15 +34,15 @@ module Praxis
   , runSilent
   , runInternal
 
-  -- |Lift an IO computation to the Praxis monad
+  -- | Lift an IO computation to the Praxis monad
   , liftIO
   , liftIOUnsafe
 
-  -- |Flag lenses
+  -- | Flag lenses
   , debug
   , interactive
 
-  -- |Praxis lenses
+  -- | Praxis lenses
   , infile
   , outfile
   , flags
@@ -138,17 +138,19 @@ makeLenses ''OpContext
 data PraxisState = PraxisState
   { _infile     :: Maybe String
   , _outfile    :: Maybe String
-  , _flags      :: Flags               -- ^Flags
+  , _flags      :: Flags               -- ^ Flags
   , _fresh      :: Fresh
-  , _stage      :: Stage               -- ^Current stage of compilation
+  , _stage      :: Stage               -- ^ Current stage of compilation
   , _opContext  :: OpContext
-  , _kEnv       :: KEnv                -- ^Kind environment
-  , _tEnv       :: TEnv                -- ^Type environment
-  , _daEnv      :: DAEnv               -- ^Data alternative environment
-  , _vEnv       :: VEnv                -- ^Value environment for interpreter
-  , _tySynonyms :: Map Name (Annotated Type) -- ^Type synonyms TODO encapsulate within desugarer?
-  , _tyVarMap   :: Map Name Name       -- Substitutions to apply to TyVar / TyVarOp when printing
-  , _system     :: Check.System        -- ^ TODO rename?
+  , _kEnv       :: KEnv                -- ^ Kind environment
+  , _tEnv       :: TEnv                -- ^ Type environment
+  , _daEnv      :: DAEnv               -- ^ Data alternative environment
+  , _vEnv       :: VEnv                -- ^ Value environment for interpreter
+  -- TODO encapsulate within desugarer?
+  , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
+  , _tyVarMap   :: Map Name Name       -- ^ Substitutions to apply to TyVar / TyVarOp when printing
+  -- TODO rename?
+  , _system     :: Check.System        -- ^ Type/Kind check state
   }
 
 instance Show PraxisState where
@@ -321,6 +323,7 @@ reuse n@('?':c:_) = over (fresh . f c) (n:)
         f 'k' = freshKindUnis
 -}
 
+-- | Unrewrite type (operator) variables
 sanitise :: Term a => Annotated a -> Praxis (Annotated a)
 sanitise x = do
   m <- use tyVarMap

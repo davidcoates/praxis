@@ -1,8 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | Template Haskell helper for creating prisms from data constructors, using ''definePrisms
+
 module Syntax.TH
-  ( constructorPrism
-  , definePrisms
+  ( definePrisms
   ) where
 
 import           Syntax.Prism
@@ -64,16 +65,6 @@ prismArgs (x:xs) = AppT (AppT (TupleT 2) x) (prismArgs xs)
 -- | Apply all types to supplied type
 applyAll :: Type -> [Type] -> Type
 applyAll = foldl AppT
-
--- | Construct a partial prism expression for a constructor,
--- given the constructor's name.
-constructorPrism :: Name -> ExpQ
-constructorPrism name = do
-  DataConI n _ d    <-  reify name
-  TyConI dec        <-  reify d
-  DecInfo _ _ cs    <-  decInfo dec
-  let Just con      =   find (\c -> n == conName c) cs
-  prismFromCon (wildcard cs) con
 
 wildcard :: [Con] -> [MatchQ]
 wildcard cs

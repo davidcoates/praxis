@@ -347,7 +347,7 @@ type Foo [a, a] = cases
     Foo a
 |]
 
-  it "does not type check" $ check program `shouldReturn` "1:14 error: type 'a' redeclared (in the same scope)"
+  it "does not type check" $ check program `shouldReturn` "1:10 error: type variables are not distinct"
 
 
 readUnsafe = describe "read safety" $ do
@@ -432,7 +432,7 @@ spec = do
     forM_ types $ \t -> do
       it (show t ++ " is not valid") $ do
         t' <- check t
-        t' `shouldBe` "1:1 error: quantified type variables are not distinct"
+        t' `shouldBe` "1:1 error: type variables are not distinct"
 
 
   describe "simple monomorphic programs" $ do

@@ -296,8 +296,9 @@ instance Term TyPat where
   witness = ITyPat
   complete _ f x = f x
   recurse f = \case
-    TyPatVar n    -> pure (TyPatVar n)
-    TyPatPack a b -> TyPatPack <$> f a <*> f b
+    TyPatVar n     -> pure (TyPatVar n)
+    TyPatOpVar d n -> pure (TyPatOpVar d n)
+    TyPatPack a b  -> TyPatPack <$> f a <*> f b
 
 instance Term Type where
   witness = IType

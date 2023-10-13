@@ -234,6 +234,7 @@ dataAlt = _DataCon <$> conid <*> optional (annotated ty1)
 
 tyPat :: Syntax f => f TyPat
 tyPat = _TyPatVar <$> varid <|>
+        _TyPatOpVar <$> tyOpDomain <*> varid <|>
         pack _TyPatPack tyPat
 
 declFun :: Syntax f => f Decl

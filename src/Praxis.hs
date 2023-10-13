@@ -329,9 +329,11 @@ sanitise x = do
   m <- use tyVarMap
   let rewriteTyVars :: Term a => Annotated a -> Annotated a
       rewriteTyVars = sub $ \x -> case typeof x of
-        IType   |     TyVar n   <- x ->      TyVar <$> n `Map.lookup` m
-        ITyOp   |   TyOpVar d n <- x ->  TyOpVar d <$> n `Map.lookup` m
-        IQTyVar |    QTyVar n   <- x ->     QTyVar <$> n `Map.lookup` m
-        IQTyVar |  QTyOpVar d n <- x -> QTyOpVar d <$> n `Map.lookup` m
-        _                            -> Nothing
+        IType   |        TyVar n <- x ->        TyVar <$> n `Map.lookup` m
+        ITyOp   |    TyOpVar d n <- x ->    TyOpVar d <$> n `Map.lookup` m
+        ITyPat  |     TyPatVar n <- x ->     TyPatVar <$> n `Map.lookup` m
+        ITyPat  | TyPatOpVar d n <- x -> TyPatOpVar d <$> n `Map.lookup` m
+        IQTyVar |       QTyVar n <- x ->       QTyVar <$> n `Map.lookup` m
+        IQTyVar |   QTyOpVar d n <- x ->   QTyOpVar d <$> n `Map.lookup` m
+        _                             -> Nothing
   return (rewriteTyVars x)

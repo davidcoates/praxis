@@ -65,25 +65,21 @@ rewrite term = ($ term) $ case witness :: I a of
   IQType -> rewriteQType -- for standalone QTypes (used in tests)
   _      -> value (recurse rewrite)
 
-qTyVarNames :: [Annotated QTyVar] -> [Name]
-qTyVarNames vs = [ n | QTyVar n <- map (view value) vs ]
-
-qTyVarOpNames :: [Annotated QTyVar] -> [Name]
-qTyVarOpNames vs = [ n | QTyOpVar _ n <- map (view value) vs ]
 
 -- Substitions are generated and applied in a piece-meal way (i.e. per declaration)
 -- So we expect them to be individually fairly small, which is why we're just using assoc lists here rather than a Map.
 data RewriteMap = RewriteMap { _tyVars :: [(Name, Name)], _tyOpVars :: [(Name, Name)] }
 
-rewriteMapFromQType :: Annotated QType -> Praxis RewriteMap
-rewriteMapFromQType ((src, _) :< Forall boundVars _ _) = do
+mkRewriteMap :: Source -> ([Name], [Name]) -> Praxis RewriteMap
+mkRewriteMap src (tyVarNames, tyOpVarNames) = do
 
-  tyVars <-   series $ [ (\(_ :< TyVar m) -> (n, m)) <$> freshTyVar | n <- qTyVarNames boundVars ]
-  tyOpVars <- series $ [ (\(_ :< TyOpVar _ m) -> (n, m)) <$> freshTyOpVar undefined | n <- qTyVarOpNames boundVars ]
+  tyVars <-   series $ [ (\(_ :<     TyVar m) -> (n, m)) <$> freshTyVar             | n <- tyVarNames ]
+  tyOpVars <- series $ [ (\(_ :< TyOpVar _ m) -> (n, m)) <$> freshTyOpVar undefined | n <- tyOpVarNames ]
 
   let allTyVars = tyVars ++ tyOpVars
       isUnique xs = length (nub xs) == length xs
-  when (not (isUnique (map fst allTyVars))) $ throwAt src $ ("quantified type variables are not distinct" :: String)
+
+  when (not (isUnique (map fst allTyVars))) $ throwAt src $ ("type variables are not distinct" :: String)
 
   -- Map from generated name (freshTyVar / freshTyOpVar) to the original name
   tyVarMap %= Map.union (Map.fromList (map (\(a, b) -> (b, a)) allTyVars))
@@ -91,12 +87,30 @@ rewriteMapFromQType ((src, _) :< Forall boundVars _ _) = do
   return RewriteMap { _tyVars = tyVars, _tyOpVars = tyOpVars }
 
 
+rewriteMapFromQType :: Annotated QType -> Praxis RewriteMap
+rewriteMapFromQType ((src, _) :< Forall vs _ _) = mkRewriteMap src (tyVars, tyOpVars) where
+  tyVars   = [ n |     QTyVar n <- map (view value) vs ]
+  tyOpVars = [ n | QTyOpVar _ n <- map (view value) vs ]
+
+rewriteMapFromTyPat :: Annotated TyPat -> Praxis RewriteMap
+rewriteMapFromTyPat tyPat = mkRewriteMap (view source tyPat) (tyVars, tyOpVars) where
+  tyVars   = extract (embedMonoid f) tyPat
+  f = \case
+    TyPatVar n -> [n]
+    _          -> []
+  tyOpVars = extract (embedMonoid g) tyPat
+  g = \case
+    TyPatOpVar _ n -> [n]
+    _              -> []
+
 applyRewriteMap :: Term a => RewriteMap -> Annotated a -> Annotated a
 applyRewriteMap RewriteMap { _tyVars = tyVars, _tyOpVars = tyOpVars } = sub $ \term -> case typeof term of
-  IType   |     TyVar n   <- term ->      TyVar <$> n `Prelude.lookup` tyVars
-  ITyOp   |   TyOpVar d n <- term ->  TyOpVar d <$> n `Prelude.lookup` tyOpVars
-  IQTyVar |    QTyVar n   <- term ->     QTyVar <$> n `Prelude.lookup` tyVars
-  IQTyVar |  QTyOpVar d n <- term -> QTyOpVar d <$> n `Prelude.lookup` tyOpVars
+  IType   |      TyVar n   <- term ->        TyVar <$> n `Prelude.lookup` tyVars
+  ITyOp   |    TyOpVar d n <- term ->    TyOpVar d <$> n `Prelude.lookup` tyOpVars
+  ITyPat  |   TyPatVar n   <- term ->     TyPatVar <$> n `Prelude.lookup` tyVars
+  ITyPat  | TyPatOpVar d n <- term -> TyPatOpVar d <$> n `Prelude.lookup` tyOpVars
+  IQTyVar |     QTyVar n   <- term ->       QTyVar <$> n `Prelude.lookup` tyVars
+  IQTyVar |   QTyOpVar d n <- term ->   QTyOpVar d <$> n `Prelude.lookup` tyOpVars
   _                               -> Nothing
 
 rewriteQType :: Annotated QType -> Praxis (Annotated QType)
@@ -136,7 +150,17 @@ rewriteDecl (ann@(src, _) :< decl) = case decl of
         rwMap <- rewriteMapFromQType sig
         return (ann :< DeclVar name (Just (applyRewriteMap rwMap sig)) (applyRewriteMap rwMap exp))
 
-  -- FIXME !!! As per above, type pattern variables (in DeclData) need to be renamed
+
+  DeclData name tyPat alts -> do
+
+    case tyPat of
+
+      Nothing -> return (ann :< decl)
+
+      Just tyPat -> do
+        rwMap <- rewriteMapFromTyPat tyPat
+        return $ applyRewriteMap rwMap (ann :< decl)
+
 
   _ -> value (recurse rewrite) (ann :< decl)
 
@@ -243,11 +267,11 @@ desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
 desugarDecls []            = pure []
 desugarDecls (ann@(src, _) :< decl : decls) = case decl of
 
-  DeclData name ty args -> do
-    ty <- traverse desugar ty
-    args <- traverse desugar args
+  DeclData name tyPat alts -> do
+    tyPat <- traverse desugar tyPat
+    alts <- traverse desugar alts
     decls <- desugarDecls decls
-    return (ann :< DeclData name ty args : decls)
+    return (ann :< DeclData name tyPat alts : decls)
 
   DeclSig name ty -> do
     ty <- desugar ty

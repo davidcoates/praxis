@@ -223,9 +223,9 @@ normalise = introspect (embedVisit f) where
         --
         -- E.g. we can not strip &a from &a &b List Int (because List Int is not shareable)
         -- But we can strip &a from &a &b Int, and then &b from &b Int.
-        canStripOp <- trySolveShare (stripOuterTyOps innerTy)
-        case canStripOp of
-          Just Top -> view value <$> normalise innerTy
+        canStripOps <- trySolveShare (stripOuterTyOps innerTy)
+        case canStripOps of
+          Just Top -> view value <$> normalise (stripOuterTyOps innerTy)
           _        -> return (view value ty)
 
       ty -> Resolve (view value <$> normalise ty)

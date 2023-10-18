@@ -32,9 +32,9 @@ check term = save stage $ do
         IType -> case term of {   TyUni n   ->  lookup n  tys; _ -> Nothing }
         ITyOp -> case term of { TyOpUni _ n -> lookup n tyOps; _ -> Nothing }
         _     -> Nothing
-  term' <- normalise (sub f term)
-  display term' `ifFlag` debug
-  return term'
+  term <- normalise (sub f term)
+  display term `ifFlag` debug
+  return term
 
 
 deepTyUnis :: forall a. Term a => Annotated a -> Set Name

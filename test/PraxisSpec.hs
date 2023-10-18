@@ -330,6 +330,47 @@ g = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
 
 
 
+boxedReference = describe "boxed references" $ do
+
+  let program = [r|
+type Box [&v, a] = Box &v a
+
+type List a = cases
+  Nil
+  Cons (a, List a)
+
+fst : forall a b. (a, b) -> a
+fst (x, y) = x
+
+box = Box "x"
+|]
+
+  it "type checks" $ check program `shouldReturn` trim [r|
+type Box [ & v , a ] = [forall a & v . & v a -> Box [ & v , a ]] Box & v a
+type List a = cases
+  [forall a . List a] Nil
+  [forall a . ( a , List a ) -> List a] Cons ( a , List a )
+fst : forall a b . ( a , b ) -> a = \ ( [a] x , [b] y ) -> [a] x
+box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& ^o1 Array Char] "x"
+|]
+
+-- FIXME!!! ^^^ The type of box is not quite right, ^o1 should be substituted out (type op defaulting appears to only be partially applied)
+
+  -- TODO should also try with ? instead of &
+  it "evaluates" $ do
+
+    interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in Box xs" `shouldReturn` trim [r|
+error: found contradiction [1:47] & ^o4 List Int o~ List Int
+|-> [1:47] List Int ~ List Int ∧ & ^o4 List Int o~ List Int
+|-> [1:47] & ^o4 List Int ~ List Int ∧ Box [ & ^o4 , List Int ] ~ Box [ & ^o4 , List Int ]
+|-> [1:47] & ^o4 List Int -> Box [ & ^o4 , List Int ] ~ List Int -> Box [ & ^o4 , List Int ]
+|-> (function application)
+|]
+
+    interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in read xs in fst (5, Box xs)" `shouldReturn` "5"
+
+
+
 redeclVar = describe "variarble redeclaration" $ do
 
   let program = trim [r|
@@ -453,6 +494,7 @@ spec = do
     mutualRecursion
     list
     shadowing
+    boxedReference
 
   describe "invalid programs" $ do
     redeclVar

@@ -63,15 +63,18 @@ solveDeep s = \c -> do
 
 trySolveShare t = save our $ save tEnv $ solveDeep (trySolveShare') (Share t) where
   trySolveShare' = (solveFromAxioms <|>) $ \(Share t) -> case view value t of
-    TyUnit                                   -> tautology
-    TyFun _ _                                -> tautology
-    TyPair a b                               -> intro [ Share a, Share b]
-    TyVar _                                  -> contradiction
-    TyCon _                                  -> contradiction
-    TyApply (_ :< TyCon _) _                 -> contradiction
-    TyApply (_ :< TyOp (_ :< TyOpRef _)) _   -> tautology
-    TyApply (_ :< TyOp (_ :< TyOpVar _ _)) _ -> contradiction
-    _                                        -> defer
+    TyUnit                                     -> tautology
+    TyFun _ _                                  -> tautology
+    TyPair a b                                 -> intro [ Share a, Share b ]
+    TyVar _                                    -> contradiction
+    TyCon _                                    -> contradiction
+    TyApply (_ :< TyCon _) _                   -> contradiction
+    TyApply (_ :< TyOp (_ :< TyOpRef _)) _     -> tautology
+    TyApply (_ :< TyOp (_ :< TyOpUni Ref _)) _ -> tautology
+    TyApply (_ :< TyOp (_ :< TyOpVar Ref _)) _ -> tautology
+    TyApply (_ :< TyOp (_ :< TyOpVar _ _)) a   -> intro [ Share a ]
+    TyApply (_ :< TyOp (_ :< TyOpId)) a        -> intro [ Share a ]
+    _                                          -> defer
 
 
 solveTy :: TypeSolver
@@ -108,11 +111,16 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
         let (ops1, ops2) = let f = Set.toList . outerTyOps in (f t1, f t2)
         case (if ops1 < ops2 then (ops1, ops2) else (ops2, ops1)) of
           ([], vs) -> do
-            if all (\v -> case view value v of { TyOpUni _ _ -> True; _ -> False }) vs
+            if all (\v -> case view value v of { TyOpUni RefOrId _ -> True; _ -> False }) vs
             then mapM (\(_ :< TyOpUni _ n) -> n `isOp` TyOpId) vs >> solved
             else contradiction
-          ([_ :< TyOpUni d1 n], [_ :< TyOpUni d2 m]) | d1 == d2 && n == m -> tautology
-          ([_ :< TyOpUni d  n], [_ :< op]) -> n `isOp` op
+          -- Note: RefOrId < Ref
+          ([_ :< TyOpUni RefOrId n], [_ :< op])             -> n `isOp` op
+          ([_ :< TyOpUni Ref n], [_ :< TyOpId])             -> contradiction
+          ([_ :< TyOpUni Ref n], [_ :< TyOpVar RefOrId _])  -> contradiction
+          ([_ :< TyOpUni Ref n], [_ :< op@(TyOpVar Ref _)]) -> n `isOp` op
+          ([_ :< TyOpUni Ref n], [_ :< op@(TyOpRef _)])     -> n `isOp` op
+          ([_ :< TyOpUni Ref n], [_ :< op@(TyOpUni Ref m)]) -> n `isOp` op
           _ -> defer
       _ -> defer
 
@@ -187,25 +195,19 @@ simplifyOuterTyOps :: Annotated Type -> Annotated Type
 simplifyOuterTyOps = simplifyOuterTyOps' [] where
 
   simplifyOuterTyOps' :: [TyOp] -> Annotated Type -> Annotated Type
-  simplifyOuterTyOps' ops ty = case view value ty of
+  simplifyOuterTyOps' ops (ann :< ty) = case ty of
 
     TyApply f@(_ :< TyOp (_ :< op)) innerTy -> case op of
 
       TyOpId    -> simplifyOuterTyOps' ops innerTy
 
-      TyOpRef _ -> set value (TyApply f (stripOuterTyOps innerTy)) ty
-
       _
 
         | op `elem` ops -> simplifyOuterTyOps' ops innerTy
 
-        | otherwise     ->
-          let innerTy' = simplifyOuterTyOps' (op:ops) innerTy in
-                case view value innerTy' of
-                  TyApply (_ :< TyOp (_ :< TyOpRef r)) _ -> innerTy'
-                  _ -> set value (TyApply f innerTy') ty
+        | otherwise     -> ann :< TyApply f (simplifyOuterTyOps' (op:ops) innerTy)
 
-    _ -> ty
+    _ -> ann :< ty
 
 
 normalise :: forall a. Term a => Annotated a -> Praxis (Annotated a)
@@ -217,10 +219,14 @@ normalise = introspect (embedVisit f) where
     TyApply (_ :< TyOp _) _ -> case simplifyOuterTyOps ty of
 
       ty@(_ :< TyApply (_ :< TyOp _) innerTy) -> Resolve $ do
-        share <- trySolveShare innerTy
-        return $ case share of
-          Just Top -> view value innerTy
-          _        -> view value ty
+        -- The operator can be safely stripped if the /* stripped */ type is shareable.
+        --
+        -- E.g. we can not strip &a from &a &b List Int (because List Int is not shareable)
+        -- But we can strip &a from &a &b Int, and then &b from &b Int.
+        canStripOp <- trySolveShare (stripOuterTyOps innerTy)
+        case canStripOp of
+          Just Top -> view value <$> normalise innerTy
+          _        -> return (view value ty)
 
       ty -> Resolve (view value <$> normalise ty)
 

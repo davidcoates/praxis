@@ -166,14 +166,16 @@ equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 patToTy :: Annotated TyPat -> Annotated Type
 patToTy = over value patToTy' where
   patToTy' = \case
-    TyPatVar n    -> TyVar n
-    TyPatPack a b -> TyPack (patToTy a) (patToTy b)
+    TyPatVar n     -> TyVar n
+    TyPatOpVar d n -> TyOp (phantom (TyOpVar d n))
+    TyPatPack a b  -> TyPack (patToTy a) (patToTy b)
 
 unis :: Annotated TyPat -> Set (Annotated QTyVar)
 unis = extract (embedMonoid f) where
   f = \case
-    TyPatVar n -> Set.singleton (phantom $ QTyVar n)
-    _          -> Set.empty
+    TyPatVar n     -> Set.singleton (phantom $ QTyVar n)
+    TyPatOpVar d n -> Set.singleton (phantom $ QTyOpVar d n)
+    _              -> Set.empty
 
 generateProgram :: Annotated Program -> Praxis (Annotated Program)
 generateProgram (ann :< Program decls) = do

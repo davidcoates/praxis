@@ -146,7 +146,7 @@ data Tok = TExp (Annotated Exp)
          | TOp Name
   deriving (Eq, Ord)
 
-data TyOpDomain = Ref | RefOrId
+data TyOpDomain = RefOrId | Ref -- Note: The order here matters for the solver
   deriving (Eq, Ord)
 
 data TyOp = TyOpUni TyOpDomain Name

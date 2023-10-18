@@ -46,7 +46,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> literal <|> stuff)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> semiSpecial <|> literal <|> stuff)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment
@@ -59,6 +59,11 @@ layout = Layout <$> match (`elem` "{};")
 
 special :: Tokeniser Token
 special = Special <$> match (`elem` "(),`_")
+
+-- AKA contextually reserved operators.
+-- We want to treat them like special symbols for lexing (so e.g. "[&" lexes as two tokens, not one)
+semiSpecial :: Tokeniser Token
+semiSpecial = (\s -> QVarSym Qualified { qualification = [], unqualify = [s]}) <$> match (`elem` "[].") -- TODO qualification
 
 literal :: Tokeniser Token
 literal = intLiteral <|> charLiteral <|> stringLiteral

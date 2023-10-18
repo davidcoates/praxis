@@ -233,9 +233,11 @@ dataAlt :: Syntax f => f DataCon
 dataAlt = _DataCon <$> conid <*> optional (annotated ty1)
 
 tyPat :: Syntax f => f TyPat
-tyPat = _TyPatVar <$> varid <|>
-        _TyPatOpVar <$> tyOpDomain <*> varid <|>
-        pack _TyPatPack tyPat
+tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
+  tyPat0 = _TyPatVar <$> varid <|>
+           _TyPatOpVar <$> tyOpDomain <*> varid <|>
+           unparseable (pack _TyPatPack tyPat) <|>
+           mark "type pattern(0)"
 
 declFun :: Syntax f => f Decl
 declFun = prefix varid (_DeclSig, sig) (_DeclFun, def) <|> unparseable var <|> mark "variable/function declaration" where
@@ -274,8 +276,8 @@ tyConstraints = _Cons <$> (contextualOp "[" *> annotated tyConstraint) <*> tyCon
 
 qTyVar :: Syntax f => f QTyVar
 qTyVar = _QTyVar <$> varid <|>
-         _QTyOpVar <$> tyOpDomain <*> varid  <|>
-          mark "type or type operator variable"
+         _QTyOpVar <$> tyOpDomain <*> varid <|>
+          mark "type variable"
 
 ty :: Syntax f => f Type
 ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type"
@@ -283,7 +285,7 @@ ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type"
 tyOpDomain :: Syntax f => f TyOpDomain
 tyOpDomain = _Ref <$> reservedOp "&" <|>
              _RefOrId <$> reservedOp "?" <|>
-             mark "type operater domain"
+             mark "type operator domain"
 
 ty1 :: Syntax f => f Type
 ty1 = right _TyApply ty0 <|> mark "type(1)" where

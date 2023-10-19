@@ -351,10 +351,8 @@ type List a = cases
   [forall a . List a] Nil
   [forall a . ( a , List a ) -> List a] Cons ( a , List a )
 fst : forall a b . ( a , b ) -> a = \ ( [a] x , [b] y ) -> [a] x
-box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& ^o1 Array Char] "x"
+box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x"
 |]
-
--- FIXME!!! ^^^ The type of box is not quite right, ^o1 should be substituted out (type op defaulting appears to only be partially applied)
 
   -- TODO should also try with ? instead of &
   it "evaluates" $ do

@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE Rank2Types           #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -22,14 +23,34 @@ import           Data.Maybe         (fromMaybe)
 import           Data.Set           (Set, union)
 import qualified Data.Set           as Set
 
-run :: Praxis [(Name, Kind)]
-run = save stage $ save our $ do
+
+run :: Term a => Annotated a -> Praxis (Annotated a)
+run term = save stage $ save our $ do
   stage .= KindCheck Solve
   solve (our . constraints) solveKind
-  use (our . sol)
+  tryDefault term
+  simplify term
 
-unis :: forall a. Term a => Annotated a -> Set Name
-unis = extract (embedMonoid f) where
+deepKindUnis :: forall a. Term a => Annotated a -> Set Name
+deepKindUnis = deepExtract (embedMonoid f) where
+  f = \case
+    KindUni n -> Set.singleton n
+    _         -> Set.empty
+
+tryDefault :: Term a => Annotated a -> Praxis (Annotated a)
+tryDefault term@((src, _) :< _) = do
+
+  kindSol <- use (our . sol)
+
+  -- TODO could just be a warning, and default to Type?
+  let freeKinds = deepKindUnis term `Set.difference` Set.fromList (map fst kindSol)
+  when (not (null freeKinds)) $ throwAt src $ "underdetermined kind: " <> quote (pretty (Set.elemAt 0 freeKinds))
+
+  return term
+
+
+kindUnis :: forall a. Term a => Annotated a -> Set Name
+kindUnis = extract (embedMonoid f) where
   f = \case
     KindUni n -> Set.singleton n
     _         -> Set.empty
@@ -41,7 +62,7 @@ solveKind = \case
 
   KEq k1 k2 | k1 == k2 -> tautology
 
-  KEq (_ :< KindUni x) k -> if x `Set.member` unis k then contradiction else x `is` view value k -- Note: Occurs check here
+  KEq (_ :< KindUni x) k -> if x `Set.member` kindUnis k then contradiction else x `is` view value k -- Note: Occurs check here
 
   KEq k1 k2@(_ :< KindUni _) -> solveKind (k2 `KEq` k1) -- handled by the above case
 

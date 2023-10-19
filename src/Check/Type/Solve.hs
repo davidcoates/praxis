@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE Rank2Types           #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
@@ -25,11 +26,48 @@ import           Data.Set            (Set, union)
 import qualified Data.Set            as Set
 import           Data.Traversable    (forM)
 
-run :: Praxis Solution
-run = save stage $ save our $ do
+
+run :: Term a => Annotated a -> Praxis (Annotated a)
+run term = save stage $ save our $ do
   stage .= TypeCheck Solve
   solve (our . constraints) solveTy
-  use (our . sol)
+  tryDefault term
+  simplify term
+
+deepTyUnis :: forall a. Term a => Annotated a -> Set Name
+deepTyUnis = deepExtract (embedMonoid f) where
+  f = \case
+    TyUni n -> Set.singleton n
+    _       -> Set.empty
+
+deepTyOpUnis :: forall a. Term a => Annotated a -> Set Name
+deepTyOpUnis = deepExtract (embedMonoid f) where
+  f = \case
+    TyOpUni _ n -> Set.singleton n
+    _           -> Set.empty
+
+tryDefault :: Term a => Annotated a -> Praxis ()
+tryDefault term@((src, _) :< _) = do
+
+  tys <- use (our . sol . tySol)
+  tyOps <- use (our . sol . tyOpSol)
+
+  -- TODO could just be a warning, and default to ()?
+  let freeTys = deepTyUnis term `Set.difference` Set.fromList (map fst tys)
+  when (not (null freeTys)) $ throwAt src $ "underdetermined type: " <> quote (pretty (Set.elemAt 0 freeTys))
+
+  let freeTyOps = deepTyOpUnis term `Set.difference` Set.fromList (map fst tyOps)
+  flip mapM_ freeTyOps $ \tyOp -> do
+    warnAt src $ "underdetermined type operator: " <> quote (pretty tyOp) <> ", defaulting to &"
+
+  let defaultTyOp n = do
+        r <- freshTyOpRef
+        n `isOp` (view value r)
+
+  mapM defaultTyOp (Set.toList freeTyOps)
+  return ()
+
+
 
 tyUnis :: forall a. Term a => Annotated a -> Set Name
 tyUnis = extract (embedMonoid f) where

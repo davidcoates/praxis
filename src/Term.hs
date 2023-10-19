@@ -23,8 +23,8 @@ module Term
   , Tok(..)
 
   -- | T1
-  , TyOpDomain(..)
-  , TyOp(..)
+  , ViewDomain(..)
+  , View(..)
   , TyPat(..)
   , Type(..)
   , QTyVar(..)
@@ -146,32 +146,32 @@ data Tok = TExp (Annotated Exp)
          | TOp Name
   deriving (Eq, Ord)
 
-data TyOpDomain = RefOrId | Ref -- Note: The order here matters for the solver
+data ViewDomain = RefOrValue | Ref -- Note: The order here matters for the solver
   deriving (Eq, Ord)
 
-data TyOp = TyOpUni TyOpDomain Name
-          | TyOpId
-          | TyOpRef Name
-          | TyOpVar TyOpDomain Name
+data View = ViewUni ViewDomain Name
+          | ViewValue
+          | ViewRef Name
+          | ViewVar ViewDomain Name
   deriving (Eq, Ord)
 
 data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
            | TyPatVar Name
-           | TyPatOpVar TyOpDomain Name
+           | TyPatOpVar ViewDomain Name
   deriving (Eq, Ord)
 
 data Type = TyUni Name -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
           | TyFun (Annotated Type) (Annotated Type)
-          | TyOp (Annotated TyOp)
+          | View (Annotated View)
           | TyPack (Annotated Type) (Annotated Type)
           | TyPair (Annotated Type) (Annotated Type)
           | TyUnit
           | TyVar Name
   deriving (Eq, Ord)
 
-data QTyVar = QTyVar Name | QTyOpVar TyOpDomain Name
+data QTyVar = QTyVar Name | QViewVar ViewDomain Name
   deriving (Eq, Ord)
 
 data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)
@@ -180,7 +180,7 @@ data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)
 data Kind = KindUni Name
           | KindConstraint
           | KindFun (Annotated Kind) (Annotated Kind)
-          | KindOp
+          | KindView
           | KindPair (Annotated Kind) (Annotated Kind)
           | KindType
   deriving (Eq, Ord)

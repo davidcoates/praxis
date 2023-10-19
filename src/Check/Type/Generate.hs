@@ -43,11 +43,11 @@ mono t = (view source t, Nothing) :< Forall [] [] t
 specialise :: Source -> [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis (Annotated Type -> Annotated Type)
 specialise s vs cs = do
   vars <- series $ [ (\t -> (n, view value t)) <$> freshTyUni | QTyVar n <- map (view value) vs ]
-  opVars <- series $ [ (\t -> ((n, d), view value t)) <$> freshTyOpUni d | QTyOpVar d n <- map (view value) vs ]
+  opVars <- series $ [ (\t -> ((n, d), view value t)) <$> freshViewUni d | QViewVar d n <- map (view value) vs ]
   let f :: Term a => a -> Maybe a
       f x = case typeof x of
         IType |   TyVar n   <- x -> n `Prelude.lookup` vars
-        ITyOp | TyOpVar d n <- x -> (n, d) `Prelude.lookup` opVars
+        IView | ViewVar d n <- x -> (n, d) `Prelude.lookup` opVars
         _                        -> Nothing
   requires [ newConstraint (view value (sub f c)) Specialisation s | c <- cs ]
   return (sub f)
@@ -80,13 +80,13 @@ scope x = save tEnv $ do
 read :: Source -> Name -> Praxis (Name, Annotated Type)
 read s n = do
   l <- use tEnv
-  r@(_ :< TyOpRef refName) <- freshTyOpRef
+  r@(_ :< ViewRef refName) <- freshViewRef
   case LEnv.lookupFull n l of
     Just entry -> do
       t <- specialiseQType s (view LEnv.value entry)
-      requires [ newConstraint (Share t) (UnsafeView n) s | view LEnv.used entry ]
+      requires [ newConstraint (Share t) (UnsafeRead n) s | view LEnv.used entry ]
       requires [ newConstraint (Share t) (Captured n) s   | view LEnv.captured entry  ]
-      return $ (refName, phantom (TyApply (phantom (TyOp r)) t))
+      return $ (refName, phantom (TyApply (phantom (View r)) t))
     Nothing -> throwAt s (NotInScope n)
 
 -- |Marks a variable as used, and generate a Share constraint if it has already been used.
@@ -167,14 +167,14 @@ patToTy :: Annotated TyPat -> Annotated Type
 patToTy = over value patToTy' where
   patToTy' = \case
     TyPatVar n     -> TyVar n
-    TyPatOpVar d n -> TyOp (phantom (TyOpVar d n))
+    TyPatOpVar d n -> View (phantom (ViewVar d n))
     TyPatPack a b  -> TyPack (patToTy a) (patToTy b)
 
 unis :: Annotated TyPat -> Set (Annotated QTyVar)
 unis = extract (embedMonoid f) where
   f = \case
     TyPatVar n     -> Set.singleton (phantom $ QTyVar n)
-    TyPatOpVar d n -> Set.singleton (phantom $ QTyOpVar d n)
+    TyPatOpVar d n -> Set.singleton (phantom $ QViewVar d n)
     _              -> Set.empty
 
 generateProgram :: Annotated Program -> Praxis (Annotated Program)
@@ -268,7 +268,7 @@ generateExp = split $ \src -> \case
   Case exp alts -> do
     exp <- generateExp exp
     let expTy = view ty exp
-    op <- freshTyOpUni RefOrId
+    op <- freshViewUni RefOrValue
     alts <- parallel (map (generateAlt op) alts)
     ty1 <- equals (map fst alts) CaseCongruence
     ty2 <- equals (map snd alts) CaseCongruence
@@ -276,7 +276,7 @@ generateExp = split $ \src -> \case
     return (ty2 :< Case exp alts)
 
   Cases alts -> closure $ do
-    op <- freshTyOpUni RefOrId
+    op <- freshViewUni RefOrValue
     alts <- parallel (map (generateAlt op) alts)
     ty1 <- equals (map fst alts) CaseCongruence
     ty2 <- equals (map snd alts) CaseCongruence
@@ -301,7 +301,7 @@ generateExp = split $ \src -> \case
     return (view ty thenExp :< If condExp thenExp elseExp)
 
   Lambda pat exp -> closure $ do
-    op <- freshTyOpUni RefOrId
+    op <- freshViewUni RefOrValue
     (pat, exp) <- generateAlt op (pat, exp)
     return (fun (view ty pat) (view ty exp) :< Lambda pat exp)
 
@@ -316,10 +316,10 @@ generateExp = split $ \src -> \case
     Bool _   -> return $ TyCon "Bool"
     Char _   -> return $ TyCon "Char"
     String _ -> do
-      op <- freshTyOpUni RefOrId
+      op <- freshViewUni RefOrValue
       let arr = TyCon "Array" `as` phantom (KindFun (phantom KindType) (phantom KindType))
           str = TyApply arr (TyCon "Char" `as` phantom KindType) `as` phantom KindType
-      return $ TyApply (TyOp op `as` phantom KindOp) str
+      return $ TyApply (View op `as` phantom KindView) str
 
   Read var exp -> scope $ do
     (refName, t) <- read src var
@@ -372,23 +372,23 @@ generateBind = splitTrivial $ \src -> \case
 
   Bind pat exp -> do
     exp <- generateExp exp
-    op <- freshTyOpUni RefOrId
+    op <- freshViewUni RefOrValue
     pat <- generatePat op pat
     equal (view ty pat) (view ty exp) (BindCongruence) (view source pat <> view source exp)
     return $ Bind pat exp
 
 
-generateAlt :: Annotated TyOp -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
+generateAlt :: Annotated View -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
 generateAlt op (pat, exp) = scope $ do
   pat <- generatePat op pat
   exp <- generateExp exp
   return (pat, exp)
 
 
-generatePat :: Annotated TyOp -> Annotated Pat -> Praxis (Annotated Pat)
+generatePat :: Annotated View -> Annotated Pat -> Praxis (Annotated Pat)
 generatePat op pat = snd <$> generatePat' pat where
 
-  wrap t = TyApply (TyOp op `as` phantom KindOp) t `as` phantom KindType
+  wrap t = TyApply (View op `as` phantom KindView) t `as` phantom KindType
 
   generatePat' :: Annotated Pat -> Praxis (Annotated Type, Annotated Pat)
   generatePat' = splitPair $ \src -> \case

@@ -3,7 +3,7 @@ module Token
   ) where
 
 import           Common
-import           Term   (Lit (..), TyOpDomain (..))
+import           Term   (Lit (..), ViewDomain (..))
 
 data Token = QVarId (Qualified Name)
            | QConId (Qualified Name)

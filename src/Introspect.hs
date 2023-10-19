@@ -65,7 +65,7 @@ data I a where
   IStmt    :: I Stmt
   ITok     :: I Tok
   -- | T1
-  ITyOp   :: I TyOp
+  IView   :: I View
   ITyPat  :: I TyPat
   IType   :: I Type
   IQType  :: I QType
@@ -99,7 +99,7 @@ switch a b eq neq = case (a, b) of
   (IStmt, IStmt)                     -> eq
   (ITok, ITok)                       -> eq
   -- | T1
-  (ITyOp, ITyOp)                     -> eq
+  (IView, IView)                     -> eq
   (ITyPat, ITyPat)                   -> eq
   (IType, IType)                     -> eq
   (IQType, IQType)                   -> eq
@@ -287,8 +287,8 @@ instance Term Tok where
 
 -- | T1
 
-instance Term TyOp where
-  witness = ITyOp
+instance Term View where
+  witness = IView
   complete = trivial
   recurse _ = pure
 
@@ -308,7 +308,7 @@ instance Term Type where
     TyApply a b -> TyApply <$> f a <*> f b
     TyCon n     -> pure (TyCon n)
     TyFun a b   -> TyFun <$> f a <*> f b
-    TyOp op     -> TyOp <$> f op
+    View op     -> View <$> f op
     TyPack a b  -> TyPack <$> f a <*> f b
     TyPair a b  -> TyPair <$> f a <*> f b
     TyUnit      -> pure TyUnit
@@ -334,7 +334,7 @@ instance Term Kind where
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
     KindFun a b    -> KindFun <$> f a <*> f b
-    KindOp         -> pure KindOp
+    KindView         -> pure KindView
     KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType
 

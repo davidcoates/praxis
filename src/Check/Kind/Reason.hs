@@ -5,7 +5,7 @@ module Check.Kind.Reason
 import           Common
 
 data Reason = TyFunApplication
-            | TyOpApplication
+            | ViewApplication
             | DataConType Name
             | DataType Name
             | FunType
@@ -16,7 +16,7 @@ data Reason = TyFunApplication
 instance Show Reason where
   show = \case
     TyFunApplication -> "type function application"
-    TyOpApplication  -> "type operator application"
+    ViewApplication  -> "view application"
     DataConType n    -> "data constructor '" ++ n ++ "' must return kind Type"
     DataType n       -> "type constructor'" ++ n ++ "' must have kind Type"
     FunType          -> "type function must have kind (Type -> Type)"

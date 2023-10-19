@@ -86,7 +86,7 @@ hideLabel x = case typeof x of
     Lambda _ _ -> True
     _          -> False
   IPat -> case x of
-    PatPair _ _ -> True -- Note: Not trivial due to view operators: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
+    PatPair _ _ -> True -- Note: Not trivial due to views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
     _           -> False
   ITyPat -> case x of
     TyPatPack _ _ -> True

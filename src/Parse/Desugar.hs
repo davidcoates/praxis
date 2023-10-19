@@ -68,49 +68,49 @@ rewrite term = ($ term) $ case witness :: I a of
 
 -- Substitions are generated and applied in a piece-meal way (i.e. per declaration)
 -- So we expect them to be individually fairly small, which is why we're just using assoc lists here rather than a Map.
-data RewriteMap = RewriteMap { _tyVars :: [(Name, Name)], _tyOpVars :: [(Name, Name)] }
+data RewriteMap = RewriteMap { _tyVars :: [(Name, Name)], _viewVars :: [(Name, Name)] }
 
 mkRewriteMap :: Source -> ([Name], [Name]) -> Praxis RewriteMap
-mkRewriteMap src (tyVarNames, tyOpVarNames) = do
+mkRewriteMap src (tyVarNames, viewVarNames) = do
 
   tyVars <-   series $ [ (\(_ :<     TyVar m) -> (n, m)) <$> freshTyVar             | n <- tyVarNames ]
-  tyOpVars <- series $ [ (\(_ :< TyOpVar _ m) -> (n, m)) <$> freshTyOpVar undefined | n <- tyOpVarNames ]
+  viewVars <- series $ [ (\(_ :< ViewVar _ m) -> (n, m)) <$> freshViewVar undefined | n <- viewVarNames ]
 
-  let allTyVars = tyVars ++ tyOpVars
+  let allTyVars = tyVars ++ viewVars
       isUnique xs = length (nub xs) == length xs
 
   when (not (isUnique (map fst allTyVars))) $ throwAt src $ ("type variables are not distinct" :: String)
 
-  -- Map from generated name (freshTyVar / freshTyOpVar) to the original name
+  -- Map from generated name (freshTyVar / freshViewVar) to the original name
   tyVarMap %= Map.union (Map.fromList (map (\(a, b) -> (b, a)) allTyVars))
 
-  return RewriteMap { _tyVars = tyVars, _tyOpVars = tyOpVars }
+  return RewriteMap { _tyVars = tyVars, _viewVars = viewVars }
 
 
 rewriteMapFromQType :: Annotated QType -> Praxis RewriteMap
-rewriteMapFromQType ((src, _) :< Forall vs _ _) = mkRewriteMap src (tyVars, tyOpVars) where
+rewriteMapFromQType ((src, _) :< Forall vs _ _) = mkRewriteMap src (tyVars, viewVars) where
   tyVars   = [ n |     QTyVar n <- map (view value) vs ]
-  tyOpVars = [ n | QTyOpVar _ n <- map (view value) vs ]
+  viewVars = [ n | QViewVar _ n <- map (view value) vs ]
 
 rewriteMapFromTyPat :: Annotated TyPat -> Praxis RewriteMap
-rewriteMapFromTyPat tyPat = mkRewriteMap (view source tyPat) (tyVars, tyOpVars) where
+rewriteMapFromTyPat tyPat = mkRewriteMap (view source tyPat) (tyVars, viewVars) where
   tyVars   = extract (embedMonoid f) tyPat
   f = \case
     TyPatVar n -> [n]
     _          -> []
-  tyOpVars = extract (embedMonoid g) tyPat
+  viewVars = extract (embedMonoid g) tyPat
   g = \case
     TyPatOpVar _ n -> [n]
     _              -> []
 
 applyRewriteMap :: Term a => RewriteMap -> Annotated a -> Annotated a
-applyRewriteMap RewriteMap { _tyVars = tyVars, _tyOpVars = tyOpVars } = sub $ \term -> case typeof term of
+applyRewriteMap RewriteMap { _tyVars = tyVars, _viewVars = viewVars } = sub $ \term -> case typeof term of
   IType   |      TyVar n   <- term ->        TyVar <$> n `Prelude.lookup` tyVars
-  ITyOp   |    TyOpVar d n <- term ->    TyOpVar d <$> n `Prelude.lookup` tyOpVars
+  IView   |    ViewVar d n <- term ->    ViewVar d <$> n `Prelude.lookup` viewVars
   ITyPat  |   TyPatVar n   <- term ->     TyPatVar <$> n `Prelude.lookup` tyVars
-  ITyPat  | TyPatOpVar d n <- term -> TyPatOpVar d <$> n `Prelude.lookup` tyOpVars
+  ITyPat  | TyPatOpVar d n <- term -> TyPatOpVar d <$> n `Prelude.lookup` viewVars
   IQTyVar |     QTyVar n   <- term ->       QTyVar <$> n `Prelude.lookup` tyVars
-  IQTyVar |   QTyOpVar d n <- term ->   QTyOpVar d <$> n `Prelude.lookup` tyOpVars
+  IQTyVar |   QViewVar d n <- term ->   QViewVar d <$> n `Prelude.lookup` viewVars
   _                               -> Nothing
 
 rewriteQType :: Annotated QType -> Praxis (Annotated QType)

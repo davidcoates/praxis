@@ -43,7 +43,7 @@ generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case witness :: I a of
   IDecl    -> generateDecl
   IType    -> generateTy
-  ITyOp    -> generateTyOp
+  IView    -> generateView
   ITyPat   -> generateTyPat
   IQTyVar  -> generateQTyVar
   IDataCon -> generateDataCon
@@ -65,15 +65,15 @@ generateQTyVar = splitTrivial $ \src -> \case
     introKind src var k
     return (QTyVar var)
 
-  QTyOpVar domain var -> do
+  QViewVar domain var -> do
     introKind src var undefined -- Note: The kind doesn't matter here, just introducting for in-scope checking.
-    return (QTyOpVar domain var)
+    return (QViewVar domain var)
 
 
-generateTyOp :: Annotated TyOp -> Praxis (Annotated TyOp)
-generateTyOp = splitTrivial $ \src -> \case
+generateView :: Annotated View -> Praxis (Annotated View)
+generateView = splitTrivial $ \src -> \case
 
-  op@(TyOpVar _ var) -> do
+  op@(ViewVar _ var) -> do
     entry <- kEnv `uses` lookup var
     case entry of
       Just _  -> return op
@@ -89,8 +89,8 @@ generateTy = split $ \src -> \case
       f <- generateTy f
       x <- generateTy x
       case view kind f of
-        (_ :< KindOp) -> do
-          require $ newConstraint (view kind x `KEq` phantom KindType) TyOpApplication src
+        (_ :< KindView) -> do
+          require $ newConstraint (view kind x `KEq` phantom KindType) ViewApplication src
           return (phantom KindType :< TyApply f x)
         funKind -> do
           k <- freshKindUni
@@ -110,9 +110,9 @@ generateTy = split $ \src -> \case
       require $ newConstraint (view kind ty2 `KEq` phantom KindType) FunType src
       return (phantom KindType :< TyFun ty1 ty2)
 
-    TyOp op -> do
-      op <- generateTyOp op
-      return (phantom KindOp :< TyOp op)
+    View op -> do
+      op <- generateView op
+      return (phantom KindView :< View op)
 
     TyPair ty1 ty2 -> do
       ty1 <- generateTy ty1
@@ -145,8 +145,8 @@ generateTyPat = split $ \src -> \case
     return (k :< TyPatVar var)
 
   TyPatOpVar domain var -> do
-    introKind src var (phantom KindOp)
-    return (phantom KindOp :< TyPatOpVar domain var)
+    introKind src var (phantom KindView)
+    return (phantom KindView :< TyPatOpVar domain var)
 
   TyPatPack tyPat1 tyPat2 -> do
     tyPat1 <- generateTyPat tyPat1

@@ -117,8 +117,8 @@ definePrisms ''Program
 definePrisms ''Stmt
 definePrisms ''Tok
 
-definePrisms ''TyOpDomain
-definePrisms ''TyOp
+definePrisms ''ViewDomain
+definePrisms ''View
 definePrisms ''TyPat
 definePrisms ''Type
 definePrisms ''QType
@@ -147,7 +147,7 @@ syntax = \case
   IStmt           -> stmt
   ITok            -> undefined
   -- | T1
-  ITyOp           -> tyOp
+  IView           -> view'
   ITyPat          -> tyPat
   IType           -> ty
   IQType          -> qTy
@@ -235,7 +235,7 @@ dataAlt = _DataCon <$> conid <*> optional (annotated ty1)
 tyPat :: Syntax f => f TyPat
 tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
   tyPat0 = _TyPatVar <$> varid <|>
-           _TyPatOpVar <$> tyOpDomain <*> varid <|>
+           _TyPatOpVar <$> viewDomain <*> varid <|>
            unparseable (pack _TyPatPack tyPat) <|>
            mark "type pattern(0)"
 
@@ -258,7 +258,7 @@ pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern
 
 kind :: Syntax f => f Kind
 kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind" where
-  kind0 = _KindOp <$> reservedCon "Op" <|>
+  kind0 = _KindView <$> reservedCon "View" <|>
           _KindType <$> reservedCon "Type" <|>
           unparseable (_KindUni <$> uni) <|>
           _KindConstraint <$> reservedCon "Constraint" <|>
@@ -276,20 +276,20 @@ tyConstraints = _Cons <$> (contextualOp "[" *> annotated tyConstraint) <*> tyCon
 
 qTyVar :: Syntax f => f QTyVar
 qTyVar = _QTyVar <$> varid <|>
-         _QTyOpVar <$> tyOpDomain <*> varid <|>
+         _QViewVar <$> viewDomain <*> varid <|>
           mark "type variable"
 
 ty :: Syntax f => f Type
 ty = ty1 `join` (_TyFun, reservedOp "->" *> annotated ty) <|> mark "type"
 
-tyOpDomain :: Syntax f => f TyOpDomain
-tyOpDomain = _Ref <$> reservedOp "&" <|>
-             _RefOrId <$> reservedOp "?" <|>
-             mark "type operator domain"
+viewDomain :: Syntax f => f ViewDomain
+viewDomain = _Ref <$> reservedOp "&" <|>
+             _RefOrValue <$> reservedOp "?" <|>
+             mark "view domain"
 
 ty1 :: Syntax f => f Type
 ty1 = right _TyApply ty0 <|> mark "type(1)" where
-  ty0 = _TyOp  <$> annotated tyOp <|>
+  ty0 = _View  <$> annotated view' <|>
         _TyVar <$> varid <|>
         _TyCon <$> conid <|>
         unparseable (_TyUni <$> uni) <|>
@@ -297,12 +297,12 @@ ty1 = right _TyApply ty0 <|> mark "type(1)" where
         tuple _TyUnit _TyPair ty <|>
         mark "type(0)"
 
-tyOp :: Syntax f => f TyOp
-tyOp = unparseable (_TyOpUni <$> tyOpDomain <*> uni) <|>
-       unparseable (_TyOpRef <$> reservedOp "&" *> varid) <|>
-       unparseable (_TyOpId <$> contextualId "id") <|>
-       _TyOpVar <$> tyOpDomain <*> varid <|>
-       mark "type operator"
+view' :: Syntax f => f View
+view' = unparseable (_ViewUni <$> viewDomain <*> uni) <|>
+        unparseable (_ViewRef <$> reservedOp "&" *> varid) <|>
+        unparseable (_ViewValue <$> contextualId "«value-view»") <|>
+        _ViewVar <$> viewDomain <*> varid <|>
+        mark "view"
 
 exp :: Syntax f => f Exp
 exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where

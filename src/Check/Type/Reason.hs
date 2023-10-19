@@ -20,7 +20,7 @@ data Reason = BindCongruence
             | Specialisation
             | SwitchCondition
             | SwitchCongruence
-            | UnsafeView Name
+            | UnsafeRead Name
             | UserSignature
 
 -- TODO Pretty
@@ -42,5 +42,5 @@ instance Show Reason where
     Specialisation   -> "specialisation"
     SwitchCondition  -> "type of 'switch' condition must be Bool"
     SwitchCongruence -> "branches of 'switch' expression must have the same type"
-    UnsafeView n     -> "variable '" ++ n ++ "' viewed after being used"
+    UnsafeRead n     -> "variable '" ++ n ++ "' read after being used"
     UserSignature    -> "user-supplied signature"

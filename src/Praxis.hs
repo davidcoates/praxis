@@ -59,10 +59,10 @@ module Praxis
 
   , freshTyUni
   , freshKindUni
-  , freshTyOpUni
+  , freshViewUni
   , freshTyVar
-  , freshTyOpVar
-  , freshTyOpRef
+  , freshViewVar
+  , freshViewRef
   , reuse
 
   , clearTerm
@@ -105,11 +105,11 @@ data Flags = Flags
 
 data Fresh = Fresh
   { _freshTyUnis   :: [String]
-  , _freshTyOpUnis :: [String]
+  , _freshViewUnis :: [String]
   , _freshKindUnis :: [String]
   , _freshTyVars   :: [String]
-  , _freshTyOpVars :: [String]
-  , _freshTyOpRefs :: [String]
+  , _freshViewVars :: [String]
+  , _freshViewRefs :: [String]
   }
 
 instance Show Fresh where
@@ -171,11 +171,11 @@ defaultFlags = Flags { _debug = False, _interactive = False, _silent = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("^t"++) . show) [0..]
-  , _freshTyOpUnis = map (("^o"++) . show) [0..]
+  , _freshViewUnis = map (("^o"++) . show) [0..]
   , _freshKindUnis = map (("^k"++) . show) [0..]
   , _freshTyVars   = map (("'t"++) . show) [0..]
-  , _freshTyOpVars = map (("'o"++) . show) [0..]
-  , _freshTyOpRefs = map (("'l"++) . show) [0..]
+  , _freshViewVars = map (("'o"++) . show) [0..]
+  , _freshViewRefs = map (("'l"++) . show) [0..]
   }
 
 emptyState :: PraxisState
@@ -283,11 +283,11 @@ freshTyUni = do
   fresh . freshTyUnis .= xs
   return (TyUni x `as` phantom KindType)
 
-freshTyOpUni :: TyOpDomain -> Praxis (Annotated TyOp)
-freshTyOpUni domain = do
-  (o:os) <- use (fresh . freshTyOpUnis)
-  fresh . freshTyOpUnis .= os
-  return (phantom (TyOpUni domain o))
+freshViewUni :: ViewDomain -> Praxis (Annotated View)
+freshViewUni domain = do
+  (o:os) <- use (fresh . freshViewUnis)
+  fresh . freshViewUnis .= os
+  return (phantom (ViewUni domain o))
 
 freshKindUni :: Praxis (Annotated Kind)
 freshKindUni = do
@@ -301,17 +301,17 @@ freshTyVar = do
   fresh . freshTyVars .= xs
   return (TyVar x `as` phantom KindType)
 
-freshTyOpVar :: TyOpDomain -> Praxis (Annotated TyOp)
-freshTyOpVar domain = do
-  (o:os) <- use (fresh . freshTyOpVars)
-  fresh . freshTyOpVars .= os
-  return (phantom (TyOpVar domain o))
+freshViewVar :: ViewDomain -> Praxis (Annotated View)
+freshViewVar domain = do
+  (o:os) <- use (fresh . freshViewVars)
+  fresh . freshViewVars .= os
+  return (phantom (ViewVar domain o))
 
-freshTyOpRef :: Praxis (Annotated TyOp)
-freshTyOpRef = do
-  (l:ls) <- use (fresh . freshTyOpRefs)
-  fresh . freshTyOpRefs .= ls
-  return (phantom (TyOpRef l))
+freshViewRef :: Praxis (Annotated View)
+freshViewRef = do
+  (l:ls) <- use (fresh . freshViewRefs)
+  fresh . freshViewRefs .= ls
+  return (phantom (ViewRef l))
 
 -- This will fuck things up if the name is still used somewhere
 reuse :: Name -> Praxis ()
@@ -319,21 +319,21 @@ reuse _ = pure ()
 {-
 reuse n@('?':c:_) = over (fresh . f c) (n:)
   where f 'a' = freshTyUnis
-        f 'e' = freshTyOpUnis
+        f 'e' = freshViewUnis
         f 'k' = freshKindUnis
 -}
 
--- | Unrewrite type (operator) variables
+-- | Unrewrite type and view variables
 sanitise :: Term a => Annotated a -> Praxis (Annotated a)
 sanitise x = do
   m <- use tyVarMap
   let rewriteTyVars :: Term a => Annotated a -> Annotated a
       rewriteTyVars = sub $ \x -> case typeof x of
         IType   |        TyVar n <- x ->        TyVar <$> n `Map.lookup` m
-        ITyOp   |    TyOpVar d n <- x ->    TyOpVar d <$> n `Map.lookup` m
+        IView   |    ViewVar d n <- x ->    ViewVar d <$> n `Map.lookup` m
         ITyPat  |     TyPatVar n <- x ->     TyPatVar <$> n `Map.lookup` m
         ITyPat  | TyPatOpVar d n <- x -> TyPatOpVar d <$> n `Map.lookup` m
         IQTyVar |       QTyVar n <- x ->       QTyVar <$> n `Map.lookup` m
-        IQTyVar |   QTyOpVar d n <- x ->   QTyOpVar d <$> n `Map.lookup` m
+        IQTyVar |   QViewVar d n <- x ->   QViewVar d <$> n `Map.lookup` m
         _                             -> Nothing
   return (rewriteTyVars x)

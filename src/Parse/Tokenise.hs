@@ -8,7 +8,7 @@ import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Parse.Tokenise.Unlayout
 import           Praxis                   hiding (throw)
 import qualified Stage
-import           Term                     (Lit (..), TyOpDomain (..))
+import           Term                     (Lit (..), ViewDomain (..))
 import           Token
 
 import           Control.Applicative      (Alternative (..), Applicative (..))

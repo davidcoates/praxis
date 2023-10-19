@@ -171,10 +171,10 @@ defaultFlags = Flags { _debug = False, _interactive = False, _silent = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("^t"++) . show) [0..]
-  , _freshViewUnis = map (("^o"++) . show) [0..]
+  , _freshViewUnis = map (("^v"++) . show) [0..]
   , _freshKindUnis = map (("^k"++) . show) [0..]
   , _freshTyVars   = map (("'t"++) . show) [0..]
-  , _freshViewVars = map (("'o"++) . show) [0..]
+  , _freshViewVars = map (("'v"++) . show) [0..]
   , _freshViewRefs = map (("'l"++) . show) [0..]
   }
 

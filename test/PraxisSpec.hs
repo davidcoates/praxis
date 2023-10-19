@@ -358,10 +358,10 @@ box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x
   it "evaluates" $ do
 
     interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in Box xs" `shouldReturn` trim [r|
-error: found contradiction [1:47] & ^o4 List Int o~ List Int
-|-> [1:47] List Int ~ List Int ∧ & ^o4 List Int o~ List Int
-|-> [1:47] & ^o4 List Int ~ List Int ∧ Box [ & ^o4 , List Int ] ~ Box [ & ^o4 , List Int ]
-|-> [1:47] & ^o4 List Int -> Box [ & ^o4 , List Int ] ~ List Int -> Box [ & ^o4 , List Int ]
+error: found contradiction [1:47] & ^v4 List Int o~ List Int
+|-> [1:47] List Int ~ List Int ∧ & ^v4 List Int o~ List Int
+|-> [1:47] & ^v4 List Int ~ List Int ∧ Box [ & ^v4 , List Int ] ~ Box [ & ^v4 , List Int ]
+|-> [1:47] & ^v4 List Int -> Box [ & ^v4 , List Int ] ~ List Int -> Box [ & ^v4 , List Int ]
 |-> (function application)
 |]
 

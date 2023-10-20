@@ -104,15 +104,17 @@ error: found contradiction Int ~ Int -> Int ∧ Int ~ Int
 recursion = describe "recursion (factorial)" $ do
 
   let program = [r|
-fac = cases
-  0 -> 1
-  n -> n * fac (n - 1)
+rec
+  fac = cases
+    0 -> 1
+    n -> n * fac (n - 1)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-fac = [Int -> Int] cases
-  [Int] 0 -> [Int] 1
-  [Int] n -> [( Int , Int ) -> Int] multiply_int ( [Int] n , [Int -> Int] fac [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
+rec
+  fac = [Int -> Int] cases
+    [Int] 0 -> [Int] 1
+    [Int] n -> [( Int , Int ) -> Int] multiply_int ( [Int] n , [Int -> Int] fac [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
 |]
 
   it "evaluates" $ do
@@ -230,22 +232,24 @@ id_fun : forall a . Fun [ a , a ] = [( a -> a ) -> Fun [ a , a ]] Fun ( \ [a] x 
 mutualRecursion = describe "mutual recursion" $ do
 
   let program = [r|
-f = cases
-  0 -> 1
-  n -> n - m f (n - 1)
+rec
+  f = cases
+    0 -> 1
+    n -> n - m f (n - 1)
 
-m = cases
-  0 -> 0
-  n -> n - f m (n - 1)
+  m = cases
+    0 -> 0
+    n -> n - f m (n - 1)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-f = [Int -> Int] cases
-  [Int] 0 -> [Int] 1
-  [Int] n -> [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
-m = [Int -> Int] cases
-  [Int] 0 -> [Int] 0
-  [Int] n -> [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
+rec
+  f = [Int -> Int] cases
+    [Int] 0 -> [Int] 1
+    [Int] n -> [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
+  m = [Int -> Int] cases
+    [Int] 0 -> [Int] 0
+    [Int] n -> [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
 |]
 
   it "evaluates" $ do
@@ -273,27 +277,31 @@ type List a = cases
   Nil
   Cons (a, List a)
 
-map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
-map f = cases
-  Nil          -> Nil
-  Cons (x, xs) -> Cons (f x, (map f) xs)
+rec
+  map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
+  map f = cases
+    Nil          -> Nil
+    Cons (x, xs) -> Cons (f x, (map f) xs)
 
-sum : forall &r. &r List Int -> Int
-sum = cases
-  Nil          -> 0
-  Cons (x, xs) -> x + sum xs
+rec
+  sum : forall &r. &r List Int -> Int
+  sum = cases
+    Nil          -> 0
+    Cons (x, xs) -> x + sum xs
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
 type List a = cases
   [forall a . List a] Nil
   [forall a . ( a , List a ) -> List a] Cons ( a , List a )
-map : forall ? v a b . ( ? v a -> b ) -> ? v List a -> List b = \ [? v a -> b] f -> [? v List a -> List b] cases
-  [? v List a] Nil -> [List b] Nil
-  [? v List a] Cons ( [? v a] x , [? v List a] xs ) -> [( b , List b ) -> List b] Cons ( [? v a -> b] f [? v a] x , ( [( ? v a -> b ) -> ? v List a -> List b] map [? v a -> b] f ) [? v List a] xs )
-sum : forall & r . & r List Int -> Int = [& r List Int -> Int] cases
-  [& r List Int] Nil -> [Int] 0
-  [& r List Int] Cons ( [Int] x , [& r List Int] xs ) -> [( Int , Int ) -> Int] add_int ( [Int] x , [& r List Int -> Int] sum [& r List Int] xs )
+rec
+  map : forall ? v a b . ( ? v a -> b ) -> ? v List a -> List b = \ [? v a -> b] f -> [? v List a -> List b] cases
+    [? v List a] Nil -> [List b] Nil
+    [? v List a] Cons ( [? v a] x , [? v List a] xs ) -> [( b , List b ) -> List b] Cons ( [? v a -> b] f [? v a] x , ( [( ? v a -> b ) -> ? v List a -> List b] map [? v a -> b] f ) [? v List a] xs )
+rec
+  sum : forall & r . & r List Int -> Int = [& r List Int -> Int] cases
+    [& r List Int] Nil -> [Int] 0
+    [& r List Int] Cons ( [Int] x , [& r List Int] xs ) -> [( Int , Int ) -> Int] add_int ( [Int] x , [& r List Int -> Int] sum [& r List Int] xs )
 |]
 
   it "evaluates" $ do
@@ -304,12 +312,13 @@ sum : forall & r . & r List Int -> Int = [& r List Int -> Int] cases
 
 shadowing = describe "shadowing" $ do
 
+-- TODO, the absence of rec means f (on the last line) is the top f. Very confusing... should be an error?
   let program = [r|
 f x = f x where
   f : Int -> Int
   f x = x
 
-g x = f x where
+g x = f x where rec
   f = cases
     0 -> 1
     n -> f (n - 1) * n
@@ -319,9 +328,10 @@ g x = f x where
 f = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
   f : Int -> Int = \ [Int] x -> [Int] x
 g = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
-  f = [Int -> Int] cases
-    [Int] 0 -> [Int] 1
-    [Int] n -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) , [Int] n )
+  rec
+    f = [Int -> Int] cases
+      [Int] 0 -> [Int] 1
+      [Int] n -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) , [Int] n )
 |]
 
   it "evaluates" $ do

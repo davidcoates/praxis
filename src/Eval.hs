@@ -37,7 +37,9 @@ instance Evaluable Exp Value where
   eval' = evalExp
 
 evalProgram :: Annotated Program -> Praxis ()
-evalProgram (_ :< Program decls) = evalDecls decls
+evalProgram (_ :< Program decls) = do
+  traverse evalDecl decls
+  return ()
 
 -- | A helper for decls, irrefutably matching the [b] argument
 irrefMapM :: Monad m => ((a, b) -> m c) -> [a] -> [b] -> m [c]
@@ -49,26 +51,25 @@ irrefMapM f as bs = case as of
       cs <- irrefMapM f as bs
       return (c : cs)
 
+evalDecl :: Annotated Decl -> Praxis ()
+evalDecl (_ :< decl) = case decl of
 
-evalDecls :: [Annotated Decl] -> Praxis ()
-evalDecls decls = do
+  DeclRec decls -> do
+    let (names, exps) = unzip [ (name, exp) | (_ :< DeclTerm name _ exp) <- decls ]
+    -- To support mutual recursion, each function needs to see the evaluation of all other functions (including itself).
+    -- Leverage mfix to find the fixpoint.
+    mfix $ \values -> do
+      -- Evaluate each of the functions in turn, with all of the evaluations in the environment
+      -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
+      irrefMapM (\(name, value) -> vEnv %= intro name value) names values
+      mapM evalExp exps
+    return ()
 
-  -- Only variable declartions (values / functions) can be evaluated, so we only need to consider DeclVar
-  let declVar :: Annotated Decl -> Maybe (Name, Annotated Exp)
-      declVar = \case
-        (_ :< DeclVar var _ exp) -> Just (var, exp)
-        _ -> Nothing
-      (vars, exps) = unzip (mapMaybe declVar decls)
+  DeclTerm name _ exp -> do
+    value <- evalExp exp
+    vEnv %= intro name value
 
-  -- To support mutual recursion, each value needs to see the evaluation of all other values (including itself).
-  -- Leverage mfix to find the fixpoint (where vs stands for the list of evaluations).
-  mfix $ \values -> do
-    -- Evaluate each of the values in turn, with all of the evaluations in the environment
-    -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
-    irrefMapM (\(var, value) -> vEnv %= intro var value) vars values
-    mapM evalExp exps
-
-  return ()
+  _ -> return ()
 
 
 evalStmt :: Annotated Stmt -> Praxis ()
@@ -142,7 +143,7 @@ evalExp ((src, _) :< exp) = case exp of
        Nothing  -> throwAt src ("unknown variable " <> quote (pretty var))
 
   Where exp decls -> save vEnv $ do
-    evalDecls decls
+    traverse evalDecl decls
     evalExp exp
 
 

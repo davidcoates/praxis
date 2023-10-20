@@ -16,6 +16,7 @@ module Term
   , DataCon(..)
   , Decl(..)
   , Exp(..)
+  , expIsRecSafe
   , Lit(..)
   , Pat(..)
   , Program(..)
@@ -84,11 +85,12 @@ data DataCon = DataCon Name (Maybe (Annotated Type))
   deriving (Eq, Ord)
 
 data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
-          | DeclFun Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
+          | DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
+          | DeclRec [Annotated Decl]
           | DeclSig Name (Annotated QType) -- ^ Parsing only
           | DeclSyn Name (Annotated Type) -- ^ Parsing only
-          | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
+          | DeclTerm Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
@@ -110,6 +112,12 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | VarRef Name -- ^ Parsing only
          | Where (Annotated Exp) [Annotated Decl]
   deriving (Eq, Ord)
+
+expIsRecSafe :: Annotated Exp -> Bool
+expIsRecSafe term = case view value term of
+  Lambda _ _ -> True
+  Cases _    -> True
+  _          -> False
 
 data Lit = Bool Bool
          | Char Char

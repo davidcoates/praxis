@@ -137,11 +137,10 @@ run term = save stage $ do
 
 generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case witness :: I a of
-  IProgram -> generateProgram
   IExp     -> generateExp
   IBind    -> generateBind
   IDataCon -> error "standalone DataCon"
-  IDecl    -> error "standalone Decl"
+  IDecl    -> generateDecl Nothing
   IPat     -> error "standalone Pat"
   _        -> value (recurse generate)
 
@@ -177,11 +176,6 @@ unis = extract (embedMonoid f) where
     TyPatOpVar d n -> Set.singleton (phantom $ QViewVar d n)
     _              -> Set.empty
 
-generateProgram :: Annotated Program -> Praxis (Annotated Program)
-generateProgram (ann :< Program decls) = do
-  decls <- generateDecls decls
-  return (ann :< Program decls)
-
 generateDataCon :: [Annotated QTyVar] -> Annotated Type -> Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon vars retType ((src, Nothing) :< DataCon name argType) = do
   let fullType = phantom $ Forall vars [] $ case argType of -- Type of the constructor -- FIXME constraints???
@@ -190,22 +184,6 @@ generateDataCon vars retType ((src, Nothing) :< DataCon name argType) = do
       dataCon = ((src, Just (DataConInfo {fullType, argType, retType})) :< DataCon name argType)
   daEnv %= Env.intro name dataCon
   return dataCon
-
-generateDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
-generateDecls decls = do
-  -- Variable declarations are allowed to be (mutually) recursive.
-  -- So we first "pre declare" them by adding them to the context, so that each declaration sees all the others (and itself) in scope.
-  decls <- mapM preDeclare decls
-  mapM (\(t, d) -> generateDecl t d) decls
-  where
-    declare src name sig = do
-      t <- case sig of Nothing -> mono <$> freshTyUni
-                       Just t  -> pure t
-      introTy src name t
-      return t
-    preDeclare decl = case decl of
-      ((src, _) :< DeclVar name sig exp) -> do { t <- declare src name sig; return (Just t, decl) }
-      _                                  -> return (Nothing, decl)
 
 
 generateDecl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
@@ -227,7 +205,27 @@ generateDecl forwardT = splitTrivial $ \src -> \case
     alts <- traverse (generateDataCon vars returnTy) alts
     return $ DeclData name arg alts
 
-  DeclVar name sig exp -> do
+  op@(DeclOp _ _ _) -> return op
+
+  DeclRec decls -> do
+
+    terms <- mapM preDeclare decls
+    decls <- mapM (\(ty, decl) -> generateDecl (Just ty) decl) terms
+    return $ DeclRec decls
+    where
+      getTyFromSig = \case
+        Nothing -> mono <$> freshTyUni
+        Just ty -> pure ty
+      preDeclare decl = case decl of
+        ((src, _) :< DeclTerm name sig exp)
+          | expIsRecSafe exp -> do { ty <- getTyFromSig sig; introTy src name ty; return (ty, decl) }
+          | otherwise        -> throwAt src $ "non-function " <> quote (pretty name) <> " can not be recursive"
+        _                    -> throwAt src ("illegal non-term in recursive block" :: String)
+
+
+  DeclSyn name t -> return $ DeclSyn name t
+
+  DeclTerm name sig exp -> do
 
     case sig of
 
@@ -236,7 +234,7 @@ generateDecl forwardT = splitTrivial $ \src -> \case
         case forwardT of
           Just (_ :< Forall [] [] t) -> equal t (view ty exp) (FunCongruence name) src
           Nothing                    -> introTy src name (mono (view ty exp))
-        return $ DeclVar name Nothing exp
+        return $ DeclTerm name Nothing exp
 
       Just sig@(_ :< Forall boundVars cosntraints t) -> do
         our . axioms %= (++ [ axiom (view value c) | c <- cosntraints ]) -- Constraints in the signature are added as axioms
@@ -245,12 +243,7 @@ generateDecl forwardT = splitTrivial $ \src -> \case
           Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)
           Nothing -> introTy src name sig
         equal t (view ty exp) (FunSignature name) src
-        return $ DeclVar name (Just sig) exp
-
-
-  op@(DeclOp _ _ _) -> return op
-
-  DeclSyn name t -> return $ DeclSyn name t
+        return $ DeclTerm name (Just sig) exp
 
 
 generateExp :: Annotated Exp -> Praxis (Annotated Exp)
@@ -291,7 +284,7 @@ generateExp = split $ \src -> \case
     stmts <- traverse generate stmts
     case view value (last stmts) of
       StmtExp ((_, Just t) :< _) -> return (t :< Do stmts)
-      _                          -> throwAt src $ ("do block must end in an expression" :: String)
+      _                          -> throwAt src ("do block must end in an expression" :: String)
 
   If condExp thenExp elseExp -> do
     condExp <- generateExp condExp
@@ -356,7 +349,7 @@ generateExp = split $ \src -> \case
     return (t :< Var name)
 
   Where exp decls -> scope $ do
-    decls <- generateDecls decls
+    decls <- traverse (generateDecl Nothing) decls
     exp <- generateExp exp
     return (view ty exp :< Where exp decls)
 

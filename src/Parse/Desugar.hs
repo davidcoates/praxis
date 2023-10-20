@@ -121,7 +121,7 @@ rewriteQType qTy = do
 rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
 rewriteDecl (ann@(src, _) :< decl) = case decl of
 
-  DeclVar name sig exp -> do
+  DeclTerm name sig exp -> do
 
     {-
     Type variables need to be renamed to be globally unqiue, because the type solver acts globally.
@@ -148,7 +148,7 @@ rewriteDecl (ann@(src, _) :< decl) = case decl of
         exp <- value (recurse rewrite) exp
         -- Now rewrite for the top level tyVars
         rwMap <- rewriteMapFromQType sig
-        return (ann :< DeclVar name (Just (applyRewriteMap rwMap sig)) (applyRewriteMap rwMap exp))
+        return (ann :< DeclTerm name (Just (applyRewriteMap rwMap sig)) (applyRewriteMap rwMap exp))
 
 
   DeclData name tyPat alts -> do
@@ -181,8 +181,8 @@ collectFreeVars = extractPartial f where
       Var n -> (Set.singleton n, False)
       _     -> (Set.empty,        True)
     IDecl -> case x of
-      DeclVar n _ e -> (Set.delete n (collectFreeVars e), False)
-      _             -> (Set.empty,                         True)
+      DeclTerm n _ e -> (Set.delete n (collectFreeVars e), False)
+      _              -> (Set.empty,                         True)
     _     -> (Set.empty, True)
 
 -- Helper for desugaring "&". It turns top-level VarRef into Var and returns the name of such variables
@@ -273,23 +273,16 @@ desugarDecls (ann@(src, _) :< decl : decls) = case decl of
     decls <- desugarDecls decls
     return (ann :< DeclData name tyPat alts : decls)
 
-  DeclSig name ty -> do
-    ty <- desugar ty
-    desugarDecls decls >>= \case
-      (ann' :< DeclVar name' Nothing exp) : decls
-        | name == name' -> return $ ((ann <> ann') :< DeclVar name (Just ty) exp) : decls
-      _ -> throwAt src $ "declaration of " <> quote (pretty name) <> " lacks an accompanying binding"
-
-  DeclFun name args exp -> do
+  DeclDef name args exp -> do
     args <- mapM desugar args
     exp <- desugar exp
-    let decl = ann :< DeclVar name Nothing (curry args exp)
+    let decl = ann :< DeclTerm name Nothing (curry args exp)
         curry :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
         curry     [] e = e
         curry (p:ps) e = (src, Nothing) :< Lambda p (curry ps e)
     desugarDecls decls >>= \case
       [] -> return $ [decl]
-      (_ :< DeclVar name' _ _) : _
+      (_ :< DeclTerm name' _ _) : _
         | name == name' -> throwAt src $ "multiple definitions for " <> quote (pretty name)
       decls -> return $ decl:decls
 
@@ -334,6 +327,18 @@ desugarDecls (ann@(src, _) :< decl : decls) = case decl of
     decls <- desugarDecls decls
     return (ann :< DeclOp op name rules : decls)
 
+
+  DeclRec recDecls -> do
+    recDecls <- desugarDecls recDecls
+    decls <- desugarDecls decls
+    return (ann :< DeclRec recDecls : decls)
+
+  DeclSig name ty -> do
+    ty <- desugar ty
+    desugarDecls decls >>= \case
+      (ann' :< DeclTerm name' Nothing exp) : decls
+        | name == name' -> return $ ((ann <> ann') :< DeclTerm name (Just ty) exp) : decls
+      _ -> throwAt src $ "declaration of " <> quote (pretty name) <> " lacks an accompanying binding"
 
   DeclSyn name ty -> do
     ty <- desugar ty

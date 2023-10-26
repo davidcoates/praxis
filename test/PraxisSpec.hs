@@ -62,7 +62,7 @@ ifThenElse = describe "if then else (min)" $ do
   let program = "min (x, y) = if x < y then x else y"
 
   it "type checks" $ do
-    check program `shouldReturn` [r|min = \ ( [Int] x , [Int] y ) -> [Int] if [( Int , Int ) -> Bool] lt_int ( [Int] x , [Int] y ) then [Int] x else [Int] y|]
+    check program `shouldReturn` [r|min = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int ( [Int] x_0 , [Int] y_0 ) then [Int] x_0 else [Int] y_0|]
 
   it "evaluates" $ do
     interpret program "min (1, 2)" `shouldReturn` "1"
@@ -82,10 +82,10 @@ sign n = switch
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-sign : Int -> Int = \ [Int] n -> [Int] switch
-  [( Int , Int ) -> Bool] lt_int ( [Int] n , [Int] 0 ) -> [Int -> Int] negate_int [Int] 1
-  [( Int , Int ) -> Bool] eq_int ( [Int] n , [Int] 0 ) -> [Int] 0
-  [( Int , Int ) -> Bool] gt_int ( [Int] n , [Int] 0 ) -> [Int -> Int] unary_plus_int [Int] 1
+sign : Int -> Int = \ [Int] n_0 -> [Int] switch
+  [( Int , Int ) -> Bool] lt_int ( [Int] n_0 , [Int] 0 ) -> [Int -> Int] negate_int [Int] 1
+  [( Int , Int ) -> Bool] eq_int ( [Int] n_0 , [Int] 0 ) -> [Int] 0
+  [( Int , Int ) -> Bool] gt_int ( [Int] n_0 , [Int] 0 ) -> [Int -> Int] unary_plus_int [Int] 1
 |]
 
   it "evaluates" $ do
@@ -114,7 +114,7 @@ rec
 rec
   fac = [Int -> Int] cases
     [Int] 0 -> [Int] 1
-    [Int] n -> [( Int , Int ) -> Int] multiply_int ( [Int] n , [Int -> Int] fac [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
+    [Int] n_0 -> [( Int , Int ) -> Int] multiply_int ( [Int] n_0 , [Int -> Int] fac [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) )
 |]
 
   it "evaluates" $ do
@@ -157,7 +157,7 @@ swap (a, b) = (b, a)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-swap : forall a b . ( a , b ) -> ( b , a ) = \ ( [a] a , [b] b ) -> ( [b] b , [a] a )
+swap : forall a b . ( a , b ) -> ( b , a ) = \ ( [a] a_0 , [b] b_0 ) -> ( [b] b_0 , [a] a_0 )
 |]
 
   it "evaluates" $ do
@@ -177,7 +177,7 @@ copy x = (x, x)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-copy : forall a . [ Share a ] => a -> ( a , a ) = \ [a] x -> ( [a] x , [a] x )
+copy : forall a . [ Share a ] => a -> ( a , a ) = \ [a] x_0 -> ( [a] x_0 , [a] x_0 )
 |]
 
   it "evaluates" $ do
@@ -220,8 +220,8 @@ id_fun = Fun (\x -> x)
 
   it "type checks" $ check program `shouldReturn` trim [r|
 type Fun [ a , b ] = [forall a b . ( a -> b ) -> Fun [ a , b ]] Fun ( a -> b )
-unbox_fun : forall a b . Fun [ a , b ] -> a -> b = \ [Fun [ a , b ]] Fun [a -> b] f -> \ [a] x -> [a -> b] f [a] x
-id_fun : forall a . Fun [ a , a ] = [( a -> a ) -> Fun [ a , a ]] Fun ( \ [a] x -> [a] x )
+unbox_fun : forall a b . Fun [ a , b ] -> a -> b = \ [Fun [ a , b ]] Fun [a -> b] f_0 -> \ [a] x_0 -> [a -> b] f_0 [a] x_0
+id_fun : forall a . Fun [ a , a ] = [( a -> a ) -> Fun [ a , a ]] Fun ( \ [a] x_1 -> [a] x_1 )
 |]
 
   it "evaluates" $ do
@@ -246,10 +246,10 @@ rec
 rec
   f = [Int -> Int] cases
     [Int] 0 -> [Int] 1
-    [Int] n -> [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
+    [Int] n_0 -> [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) )
   m = [Int -> Int] cases
     [Int] 0 -> [Int] 0
-    [Int] n -> [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) )
+    [Int] n_1 -> [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int] 1 ) )
 |]
 
   it "evaluates" $ do
@@ -295,13 +295,13 @@ type List a = cases
   [forall a . List a] Nil
   [forall a . ( a , List a ) -> List a] Cons ( a , List a )
 rec
-  map : forall ? v a b . ( ? v a -> b ) -> ? v List a -> List b = \ [? v a -> b] f -> [? v List a -> List b] cases
+  map : forall ? v a b . ( ? v a -> b ) -> ? v List a -> List b = \ [? v a -> b] f_0 -> [? v List a -> List b] cases
     [? v List a] Nil -> [List b] Nil
-    [? v List a] Cons ( [? v a] x , [? v List a] xs ) -> [( b , List b ) -> List b] Cons ( [? v a -> b] f [? v a] x , ( [( ? v a -> b ) -> ? v List a -> List b] map [? v a -> b] f ) [? v List a] xs )
+    [? v List a] Cons ( [? v a] x_0 , [? v List a] xs_0 ) -> [( b , List b ) -> List b] Cons ( [? v a -> b] f_0 [? v a] x_0 , ( [( ? v a -> b ) -> ? v List a -> List b] map [? v a -> b] f_0 ) [? v List a] xs_0 )
 rec
   sum : forall & r . & r List Int -> Int = [& r List Int -> Int] cases
     [& r List Int] Nil -> [Int] 0
-    [& r List Int] Cons ( [Int] x , [& r List Int] xs ) -> [( Int , Int ) -> Int] add_int ( [Int] x , [& r List Int -> Int] sum [& r List Int] xs )
+    [& r List Int] Cons ( [Int] x_1 , [& r List Int] xs_1 ) -> [( Int , Int ) -> Int] add_int ( [Int] x_1 , [& r List Int -> Int] sum [& r List Int] xs_1 )
 |]
 
   it "evaluates" $ do
@@ -325,13 +325,13 @@ g x = f x where rec
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-f = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
-  f : Int -> Int = \ [Int] x -> [Int] x
-g = \ [Int] x -> [Int] [Int -> Int] f [Int] x where
+f = \ [Int] x_0 -> [Int] [Int -> Int] f_0 [Int] x_0 where
+  f_0 : Int -> Int = \ [Int] x_1 -> [Int] x_1
+g = \ [Int] x_2 -> [Int] [Int -> Int] f_1 [Int] x_2 where
   rec
-    f = [Int -> Int] cases
+    f_1 = [Int -> Int] cases
       [Int] 0 -> [Int] 1
-      [Int] n -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n , [Int] 1 ) , [Int] n )
+      [Int] n_0 -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f_1 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) , [Int] n_0 )
 |]
 
   it "evaluates" $ do
@@ -360,7 +360,7 @@ type Box [ & v , a ] = [forall a & v . & v a -> Box [ & v , a ]] Box & v a
 type List a = cases
   [forall a . List a] Nil
   [forall a . ( a , List a ) -> List a] Cons ( a , List a )
-fst : forall a b . ( a , b ) -> a = \ ( [a] x , [b] y ) -> [a] x
+fst : forall a b . ( a , b ) -> a = \ ( [a] x_0 , [b] y_0 ) -> [a] x_0
 box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x"
 |]
 
@@ -386,7 +386,7 @@ fst : forall a. (a, a) -> a
 fst (a, a) = a
 |]
 
-  it "does not type check" $ check program `shouldReturn` "2:9 error: variable 'a' redeclared (in the same scope)"
+  it "does not type check" $ check program `shouldReturn` "2:5 error: variables are not distinct"
 
 
 redeclTyVar = describe "type variarble redeclaration" $ do
@@ -466,8 +466,8 @@ spec = do
         b <- parse b
         a `shouldBe` b
 
-    let check :: String -> IO String
-        check s = run (Parse.parse s >>= Check.check :: Praxis (Annotated QType))
+    let parse :: String -> IO String
+        parse s = run (Parse.parse s :: Praxis (Annotated QType))
 
     let types =
           [ "forall r &r. ()"
@@ -480,7 +480,7 @@ spec = do
 
     forM_ types $ \t -> do
       it (show t ++ " is not valid") $ do
-        t' <- check t
+        t' <- parse t
         t' `shouldBe` "1:1 error: type variables are not distinct"
 
 

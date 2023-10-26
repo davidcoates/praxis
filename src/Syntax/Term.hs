@@ -235,7 +235,7 @@ dataAlt = _DataCon <$> conid <*> optional (annotated ty1)
 tyPat :: Syntax f => f TyPat
 tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
   tyPat0 = _TyPatVar <$> varid <|>
-           _TyPatOpVar <$> viewDomain <*> varid <|>
+           _TyPatViewVar <$> viewDomain <*> varid <|>
            unparseable (pack _TyPatPack tyPat) <|>
            mark "type pattern(0)"
 

@@ -165,16 +165,16 @@ equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 patToTy :: Annotated TyPat -> Annotated Type
 patToTy = over value patToTy' where
   patToTy' = \case
-    TyPatVar n     -> TyVar n
-    TyPatOpVar d n -> View (phantom (ViewVar d n))
-    TyPatPack a b  -> TyPack (patToTy a) (patToTy b)
+    TyPatVar n       -> TyVar n
+    TyPatViewVar d n -> View (phantom (ViewVar d n))
+    TyPatPack a b    -> TyPack (patToTy a) (patToTy b)
 
 unis :: Annotated TyPat -> Set (Annotated QTyVar)
 unis = extract (embedMonoid f) where
   f = \case
-    TyPatVar n     -> Set.singleton (phantom $ QTyVar n)
-    TyPatOpVar d n -> Set.singleton (phantom $ QViewVar d n)
-    _              -> Set.empty
+    TyPatVar n       -> Set.singleton (phantom $ QTyVar n)
+    TyPatViewVar d n -> Set.singleton (phantom $ QViewVar d n)
+    _                -> Set.empty
 
 generateDataCon :: [Annotated QTyVar] -> Annotated Type -> Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon vars retType ((src, Nothing) :< DataCon name argType) = do

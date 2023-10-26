@@ -53,9 +53,14 @@ module Praxis
   , tEnv
   , daEnv
   , vEnv
-  , tyVarMap
+  , rewriteMap
+  , unrewriteMap
   , tySynonyms
   , system
+
+  -- | RewriteMap lenses
+  , tyVarMap
+  , varMap
 
   , freshTyUni
   , freshKindUni
@@ -63,7 +68,7 @@ module Praxis
   , freshTyVar
   , freshViewVar
   , freshViewRef
-  , reuse
+  , freshVar
 
   , clearTerm
   , ifFlag
@@ -91,7 +96,6 @@ import qualified Data.Set                     as Set
 import qualified Env                          as Env (Environment (..))
 import           Env.Env
 import           Env.LEnv
-import           Env.SEnv
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
@@ -110,6 +114,7 @@ data Fresh = Fresh
   , _freshTyVars   :: [String]
   , _freshViewVars :: [String]
   , _freshViewRefs :: [String]
+  , _freshVars     :: Map Name Int
   }
 
 instance Show Fresh where
@@ -135,22 +140,27 @@ data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Grap
 
 makeLenses ''OpContext
 
+data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name Name }
+
+makeLenses ''RewriteMap
+
 data PraxisState = PraxisState
-  { _infile     :: Maybe String
-  , _outfile    :: Maybe String
-  , _flags      :: Flags               -- ^ Flags
-  , _fresh      :: Fresh
-  , _stage      :: Stage               -- ^ Current stage of compilation
-  , _opContext  :: OpContext
-  , _kEnv       :: KEnv                -- ^ Kind environment
-  , _tEnv       :: TEnv                -- ^ Type environment
-  , _daEnv      :: DAEnv               -- ^ Data alternative environment
-  , _vEnv       :: VEnv                -- ^ Value environment for interpreter
+  { _infile       :: Maybe String
+  , _outfile      :: Maybe String
+  , _flags        :: Flags               -- ^ Flags
+  , _fresh        :: Fresh
+  , _stage        :: Stage               -- ^ Current stage of compilation
+  , _opContext    :: OpContext
+  , _kEnv         :: KEnv                -- ^ Kind environment
+  , _tEnv         :: TEnv                -- ^ Type environment
+  , _daEnv        :: DAEnv               -- ^ Data alternative environment
+  , _vEnv         :: VEnv                -- ^ Value environment for interpreter
   -- TODO encapsulate within desugarer?
-  , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
-  , _tyVarMap   :: Map Name Name       -- ^ Substitutions to apply to TyVar / TyVarOp when printing
+  , _tySynonyms   :: Map Name (Annotated Type) -- ^ Type synonyms
+  , _unrewriteMap :: Map Name Name
+  , _rewriteMap   :: RewriteMap
   -- TODO rename?
-  , _system     :: Check.System        -- ^ Type/Kind check state
+  , _system       :: Check.System        -- ^ Type/Kind check state
   }
 
 instance Show PraxisState where
@@ -176,6 +186,7 @@ defaultFresh = Fresh
   , _freshTyVars   = map (("'t"++) . show) [0..]
   , _freshViewVars = map (("'v"++) . show) [0..]
   , _freshViewRefs = map (("'l"++) . show) [0..]
+  , _freshVars     = Map.empty
   }
 
 emptyState :: PraxisState
@@ -191,7 +202,8 @@ emptyState = PraxisState
   , _daEnv        = Env.empty
   , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
-  , _tyVarMap     = Map.empty
+  , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
+  , _unrewriteMap = Map.empty
   , _system       = error ("unset system") -- FIXME Checkers are responsible for initialisating system
   }
 
@@ -313,27 +325,24 @@ freshViewRef = do
   fresh . freshViewRefs .= ls
   return (phantom (ViewRef l))
 
--- This will fuck things up if the name is still used somewhere
-reuse :: Name -> Praxis ()
-reuse _ = pure ()
-{-
-reuse n@('?':c:_) = over (fresh . f c) (n:)
-  where f 'a' = freshTyUnis
-        f 'e' = freshViewUnis
-        f 'k' = freshKindUnis
--}
+freshVar :: Name -> Praxis Name
+freshVar var = do
+  m <- use (fresh . freshVars)
+  let i = Map.findWithDefault 0 var m
+  fresh . freshVars .= (Map.insert var (i+1) m)
+  return (var ++ "_" ++ show i)
 
 -- | Unrewrite type and view variables
 sanitise :: Term a => Annotated a -> Praxis (Annotated a)
 sanitise x = do
-  m <- use tyVarMap
-  let rewriteTyVars :: Term a => Annotated a -> Annotated a
-      rewriteTyVars = sub $ \x -> case typeof x of
-        IType   |        TyVar n <- x ->        TyVar <$> n `Map.lookup` m
-        IView   |    ViewVar d n <- x ->    ViewVar d <$> n `Map.lookup` m
-        ITyPat  |     TyPatVar n <- x ->     TyPatVar <$> n `Map.lookup` m
-        ITyPat  | TyPatOpVar d n <- x -> TyPatOpVar d <$> n `Map.lookup` m
-        IQTyVar |       QTyVar n <- x ->       QTyVar <$> n `Map.lookup` m
-        IQTyVar |   QViewVar d n <- x ->   QViewVar d <$> n `Map.lookup` m
-        _                             -> Nothing
-  return (rewriteTyVars x)
+  m <- use unrewriteMap
+  let rewrite :: Term a => Annotated a -> Annotated a
+      rewrite = sub $ \x -> case typeof x of
+        IType   |          TyVar n <- x ->          TyVar <$> n `Map.lookup` m
+        IView   |      ViewVar d n <- x ->      ViewVar d <$> n `Map.lookup` m
+        ITyPat  |       TyPatVar n <- x ->       TyPatVar <$> n `Map.lookup` m
+        ITyPat  | TyPatViewVar d n <- x -> TyPatViewVar d <$> n `Map.lookup` m
+        IQTyVar |         QTyVar n <- x ->         QTyVar <$> n `Map.lookup` m
+        IQTyVar |     QViewVar d n <- x ->     QViewVar d <$> n `Map.lookup` m
+        _                               -> Nothing
+  return (rewrite x)

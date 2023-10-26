@@ -144,9 +144,9 @@ generateTyPat = split $ \src -> \case
     introKind src var k
     return (k :< TyPatVar var)
 
-  TyPatOpVar domain var -> do
+  TyPatViewVar domain var -> do
     introKind src var (phantom KindView)
-    return (phantom KindView :< TyPatOpVar domain var)
+    return (phantom KindView :< TyPatViewVar domain var)
 
   TyPatPack tyPat1 tyPat2 -> do
     tyPat1 <- generateTyPat tyPat1

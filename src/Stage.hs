@@ -8,6 +8,7 @@ data Stage = Unknown
            | Layout
            | Parse
            | Desugar
+           | Rewrite
            | KindCheck Check
            | TypeCheck Check
            | Evaluate
@@ -20,9 +21,10 @@ instance Show Stage where
   show = \case
     Unknown     -> "unknown"
     Tokenise    -> "tokenise"
-    Layout      -> "tokenise (layout)"
+    Layout      -> "layout"
     Parse       -> "parse"
-    Desugar     -> "parse (desugar)"
+    Desugar     -> "desugar"
+    Rewrite     -> "rewrite"
     KindCheck c -> "kind check" ++ show c
     TypeCheck c -> "type check" ++ show c
     Evaluate    -> "evaluate"

@@ -165,7 +165,7 @@ data View = ViewUni ViewDomain Name
 
 data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
            | TyPatVar Name
-           | TyPatOpVar ViewDomain Name
+           | TyPatViewVar ViewDomain Name
   deriving (Eq, Ord)
 
 data Type = TyUni Name -- Compares less than all other types

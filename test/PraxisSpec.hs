@@ -33,7 +33,7 @@ run p = do
     Right y -> return (show y)
 
 check :: String -> IO String
-check s = run (Parse.parse s >>= Check.check >>= sanitise :: Praxis (Annotated Program))
+check s = run (Parse.parse s >>= Check.check :: Praxis (Annotated Program))
 
 interpret :: String -> String -> IO String
 interpret program exp = run $ do
@@ -157,7 +157,7 @@ swap (a, b) = (b, a)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-swap : forall a b . ( a , b ) -> ( b , a ) = \ ( [a] a_0 , [b] b_0 ) -> ( [b] b_0 , [a] a_0 )
+swap : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b_0 ) -> ( [b_0] b_0 , [a_0] a_0 )
 |]
 
   it "evaluates" $ do
@@ -177,7 +177,7 @@ copy x = (x, x)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-copy : forall a . [ Share a ] => a -> ( a , a ) = \ [a] x_0 -> ( [a] x_0 , [a] x_0 )
+copy : forall a_0 . [ Share a_0 ] => a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
 |]
 
   it "evaluates" $ do
@@ -195,9 +195,9 @@ type Either [a, b] = cases
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Either [ a , b ] = cases
-  [forall a b . a -> Either [ a , b ]] Left a
-  [forall a b . b -> Either [ a , b ]] Right b
+type Either [ a_0 , b_0 ] = cases
+  [forall a_0 b_0 . a_0 -> Either [ a_0 , b_0 ]] Left a_0
+  [forall a_0 b_0 . b_0 -> Either [ a_0 , b_0 ]] Right b_0
 |]
 
   it "evaluates" $ do
@@ -219,9 +219,9 @@ id_fun = Fun (\x -> x)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Fun [ a , b ] = [forall a b . ( a -> b ) -> Fun [ a , b ]] Fun ( a -> b )
-unbox_fun : forall a b . Fun [ a , b ] -> a -> b = \ [Fun [ a , b ]] Fun [a -> b] f_0 -> \ [a] x_0 -> [a -> b] f_0 [a] x_0
-id_fun : forall a . Fun [ a , a ] = [( a -> a ) -> Fun [ a , a ]] Fun ( \ [a] x_1 -> [a] x_1 )
+type Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
+unbox_fun : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
+id_fun : forall a_2 . Fun [ a_2 , a_2 ] = [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
 
   it "evaluates" $ do
@@ -291,17 +291,17 @@ rec
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type List a = cases
-  [forall a . List a] Nil
-  [forall a . ( a , List a ) -> List a] Cons ( a , List a )
+type List a_0 = cases
+  [forall a_0 . List a_0] Nil
+  [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
-  map : forall ? v a b . ( ? v a -> b ) -> ? v List a -> List b = \ [? v a -> b] f_0 -> [? v List a -> List b] cases
-    [? v List a] Nil -> [List b] Nil
-    [? v List a] Cons ( [? v a] x_0 , [? v List a] xs_0 ) -> [( b , List b ) -> List b] Cons ( [? v a -> b] f_0 [? v a] x_0 , ( [( ? v a -> b ) -> ? v List a -> List b] map [? v a -> b] f_0 ) [? v List a] xs_0 )
+  map : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 List a_1 -> List b_0] cases
+    [? v_0 List a_1] Nil -> [List b_0] Nil
+    [? v_0 List a_1] Cons ( [? v_0 a_1] x_0 , [? v_0 List a_1] xs_0 ) -> [( b_0 , List b_0 ) -> List b_0] Cons ( [? v_0 a_1 -> b_0] f_0 [? v_0 a_1] x_0 , ( [( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0] map [? v_0 a_1 -> b_0] f_0 ) [? v_0 List a_1] xs_0 )
 rec
-  sum : forall & r . & r List Int -> Int = [& r List Int -> Int] cases
-    [& r List Int] Nil -> [Int] 0
-    [& r List Int] Cons ( [Int] x_1 , [& r List Int] xs_1 ) -> [( Int , Int ) -> Int] add_int ( [Int] x_1 , [& r List Int -> Int] sum [& r List Int] xs_1 )
+  sum : forall & r_0 . & r_0 List Int -> Int = [& r_0 List Int -> Int] cases
+    [& r_0 List Int] Nil -> [Int] 0
+    [& r_0 List Int] Cons ( [Int] x_1 , [& r_0 List Int] xs_1 ) -> [( Int , Int ) -> Int] add_int ( [Int] x_1 , [& r_0 List Int -> Int] sum [& r_0 List Int] xs_1 )
 |]
 
   it "evaluates" $ do
@@ -356,11 +356,11 @@ box = Box "x"
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Box [ & v , a ] = [forall a & v . & v a -> Box [ & v , a ]] Box & v a
-type List a = cases
-  [forall a . List a] Nil
-  [forall a . ( a , List a ) -> List a] Cons ( a , List a )
-fst : forall a b . ( a , b ) -> a = \ ( [a] x_0 , [b] y_0 ) -> [a] x_0
+type Box [ & v_0 , a_0 ] = [forall a_0 & v_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
+type List a_1 = cases
+  [forall a_1 . List a_1] Nil
+  [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
+fst : forall a_2 b_0 . ( a_2 , b_0 ) -> a_2 = \ ( [a_2] x_0 , [b_0] y_0 ) -> [a_2] x_0
 box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x"
 |]
 

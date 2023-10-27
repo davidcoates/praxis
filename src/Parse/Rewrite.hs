@@ -39,7 +39,7 @@ run term = save stage $ do
 
 rewriteTopLevel :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 rewriteTopLevel term = case witness :: I a of
-  IQType -> saveTyVarMap $ doRewriteQType term >> value (recurse rewrite) term -- For testing
+  IQType -> saveTyVarMap $ addRewriteFromQType term >> value (recurse rewrite) term -- For testing
   _ -> rewrite term
 
 rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
@@ -76,42 +76,34 @@ mkVarRewriteMap :: Source -> [Name] -> Praxis (Map Name Name)
 mkVarRewriteMap src varNames = do
   when (not (isUnique varNames)) $ throwAt src $ ("variables are not distinct" :: String)
   vars <- series $ [ (\m -> (n, m)) <$> freshVar n | n <- varNames ]
-  unrewriteMap %= Map.union (Map.fromList (map (\(a, b) -> (b, a)) vars))
   return (Map.fromList vars)
 
-mkTyRewriteMap :: Source -> ([Name], [Name]) -> Praxis (Map Name Name)
-mkTyRewriteMap src (tyVarNames, viewVarNames) = do
-  tyVars <-   series $ [ (\(_ :<     TyVar m) -> (n, m)) <$> freshTyVar             | n <- tyVarNames ]
-  viewVars <- series $ [ (\(_ :< ViewVar _ m) -> (n, m)) <$> freshViewVar undefined | n <- viewVarNames ]
-  let allTyVars = tyVars ++ viewVars
-  when (not (isUnique (map fst allTyVars))) $ throwAt src $ ("type variables are not distinct" :: String)
-  unrewriteMap %= Map.union (Map.fromList (map (\(a, b) -> (b, a)) allTyVars))
-  return (Map.fromList allTyVars)
+mkTyRewriteMap :: Source -> [Name] -> Praxis (Map Name Name)
+mkTyRewriteMap src tyVarNames = do
+  tyVars <- series $ [ (\m -> (n, m)) <$> freshTyVar n | n <- tyVarNames ]
+  when (not (isUnique (map fst tyVars))) $ throwAt src $ ("type variables are not distinct" :: String)
+  return (Map.fromList tyVars)
 
-doRewriteTyPat :: Annotated TyPat -> Praxis ()
-doRewriteTyPat tyPat = do
-  let tyVars   = extract (embedMonoid f) tyPat
+addRewriteFromTyPat :: Annotated TyPat -> Praxis ()
+addRewriteFromTyPat tyPat = do
+  let tyVars = extract (embedMonoid f) tyPat
       f = \case
-        TyPatVar n -> [n]
-        _          -> []
-      viewVars = extract (embedMonoid g) tyPat
-      g = \case
+        TyPatVar n       -> [n]
         TyPatViewVar _ n -> [n]
         _                -> []
-  m' <- mkTyRewriteMap (view source tyPat) (tyVars, viewVars)
+  m' <- mkTyRewriteMap (view source tyPat) tyVars
   m <- use (rewriteMap . tyVarMap)
   rewriteMap . tyVarMap .= (m' `Map.union` m)
 
-doRewriteQType :: Annotated QType -> Praxis ()
-doRewriteQType ((src, _) :< Forall vs _ _) = do
-  let tyVars   = [ n |     QTyVar n <- map (view value) vs ]
-      viewVars = [ n | QViewVar _ n <- map (view value) vs ]
-  m' <- mkTyRewriteMap src (tyVars, viewVars)
+addRewriteFromQType :: Annotated QType -> Praxis ()
+addRewriteFromQType ((src, _) :< Forall vs _ _) = do
+  let tyVars = [ n | QTyVar n <- map (view value) vs ] ++ [ n | QViewVar _ n <- map (view value) vs ]
+  m' <- mkTyRewriteMap src tyVars
   m <- use (rewriteMap . tyVarMap)
   rewriteMap . tyVarMap .= (m' `Map.union` m)
 
-doRewritePat :: Annotated Pat -> Praxis ()
-doRewritePat pat = do
+addRewriteFromPat :: Annotated Pat -> Praxis ()
+addRewriteFromPat pat = do
   let vars = extract (embedMonoid f) pat
       f = \case
         PatVar n  -> [n]
@@ -186,7 +178,7 @@ rewriteQTyVar = splitTrivial $ \src -> \case
 
 rewriteAlt :: (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
 rewriteAlt (pat, exp) = saveVarMap $ do
-  doRewritePat pat
+  addRewriteFromPat pat
   pat <- rewritePat pat
   exp <- rewriteExp exp
   return (pat, exp)
@@ -194,7 +186,7 @@ rewriteAlt (pat, exp) = saveVarMap $ do
 rewriteBind :: Annotated Bind -> Praxis (Annotated Bind)
 rewriteBind (ann :< Bind pat exp) = do
   exp <- rewriteExp exp
-  doRewritePat pat
+  addRewriteFromPat pat
   pat <- rewritePat pat
   return (ann :< Bind pat exp)
 
@@ -225,7 +217,7 @@ rewriteExp = splitTrivial $ \src -> \case
     return $ Cases alts
 
   exp@(Lambda pat _) -> saveVarMap $ do
-    doRewritePat pat
+    addRewriteFromPat pat
     recurse rewrite exp
 
   Let bind exp -> saveVarMap $ do
@@ -285,14 +277,14 @@ rewriteDecls' (decl : decls) = case view value decl of
   DeclTerm name sig exp -> do
     decl <- case sig of
       Nothing  -> rewriteDecl decl
-      Just sig -> saveTyVarMap (doRewriteQType sig >> rewriteDecl decl)
+      Just sig -> saveTyVarMap (addRewriteFromQType sig >> rewriteDecl decl)
     decls <- rewriteDecls' decls
     return (decl : decls)
 
   DeclData name tyPat alts -> do
     decl <- case tyPat of
       Nothing    -> rewriteDecl decl
-      Just tyPat -> saveTyVarMap (doRewriteTyPat tyPat >> rewriteDecl decl)
+      Just tyPat -> saveTyVarMap (addRewriteFromTyPat tyPat >> rewriteDecl decl)
     decls <- rewriteDecls' decls
     return (decl : decls)
 

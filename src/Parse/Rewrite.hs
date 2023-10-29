@@ -11,7 +11,6 @@ module Parse.Rewrite
   ) where
 
 import           Common
-import           Env
 import           Introspect
 import qualified Parse.Mixfix    as Mixfix
 import           Praxis

@@ -15,7 +15,7 @@ import           Check.Kind.Reason
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
-import           Env
+import qualified Env.Env as Env
 import           Introspect
 import           Praxis
 import           Print
@@ -52,9 +52,9 @@ generate term = ($ term) $ case witness :: I a of
 introKind :: Source -> Name -> Annotated Kind -> Praxis ()
 introKind s n k = do
   l <- use kEnv
-  case lookup n l of
+  case Env.lookup n l of
     Just _ -> throwAt s $ "type " <> quote (pretty n) <> " redeclared"
-    _      -> kEnv %= intro n k
+    _      -> kEnv %= Env.intro n k
 
 
 generateQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
@@ -74,7 +74,7 @@ generateView :: Annotated View -> Praxis (Annotated View)
 generateView = splitTrivial $ \src -> \case
 
   op@(ViewVar _ var) -> do
-    entry <- kEnv `uses` lookup var
+    entry <- kEnv `uses` Env.lookup var
     case entry of
       Just _  -> return op
       Nothing -> throwAt src (NotInScope var)
@@ -98,7 +98,7 @@ generateTy = split $ \src -> \case
           return (k :< TyApply f x)
 
     TyCon con -> do
-      entry <- kEnv `uses` lookup con
+      entry <- kEnv `uses` Env.lookup con
       case entry of
         Just k  -> return (k :< TyCon con)
         Nothing -> throwAt src (NotInScope con)
@@ -130,7 +130,7 @@ generateTy = split $ \src -> \case
       return (phantom KindType :< TyUnit)
 
     TyVar var -> do
-      entry <- kEnv `uses` lookup var
+      entry <- kEnv `uses` Env.lookup var
       case entry of
         Just k  -> return (k :< TyVar var)
         Nothing -> throwAt src (NotInScope var)

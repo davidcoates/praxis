@@ -90,9 +90,10 @@ import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
-import qualified Env                          as Env (Environment (..))
-import           Env.Env
-import           Env.LEnv
+import           Env.Env (Env)
+import qualified Env.Env as Env
+import           Env.LEnv (LEnv)
+import qualified Env.LEnv as LEnv
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
@@ -116,13 +117,13 @@ data Fresh = Fresh
 instance Show Fresh where
   show _ = "<fresh>"
 
-type VEnv = Env Name Value
+type VEnv = Env Value
 
-type TEnv = LEnv Name (Annotated QType)
+type TEnv = LEnv (Annotated QType)
 
-type KEnv = Env Name (Annotated Kind)
+type KEnv = Env (Annotated Kind)
 
-type DAEnv = Env Name (Annotated DataCon)
+type DAEnv = Env (Annotated DataCon)
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix
@@ -192,7 +193,7 @@ emptyState = PraxisState
   , _stage        = Unknown
   , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
   , _kEnv         = Env.empty
-  , _tEnv         = Env.empty
+  , _tEnv         = LEnv.empty
   , _daEnv        = Env.empty
   , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty

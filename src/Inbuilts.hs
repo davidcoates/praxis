@@ -9,7 +9,8 @@ module Inbuilts
 
 import           Common
 import           Control.Lens              (set, view)
-import           Env
+import qualified Env.Env as Env
+import qualified Env.LEnv as LEnv
 import           Introspect
 import           Parse                     (parse)
 import           Praxis
@@ -101,13 +102,13 @@ inbuiltKinds =
   ]
 
 initialVEnv :: VEnv
-initialVEnv = fromList (map (\(n, _, v) -> (n, v)) inbuilts)
+initialVEnv = Env.fromList (map (\(n, _, v) -> (n, v)) inbuilts)
 
 initialTEnv :: TEnv
-initialTEnv = fromList (map (\(n, t, _) -> (n, t)) inbuilts)
+initialTEnv = LEnv.fromList (map (\(n, t, _) -> (n, t)) inbuilts)
 
 initialKEnv :: KEnv
-initialKEnv = fromList inbuiltKinds
+initialKEnv = Env.fromList inbuiltKinds
 
 -- TODO interfaces
 prelude = [r|

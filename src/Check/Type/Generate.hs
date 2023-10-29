@@ -17,7 +17,7 @@ import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import           Env
+import qualified Env.Env            as Env
 import qualified Env.LEnv           as LEnv
 import           Introspect
 import           Praxis
@@ -77,7 +77,7 @@ read :: Source -> Name -> Praxis (Name, Annotated Type)
 read s n = do
   l <- use tEnv
   r@(_ :< ViewRef refName) <- freshViewRef
-  case LEnv.lookupFull n l of
+  case LEnv.lookup n l of
     Just entry -> do
       t <- specialiseQType s (view LEnv.value entry)
       requires [ newConstraint (Share t) (UnsafeRead n) s | view LEnv.used entry ]
@@ -89,7 +89,7 @@ read s n = do
 mark :: Source -> Name -> Praxis (Annotated Type)
 mark s n = do
   l <- use tEnv
-  case LEnv.lookupFull n l of
+  case LEnv.lookup n l of
     Just entry -> do
       t <- specialiseQType s (view LEnv.value entry)
       tEnv %= LEnv.mark n
@@ -101,21 +101,21 @@ mark s n = do
 introTy :: Source -> Name -> Annotated QType -> Praxis ()
 introTy s n t = do
   l <- use tEnv
-  case lookup n l of
+  case LEnv.lookup' n l of
     Just _ -> throwAt s $ "variable " <> quote (pretty n) <> " redeclared"
-    _      -> tEnv %= intro n t
+    _      -> tEnv %= LEnv.intro n t
 
 getType :: Source -> Name -> Praxis (Annotated QType)
 getType s n = do
   l <- use tEnv
-  case lookup n l of
+  case LEnv.lookup' n l of
     Just t  -> return t
     Nothing -> throwAt s (NotInScope n)
 
 getData :: Source -> Name -> Praxis DataConInfo
 getData s n = do
   l <- use daEnv
-  case lookup n l of
+  case Env.lookup n l of
     Just v  -> return (view (annotation . just) v)
     Nothing -> throwAt s $ "data constructor " <> quote (pretty n) <> " is not in scope"
 

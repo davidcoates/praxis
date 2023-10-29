@@ -1,19 +1,23 @@
 {-# LANGUAGE DeriveFoldable     #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE NamedFieldPuns     #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Env.LEnv
   ( LEnv
 
-  , Entry
   , value
   , used
   , captured
 
-  , lookupFull
+  , empty
+  , intro
+  , lookup
+  , lookup'
   , adjust
+  , fromList
 
   , mark
   , capture
@@ -22,64 +26,66 @@ module Env.LEnv
 where
 
 import           Common        hiding (value)
-import           Env
 import           Env.Env (Env(..))
 import qualified Env.Env as Env
 
-import           Control.Arrow (second)
 import           Control.Lens  (makeLenses)
-import           Data.List     (intercalate)
 import           Prelude       hiding (lookup)
 import qualified Prelude       (lookup)
 
-data Entry b = Entry { _value :: b, _used :: Bool, _captured :: Bool }
+data Entry a = Entry { _value :: a, _used :: Bool, _captured :: Bool }
+
+makeLenses ''Entry
 
 deriving instance Functor Entry
 deriving instance Foldable Entry
 deriving instance Traversable Entry
 
-makeLenses ''Entry
-
-instance Pretty b => Pretty (Entry b) where
-  pretty b = (<> pretty (view value b)) $ case (view used b, view captured b) of
+instance Pretty a => Pretty (Entry a) where
+  pretty Entry{ _value, _used, _captured } = (<> pretty _value) $ case (_used, _captured) of
     (True, True)   -> "[uc] "
     (True, False)  -> "[u] "
     (False, True)  -> "[c] "
     (False, False) -> ""
 
 -- Linear environment
-newtype LEnv a b = LEnv (Env a (Entry b))
+newtype LEnv a = LEnv (Env (Entry a))
 
-deriving instance Foldable (LEnv a)
-deriving instance Traversable (LEnv a)
+deriving instance Functor LEnv
+deriving instance Foldable LEnv
+deriving instance Traversable LEnv
 
-instance Functor (LEnv a) where
-  fmap f (LEnv l) = LEnv (fmap (over value f) l)
-
-instance (Show a, Pretty b) => Pretty (LEnv a b) where
+instance Pretty a => Pretty (LEnv a) where
   pretty (LEnv l) = pretty l
 
-instance Environment LEnv where
-  intro a b (LEnv l) = LEnv (intro a b' l) where
-    b' = Entry { _value = b, _used = False, _captured = False }
-  elim (LEnv l) = LEnv (elim l)
-  empty = LEnv empty
-  lookup a (LEnv l) = fmap (view value) (lookup a l)
+empty :: LEnv a
+empty = LEnv (Env.empty)
 
-lookupFull :: Eq a => a -> LEnv a b -> Maybe (Entry b)
-lookupFull a (LEnv l) = lookup a l
+intro :: Name -> a -> LEnv a -> LEnv a
+intro k v (LEnv l) = LEnv $ Env.intro k (Entry { _value = v, _used = False, _captured = False}) l
 
-mark :: Eq a => a -> LEnv a b -> LEnv a b
-mark a (LEnv l) = LEnv (Env.adjust (\b -> b { _used = True} ) a l)
+lookup :: Name -> LEnv a -> Maybe (Entry a)
+lookup k (LEnv l) = Env.lookup k l
 
-capture :: LEnv a b -> LEnv a b
-capture (LEnv l) = LEnv (fmap (\b -> b { _captured = True}) l)
+lookup' :: Name -> LEnv a -> Maybe a
+lookup' k l = view value <$> lookup k l
 
-adjust :: Eq a => (b -> b) -> a -> LEnv a b -> LEnv a b
-adjust f a (LEnv l) = LEnv (Env.adjust (over value f) a l)
+adjust :: (a -> a) -> Name -> LEnv a -> LEnv a
+adjust f k (LEnv l) = LEnv $ Env.adjust (over value f) k l
+
+fromList :: [(Name, a)] -> LEnv a
+fromList = \case
+  []        -> empty
+  ((k,v):l) -> intro k v (fromList l)
+
+mark :: Name -> LEnv a -> LEnv a
+mark k (LEnv l) = LEnv (Env.adjust (\v -> v { _used = True} ) k l)
+
+capture :: LEnv a -> LEnv a
+capture (LEnv l) = LEnv (fmap (\v -> v { _captured = True}) l)
 
 -- Join is used to unify branches with respect to usage and captured status.
 -- E.g. a variable is used/captured by an If expression iff it is used/captured by at least one branch.
-join :: LEnv a b -> LEnv a b -> LEnv a b
+join :: LEnv a -> LEnv a -> LEnv a
 join (LEnv l1) (LEnv l2) = LEnv (join' l1 l2) where
-  join' (Env l1) (Env l2) = Env (zipWith (\(x, xb) (_, yb) -> (x, Entry { _value = view value xb, _used = view used xb || view used yb, _captured = view captured xb || view captured yb })) l1 l2)
+  join' (Env l1) (Env l2) = Env $ zipWith (\(x, xb) (_, yb) -> (x, Entry { _value = view value xb, _used = view used xb || view used yb, _captured = view captured xb || view captured yb })) l1 l2

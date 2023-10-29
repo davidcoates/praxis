@@ -14,11 +14,11 @@ import           Check.Solve
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
+import qualified Env.LEnv            as LEnv
 import           Introspect
 import           Praxis
 import           Stage               hiding (Unknown)
 import           Term
-import qualified Env.LEnv as LEnv
 
 import           Control.Applicative (liftA2)
 import           Data.List           (foldl', nub, sort)

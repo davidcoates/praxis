@@ -17,7 +17,7 @@ import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import           Env.Env (Env(..))
+import           Env.Env            (Env (..))
 import qualified Env.Env            as Env
 import qualified Env.LEnv           as LEnv
 import           Introspect
@@ -79,7 +79,14 @@ join src f1 f2 = do
   return (x, y)
 
 closure :: Source -> Praxis a -> Praxis a
-closure src x = scope src (tEnv %= LEnv.capture >> x)
+closure src x = do
+  l1 <- use tEnv
+  tEnv %= LEnv.capture
+  a <- scope src x
+  l2 <- use tEnv
+  -- Restored captured bit but save used bit
+  tEnv .= Env.zipWith (\e1 e2 -> set LEnv.captured (view LEnv.captured e1) e2) l1 l2 -- This is disgusting
+  return a
 
 scope :: Source -> Praxis a -> Praxis a
 scope src x = do
@@ -90,6 +97,9 @@ scope src x = do
       (newVars, oldVars) = splitAt n l2
       unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, not (view LEnv.used e) ]
   series $ [ throwAt src (Unused n) | (n, _) <- unusedVars, head n /= '_' ] -- hacky
+  -- Ideally we would use the specialised type here, although polymorphic types must have a Copy'able specialsation (see specialiseQType)
+  -- so it suffices to check monomorphic types
+  requires [ newConstraint (Copy t) (NotDisposed n) src | (n, _ :< Forall vs _ t) <- unusedVars, null vs ]
   tEnv .= Env oldVars
   return a
 
@@ -298,7 +308,7 @@ generateExp = split $ \src -> \case
     return (t :< Con name)
 
   Do stmts -> scope src $ do
-    stmts <- traverse generate (init stmts)
+    stmts <- traverse generate stmts
     let matchExp stmt = case view value stmt of { StmtExp exp -> Just exp; _ -> Nothing }
     requires [ newConstraint (t `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src | ((src, Just t) :< _) <- mapMaybe matchExp (init stmts) ]
     case view value (last stmts) of
@@ -335,8 +345,9 @@ generateExp = split $ \src -> \case
 
   Read var exp -> scope src $ do
     (refName, t) <- read src var
-    tEnv %= LEnv.adjust (const (mono t)) var
+    tEnv %= LEnv.intro var (mono t)
     exp <- generateExp exp
+    tEnv %= Env.elim
     require $ newConstraint (RefFree refName (view ty exp)) SafeRead src
     return (view ty exp :< view value exp)
 

@@ -201,7 +201,7 @@ rewriteExp = splitTrivial $ \src -> \case
     return $ Where exp decls
 
   Do stmts -> saveVarMap $ do
-    smts <- traverse rewrite stmts
+    smts <- traverse rewrite stmts -- FIXME this needs to rewrite from StmtBind's
     return $ Do stmts
 
   Case exp alts -> do

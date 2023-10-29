@@ -8,6 +8,7 @@ module Env.Env
 
   , empty
   , intro
+  , elim
   , lookup
   , adjust
   , fromList
@@ -34,6 +35,9 @@ empty = Env []
 
 intro :: Name -> a -> Env a -> Env a
 intro k v (Env l) = Env ((k, v):l)
+
+elim :: Env a -> Env a
+elim (Env (l:ls)) = Env ls
 
 lookup :: Name -> Env a -> Maybe a
 lookup a (Env l) = Prelude.lookup a l

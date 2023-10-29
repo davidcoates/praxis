@@ -149,6 +149,7 @@ operator (_ <?> _ <:> _) = ifthenelse where
     interpret program "False <-> True <?> 1 <:> 0" `shouldReturn` "0"
 
 
+
 unusedVar = describe "unused variable" $ do
 
   let program = trim [r|
@@ -157,6 +158,30 @@ fst (x, y) = x
 |]
 
   it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
+
+
+
+disposal = describe "non-copyable terms must be disposed" $ do
+
+  let bad = trim [r|
+fst : forall a b. (a, b) -> a
+fst (x, _) = x
+|]
+
+  it "does not type check" $ check bad `shouldReturn` trim [r|
+error: found contradiction [2:5] Copy b_0
+|-> (variable '_0' is not disposed of)
+|]
+
+  let good = trim [r|
+fst : forall a b | Copy b. (a, b) -> a
+fst (x, _) = x
+|]
+
+  it "type checks" $ check good `shouldReturn` trim [r|
+fst : forall a_0 b_0 | Copy b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _0 ) -> [a_0] x_0
+|]
+
 
 
 swap = describe "polymorphic function (swap)" $ do
@@ -316,9 +341,22 @@ rec
 |]
 
   it "evaluates" $ do
-    interpret program [r|let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in sum &xs|] `shouldReturn` "6"
-    interpret program [r|let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in let ys = (map (\x -> x * 2)) &xs in sum &ys|] `shouldReturn` "12"
-
+    interpret program [r|
+do
+  let xs = Cons (1, Cons (2, Cons (3, Nil ())))
+  let ret = sum &xs
+  free xs
+  ret
+|] `shouldReturn` "6"
+    interpret program [r|
+do
+  let xs = Cons (1, Cons (2, Cons (3, Nil ())))
+  let ys = (map (\x -> x * 2)) &xs
+  let ret = sum &ys
+  free xs
+  free ys
+  ret
+|] `shouldReturn` "12"
 
 
 shadowing = describe "shadowing" $ do
@@ -353,15 +391,12 @@ g = \ [Int] x_2 -> [Int] [Int -> Int] f_1 [Int] x_2 where
 
 boxedReference = describe "boxed references" $ do
 
-  let program = [r|
+  let program = trim [r|
 type Box [&v, a] = Box &v a
 
 type List a = cases
   Nil ()
   Cons (a, List a)
-
-fst : forall a b. (a, b) -> a
-fst (x, _) = x
 
 box = Box "x"
 |]
@@ -371,7 +406,6 @@ type Box [ & v_0 , a_0 ] = [forall a_0 & v_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]]
 type List a_1 = cases
   [forall a_1 . ( ) -> List a_1] Nil ( )
   [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
-fst : forall a_2 b_0 . ( a_2 , b_0 ) -> a_2 = \ ( [a_2] x_0 , [b_0] _0 ) -> [a_2] x_0
 box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x"
 |]
 
@@ -379,14 +413,19 @@ box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x
   it "evaluates" $ do
 
     interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
-error: found contradiction [1:50] & ^v4 List Int o~ List Int
-|-> [1:50] List Int ~ List Int ∧ & ^v4 List Int o~ List Int
-|-> [1:50] & ^v4 List Int ~ List Int ∧ Box [ & ^v4 , List Int ] ~ Box [ & ^v4 , List Int ]
-|-> [1:50] & ^v4 List Int -> Box [ & ^v4 , List Int ] ~ List Int -> Box [ & ^v4 , List Int ]
+error: found contradiction [1:50] & ^v3 List Int o~ List Int
+|-> [1:50] List Int ~ List Int ∧ & ^v3 List Int o~ List Int
+|-> [1:50] & ^v3 List Int ~ List Int ∧ Box [ & ^v3 , List Int ] ~ Box [ & ^v3 , List Int ]
+|-> [1:50] & ^v3 List Int -> Box [ & ^v3 , List Int ] ~ List Int -> Box [ & ^v3 , List Int ]
 |-> (function application)
 |]
 
-    interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in read xs in fst (5, Box xs)" `shouldReturn` "5"
+    interpret program [r|
+do
+  let xs = Cons (1, Cons (2, Cons (3, Nil ())))
+  read xs in free (Box xs) -- Note, Box xs can't escape the read
+  free xs
+|] `shouldReturn` "()"
 
 
 
@@ -503,12 +542,13 @@ spec = do
     mixfix
 
   describe "simple polymorphic programs" $ do
-    unusedVar
     swap
     copy
     either
     fun
     readUnsafe
+    unusedVar
+    disposal
 
   describe "complex programs" $ do
     mutualRecursion

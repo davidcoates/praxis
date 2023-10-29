@@ -12,14 +12,16 @@ module Env.Env
   , adjust
   , fromList
 
+  , zipWith
+  , difference
   )
 where
 
 import           Common
 import           Control.Lens (Traversal)
 import           Data.List    (intercalate)
-import           Prelude      hiding (lookup)
-import qualified Prelude      (lookup)
+import           Prelude      hiding (lookup, zipWith)
+import qualified Prelude      (lookup, zipWith)
 
 -- TODO Cosider putting source in Env
 newtype Env a = Env [(Name, a)]
@@ -48,3 +50,13 @@ fromList :: [(Name, a)] -> Env a
 fromList = \case
   []        -> empty
   ((k,v):l) -> intro k v (fromList l)
+
+zipWith :: (a -> a -> a) -> Env a -> Env a -> Env a
+zipWith f (Env l1) (Env l2) = Env (Prelude.zipWith (\(k, v1) (_, v2) -> (k, f v1 v2)) l1 l2)
+
+difference :: Env a -> Env a -> Env a
+difference (Env l1) (Env l2) = Env (difference' l1 l2) where
+  difference' xs [] = xs
+  difference' (x@(k1, _):xs) (y@(k2, _):ys)
+    | k1 == k2  = []
+    | otherwise = x : difference' xs (y:ys)

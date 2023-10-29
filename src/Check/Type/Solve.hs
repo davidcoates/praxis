@@ -18,6 +18,7 @@ import           Introspect
 import           Praxis
 import           Stage               hiding (Unknown)
 import           Term
+import qualified Env.LEnv as LEnv
 
 import           Control.Applicative (liftA2)
 import           Data.List           (foldl', nub, sort)
@@ -222,7 +223,7 @@ simplifyAll = do
   our . sol . tySol   %%= traverse (second (covalue simplify))
   our . sol . viewSol %%= traverse (second (covalue simplify))
   our . constraints %%= traverse simplify
-  tEnv %%= traverse simplify
+  tEnv %%= traverse (LEnv.value simplify)
 
 
 outerViews :: Annotated Type -> Set (Annotated View)

@@ -75,7 +75,7 @@ file f = (interpretFile f :: Praxis (Annotated Program, ())) >> onFileSuccess
 
 runMain :: Praxis ()
 runMain = do
-  ty <- tEnv `uses` LEnv.lookup' "main"
+  ty <- tEnv `uses` LEnv.lookup "main"
   case ty of Nothing -> throw "missing main function"
              Just (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) ->
                do { Just (Fun f) <- vEnv `uses` Env.lookup "main"; f Value.Unit; return () }

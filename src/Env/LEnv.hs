@@ -22,6 +22,7 @@ module Env.LEnv
   , mark
   , capture
   , join
+  , mixedUse
   )
 where
 
@@ -88,4 +89,8 @@ capture (LEnv l) = LEnv (fmap (\v -> v { _captured = True}) l)
 -- E.g. a variable is used/captured by an If expression iff it is used/captured by at least one branch.
 join :: LEnv a -> LEnv a -> LEnv a
 join (LEnv l1) (LEnv l2) = LEnv (join' l1 l2) where
-  join' (Env l1) (Env l2) = Env $ zipWith (\(x, xb) (_, yb) -> (x, Entry { _value = view value xb, _used = view used xb || view used yb, _captured = view captured xb || view captured yb })) l1 l2
+  join' (Env l1) (Env l2) = Env $ zipWith (\(k, v1) (_, v2) -> (k, Entry { _value = view value v1, _used = view used v1 || view used v2, _captured = view captured v1 || view captured v2 })) l1 l2
+
+mixedUse :: LEnv a -> LEnv a -> [(Name, a)]
+mixedUse (LEnv l1) (LEnv l2) = mixedUse' l1 l2 where
+  mixedUse' (Env l1) (Env l2) = [ (k, view value v1) | ((k, v1), (_, v2)) <- zip l1 l2, view used v1 /= view used v2 ]

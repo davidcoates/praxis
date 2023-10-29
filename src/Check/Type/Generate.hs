@@ -65,8 +65,8 @@ specialiseQType s n (_ :< Forall vs cs t) = do
 
   return t
 
-join :: Praxis a -> Praxis b -> Praxis (a, b)
-join f1 f2 = do
+join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
+join src f1 f2 = do
   l <- use tEnv
   x <- f1
   l1 <- use tEnv
@@ -74,6 +74,7 @@ join f1 f2 = do
   y <- f2
   l2 <- use tEnv
   tEnv .= LEnv.join l1 l2
+  requires [ newConstraint (Copy t) (MixedUse n) src | (n, qTy@(_ :< Forall vs _ t)) <- LEnv.mixedUse l1 l2, null vs ]
   return (x, y)
 
 closure :: Praxis a -> Praxis a
@@ -153,11 +154,11 @@ generate term = ($ term) $ case witness :: I a of
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
 -- The output environments are all contextJoined
-parallel :: [Praxis a] -> Praxis [a]
-parallel []     = return []
-parallel [x]    = (:[]) <$> x
-parallel (x:xs) = do
-  (a, as) <- join x (parallel xs)
+parallel :: Source -> [Praxis a] -> Praxis [a]
+parallel _ []     = return []
+parallel _ [x]    = (:[]) <$> x
+parallel src (x:xs) = do
+  (a, as) <- join src x (parallel src xs)
   return (a:as)
 
 -- TODO move this somewhere
@@ -268,7 +269,7 @@ generateExp = split $ \src -> \case
     exp <- generateExp exp
     let expTy = view ty exp
     op <- freshViewUni RefOrValue
-    alts <- parallel (map (generateAlt op) alts)
+    alts <- parallel src (map (generateAlt op) alts)
     ty1 <- equals (map fst alts) CaseCongruence
     ty2 <- equals (map snd alts) CaseCongruence
     equal expTy ty1 CaseCongruence src -- TODO probably should pick a better name for this
@@ -276,7 +277,7 @@ generateExp = split $ \src -> \case
 
   Cases alts -> closure $ do
     op <- freshViewUni RefOrValue
-    alts <- parallel (map (generateAlt op) alts)
+    alts <- parallel src (map (generateAlt op) alts)
     ty1 <- equals (map fst alts) CaseCongruence
     ty2 <- equals (map snd alts) CaseCongruence
     return (fun ty1 ty2 :< Cases alts)
@@ -294,7 +295,7 @@ generateExp = split $ \src -> \case
 
   If condExp thenExp elseExp -> do
     condExp <- generateExp condExp
-    (thenExp, elseExp) <- join (generateExp thenExp) (generateExp elseExp)
+    (thenExp, elseExp) <- join src (generateExp thenExp) (generateExp elseExp)
     require $ newConstraint (view ty condExp `TEq` TyCon "Bool" `as` phantom KindType) IfCondition src
     require $ newConstraint (view ty thenExp `TEq` view ty elseExp) IfCongruence src
     return (view ty thenExp :< If condExp thenExp elseExp)
@@ -341,7 +342,7 @@ generateExp = split $ \src -> \case
   Switch alts -> do
     constraints <- sequence (map (generateExp . fst) alts)
     requires [ newConstraint (view ty c `TEq` TyCon "Bool" `as` phantom KindType) SwitchCondition (view source c) | c <- constraints]
-    exps <- parallel (map (generateExp . snd) alts)
+    exps <- parallel src (map (generateExp . snd) alts)
     t <- equals exps SwitchCongruence
     return (t :< Switch (zip constraints exps))
 

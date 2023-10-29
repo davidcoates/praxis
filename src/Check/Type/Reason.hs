@@ -14,6 +14,7 @@ data Reason = BindCongruence
             | IfCondition
             | IfCongruence
             | Instance Name
+            | MixedUse Name
             | MultiAlias Name
             | MultiUse Name
             | SafeRead
@@ -36,6 +37,7 @@ instance Show Reason where
     IfCondition      -> "type of 'if' condition must be Bool"
     IfCongruence     -> "branches of 'if' expression must have the same type"
     Instance n       -> "monomorphic usage of '" ++ n ++ "'"
+    MixedUse n       -> "variable '" ++ n ++ "' is used inconsistently across branches"
     MultiAlias n     -> "variable '" ++ n ++ "' is not a unique alias"
     MultiUse n       -> "variable '" ++ n ++ "' used more than once"
     SafeRead         -> "safe read"

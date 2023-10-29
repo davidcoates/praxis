@@ -31,8 +31,7 @@ import           Data.List          (nub, partition, sort)
 import           Data.Maybe         (isJust, mapMaybe)
 import           Data.Set           (Set)
 import qualified Data.Set           as Set
-import           Prelude            hiding (exp, log, lookup, read)
-import qualified Prelude            (lookup)
+import           Prelude            hiding (log, read)
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
@@ -46,8 +45,8 @@ specialise s vs cs = do
   opVars <- series $ [ (\t -> ((n, d), view value t)) <$> freshViewUni d | QViewVar d n <- map (view value) vs ]
   let f :: Term a => a -> Maybe a
       f x = case typeof x of
-        IType |   TyVar n   <- x -> n `Prelude.lookup` vars
-        IView | ViewVar d n <- x -> (n, d) `Prelude.lookup` opVars
+        IType |   TyVar n   <- x -> n `lookup` vars
+        IView | ViewVar d n <- x -> (n, d) `lookup` opVars
         _                        -> Nothing
   requires [ newConstraint (view value (sub f c)) Specialisation s | c <- cs ]
   return (sub f)

@@ -24,7 +24,6 @@ import           Term
 
 import           Data.List          (nub, sort)
 import qualified Data.Set           as Set
-import           Prelude            hiding (lookup)
 
 kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
 kind = annotation . just

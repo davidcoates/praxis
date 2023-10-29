@@ -22,8 +22,6 @@ import           Data.List       (intersect, intersperse, nub, partition, (\\))
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
-import           Prelude         hiding (exp)
-
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = save stage $ do

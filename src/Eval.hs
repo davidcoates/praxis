@@ -20,7 +20,6 @@ import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
 import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
-import           Prelude           hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
   eval' :: Annotated a -> Praxis b

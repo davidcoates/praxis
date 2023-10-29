@@ -67,14 +67,10 @@ join f1 f2 = do
   return (x, y)
 
 closure :: Praxis a -> Praxis a
-closure x = save tEnv $ do
-  tEnv %= LEnv.capture
-  tEnv %= LEnv.push
-  x
+closure x = scope (tEnv %= LEnv.capture >> x)
 
 scope :: Praxis a -> Praxis a
 scope x = save tEnv $ do
-  tEnv %= LEnv.push
   x
 
 read :: Source -> Name -> Praxis (Name, Annotated Type)
@@ -105,8 +101,8 @@ mark s n = do
 introTy :: Source -> Name -> Annotated QType -> Praxis ()
 introTy s n t = do
   l <- use tEnv
-  case LEnv.lookupTop n l of
-    Just _ -> throwAt s $ "variable " <> quote (pretty n) <> " redeclared (in the same scope)"
+  case lookup n l of
+    Just _ -> throwAt s $ "variable " <> quote (pretty n) <> " redeclared"
     _      -> tEnv %= intro n t
 
 getType :: Source -> Name -> Praxis (Annotated QType)
@@ -316,9 +312,8 @@ generateExp = split $ \src -> \case
 
   Read var exp -> scope $ do
     (refName, t) <- read src var
-    introTy src var (mono t)
+    tEnv %= LEnv.adjust (const (mono t)) var
     exp <- generateExp exp
-    tEnv %= elim
     require $ newConstraint (RefFree refName (view ty exp)) SafeRead src
     return (view ty exp :< view value exp)
 

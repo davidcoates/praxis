@@ -53,7 +53,7 @@ introKind :: Source -> Name -> Annotated Kind -> Praxis ()
 introKind s n k = do
   l <- use kEnv
   case lookup n l of
-    Just _ -> throwAt s $ "type " <> quote (pretty n) <> " redeclared (in the same scope)"
+    Just _ -> throwAt s $ "type " <> quote (pretty n) <> " redeclared"
     _      -> kEnv %= intro n k
 
 

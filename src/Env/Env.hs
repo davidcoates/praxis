@@ -36,6 +36,5 @@ instance (Show a, Pretty b) => Pretty (Env a b) where
 
 -- |adjust the value associated with a given key
 adjust :: Eq a => (b -> b) -> a -> Env a b -> Env a b
-adjust f a (Env [])         = Env []
 adjust f a (Env ((k,v):xs)) | a == k    = let v' = f v in Env ((k, f v):xs)
                             | otherwise = let Env ys = adjust f a (Env xs) in Env ((k,v):ys)

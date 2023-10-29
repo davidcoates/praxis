@@ -13,8 +13,7 @@ module Env.LEnv
   , captured
 
   , lookupFull
-  , lookupTop
-  , push
+  , adjust
 
   , mark
   , capture
@@ -24,9 +23,8 @@ where
 
 import           Common        hiding (value)
 import           Env
-import           Env.Env
-import           Env.SEnv      (SEnv (..))
-import qualified Env.SEnv      as SEnv
+import           Env.Env (Env(..))
+import qualified Env.Env as Env
 
 import           Control.Arrow (second)
 import           Control.Lens  (makeLenses)
@@ -50,45 +48,38 @@ instance Pretty b => Pretty (Entry b) where
     (False, False) -> ""
 
 -- Linear environment
-data LEnv a b = LEnv (SEnv a (Entry b))
+newtype LEnv a b = LEnv (Env a (Entry b))
 
 deriving instance Foldable (LEnv a)
 deriving instance Traversable (LEnv a)
 
 instance Functor (LEnv a) where
-  fmap f (LEnv s) = LEnv (fmap (over value f) s)
+  fmap f (LEnv l) = LEnv (fmap (over value f) l)
 
 instance (Show a, Pretty b) => Pretty (LEnv a b) where
-  pretty (LEnv s) = pretty s
+  pretty (LEnv l) = pretty l
 
 instance Environment LEnv where
-  intro a b (LEnv s) = LEnv (intro a b' s) where
+  intro a b (LEnv l) = LEnv (intro a b' l) where
     b' = Entry { _value = b, _used = False, _captured = False }
-  elim (LEnv s) = LEnv (elim s)
+  elim (LEnv l) = LEnv (elim l)
   empty = LEnv empty
-  lookup a (LEnv s) = fmap (view value) (lookup a s)
-
+  lookup a (LEnv l) = fmap (view value) (lookup a l)
 
 lookupFull :: Eq a => a -> LEnv a b -> Maybe (Entry b)
-lookupFull a (LEnv s) = lookup a s
-
-lookupTop :: Eq a => a -> LEnv a b -> Maybe (Entry b)
-lookupTop a (LEnv s) = SEnv.lookupTop a s
-
-push :: LEnv a b -> LEnv a b
-push (LEnv s) = LEnv (SEnv.push s)
+lookupFull a (LEnv l) = lookup a l
 
 mark :: Eq a => a -> LEnv a b -> LEnv a b
-mark x (LEnv (SEnv l ls)) = let (m:ms) = f (l:ls) in LEnv (SEnv m ms)
-  where f (l:ls) = case lookup x l of
-          Just _  -> adjust (\b -> b { _used = True} ) x l : ls
-          Nothing -> l : f ls
+mark a (LEnv l) = LEnv (Env.adjust (\b -> b { _used = True} ) a l)
 
 capture :: LEnv a b -> LEnv a b
-capture (LEnv s) = LEnv (fmap (\b -> b { _captured = True}) s)
+capture (LEnv l) = LEnv (fmap (\b -> b { _captured = True}) l)
+
+adjust :: Eq a => (b -> b) -> a -> LEnv a b -> LEnv a b
+adjust f a (LEnv l) = LEnv (Env.adjust (over value f) a l)
 
 -- Join is used to unify branches with respect to usage and captured status.
 -- E.g. a variable is used/captured by an If expression iff it is used/captured by at least one branch.
 join :: LEnv a b -> LEnv a b -> LEnv a b
-join (LEnv (SEnv l1 l1s)) (LEnv (SEnv l2 l2s)) = LEnv (SEnv (join' l1 l2) (zipWith join' l1s l2s)) where
+join (LEnv l1) (LEnv l2) = LEnv (join' l1 l2) where
   join' (Env l1) (Env l2) = Env (zipWith (\(x, xb) (_, yb) -> (x, Entry { _value = view value xb, _used = view used xb || view used yb, _captured = view captured xb || view captured yb })) l1 l2)

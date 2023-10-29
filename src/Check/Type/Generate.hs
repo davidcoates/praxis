@@ -17,6 +17,7 @@ import           Check.Type.Reason
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
+import           Env.Env (Env(..))
 import qualified Env.Env            as Env
 import qualified Env.LEnv           as LEnv
 import           Introspect
@@ -77,12 +78,21 @@ join src f1 f2 = do
   requires [ newConstraint (Copy t) (MixedUse n) src | (n, qTy@(_ :< Forall vs _ t)) <- LEnv.mixedUse l1 l2, null vs ]
   return (x, y)
 
-closure :: Praxis a -> Praxis a
-closure x = scope (tEnv %= LEnv.capture >> x)
+closure :: Source -> Praxis a -> Praxis a
+closure src x = scope src (tEnv %= LEnv.capture >> x)
 
-scope :: Praxis a -> Praxis a
-scope x = save tEnv $ do
-  x
+scope :: Source -> Praxis a -> Praxis a
+scope src x = do
+  Env l1 <- use tEnv
+  a <- x
+  Env l2 <- use tEnv
+  let n = length l2 - length l1
+      (newVars, oldVars) = splitAt n l2
+      unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, not (view LEnv.used e) ]
+  series $ [ throwAt src (Unused n) | (n, _) <- unusedVars, head n /= '_' ] -- hacky
+  tEnv .= Env oldVars
+  return a
+
 
 read :: Source -> Name -> Praxis (Name, Annotated Type)
 read s n = do
@@ -275,7 +285,7 @@ generateExp = split $ \src -> \case
     equal expTy ty1 CaseCongruence src -- TODO probably should pick a better name for this
     return (ty2 :< Case exp alts)
 
-  Cases alts -> closure $ do
+  Cases alts -> closure src $ do
     op <- freshViewUni RefOrValue
     alts <- parallel src (map (generateAlt op) alts)
     ty1 <- equals (map fst alts) CaseCongruence
@@ -287,7 +297,7 @@ generateExp = split $ \src -> \case
     t <- specialiseQType src name fullType
     return (t :< Con name)
 
-  Do stmts -> scope $ do
+  Do stmts -> scope src $ do
     stmts <- traverse generate (init stmts)
     let matchExp stmt = case view value stmt of { StmtExp exp -> Just exp; _ -> Nothing }
     requires [ newConstraint (t `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src | ((src, Just t) :< _) <- mapMaybe matchExp (init stmts) ]
@@ -302,12 +312,12 @@ generateExp = split $ \src -> \case
     require $ newConstraint (view ty thenExp `TEq` view ty elseExp) IfCongruence src
     return (view ty thenExp :< If condExp thenExp elseExp)
 
-  Lambda pat exp -> closure $ do
+  Lambda pat exp -> closure src $ do
     op <- freshViewUni RefOrValue
     (pat, exp) <- generateAlt op (pat, exp)
     return (fun (view ty pat) (view ty exp) :< Lambda pat exp)
 
-  Let bind exp -> scope $ do
+  Let bind exp -> scope src $ do
     bind <- generateBind bind
     exp <- generateExp exp
     return (view ty exp :< Let bind exp)
@@ -323,7 +333,7 @@ generateExp = split $ \src -> \case
           str = TyApply arr (TyCon "Char" `as` phantom KindType) `as` phantom KindType
       return $ TyApply (View op `as` phantom KindView) str
 
-  Read var exp -> scope $ do
+  Read var exp -> scope src $ do
     (refName, t) <- read src var
     tEnv %= LEnv.adjust (const (mono t)) var
     exp <- generateExp exp
@@ -356,7 +366,7 @@ generateExp = split $ \src -> \case
     t <- mark src name
     return (t :< Var name)
 
-  Where exp decls -> scope $ do
+  Where exp decls -> scope src $ do
     decls <- traverse (generateDecl Nothing) decls
     exp <- generateExp exp
     return (view ty exp :< Where exp decls)
@@ -380,7 +390,7 @@ generateBind = splitTrivial $ \src -> \case
 
 
 generateAlt :: Annotated View -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
-generateAlt op (pat, exp) = scope $ do
+generateAlt op (pat, exp) = scope (view source pat) $ do
   pat <- generatePat op pat
   exp <- generateExp exp
   return (pat, exp)

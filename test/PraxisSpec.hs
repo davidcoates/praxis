@@ -149,6 +149,16 @@ operator (_ <?> _ <:> _) = ifthenelse where
     interpret program "False <-> True <?> 1 <:> 0" `shouldReturn` "0"
 
 
+unusedVar = describe "unused variable" $ do
+
+  let program = trim [r|
+fst : forall a b. (a, b) -> a
+fst (x, y) = x
+|]
+
+  it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
+
+
 swap = describe "polymorphic function (swap)" $ do
 
   let program = [r|
@@ -351,7 +361,7 @@ type List a = cases
   Cons (a, List a)
 
 fst : forall a b. (a, b) -> a
-fst (x, y) = x
+fst (x, _) = x
 
 box = Box "x"
 |]
@@ -361,7 +371,7 @@ type Box [ & v_0 , a_0 ] = [forall a_0 & v_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]]
 type List a_1 = cases
   [forall a_1 . ( ) -> List a_1] Nil ( )
   [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
-fst : forall a_2 b_0 . ( a_2 , b_0 ) -> a_2 = \ ( [a_2] x_0 , [b_0] y_0 ) -> [a_2] x_0
+fst : forall a_2 b_0 . ( a_2 , b_0 ) -> a_2 = \ ( [a_2] x_0 , [b_0] _0 ) -> [a_2] x_0
 box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x"
 |]
 
@@ -493,6 +503,7 @@ spec = do
     mixfix
 
   describe "simple polymorphic programs" $ do
+    unusedVar
     swap
     copy
     either

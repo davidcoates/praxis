@@ -214,18 +214,19 @@ type Fun [a, b] = Fun (a -> b)
 unbox_fun : forall a b. Fun [a, b] -> a -> b
 unbox_fun (Fun f) x = f x
 
-id_fun : forall a. Fun [a, a]
-id_fun = Fun (\x -> x)
+-- FIXME unit shouldn't be required here since Fun [a, a] is shareable
+id_fun : forall a. () -> Fun [a, a]
+id_fun () = Fun (\x -> x)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
 type Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
 unbox_fun : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
-id_fun : forall a_2 . Fun [ a_2 , a_2 ] = [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
+id_fun : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
 
   it "evaluates" $ do
-    interpret program "(unbox_fun id_fun) 4"  `shouldReturn` "4"
+    interpret program "(unbox_fun id_fun ()) 4"  `shouldReturn` "4"
 
 
 
@@ -274,39 +275,39 @@ list = describe "quantified type operators (list)" $ do
 
   let program = [r|
 type List a = cases
-  Nil
+  Nil ()
   Cons (a, List a)
 
 rec
   map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
   map f = cases
-    Nil          -> Nil
+    Nil ()       -> Nil ()
     Cons (x, xs) -> Cons (f x, (map f) xs)
 
 rec
   sum : forall &r. &r List Int -> Int
   sum = cases
-    Nil          -> 0
+    Nil ()       -> 0
     Cons (x, xs) -> x + sum xs
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
 type List a_0 = cases
-  [forall a_0 . List a_0] Nil
+  [forall a_0 . ( ) -> List a_0] Nil ( )
   [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
   map : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 List a_1 -> List b_0] cases
-    [? v_0 List a_1] Nil -> [List b_0] Nil
+    [? v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
     [? v_0 List a_1] Cons ( [? v_0 a_1] x_0 , [? v_0 List a_1] xs_0 ) -> [( b_0 , List b_0 ) -> List b_0] Cons ( [? v_0 a_1 -> b_0] f_0 [? v_0 a_1] x_0 , ( [( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0] map [? v_0 a_1 -> b_0] f_0 ) [? v_0 List a_1] xs_0 )
 rec
   sum : forall & r_0 . & r_0 List Int -> Int = [& r_0 List Int -> Int] cases
-    [& r_0 List Int] Nil -> [Int] 0
+    [& r_0 List Int] Nil [( )] ( ) -> [Int] 0
     [& r_0 List Int] Cons ( [Int] x_1 , [& r_0 List Int] xs_1 ) -> [( Int , Int ) -> Int] add_int ( [Int] x_1 , [& r_0 List Int -> Int] sum [& r_0 List Int] xs_1 )
 |]
 
   it "evaluates" $ do
-    interpret program [r|let xs = Cons (1, Cons (2, Cons (3, Nil))) in sum &xs|] `shouldReturn` "6"
-    interpret program [r|let xs = Cons (1, Cons (2, Cons (3, Nil))) in let ys = (map (\x -> x * 2)) &xs in sum &ys|] `shouldReturn` "12"
+    interpret program [r|let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in sum &xs|] `shouldReturn` "6"
+    interpret program [r|let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in let ys = (map (\x -> x * 2)) &xs in sum &ys|] `shouldReturn` "12"
 
 
 
@@ -346,7 +347,7 @@ boxedReference = describe "boxed references" $ do
 type Box [&v, a] = Box &v a
 
 type List a = cases
-  Nil
+  Nil ()
   Cons (a, List a)
 
 fst : forall a b. (a, b) -> a
@@ -358,7 +359,7 @@ box = Box "x"
   it "type checks" $ check program `shouldReturn` trim [r|
 type Box [ & v_0 , a_0 ] = [forall a_0 & v_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
 type List a_1 = cases
-  [forall a_1 . List a_1] Nil
+  [forall a_1 . ( ) -> List a_1] Nil ( )
   [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
 fst : forall a_2 b_0 . ( a_2 , b_0 ) -> a_2 = \ ( [a_2] x_0 , [b_0] y_0 ) -> [a_2] x_0
 box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x"
@@ -367,15 +368,15 @@ box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x
   -- TODO should also try with ? instead of &
   it "evaluates" $ do
 
-    interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in Box xs" `shouldReturn` trim [r|
-error: found contradiction [1:47] & ^v4 List Int o~ List Int
-|-> [1:47] List Int ~ List Int ∧ & ^v4 List Int o~ List Int
-|-> [1:47] & ^v4 List Int ~ List Int ∧ Box [ & ^v4 , List Int ] ~ Box [ & ^v4 , List Int ]
-|-> [1:47] & ^v4 List Int -> Box [ & ^v4 , List Int ] ~ List Int -> Box [ & ^v4 , List Int ]
+    interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
+error: found contradiction [1:50] & ^v4 List Int o~ List Int
+|-> [1:50] List Int ~ List Int ∧ & ^v4 List Int o~ List Int
+|-> [1:50] & ^v4 List Int ~ List Int ∧ Box [ & ^v4 , List Int ] ~ Box [ & ^v4 , List Int ]
+|-> [1:50] & ^v4 List Int -> Box [ & ^v4 , List Int ] ~ List Int -> Box [ & ^v4 , List Int ]
 |-> (function application)
 |]
 
-    interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil))) in read xs in fst (5, Box xs)" `shouldReturn` "5"
+    interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in read xs in fst (5, Box xs)" `shouldReturn` "5"
 
 
 

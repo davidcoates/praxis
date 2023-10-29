@@ -17,7 +17,7 @@ data Reason = BindCongruence
             | MultiAlias Name
             | MultiUse Name
             | SafeRead
-            | Specialisation
+            | Specialisation Name
             | SwitchCondition
             | SwitchCongruence
             | UnsafeRead Name
@@ -39,7 +39,7 @@ instance Show Reason where
     MultiAlias n     -> "variable '" ++ n ++ "' is not a unique alias"
     MultiUse n       -> "variable '" ++ n ++ "' used more than once"
     SafeRead         -> "safe read"
-    Specialisation   -> "specialisation"
+    Specialisation n -> "specialisation of '" ++ n ++ "'"
     SwitchCondition  -> "type of 'switch' condition must be Bool"
     SwitchCongruence -> "branches of 'switch' expression must have the same type"
     UnsafeRead n     -> "variable '" ++ n ++ "' read after being used"

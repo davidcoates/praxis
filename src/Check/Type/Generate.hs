@@ -39,8 +39,8 @@ ty = annotation . just
 mono :: Annotated Type -> Annotated QType
 mono t = (view source t, Nothing) :< Forall [] [] t
 
-specialise :: Source -> [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis (Annotated Type -> Annotated Type)
-specialise s vs cs = do
+specialise :: Source -> Name -> [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis (Annotated Type -> Annotated Type)
+specialise s n vs cs = do
   vars <- series $ [ (\t -> (n, view value t)) <$> freshTyUni | QTyVar n <- map (view value) vs ]
   opVars <- series $ [ (\t -> ((n, d), view value t)) <$> freshViewUni d | QViewVar d n <- map (view value) vs ]
   let f :: Term a => a -> Maybe a
@@ -48,11 +48,22 @@ specialise s vs cs = do
         IType |   TyVar n   <- x -> n `lookup` vars
         IView | ViewVar d n <- x -> (n, d) `lookup` opVars
         _                        -> Nothing
-  requires [ newConstraint (view value (sub f c)) Specialisation s | c <- cs ]
+  requires [ newConstraint (view value (sub f c)) (Specialisation n) s | c <- cs ]
   return (sub f)
 
-specialiseQType :: Source -> Annotated QType -> Praxis (Annotated Type)
-specialiseQType s (_ :< Forall vs cs t) = ($ t) <$> specialise s vs cs
+specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type)
+specialiseQType s n (_ :< Forall vs cs t) = do
+  t <- ($ t) <$> specialise s n vs cs
+
+  -- Require polymorphic terms to be shareable.
+  --
+  -- This will give the compiler the freedom to allocate just once per (type-distinct) specialisation
+  -- instead of at every call site.
+  --
+  -- Ideally this check would happen at the definition of the polymorphic term, but that's not so easy.
+  when (not (null vs)) $ require $ newConstraint (Share t) (Specialisation n) s
+
+  return t
 
 join :: Praxis a -> Praxis b -> Praxis (a, b)
 join f1 f2 = do
@@ -78,7 +89,7 @@ read s n = do
   r@(_ :< ViewRef refName) <- freshViewRef
   case LEnv.lookup n l of
     Just entry -> do
-      t <- specialiseQType s (view LEnv.value entry)
+      t <- specialiseQType s n (view LEnv.value entry)
       requires [ newConstraint (Share t) (UnsafeRead n) s | view LEnv.used entry ]
       requires [ newConstraint (Share t) (Captured n) s   | view LEnv.captured entry  ]
       return $ (refName, phantom (TyApply (phantom (View r)) t))
@@ -90,7 +101,7 @@ mark s n = do
   l <- use tEnv
   case LEnv.lookup n l of
     Just entry -> do
-      t <- specialiseQType s (view LEnv.value entry)
+      t <- specialiseQType s n (view LEnv.value entry)
       tEnv %= LEnv.mark n
       requires [ newConstraint (Share t) (MultiUse n) s | view LEnv.used entry ]
       requires [ newConstraint (Share t) (Captured n) s | view LEnv.captured entry ]
@@ -272,7 +283,7 @@ generateExp = split $ \src -> \case
 
   Con name -> do
     DataConInfo { fullType } <- getData src name
-    t <- specialiseQType src fullType
+    t <- specialiseQType src name fullType
     return (t :< Con name)
 
   Do stmts -> scope $ do
@@ -392,7 +403,7 @@ generatePat op pat = snd <$> generatePat' pat where
       when (isJust argType /= isJust pat) $ throwAt src $ "wrong number of arguments applied to data constructor " <> quote (pretty name)
 
       let Forall boundVars constraints _ = view value fullType
-      f <- specialise src boundVars constraints
+      f <- specialise src name boundVars constraints
       let retType' = f retType
 
       case pat of

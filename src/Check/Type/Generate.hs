@@ -288,7 +288,9 @@ generateExp = split $ \src -> \case
     return (t :< Con name)
 
   Do stmts -> scope $ do
-    stmts <- traverse generate stmts
+    stmts <- traverse generate (init stmts)
+    let matchExp stmt = case view value stmt of { StmtExp exp -> Just exp; _ -> Nothing }
+    requires [ newConstraint (t `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src | ((src, Just t) :< _) <- mapMaybe matchExp (init stmts) ]
     case view value (last stmts) of
       StmtExp ((_, Just t) :< _) -> return (t :< Do stmts)
       _                          -> throwAt src ("do block must end in an expression" :: String)
@@ -416,8 +418,11 @@ generatePat op pat = snd <$> generatePat' pat where
           return (retType', wrap retType' :< PatCon name (Just pat))
 
     PatHole -> do
+      -- Treat this is a variable for drop analysis
+      var <- freshVar ""
       t <- freshTyUni
-      return (t, wrap t :< PatHole)
+      introTy src var (mono (wrap t))
+      return (t, wrap t :< PatVar var)
 
     -- TODO think about how view literals would work, e.g. x@"abc"
     PatLit lit -> let t = TyCon (litName lit) `as` phantom KindType in return (t, t :< PatLit lit) where

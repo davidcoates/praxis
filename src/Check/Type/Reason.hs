@@ -17,6 +17,7 @@ data Reason = BindCongruence
             | MixedUse Name
             | MultiAlias Name
             | MultiUse Name
+            | NonUnitIgnored
             | SafeRead
             | Specialisation Name
             | SwitchCondition
@@ -40,6 +41,7 @@ instance Show Reason where
     MixedUse n       -> "variable '" ++ n ++ "' is used inconsistently across branches"
     MultiAlias n     -> "variable '" ++ n ++ "' is not a unique alias"
     MultiUse n       -> "variable '" ++ n ++ "' used more than once"
+    NonUnitIgnored   -> "expression in do block returns a non-unit but is ignored"
     SafeRead         -> "safe read"
     Specialisation n -> "specialisation of '" ++ n ++ "'"
     SwitchCondition  -> "type of 'switch' condition must be Bool"

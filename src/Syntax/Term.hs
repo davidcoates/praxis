@@ -41,7 +41,7 @@ layout :: Syntax f => Char -> f ()
 layout c = token (Layout c) <|> mark ("layout '" ++ [c] ++ "'")
 
 contextualOp :: Syntax f => Name -> f ()
-contextualOp op = token (QVarSym (unqualified op)) <|> unparseable (reservedOp op) <|> mark ("contextually keyword '" ++ op ++ "'")
+contextualOp op = token (QVarSym (unqualified op)) <|> unparseable (reservedOp op) <|> mark ("contextual keyword '" ++ op ++ "'")
 
 contextualId :: Syntax f => Name -> f ()
 contextualId id = token (QVarId (unqualified id)) <|> unparseable (reservedId id) <|> mark ("contextual keyword '" ++ id ++ "'")
@@ -268,14 +268,13 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
           mark "kind(0)"
 
 qTy :: Syntax f => f QType
-qTy = _Forall <$> (_Cons <$> (reservedId "forall" *> annotated qTyVar) <*> (many (annotated qTyVar) <* dot) <|> _Nil <$> pure ()) <*> tyConstraints <*> annotated ty <|> mark "quantified type"
-
-
-tyConstraints :: Syntax f => f [Annotated TyConstraint]
-tyConstraints = _Cons <$> (contextualOp "[" *> annotated tyConstraint) <*> tyConstraints' <|> _Nil <$> pure () where
-  tyConstraints' :: Syntax f => f [Annotated TyConstraint]
-  tyConstraints' = _Cons <$> (annotated tyConstraint <* special ',') <*>  tyConstraints' <|>
-                   _Nil <$> (contextualOp "]" *> reservedOp "=>")
+qTy = _Forall <$> (mono <|> reservedId "forall" *> poly) <|> mark "quantified type" where
+  mono :: Syntax f => f ([Annotated QTyVar], ([Annotated TyConstraint], Annotated Type))
+  mono = Prism (\t -> ([], ([], t))) (\(vs, (cs, t)) -> if null vs then Just t else Nothing) <$> annotated ty
+  poly :: Syntax f => f ([Annotated QTyVar], ([Annotated TyConstraint], Annotated Type))
+  poly = Prism id Just <$> some (annotated qTyVar) <*> tyConstraints <*> (dot *> annotated ty)
+  tyConstraints :: Syntax f => f [Annotated TyConstraint]
+  tyConstraints = _Cons <$> (contextualOp "|" *> annotated tyConstraint) <*> many (annotated tyConstraint) <|> _Nil <$> pure ()
 
 qTyVar :: Syntax f => f QTyVar
 qTyVar = _QTyVar <$> varid <|>

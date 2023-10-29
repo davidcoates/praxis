@@ -104,7 +104,7 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unt
 
 reservedIds = ["read", "in", "if", "then", "else", "using", "type", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec"]
 reservedCons = ["Type", "Constraint", "Copy", "NoCopy", "Op"]
-reservedOps = [":", "=>", "=", "\\", "->", "@", "&", "?"]
+reservedOps = [":", "=", "\\", "->", "@", "&", "?"]
 
 -- Possibly qualified, possibly reserved conid / varid / consym / varsym
 stuff :: Tokeniser Token

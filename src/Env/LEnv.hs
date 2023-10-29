@@ -1,9 +1,9 @@
 {-# LANGUAGE DeriveFoldable     #-}
 {-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE NamedFieldPuns     #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell    #-}
 
 module Env.LEnv
   ( LEnv
@@ -25,13 +25,13 @@ module Env.LEnv
   )
 where
 
-import           Common        hiding (value)
-import           Env.Env (Env(..))
-import qualified Env.Env as Env
+import           Common       hiding (value)
+import           Env.Env      (Env (..))
+import qualified Env.Env      as Env
 
-import           Control.Lens  (makeLenses)
-import           Prelude       hiding (lookup)
-import qualified Prelude       (lookup)
+import           Control.Lens (makeLenses)
+import           Prelude      hiding (lookup)
+import qualified Prelude      (lookup)
 
 data Entry a = Entry { _value :: a, _used :: Bool, _captured :: Bool }
 

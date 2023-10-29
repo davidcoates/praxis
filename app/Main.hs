@@ -1,8 +1,8 @@
 module Main where
 
 import           Common
-import qualified Env.Env as Env
-import qualified Env.LEnv as LEnv
+import qualified Env.Env              as Env
+import qualified Env.LEnv             as LEnv
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis

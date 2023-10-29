@@ -22,8 +22,8 @@ import           Token
 
 import           Data.List     (intersperse)
 import           Data.Maybe    (catMaybes)
-import           Prelude       hiding (exp, pure, until, (*>), (<$>), (<*),
-                                (<*>), _Just)
+import           Prelude       hiding (_Just, exp, pure, until, (*>), (<$>),
+                                (<*), (<*>))
 
 definePrisms ''Bool
 definePrisms ''Ordering

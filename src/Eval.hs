@@ -9,12 +9,12 @@ module Eval
   ) where
 
 import           Common
-import qualified Env.Env as Env
+import qualified Env.Env           as Env
 import           Praxis
 import           Stage
 import           Term
-import           Value             (Value)
 import qualified Value
+import           Value             (Value)
 
 import           Control.Monad.Fix (mfix)
 import           Data.Array.IO

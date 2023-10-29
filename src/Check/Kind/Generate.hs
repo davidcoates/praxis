@@ -15,7 +15,7 @@ import           Check.Kind.Reason
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
-import qualified Env.Env as Env
+import qualified Env.Env            as Env
 import           Introspect
 import           Praxis
 import           Print

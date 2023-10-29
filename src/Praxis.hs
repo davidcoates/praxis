@@ -90,10 +90,10 @@ import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
-import           Env.Env (Env)
-import qualified Env.Env as Env
-import           Env.LEnv (LEnv)
-import qualified Env.LEnv as LEnv
+import           Env.Env                      (Env)
+import qualified Env.Env                      as Env
+import           Env.LEnv                     (LEnv)
+import qualified Env.LEnv                     as LEnv
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)

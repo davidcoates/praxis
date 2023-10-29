@@ -9,8 +9,8 @@ module Inbuilts
 
 import           Common
 import           Control.Lens              (set, view)
-import qualified Env.Env as Env
-import qualified Env.LEnv as LEnv
+import qualified Env.Env                   as Env
+import qualified Env.LEnv                  as LEnv
 import           Introspect
 import           Parse                     (parse)
 import           Praxis

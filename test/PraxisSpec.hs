@@ -172,12 +172,12 @@ swap : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b
 copy = describe "polymorphic function with constraint (copy)" $ do
 
   let program = [r|
-copy : forall a. [Share a] => a -> (a, a)
+copy : forall a. [Copy a] => a -> (a, a)
 copy x = (x, x)
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-copy : forall a_0 . [ Share a_0 ] => a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
+copy : forall a_0 . [ Copy a_0 ] => a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
 |]
 
   it "evaluates" $ do

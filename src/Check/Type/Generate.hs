@@ -55,13 +55,13 @@ specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type)
 specialiseQType s n (_ :< Forall vs cs t) = do
   t <- ($ t) <$> specialise s n vs cs
 
-  -- Require polymorphic terms to be shareable.
+  -- Require polymorphic terms to be copyable.
   --
   -- This will give the compiler the freedom to allocate just once per (type-distinct) specialisation
   -- instead of at every call site.
   --
   -- Ideally this check would happen at the definition of the polymorphic term, but that's not so easy.
-  when (not (null vs)) $ require $ newConstraint (Share t) (Specialisation n) s
+  when (not (null vs)) $ require $ newConstraint (Copy t) (Specialisation n) s
 
   return t
 
@@ -90,12 +90,12 @@ read s n = do
   case LEnv.lookup n l of
     Just entry -> do
       t <- specialiseQType s n (view LEnv.value entry)
-      requires [ newConstraint (Share t) (UnsafeRead n) s | view LEnv.used entry ]
-      requires [ newConstraint (Share t) (Captured n) s   | view LEnv.captured entry  ]
+      requires [ newConstraint (Copy t) (UnsafeRead n) s | view LEnv.used entry ]
+      requires [ newConstraint (Copy t) (Captured n) s   | view LEnv.captured entry  ]
       return $ (refName, phantom (TyApply (phantom (View r)) t))
     Nothing -> throwAt s (NotInScope n)
 
--- |Marks a variable as used, and generate a Share constraint if it has already been used.
+-- |Marks a variable as used, and generate a Copy constraint if it has already been used.
 mark :: Source -> Name -> Praxis (Annotated Type)
 mark s n = do
   l <- use tEnv
@@ -103,8 +103,8 @@ mark s n = do
     Just entry -> do
       t <- specialiseQType s n (view LEnv.value entry)
       tEnv %= LEnv.mark n
-      requires [ newConstraint (Share t) (MultiUse n) s | view LEnv.used entry ]
-      requires [ newConstraint (Share t) (Captured n) s | view LEnv.captured entry ]
+      requires [ newConstraint (Copy t) (MultiUse n) s | view LEnv.used entry ]
+      requires [ newConstraint (Copy t) (Captured n) s | view LEnv.captured entry ]
       return t
     Nothing -> throwAt s (NotInScope n)
 
@@ -195,7 +195,7 @@ generateDataCon vars retType ((src, Nothing) :< DataCon name argType) = do
 generateDecl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
 generateDecl forwardT = splitTrivial $ \src -> \case
 
-  -- TODO Share constraints needed!
+  -- TODO Copy constraints needed!
   DeclData name arg alts -> do
     -- TODO could be kind annotated to avoid this lookup
     Just k <- kEnv `uses` Env.lookup name
@@ -394,7 +394,7 @@ generatePat op pat = snd <$> generatePat' pat where
     PatAt name pat -> do
       (t, pat) <- generatePat' pat
       introTy src name (mono t)
-      require $ newConstraint (Share t) (MultiAlias name) src
+      require $ newConstraint (Copy t) (MultiAlias name) src
       return (t, wrap t :< PatAt name pat)
 
     PatCon name pat -> do

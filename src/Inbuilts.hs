@@ -98,7 +98,7 @@ inbuiltKinds =
   , ("String", kind "Type")
   , ("Char",   kind "Type")
   , ("Array",  kind "Type -> Type")
-  , ("Share",  kind "Type -> Constraint")
+  , ("Copy",  kind "Type -> Constraint")
   ]
 
 initialVEnv :: VEnv

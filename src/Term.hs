@@ -194,7 +194,7 @@ data Kind = KindUni Name
   deriving (Eq, Ord)
 
 data TyConstraint = Class (Annotated Type)
-                  | Share (Annotated Type)
+                  | Copy (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated Type) (Annotated Type)
                   | RefFree Name (Annotated Type)

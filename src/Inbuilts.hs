@@ -82,6 +82,7 @@ inbuilts =
   , ("gt_int",       poly "(Int, Int) -> Bool", liftE (>))
   , ("lte_int",      poly "(Int, Int) -> Bool", liftE (<=))
   , ("gte_int",      poly "(Int, Int) -> Bool", liftE (>=))
+  , ("free",         poly "forall r. [NoCopy r] => r -> ()", Fun (\_ -> pure Unit)) -- TODO eval
   ]
   where
     liftI :: (Int -> Int -> Int) -> Value
@@ -98,7 +99,8 @@ inbuiltKinds =
   , ("String", kind "Type")
   , ("Char",   kind "Type")
   , ("Array",  kind "Type -> Type")
-  , ("Copy",  kind "Type -> Constraint")
+  , ("Copy",   kind "Type -> Constraint")
+  , ("NoCopy", kind "Type -> Constraint")
   ]
 
 initialVEnv :: VEnv

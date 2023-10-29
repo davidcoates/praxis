@@ -193,6 +193,7 @@ rightWithSep s _P p = Prism f g <$> annotated p <*> (s *> (_Just <$> annotated (
 
 tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Copy <$> reservedCon "Copy" *> annotated ty <|>
+               _NoCopy <$> reservedCon "NoCopy" *> annotated ty <|>
                _Class <$> annotated ty <|>
                unparseable (_RefFree <$> varid <*> reservedId "ref-free" *> annotated ty) <|>
                _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
@@ -268,6 +269,7 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
 
 qTy :: Syntax f => f QType
 qTy = _Forall <$> (_Cons <$> (reservedId "forall" *> annotated qTyVar) <*> (many (annotated qTyVar) <* dot) <|> _Nil <$> pure ()) <*> tyConstraints <*> annotated ty <|> mark "quantified type"
+
 
 tyConstraints :: Syntax f => f [Annotated TyConstraint]
 tyConstraints = _Cons <$> (contextualOp "[" *> annotated tyConstraint) <*> tyConstraints' <|> _Nil <$> pure () where

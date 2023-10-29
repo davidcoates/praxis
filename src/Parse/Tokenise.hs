@@ -103,7 +103,7 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unt
   inner = concat <$> while (satisfy (/= '"')) (escape stringEscapeSeqs <|> ((:[]) <$> consume))
 
 reservedIds = ["read", "in", "if", "then", "else", "using", "type", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec"]
-reservedCons = ["Type", "Constraint", "Copy", "Op"]
+reservedCons = ["Type", "Constraint", "Copy", "NoCopy", "Op"]
 reservedOps = [":", "=>", "=", "\\", "->", "@", "&", "?"]
 
 -- Possibly qualified, possibly reserved conid / varid / consym / varsym

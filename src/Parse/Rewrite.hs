@@ -110,22 +110,6 @@ addRewriteFromPat pat = do
   m <- use (rewriteMap . varMap)
   rewriteMap . varMap .= (m' `Map.union` m)
 
-{-
-applyRewriteMap :: Term a => RewriteMap -> Annotated a -> Annotated a
-applyRewriteMap m@(RewriteMap { _tyVars = tyVars, _viewVars = viewVars, _vars = vars }) = sub $ \term -> case typeof term of
-  IType   |      TyVar n   <- term ->        TyVar <$> n `Prelude.lookup` tyVars
-  IView   |    ViewVar d n <- term ->    ViewVar d <$> n `Prelude.lookup` viewVars
-  ITyPat  |   TyPatVar n   <- term ->     TyPatVar <$> n `Prelude.lookup` tyVars
-  ITyPat  | TyPatOpVar d n <- term -> TyPatOpVar d <$> n `Prelude.lookup` viewVars
-  IQTyVar |     QTyVar n   <- term ->       QTyVar <$> n `Prelude.lookup` tyVars
-  IQTyVar |   QViewVar d n <- term ->   QViewVar d <$> n `Prelude.lookup` viewVars
-  IPat    |       PatVar n <- term ->       PatVar <$> n `Prelude.lookup` vars
-  IPat    |      PatAt n p <- term -> (\n -> PatAt n (applyRewriteMap m p)) <$> n `Prelude.lookup` vars
-  IDecl   | DeclTerm n t e <- term -> (\n -> DeclTerm n (applyRewriteMap m <$> t) (applyRewriteMap m e)) <$> n `Prelude.lookup` vars
-  -- TODO DeclOp as well perhap?
-  _                                -> Nothing
--}
-
 rewriteTyVar :: Name -> Praxis Name
 rewriteTyVar n = do
   m <- use (rewriteMap . tyVarMap)
@@ -187,7 +171,23 @@ rewriteBind (ann :< Bind pat exp) = do
   pat <- rewritePat pat
   return (ann :< Bind pat exp)
 
--- TODO
+
+rewriteStmts :: [Annotated Stmt] -> Praxis [Annotated Stmt]
+rewriteStmts = \case
+
+    [] -> return []
+
+    ((ann :< StmtBind bind):stmts) -> saveVarMap $ do
+        bind <- rewriteBind bind
+        stmts <- rewriteStmts stmts
+        return $ (ann :< StmtBind bind):stmts
+
+    ((ann :< StmtExp exp):stmts) -> do
+        exp <- rewriteExp exp
+        stmts <- rewriteStmts stmts
+        return $ (ann :< StmtExp exp):stmts
+
+
 rewriteExp :: Annotated Exp -> Praxis (Annotated Exp)
 rewriteExp = splitTrivial $ \src -> \case
 
@@ -200,9 +200,7 @@ rewriteExp = splitTrivial $ \src -> \case
     exp <- rewriteExp exp
     return $ Where exp decls
 
-  Do stmts -> saveVarMap $ do
-    smts <- traverse rewrite stmts -- FIXME this needs to rewrite from StmtBind's
-    return $ Do stmts
+  Do stmts -> Do <$> rewriteStmts stmts
 
   Case exp alts -> do
     exp <- rewriteExp exp

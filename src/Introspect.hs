@@ -239,6 +239,7 @@ instance Term Exp where
     Case a as    -> Case <$> f a <*> pairs f as
     Cases as     -> Cases <$> pairs f as
     Con n        -> pure (Con n)
+    Defer a b    -> Defer <$> f a <*> f b
     Do ss        -> Do <$> traverse f ss
     If a b c     -> If <$> f a <*> f b <*> f c
     Lambda a b   -> Lambda <$> f a <*> f b

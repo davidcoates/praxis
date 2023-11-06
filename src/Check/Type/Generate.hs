@@ -307,6 +307,12 @@ generateExp = split $ \src -> \case
     t <- specialiseQType src name fullType
     return (t :< Con name)
 
+  Defer exp1 exp2 -> do
+    exp1 <- generateExp exp1
+    exp2 <- generateExp exp2
+    require $ newConstraint (view ty exp2 `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src
+    return (view ty exp1 :< Defer exp1 exp2)
+
   Do stmts -> scope src $ do
     stmts <- traverse generate stmts
     let matchExp stmt = case view value stmt of { StmtExp exp -> Just exp; _ -> Nothing }

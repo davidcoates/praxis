@@ -344,18 +344,14 @@ rec
     interpret program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
-  let ret = sum &xs
-  free xs
-  ret
+  sum &xs defer free xs
 |] `shouldReturn` "6"
     interpret program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
   let ys = (map (\x -> x * 2)) &xs
-  let ret = sum &ys
   free xs
-  free ys
-  ret
+  sum &ys defer free ys
 |] `shouldReturn` "12"
 
 

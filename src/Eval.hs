@@ -102,6 +102,11 @@ evalExp ((src, _) :< exp) = case exp of
       Nothing -> Value.Con name Nothing
       Just _  -> Value.Fun (\val -> return $ Value.Con name (Just val))
 
+  Defer exp1 exp2 -> do
+    val <- evalExp exp1
+    evalExp exp2
+    return val
+
   Do stmts -> save vEnv $ do
     mapM evalStmt (init stmts)
     let _ :< StmtExp lastExp = last stmts

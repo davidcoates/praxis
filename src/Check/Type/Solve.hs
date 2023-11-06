@@ -14,7 +14,6 @@ import           Check.Solve
 import           Check.Type.Require
 import           Check.Type.System
 import           Common
-import qualified Env.LEnv            as LEnv
 import           Introspect
 import           Praxis
 import           Stage               hiding (Unknown)
@@ -99,34 +98,27 @@ solveDeep s = \c -> do
     Just Bottom -> return $ Just Bottom
     Just p      -> solveProp (our . constraints) (solveDeep s) p
 
-trySolveCopy t = save our $ save tEnv $ solveDeep (trySolveCopy') (Copy t) where
-  trySolveCopy' = (solveFromAxioms <|>) $ \(Copy t) -> case view value t of
+
+trySolveShare t = save our $ save tEnv $ solveDeep (trySolveShare') (Share t) where
+  trySolveShare' = (solveFromAxioms <|>) $ \(Share t) -> case view value t of
     TyUnit                                     -> tautology
     TyFun _ _                                  -> tautology
-    TyPair a b                                 -> intro [ Copy a, Copy b ]
+    TyPair a b                                 -> intro [ Share a, Share b ]
     TyVar _                                    -> contradiction
     TyCon _                                    -> contradiction
     TyApply (_ :< TyCon _) _                   -> contradiction
     TyApply (_ :< View (_ :< ViewRef _)) _     -> tautology
     TyApply (_ :< View (_ :< ViewUni Ref _)) _ -> tautology
     TyApply (_ :< View (_ :< ViewVar Ref _)) _ -> tautology
-    TyApply (_ :< View (_ :< ViewVar _ _)) a   -> intro [ Copy a ]
-    TyApply (_ :< View (_ :< ViewValue)) a     -> intro [ Copy a ]
+    TyApply (_ :< View (_ :< ViewVar _ _)) a   -> intro [ Share a ]
+    TyApply (_ :< View (_ :< ViewValue)) a     -> intro [ Share a ]
     _                                          -> defer
 
-trySolveNoCopy t = do
-  r <- trySolveCopy t
-  return $ case r of
-    Just Top    -> Just Bottom
-    Just Bottom -> Just Top
-    Nothing     -> Nothing
 
 solveTy :: TypeSolver
 solveTy = (solveFromAxioms <|>) $ \c -> case c of
 
-  Copy t -> trySolveCopy t
-
-  NoCopy t -> trySolveNoCopy t
+  Share t -> trySolveShare t
 
   TEq t1 t2 | t1 == t2 -> tautology
 
@@ -151,7 +143,7 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
   TOpEq t1 t2 | outerViews t1 == outerViews t2 -> tautology
 
   TOpEq t1 t2 -> do
-    r <- trySolveCopy (stripOuterViews t1) -- stripOuterViews t1 == stripOuterViews t2
+    r <- trySolveShare (stripOuterViews t1) -- stripOuterViews t1 == stripOuterViews t2
     case r of
       Just Bottom -> do
         let (ops1, ops2) = let f = Set.toList . outerViews in (f t1, f t2)
@@ -223,7 +215,7 @@ simplifyAll = do
   our . sol . tySol   %%= traverse (second (covalue simplify))
   our . sol . viewSol %%= traverse (second (covalue simplify))
   our . constraints %%= traverse simplify
-  tEnv %%= traverse (LEnv.value simplify)
+  tEnv %%= traverse simplify
 
 
 outerViews :: Annotated Type -> Set (Annotated View)
@@ -265,11 +257,11 @@ normalise = introspect (embedVisit f) where
     TyApply (_ :< View _) _ -> case simplifyOuterViews ty of
 
       ty@(_ :< TyApply (_ :< View _) innerTy) -> Resolve $ do
-        -- The view can be safely stripped if the /* stripped */ type is copyable.
+        -- The view can be safely stripped if the /* stripped */ type is shareable.
         --
-        -- E.g. we can not strip &a from &a &b List Int (because List Int is not copyable)
+        -- E.g. we can not strip &a from &a &b List Int (because List Int is not shareable)
         -- But we can strip &a from &a &b Int, and then &b from &b Int.
-        canStripOps <- trySolveCopy (stripOuterViews innerTy)
+        canStripOps <- trySolveShare (stripOuterViews innerTy)
         case canStripOps of
           Just Top -> view value <$> normalise (stripOuterViews innerTy)
           _        -> return (view value ty)

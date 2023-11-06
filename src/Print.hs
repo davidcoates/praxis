@@ -10,12 +10,12 @@ module Print
   ) where
 
 import           Common
-import           Data.Foldable        (toList)
 import qualified Data.Monoid.Colorful as Colorful
 import           Introspect
 import           Syntax.Unparser
 import           Term
 import           Token
+import           Data.Foldable (toList)
 
 newtype Printer a = Printer { runPrinter :: a -> Maybe [Token] }
 

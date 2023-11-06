@@ -35,9 +35,9 @@ data System = System
 
 makeLenses ''System
 
-copy :: Name -> Axiom
-copy n = Axiom $ \case
-  Copy  (_ :< TyCon m ) | m == n -> Just Top
+share :: Name -> Axiom
+share n = Axiom $ \case
+  Share  (_ :< TyCon m ) | m == n -> Just Top
   _                               -> Nothing
 
 axiom :: TyConstraint -> Axiom
@@ -48,8 +48,8 @@ initialSystem = System
   { _sol         = Solution { _tySol = [], _viewSol = [] }
   , _constraints = []
   , _axioms      =
-    [ copy "Int"
-    , copy "Bool"
-    , copy "Char"
+    [ share "Int"
+    , share "Bool"
+    , share "Char"
     ]
   }

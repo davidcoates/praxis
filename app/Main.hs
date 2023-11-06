@@ -1,8 +1,7 @@
 module Main where
 
 import           Common
-import qualified Env.Env              as Env
-import qualified Env.LEnv             as LEnv
+import           Env
 import           Inbuilts             (initialState)
 import           Interpret
 import           Praxis
@@ -12,6 +11,7 @@ import           Value
 import           Control.Lens.Reified (ReifiedLens (..), ReifiedLens')
 import           Control.Monad        (void, when)
 import           Data.List            (find, intercalate, stripPrefix)
+import           Prelude              hiding (lookup)
 import           System.Environment
 import           System.IO
 
@@ -75,11 +75,11 @@ file f = (interpretFile f :: Praxis (Annotated Program, ())) >> onFileSuccess
 
 runMain :: Praxis ()
 runMain = do
-  ty <- tEnv `uses` LEnv.lookup "main"
-  case ty of Nothing -> throw "missing main function"
-             Just (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) ->
-               do { Just (Fun f) <- vEnv `uses` Env.lookup "main"; f Value.Unit; return () }
-             Just ty -> throwAt (view source ty) $ pretty "main function has bad type " <> quote (pretty ty) <> pretty ", expected () -> ()"
+  t <- tEnv `uses` lookup "main"
+  case t of Nothing -> throw "missing main function"
+            Just (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) ->
+              do { Just (Fun f) <- vEnv `uses` lookup "main"; f Value.Unit; return () }
+            Just t -> throwAt (view source t) $ pretty "main function has bad type " <> quote (pretty t) <> pretty ", expected () -> ()"
 
 repl :: Praxis ()
 repl = forever $ do

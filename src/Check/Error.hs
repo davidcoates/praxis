@@ -6,9 +6,8 @@ module Check.Error
 
 import           Common
 
-data Error = NotInScope Name | Unused Name
+data Error = NotInScope Name
 
 instance Pretty Error where
   pretty = \case
     NotInScope n    -> "variable " <> quote (pretty n) <> " is not in scope"
-    Unused n        -> "variable " <> quote (pretty n) <> " is not used"

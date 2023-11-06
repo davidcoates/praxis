@@ -5,54 +5,37 @@
 
 module Env.Env
   ( Env(..)
-
-  , empty
-  , intro
-  , elim
-  , lookup
   , adjust
-  , fromList
-
-  , zipWith
   )
 where
 
 import           Common
 import           Control.Lens (Traversal)
 import           Data.List    (intercalate)
-import           Prelude      hiding (lookup, zipWith)
-import qualified Prelude      (lookup, zipWith)
+import           Env
+import           Prelude      hiding (lookup)
+import qualified Prelude      (lookup)
 
 -- TODO Cosider putting source in Env
-newtype Env a = Env [(Name, a)]
+newtype Env a b = Env [(a, b)]
 
-deriving instance Functor Env
-deriving instance Foldable Env
-deriving instance Traversable Env
+deriving instance Foldable (Env a)
+deriving instance Traversable (Env a)
 
-empty :: Env a
-empty = Env []
+instance Functor (Env a) where
+  fmap f (Env l) = Env (fmap (over second f) l)
 
-intro :: Name -> a -> Env a -> Env a
-intro k v (Env l) = Env ((k, v):l)
+instance Environment Env where
+  intro a b (Env l) = Env ((a,b):l)
+  elim (Env (_:l)) = Env l
+  empty = Env []
+  lookup a (Env l) = Prelude.lookup a l
 
-elim :: Env a -> Env a
-elim (Env (l:ls)) = Env ls
+instance (Show a, Pretty b) => Pretty (Env a b) where
+  pretty (Env l) = "[" <> separate ", " (map (\(a,b) -> pretty (show a) <> " : " <> pretty b) l) <> " ]"
 
-lookup :: Name -> Env a -> Maybe a
-lookup a (Env l) = Prelude.lookup a l
-
-instance Pretty a => Pretty (Env a) where
-  pretty (Env l) = "[" <> separate ", " (map (\(k, v) -> pretty k <> " : " <> pretty v) l) <> " ]"
-
-adjust :: (a -> a) -> Name -> Env a -> Env a
-adjust f n (Env ((k, v):l)) | n == k    = Env ((k, f v):l)
-                            | otherwise = let Env l' = adjust f n (Env l) in Env ((k, v):l')
-
-fromList :: [(Name, a)] -> Env a
-fromList = \case
-  []        -> empty
-  ((k,v):l) -> intro k v (fromList l)
-
-zipWith :: (a -> a -> a) -> Env a -> Env a -> Env a
-zipWith f (Env l1) (Env l2) = Env (Prelude.zipWith (\(k, v1) (_, v2) -> (k, f v1 v2)) l1 l2)
+-- |adjust the value associated with a given key
+adjust :: Eq a => (b -> b) -> a -> Env a b -> Env a b
+adjust f a (Env [])         = Env []
+adjust f a (Env ((k,v):xs)) | a == k    = let v' = f v in Env ((k, f v):xs)
+                            | otherwise = let Env ys = adjust f a (Env xs) in Env ((k,v):ys)

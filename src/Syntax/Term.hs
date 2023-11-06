@@ -22,8 +22,8 @@ import           Token
 
 import           Data.List     (intersperse)
 import           Data.Maybe    (catMaybes)
-import           Prelude       hiding (_Just, exp, pure, until, (*>), (<$>),
-                                (<*), (<*>))
+import           Prelude       hiding (exp, pure, until, (*>), (<$>), (<*),
+                                (<*>), _Just)
 
 definePrisms ''Bool
 definePrisms ''Ordering
@@ -41,7 +41,7 @@ layout :: Syntax f => Char -> f ()
 layout c = token (Layout c) <|> mark ("layout '" ++ [c] ++ "'")
 
 contextualOp :: Syntax f => Name -> f ()
-contextualOp op = token (QVarSym (unqualified op)) <|> unparseable (reservedOp op) <|> mark ("contextual keyword '" ++ op ++ "'")
+contextualOp op = token (QVarSym (unqualified op)) <|> unparseable (reservedOp op) <|> mark ("contextually keyword '" ++ op ++ "'")
 
 contextualId :: Syntax f => Name -> f ()
 contextualId id = token (QVarId (unqualified id)) <|> unparseable (reservedId id) <|> mark ("contextual keyword '" ++ id ++ "'")
@@ -192,8 +192,7 @@ rightWithSep s _P p = Prism f g <$> annotated p <*> (s *> (_Just <$> annotated (
     Nothing     -> Nothing
 
 tyConstraint :: Syntax f => f TyConstraint
-tyConstraint = _Copy <$> reservedCon "Copy" *> annotated ty <|>
-               _NoCopy <$> reservedCon "NoCopy" *> annotated ty <|>
+tyConstraint = _Share <$> reservedCon "Share" *> annotated ty <|>
                _Class <$> annotated ty <|>
                unparseable (_RefFree <$> varid <*> reservedId "ref-free" *> annotated ty) <|>
                _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
@@ -236,7 +235,7 @@ dataAlt = _DataCon <$> conid <*> optional (annotated ty1)
 tyPat :: Syntax f => f TyPat
 tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
   tyPat0 = _TyPatVar <$> varid <|>
-           _TyPatViewVar <$> viewDomain <*> varid <|>
+           _TyPatOpVar <$> viewDomain <*> varid <|>
            unparseable (pack _TyPatPack tyPat) <|>
            mark "type pattern(0)"
 
@@ -268,13 +267,13 @@ kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind
           mark "kind(0)"
 
 qTy :: Syntax f => f QType
-qTy = _Forall <$> (mono <|> reservedId "forall" *> poly) <|> mark "quantified type" where
-  mono :: Syntax f => f ([Annotated QTyVar], ([Annotated TyConstraint], Annotated Type))
-  mono = Prism (\t -> ([], ([], t))) (\(vs, (cs, t)) -> if null vs then Just t else Nothing) <$> annotated ty
-  poly :: Syntax f => f ([Annotated QTyVar], ([Annotated TyConstraint], Annotated Type))
-  poly = Prism id Just <$> some (annotated qTyVar) <*> tyConstraints <*> (dot *> annotated ty)
-  tyConstraints :: Syntax f => f [Annotated TyConstraint]
-  tyConstraints = _Cons <$> (contextualOp "|" *> annotated tyConstraint) <*> many (annotated tyConstraint) <|> _Nil <$> pure ()
+qTy = _Forall <$> (_Cons <$> (reservedId "forall" *> annotated qTyVar) <*> (many (annotated qTyVar) <* dot) <|> _Nil <$> pure ()) <*> tyConstraints <*> annotated ty <|> mark "quantified type"
+
+tyConstraints :: Syntax f => f [Annotated TyConstraint]
+tyConstraints = _Cons <$> (contextualOp "[" *> annotated tyConstraint) <*> tyConstraints' <|> _Nil <$> pure () where
+  tyConstraints' :: Syntax f => f [Annotated TyConstraint]
+  tyConstraints' = _Cons <$> (annotated tyConstraint <* special ',') <*>  tyConstraints' <|>
+                   _Nil <$> (contextualOp "]" *> reservedOp "=>")
 
 qTyVar :: Syntax f => f QTyVar
 qTyVar = _QTyVar <$> varid <|>
@@ -307,12 +306,12 @@ view' = unparseable (_ViewUni <$> viewDomain <*> uni) <|>
         mark "view"
 
 exp :: Syntax f => f Exp
-exp = exp5 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where
-  exp5 = optWhere <$> annotated exp4 <*> blockLike (reservedId "where") (annotated declTerm) <|> unparseable exp4 <|> mark "expression(5)"
-  optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
-  exp4 = rightWithSep (reservedId "defer") _Defer exp3 <|> mark "expression(4)"
-  exp3 = mixfix <$> some (annotated (_TOp <$> varsym <|> _TExp <$> annotated exp2)) <|> unparseable exp2 <|> mark "expression(3)" -- FIXME unparseable is a hack here
+exp = exp4 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" where
+  -- TODO should mixfix be at this high a level?
+  exp4 = mixfix <$> some (annotated (_TOp <$> varsym <|> _TExp <$> annotated exp3)) <|> unparseable exp3 <|> mark "expression(4)" -- FIXME unparseable is a hack here
   mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> Mixfix ts }) (\case { Mixfix ts -> Just ts; _ -> Nothing })
+  exp3 = optWhere <$> annotated exp2 <*> blockLike (reservedId "where") (annotated declTerm) <|> unparseable exp2 <|> mark "expression(3)"
+  optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
   exp2 = _Read <$> reservedId "read" *> varid <*> reservedId "in" *> annotated exp <|>
          _Do <$> reservedId "do" *> block (annotated stmt) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>

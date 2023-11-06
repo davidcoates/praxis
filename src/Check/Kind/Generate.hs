@@ -15,7 +15,7 @@ import           Check.Kind.Reason
 import           Check.Kind.Require
 import           Check.Kind.System
 import           Common
-import qualified Env.Env            as Env
+import           Env
 import           Introspect
 import           Praxis
 import           Print
@@ -24,6 +24,7 @@ import           Term
 
 import           Data.List          (nub, sort)
 import qualified Data.Set           as Set
+import           Prelude            hiding (lookup)
 
 kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
 kind = annotation . just
@@ -51,9 +52,9 @@ generate term = ($ term) $ case witness :: I a of
 introKind :: Source -> Name -> Annotated Kind -> Praxis ()
 introKind s n k = do
   l <- use kEnv
-  case Env.lookup n l of
-    Just _ -> throwAt s $ "type " <> quote (pretty n) <> " redeclared"
-    _      -> kEnv %= Env.intro n k
+  case lookup n l of
+    Just _ -> throwAt s $ "type " <> quote (pretty n) <> " redeclared (in the same scope)"
+    _      -> kEnv %= intro n k
 
 
 generateQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
@@ -73,7 +74,7 @@ generateView :: Annotated View -> Praxis (Annotated View)
 generateView = splitTrivial $ \src -> \case
 
   op@(ViewVar _ var) -> do
-    entry <- kEnv `uses` Env.lookup var
+    entry <- kEnv `uses` lookup var
     case entry of
       Just _  -> return op
       Nothing -> throwAt src (NotInScope var)
@@ -97,7 +98,7 @@ generateTy = split $ \src -> \case
           return (k :< TyApply f x)
 
     TyCon con -> do
-      entry <- kEnv `uses` Env.lookup con
+      entry <- kEnv `uses` lookup con
       case entry of
         Just k  -> return (k :< TyCon con)
         Nothing -> throwAt src (NotInScope con)
@@ -129,7 +130,7 @@ generateTy = split $ \src -> \case
       return (phantom KindType :< TyUnit)
 
     TyVar var -> do
-      entry <- kEnv `uses` Env.lookup var
+      entry <- kEnv `uses` lookup var
       case entry of
         Just k  -> return (k :< TyVar var)
         Nothing -> throwAt src (NotInScope var)
@@ -143,9 +144,9 @@ generateTyPat = split $ \src -> \case
     introKind src var k
     return (k :< TyPatVar var)
 
-  TyPatViewVar domain var -> do
+  TyPatOpVar domain var -> do
     introKind src var (phantom KindView)
-    return (phantom KindView :< TyPatViewVar domain var)
+    return (phantom KindView :< TyPatOpVar domain var)
 
   TyPatPack tyPat1 tyPat2 -> do
     tyPat1 <- generateTyPat tyPat1

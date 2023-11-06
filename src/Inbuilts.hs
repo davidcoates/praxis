@@ -9,8 +9,7 @@ module Inbuilts
 
 import           Common
 import           Control.Lens              (set, view)
-import qualified Env.Env                   as Env
-import qualified Env.LEnv                  as LEnv
+import           Env
 import           Introspect
 import           Parse                     (parse)
 import           Praxis
@@ -82,7 +81,6 @@ inbuilts =
   , ("gt_int",       poly "(Int, Int) -> Bool", liftE (>))
   , ("lte_int",      poly "(Int, Int) -> Bool", liftE (<=))
   , ("gte_int",      poly "(Int, Int) -> Bool", liftE (>=))
-  , ("free",         poly "forall r | NoCopy r . r -> ()", Fun (\_ -> pure Unit)) -- TODO eval
   ]
   where
     liftI :: (Int -> Int -> Int) -> Value
@@ -99,18 +97,17 @@ inbuiltKinds =
   , ("String", kind "Type")
   , ("Char",   kind "Type")
   , ("Array",  kind "Type -> Type")
-  , ("Copy",   kind "Type -> Constraint")
-  , ("NoCopy", kind "Type -> Constraint")
+  , ("Share",  kind "Type -> Constraint")
   ]
 
 initialVEnv :: VEnv
-initialVEnv = Env.fromList (map (\(n, _, v) -> (n, v)) inbuilts)
+initialVEnv = fromList (map (\(n, _, v) -> (n, v)) inbuilts)
 
 initialTEnv :: TEnv
-initialTEnv = LEnv.fromList (map (\(n, t, _) -> (n, t)) inbuilts)
+initialTEnv = fromList (map (\(n, t, _) -> (n, t)) inbuilts)
 
 initialKEnv :: KEnv
-initialKEnv = Env.fromList inbuiltKinds
+initialKEnv = fromList inbuiltKinds
 
 -- TODO interfaces
 prelude = [r|

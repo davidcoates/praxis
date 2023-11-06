@@ -13,7 +13,6 @@ import           Common
 import           Introspect
 import qualified Parse.Desugar  as Desugar
 import qualified Parse.Parse    as Parse
-import qualified Parse.Rewrite  as Rewrite
 import qualified Parse.Tokenise as Tokenise
 import           Praxis
 import           Term
@@ -24,6 +23,4 @@ parse text = do
   let topLevel = case witness :: I a of { IProgram -> True; _ -> False }
   tokens <- Tokenise.run topLevel text
   term <- Parse.run tokens
-  term <- Desugar.run term
-  term <- Rewrite.run term
-  return term
+  Desugar.run term

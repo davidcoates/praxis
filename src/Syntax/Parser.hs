@@ -9,8 +9,8 @@ module Syntax.Parser
 import           Common
 import           Introspect
 import           Syntax.Prism
-import qualified Syntax.Syntax       as Syntax
 import           Syntax.Syntax       (Syntax)
+import qualified Syntax.Syntax       as Syntax
 import           Syntax.Term
 import           Term
 import           Token

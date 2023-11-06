@@ -9,18 +9,17 @@ module Eval
   ) where
 
 import           Common
-import           Env
+import qualified Env.Env           as Env
 import           Praxis
 import           Stage
 import           Term
-import           Value             (Value)
 import qualified Value
+import           Value             (Value)
 
 import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
 import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
-import           Prelude           hiding (exp, lookup)
 
 class Evaluable a b | a -> b where
   eval' :: Annotated a -> Praxis b
@@ -61,13 +60,13 @@ evalDecl (_ :< decl) = case decl of
     mfix $ \values -> do
       -- Evaluate each of the functions in turn, with all of the evaluations in the environment
       -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
-      irrefMapM (\(name, value) -> vEnv %= intro name value) names values
+      irrefMapM (\(name, value) -> vEnv %= Env.intro name value) names values
       mapM evalExp exps
     return ()
 
   DeclTerm name _ exp -> do
     value <- evalExp exp
-    vEnv %= intro name value
+    vEnv %= Env.intro name value
 
   _ -> return ()
 
@@ -97,11 +96,16 @@ evalExp ((src, _) :< exp) = case exp of
     return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; evalCases src val alts }
 
   Con name -> do
-    Just dataAlt <- daEnv `uses` lookup name
+    Just dataAlt <- daEnv `uses` Env.lookup name
     let DataConInfo { argType } = view (annotation . just) dataAlt
     return $ case argType of
       Nothing -> Value.Con name Nothing
       Just _  -> Value.Fun (\val -> return $ Value.Con name (Just val))
+
+  Defer exp1 exp2 -> do
+    val <- evalExp exp1
+    evalExp exp2
+    return val
 
   Do stmts -> save vEnv $ do
     mapM evalStmt (init stmts)
@@ -137,7 +141,7 @@ evalExp ((src, _) :< exp) = case exp of
   Term.Unit -> return Value.Unit
 
   Var var -> do
-    entry <- vEnv `uses` lookup var
+    entry <- vEnv `uses` Env.lookup var
     case entry of
        Just val -> return val
        Nothing  -> throwAt src ("unknown variable " <> quote (pretty var))
@@ -178,7 +182,7 @@ tryBind :: Value -> Annotated Pat -> Maybe (Praxis ())
 tryBind val (_ :< pat) = case pat of
 
   PatAt name pat
-    -> (\doBind -> do { vEnv %= intro name val; doBind }) <$> tryBind val pat
+    -> (\doBind -> do { vEnv %= Env.intro name val; doBind }) <$> tryBind val pat
 
   PatCon patCon pat | Value.Con valCon val <- val
     -> if patCon /= valCon then Nothing else case (pat, val) of
@@ -202,6 +206,6 @@ tryBind val (_ :< pat) = case pat of
     -> Just (return ())
 
   PatVar name
-    -> Just $ vEnv %= intro name val
+    -> Just $ vEnv %= Env.intro name val
   _
     -> Nothing

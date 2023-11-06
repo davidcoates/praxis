@@ -7,12 +7,12 @@ module Value
   , writeArray
   ) where
 
-import {-# SOURCE #-} Praxis           (Praxis, liftIOUnsafe)
+import {-# SOURCE #-}           Praxis           (Praxis, liftIOUnsafe)
 
-import           Common
-import           Data.Array.IO    (IOArray)
-import qualified Data.Array.IO    as ArrayIO
-import           System.IO.Unsafe (unsafePerformIO)
+import                          Common
+import                          Data.Array.IO    (IOArray)
+import                qualified Data.Array.IO    as ArrayIO
+import                          System.IO.Unsafe (unsafePerformIO)
 
 type Array = IOArray Int Value
 

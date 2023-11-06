@@ -11,7 +11,6 @@ module Parse.Desugar
   ) where
 
 import           Common
-import           Env
 import           Introspect
 import qualified Parse.Mixfix        as Mixfix
 import           Praxis
@@ -40,7 +39,6 @@ run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = save stage $ do
   stage .= Desugar
   term <- desugar term
-  term <- rewrite term
   display term `ifFlag` debug
   return term
 
@@ -54,116 +52,6 @@ desugar term = ($ term) $ case witness :: I a of
   IOpRules -> error "standalone IOpRules"
   IDecl    -> error "standalone Decl"
   _        -> value (recurse desugar)
-
-
--- Term rewriting. This is used to rewrite type-level variables to guarantee uniqueness which is needed for the solver.
--- The rewrite mapping is stored so it can be applied in reverse when displaying diagnostics to the user.
-
-rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-rewrite term = ($ term) $ case witness :: I a of
-  IDecl  -> rewriteDecl
-  IQType -> rewriteQType -- for standalone QTypes (used in tests)
-  _      -> value (recurse rewrite)
-
-
--- Substitions are generated and applied in a piece-meal way (i.e. per declaration)
--- So we expect them to be individually fairly small, which is why we're just using assoc lists here rather than a Map.
-data RewriteMap = RewriteMap { _tyVars :: [(Name, Name)], _viewVars :: [(Name, Name)] }
-
-mkRewriteMap :: Source -> ([Name], [Name]) -> Praxis RewriteMap
-mkRewriteMap src (tyVarNames, viewVarNames) = do
-
-  tyVars <-   series $ [ (\(_ :<     TyVar m) -> (n, m)) <$> freshTyVar             | n <- tyVarNames ]
-  viewVars <- series $ [ (\(_ :< ViewVar _ m) -> (n, m)) <$> freshViewVar undefined | n <- viewVarNames ]
-
-  let allTyVars = tyVars ++ viewVars
-      isUnique xs = length (nub xs) == length xs
-
-  when (not (isUnique (map fst allTyVars))) $ throwAt src $ ("type variables are not distinct" :: String)
-
-  -- Map from generated name (freshTyVar / freshViewVar) to the original name
-  tyVarMap %= Map.union (Map.fromList (map (\(a, b) -> (b, a)) allTyVars))
-
-  return RewriteMap { _tyVars = tyVars, _viewVars = viewVars }
-
-
-rewriteMapFromQType :: Annotated QType -> Praxis RewriteMap
-rewriteMapFromQType ((src, _) :< Forall vs _ _) = mkRewriteMap src (tyVars, viewVars) where
-  tyVars   = [ n |     QTyVar n <- map (view value) vs ]
-  viewVars = [ n | QViewVar _ n <- map (view value) vs ]
-
-rewriteMapFromTyPat :: Annotated TyPat -> Praxis RewriteMap
-rewriteMapFromTyPat tyPat = mkRewriteMap (view source tyPat) (tyVars, viewVars) where
-  tyVars   = extract (embedMonoid f) tyPat
-  f = \case
-    TyPatVar n -> [n]
-    _          -> []
-  viewVars = extract (embedMonoid g) tyPat
-  g = \case
-    TyPatOpVar _ n -> [n]
-    _              -> []
-
-applyRewriteMap :: Term a => RewriteMap -> Annotated a -> Annotated a
-applyRewriteMap RewriteMap { _tyVars = tyVars, _viewVars = viewVars } = sub $ \term -> case typeof term of
-  IType   |      TyVar n   <- term ->        TyVar <$> n `Prelude.lookup` tyVars
-  IView   |    ViewVar d n <- term ->    ViewVar d <$> n `Prelude.lookup` viewVars
-  ITyPat  |   TyPatVar n   <- term ->     TyPatVar <$> n `Prelude.lookup` tyVars
-  ITyPat  | TyPatOpVar d n <- term -> TyPatOpVar d <$> n `Prelude.lookup` viewVars
-  IQTyVar |     QTyVar n   <- term ->       QTyVar <$> n `Prelude.lookup` tyVars
-  IQTyVar |   QViewVar d n <- term ->   QViewVar d <$> n `Prelude.lookup` viewVars
-  _                               -> Nothing
-
-rewriteQType :: Annotated QType -> Praxis (Annotated QType)
-rewriteQType qTy = do
-  rwMap <- rewriteMapFromQType qTy
-  return (applyRewriteMap rwMap qTy)
-
-rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
-rewriteDecl (ann@(src, _) :< decl) = case decl of
-
-  DeclTerm name sig exp -> do
-
-    {-
-    Type variables need to be renamed to be globally unqiue, because the type solver acts globally.
-
-    E.g.
-      foo : forall a. C a => a -> a
-      foo = ... where
-       bar : forall a. D a => a -> a
-       bar x = (x : a)
-    -->
-      foo : forall a1. C a1 => a1 -> a1
-      foo = ... where
-        bar : forall a2. D a2 => a2 -> a2
-        bar x = (x : a2)
-    -}
-
-    case sig of
-
-      Nothing -> do -- Lack of type signature implies a monomorphic function, so just recurse
-        value (recurse rewrite) (ann :< decl)
-
-      Just sig -> do
-        -- Recursiively rewrite first to handle nested declarations
-        exp <- value (recurse rewrite) exp
-        -- Now rewrite for the top level tyVars
-        rwMap <- rewriteMapFromQType sig
-        return (ann :< DeclTerm name (Just (applyRewriteMap rwMap sig)) (applyRewriteMap rwMap exp))
-
-
-  DeclData name tyPat alts -> do
-
-    case tyPat of
-
-      Nothing -> return (ann :< decl)
-
-      Just tyPat -> do
-        rwMap <- rewriteMapFromTyPat tyPat
-        return $ applyRewriteMap rwMap (ann :< decl)
-
-
-  _ -> value (recurse rewrite) (ann :< decl)
-
 
 
 -- Desugaring proper

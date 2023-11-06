@@ -97,6 +97,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
          | Con Name
+         | Defer (Annotated Exp) (Annotated Exp)
          | Do [Annotated Stmt]
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
@@ -165,7 +166,7 @@ data View = ViewUni ViewDomain Name
 
 data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
            | TyPatVar Name
-           | TyPatOpVar ViewDomain Name
+           | TyPatViewVar ViewDomain Name
   deriving (Eq, Ord)
 
 data Type = TyUni Name -- Compares less than all other types
@@ -194,7 +195,8 @@ data Kind = KindUni Name
   deriving (Eq, Ord)
 
 data TyConstraint = Class (Annotated Type)
-                  | Share (Annotated Type)
+                  | Copy (Annotated Type)
+                  | NoCopy (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated Type) (Annotated Type)
                   | RefFree Name (Annotated Type)

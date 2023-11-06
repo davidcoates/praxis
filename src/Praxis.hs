@@ -53,22 +53,24 @@ module Praxis
   , tEnv
   , daEnv
   , vEnv
-  , tyVarMap
+  , rewriteMap
   , tySynonyms
   , system
+
+  -- | RewriteMap lenses
+  , tyVarMap
+  , varMap
 
   , freshTyUni
   , freshKindUni
   , freshViewUni
-  , freshTyVar
-  , freshViewVar
   , freshViewRef
-  , reuse
+  , freshTyVar
+  , freshVar
 
   , clearTerm
   , ifFlag
   , display
-  , sanitise
   )
   where
 
@@ -88,10 +90,10 @@ import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Set                     as Set
-import qualified Env                          as Env (Environment (..))
-import           Env.Env
-import           Env.LEnv
-import           Env.SEnv
+import           Env.Env                      (Env)
+import qualified Env.Env                      as Env
+import           Env.LEnv                     (LEnv)
+import qualified Env.LEnv                     as LEnv
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
@@ -107,21 +109,21 @@ data Fresh = Fresh
   { _freshTyUnis   :: [String]
   , _freshViewUnis :: [String]
   , _freshKindUnis :: [String]
-  , _freshTyVars   :: [String]
-  , _freshViewVars :: [String]
   , _freshViewRefs :: [String]
+  , _freshTyVars   :: Map Name Int
+  , _freshVars     :: Map Name Int
   }
 
 instance Show Fresh where
   show _ = "<fresh>"
 
-type VEnv = Env Name Value
+type VEnv = Env Value
 
-type TEnv = LEnv Name (Annotated QType)
+type TEnv = LEnv (Annotated QType)
 
-type KEnv = Env Name (Annotated Kind)
+type KEnv = Env (Annotated Kind)
 
-type DAEnv = Env Name (Annotated DataCon)
+type DAEnv = Env (Annotated DataCon)
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix
@@ -134,6 +136,10 @@ type OpDefns = Map Op (Name, Fixity)
 data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Graph }
 
 makeLenses ''OpContext
+
+data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name Name }
+
+makeLenses ''RewriteMap
 
 data PraxisState = PraxisState
   { _infile     :: Maybe String
@@ -148,7 +154,7 @@ data PraxisState = PraxisState
   , _vEnv       :: VEnv                -- ^ Value environment for interpreter
   -- TODO encapsulate within desugarer?
   , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
-  , _tyVarMap   :: Map Name Name       -- ^ Substitutions to apply to TyVar / TyVarOp when printing
+  , _rewriteMap :: RewriteMap
   -- TODO rename?
   , _system     :: Check.System        -- ^ Type/Kind check state
   }
@@ -173,9 +179,9 @@ defaultFresh = Fresh
   { _freshTyUnis   = map (("^t"++) . show) [0..]
   , _freshViewUnis = map (("^v"++) . show) [0..]
   , _freshKindUnis = map (("^k"++) . show) [0..]
-  , _freshTyVars   = map (("'t"++) . show) [0..]
-  , _freshViewVars = map (("'v"++) . show) [0..]
   , _freshViewRefs = map (("'l"++) . show) [0..]
+  , _freshTyVars   = Map.empty
+  , _freshVars     = Map.empty
   }
 
 emptyState :: PraxisState
@@ -187,11 +193,11 @@ emptyState = PraxisState
   , _stage        = Unknown
   , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
   , _kEnv         = Env.empty
-  , _tEnv         = Env.empty
+  , _tEnv         = LEnv.empty
   , _daEnv        = Env.empty
   , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
-  , _tyVarMap     = Map.empty
+  , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
   , _system       = error ("unset system") -- FIXME Checkers are responsible for initialisating system
   }
 
@@ -295,45 +301,22 @@ freshKindUni = do
   fresh . freshKindUnis .= ks
   return (phantom (KindUni k))
 
-freshTyVar :: Praxis (Annotated Type)
-freshTyVar = do
-  (x:xs) <- use (fresh . freshTyVars)
-  fresh . freshTyVars .= xs
-  return (TyVar x `as` phantom KindType)
-
-freshViewVar :: ViewDomain -> Praxis (Annotated View)
-freshViewVar domain = do
-  (o:os) <- use (fresh . freshViewVars)
-  fresh . freshViewVars .= os
-  return (phantom (ViewVar domain o))
-
 freshViewRef :: Praxis (Annotated View)
 freshViewRef = do
   (l:ls) <- use (fresh . freshViewRefs)
   fresh . freshViewRefs .= ls
   return (phantom (ViewRef l))
 
--- This will fuck things up if the name is still used somewhere
-reuse :: Name -> Praxis ()
-reuse _ = pure ()
-{-
-reuse n@('?':c:_) = over (fresh . f c) (n:)
-  where f 'a' = freshTyUnis
-        f 'e' = freshViewUnis
-        f 'k' = freshKindUnis
--}
+freshTyVar :: Name -> Praxis Name
+freshTyVar var = do
+  m <- use (fresh . freshTyVars)
+  let i = Map.findWithDefault 0 var m
+  fresh . freshTyVars .= (Map.insert var (i+1) m)
+  return (var ++ "_" ++ show i)
 
--- | Unrewrite type and view variables
-sanitise :: Term a => Annotated a -> Praxis (Annotated a)
-sanitise x = do
-  m <- use tyVarMap
-  let rewriteTyVars :: Term a => Annotated a -> Annotated a
-      rewriteTyVars = sub $ \x -> case typeof x of
-        IType   |        TyVar n <- x ->        TyVar <$> n `Map.lookup` m
-        IView   |    ViewVar d n <- x ->    ViewVar d <$> n `Map.lookup` m
-        ITyPat  |     TyPatVar n <- x ->     TyPatVar <$> n `Map.lookup` m
-        ITyPat  | TyPatOpVar d n <- x -> TyPatOpVar d <$> n `Map.lookup` m
-        IQTyVar |       QTyVar n <- x ->       QTyVar <$> n `Map.lookup` m
-        IQTyVar |   QViewVar d n <- x ->   QViewVar d <$> n `Map.lookup` m
-        _                             -> Nothing
-  return (rewriteTyVars x)
+freshVar :: Name -> Praxis Name
+freshVar var = do
+  m <- use (fresh . freshVars)
+  let i = Map.findWithDefault 0 var m
+  fresh . freshVars .= (Map.insert var (i+1) m)
+  return (var ++ "_" ++ show i)

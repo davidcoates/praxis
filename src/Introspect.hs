@@ -239,6 +239,7 @@ instance Term Exp where
     Case a as    -> Case <$> f a <*> pairs f as
     Cases as     -> Cases <$> pairs f as
     Con n        -> pure (Con n)
+    Defer a b    -> Defer <$> f a <*> f b
     Do ss        -> Do <$> traverse f ss
     If a b c     -> If <$> f a <*> f b <*> f c
     Lambda a b   -> Lambda <$> f a <*> f b
@@ -297,9 +298,9 @@ instance Term TyPat where
   witness = ITyPat
   complete _ f x = f x
   recurse f = \case
-    TyPatVar n     -> pure (TyPatVar n)
-    TyPatOpVar d n -> pure (TyPatOpVar d n)
-    TyPatPack a b  -> TyPatPack <$> f a <*> f b
+    TyPatVar n       -> pure (TyPatVar n)
+    TyPatViewVar d n -> pure (TyPatViewVar d n)
+    TyPatPack a b    -> TyPatPack <$> f a <*> f b
 
 instance Term Type where
   witness = IType
@@ -347,7 +348,8 @@ instance Term TyConstraint where
   recurse f = \case
     Class t      -> Class <$> f t
     RefFree n t  -> RefFree n <$> f t
-    Share t      -> Share <$> f t
+    Copy t       -> Copy <$> f t
+    NoCopy t     -> NoCopy <$> f t
     TEq a b      -> TEq <$> f a <*> f b
     TOpEq a b    -> TOpEq <$> f a <*> f b
 

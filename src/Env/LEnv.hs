@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFoldable     #-}
 {-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
@@ -7,88 +8,83 @@
 module Env.LEnv
   ( LEnv
 
-  , Entry
   , value
   , used
   , captured
 
-  , lookupFull
-  , lookupTop
-  , push
+  , empty
+  , intro
+  , lookup
+  , adjust
+  , fromList
 
   , mark
   , capture
+
   , join
+  , mixedUse
   )
 where
 
-import           Common        hiding (value)
-import           Env
-import           Env.Env
-import           Env.SEnv      (SEnv (..))
-import qualified Env.SEnv      as SEnv
+import           Common       hiding (value)
+import           Env.Env      (Env (..))
+import qualified Env.Env      as Env
 
-import           Control.Arrow (second)
-import           Control.Lens  (makeLenses)
-import           Data.List     (intercalate)
-import           Prelude       hiding (lookup)
-import qualified Prelude       (lookup)
+import           Control.Lens (makeLenses)
+import           Prelude      hiding (lookup)
+import qualified Prelude      (lookup)
 
-data Entry b = Entry { _value :: b, _used :: Bool, _captured :: Bool }
+data Entry a = Entry { _value :: a, _used :: Bool, _captured :: Bool }
 
-deriving instance Functor Entry
-deriving instance Foldable Entry
-deriving instance Traversable Entry
+mkEntry :: a -> Entry a
+mkEntry x = Entry { _value = x, _used = False, _captured = False }
 
 makeLenses ''Entry
 
-instance Pretty b => Pretty (Entry b) where
-  pretty b = (<> pretty (view value b)) $ case (view used b, view captured b) of
+instance Semigroup (Entry a) where
+  e1 <> e2 = Entry { _value = view value e1, _used = view used e1 || view used e2, _captured = view captured e1 || view captured e2 }
+
+{-
+deriving instance Functor Entry
+deriving instance Foldable Entry
+deriving instance Traversable Entry
+-}
+
+instance Pretty a => Pretty (Entry a) where
+  pretty Entry{ _value, _used, _captured } = (<> pretty _value) $ case (_used, _captured) of
     (True, True)   -> "[uc] "
     (True, False)  -> "[u] "
     (False, True)  -> "[c] "
     (False, False) -> ""
 
 -- Linear environment
-data LEnv a b = LEnv (SEnv a (Entry b))
+type LEnv a = Env (Entry a)
 
-deriving instance Foldable (LEnv a)
-deriving instance Traversable (LEnv a)
+empty :: LEnv a
+empty = Env.empty
 
-instance Functor (LEnv a) where
-  fmap f (LEnv s) = LEnv (fmap (over value f) s)
+intro :: Name -> a -> LEnv a -> LEnv a
+intro k v l = Env.intro k (mkEntry v) l
 
-instance (Show a, Pretty b) => Pretty (LEnv a b) where
-  pretty (LEnv s) = pretty s
+lookup :: Name -> LEnv a -> Maybe a
+lookup k l = view value <$> Env.lookup k l
 
-instance Environment LEnv where
-  intro a b (LEnv s) = LEnv (intro a b' s) where
-    b' = Entry { _value = b, _used = False, _captured = False }
-  elim (LEnv s) = LEnv (elim s)
-  empty = LEnv empty
-  lookup a (LEnv s) = fmap (view value) (lookup a s)
+adjust :: (a -> a) -> Name -> LEnv a -> LEnv a
+adjust f k l = Env.adjust (over value f) k l
 
+fromList :: [(Name, a)] -> LEnv a
+fromList = \case
+  []        -> empty
+  ((k,v):l) -> intro k v (fromList l)
 
-lookupFull :: Eq a => a -> LEnv a b -> Maybe (Entry b)
-lookupFull a (LEnv s) = lookup a s
+mark :: Name -> LEnv a -> LEnv a
+mark k l = Env.adjust (\v -> v { _used = True} ) k l
 
-lookupTop :: Eq a => a -> LEnv a b -> Maybe (Entry b)
-lookupTop a (LEnv s) = SEnv.lookupTop a s
+capture :: LEnv a -> LEnv a
+capture l = fmap (\v -> v { _captured = True}) l
 
-push :: LEnv a b -> LEnv a b
-push (LEnv s) = LEnv (SEnv.push s)
+join :: LEnv a -> LEnv a -> LEnv a
+join = Env.zipWith (<>)
 
-mark :: Eq a => a -> LEnv a b -> LEnv a b
-mark x (LEnv (SEnv l ls)) = let (m:ms) = f (l:ls) in LEnv (SEnv m ms)
-  where f (l:ls) = case lookup x l of
-          Just _  -> adjust (\b -> b { _used = True} ) x l : ls
-          Nothing -> l : f ls
-
-capture :: LEnv a b -> LEnv a b
-capture (LEnv s) = LEnv (fmap (\b -> b { _captured = True}) s)
-
--- Join is used to unify branches with respect to usage and captured status.
--- E.g. a variable is used/captured by an If expression iff it is used/captured by at least one branch.
-join :: LEnv a b -> LEnv a b -> LEnv a b
-join (LEnv (SEnv l1 l1s)) (LEnv (SEnv l2 l2s)) = LEnv (SEnv (join' l1 l2) (zipWith join' l1s l2s)) where
-  join' (Env l1) (Env l2) = Env (zipWith (\(x, xb) (_, yb) -> (x, Entry { _value = view value xb, _used = view used xb || view used yb, _captured = view captured xb || view captured yb })) l1 l2)
+mixedUse :: LEnv a -> LEnv a -> [(Name, a)]
+mixedUse (Env l1) (Env l2) = [ (k, view value e1) | ((k, e1), (_, e2)) <- zip l1 l2, view used e1 /= view used e2 ]

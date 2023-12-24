@@ -45,6 +45,20 @@ trim :: String -> String
 trim = init . tail
 
 
+doBlock = describe "do" $ do
+
+  let program = [r|
+foo = do
+  let x = 1
+  ()
+  let y = 2
+  x + y
+|]
+
+  it "type checks" $ check program `shouldReturn` trim [r|
+foo = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0 = [Int] 2 in [( Int , Int ) -> Int] add_int ( [Int] x_0 , [Int] y_0 )
+|]
+
 
 tuple = describe "tuple" $ do
 
@@ -425,6 +439,33 @@ do
 
 
 
+badDo1 = describe "do not ending in expression" $ do
+
+  let program = trim [r|
+foo = do
+  let x = 1
+  let y = 1
+|]
+
+  it "does not parse" $ check program `shouldReturn` "3:3 error: do block must end in an expression"
+
+
+badDo2 = describe "do drops non-unit" $ do
+
+  let program = trim [r|
+foo = do
+  let x = 1
+  x
+  x
+|]
+
+  it "does not type check" $ check program `shouldReturn` trim [r|
+error: found contradiction [3:3] Int ~ ( ) ∧ Int o~ ( )
+|-> [3:3] Int ~ ( )
+|-> (expression in do block returns a non-unit but is ignored)
+|]
+
+
 redeclVar = describe "variarble redeclaration" $ do
 
   let program = trim [r|
@@ -531,6 +572,7 @@ spec = do
 
 
   describe "simple monomorphic programs" $ do
+    doBlock
     tuple
     ifThenElse
     switch
@@ -553,5 +595,7 @@ spec = do
     boxedReference
 
   describe "invalid programs" $ do
+    badDo1
+    badDo2
     redeclVar
     redeclTyVar

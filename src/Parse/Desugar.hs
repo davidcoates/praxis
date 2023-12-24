@@ -106,6 +106,23 @@ desugarExp (ann@(src, _) :< exp) = case exp of
         unrollReads (v:vs) = (ann :< Read v (unrollReads vs))
     return (unrollReads (Set.elems readVars))
 
+  Do stmts -> desugarStmts stmts where
+    desugarStmts :: [Annotated Stmt] -> Praxis (Annotated Exp)
+    desugarStmts [stmt]
+      | (_ :< StmtExp exp)   <- stmt = desugarExp exp
+      | (_ :< StmtBind bind) <- stmt = throwAt (view source stmt) ("do block must end in an expression" :: String)
+    desugarStmts (stmt:stmts)
+      | (_ :< StmtExp exp) <- stmt = do
+        exp1 <- desugarExp exp
+        exp2 <- desugarStmts stmts
+        let ann = (view source exp1 <> view source exp2, Nothing)
+        return (ann :< Seq exp1 exp2)
+      | (_ :< StmtBind bind) <- stmt = do
+        bind <- desugar bind
+        exp <- desugarStmts stmts
+        let ann = (view source bind <> view source exp, Nothing)
+        return (ann :< Let bind exp)
+
     -- Call Mixfix.parse to fold the token sequence into a single expression, then desugar that expression
   Mixfix tokens -> Mixfix.parse src tokens >>= desugar
 

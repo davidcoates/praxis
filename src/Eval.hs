@@ -71,12 +71,12 @@ evalDecl (_ :< decl) = case decl of
   _ -> return ()
 
 
-evalStmt :: Annotated Stmt -> Praxis ()
+evalStmt :: Annotated Stmt -> Praxis (Maybe Value)
 evalStmt (_ :< stmt) = case stmt of
 
-  StmtBind bind -> evalBind bind
+  StmtBind bind -> evalBind bind >> return Nothing
 
-  StmtExp exp   -> evalExp exp >> return ()
+  StmtExp exp   -> Just <$> evalExp exp
 
 
 evalExp :: Annotated Exp -> Praxis Value
@@ -107,11 +107,6 @@ evalExp ((src, _) :< exp) = case exp of
     evalExp exp2
     return val
 
-  Do stmts -> save vEnv $ do
-    mapM evalStmt (init stmts)
-    let _ :< StmtExp lastExp = last stmts
-    evalExp lastExp
-
   If condExp thenExp elseExp -> do
     Value.Bool cond <- evalExp condExp
     if cond then evalExp thenExp else evalExp elseExp
@@ -133,6 +128,11 @@ evalExp ((src, _) :< exp) = case exp of
   Read _ exp -> evalExp exp
 
   Pair exp1 exp2 -> Value.Pair <$> evalExp exp1 <*> evalExp exp2
+
+  Seq exp1 exp2 -> do
+    evalExp exp1
+    val <- evalExp exp2
+    return val
 
   Sig exp _ -> evalExp exp
 

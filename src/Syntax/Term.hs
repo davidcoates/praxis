@@ -320,6 +320,7 @@ exp = exp5 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedOp "\\" *> alt <|>
          _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
+         unparseable (_Seq <$> annotated exp <*> reservedId "seq" *> annotated exp) <|>
          _Switch <$> reservedId "switch" *> block switch <|>
          exp1 <|> mark "expression(2)"
   exp1 = right _Apply exp0 <|> mark "expression(1)"

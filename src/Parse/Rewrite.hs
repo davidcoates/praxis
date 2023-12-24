@@ -172,22 +172,6 @@ rewriteBind (ann :< Bind pat exp) = do
   return (ann :< Bind pat exp)
 
 
-rewriteStmts :: [Annotated Stmt] -> Praxis [Annotated Stmt]
-rewriteStmts = \case
-
-    [] -> return []
-
-    ((ann :< StmtBind bind):stmts) -> saveVarMap $ do
-        bind <- rewriteBind bind
-        stmts <- rewriteStmts stmts
-        return $ (ann :< StmtBind bind):stmts
-
-    ((ann :< StmtExp exp):stmts) -> do
-        exp <- rewriteExp exp
-        stmts <- rewriteStmts stmts
-        return $ (ann :< StmtExp exp):stmts
-
-
 rewriteExp :: Annotated Exp -> Praxis (Annotated Exp)
 rewriteExp = splitTrivial $ \src -> \case
 
@@ -199,8 +183,6 @@ rewriteExp = splitTrivial $ \src -> \case
     decls <- rewriteDecls decls
     exp <- rewriteExp exp
     return $ Where exp decls
-
-  Do stmts -> Do <$> rewriteStmts stmts
 
   Case exp alts -> do
     exp <- rewriteExp exp

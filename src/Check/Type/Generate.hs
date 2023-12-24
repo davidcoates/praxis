@@ -313,14 +313,6 @@ generateExp = split $ \src -> \case
     require $ newConstraint (view ty exp2 `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src
     return (view ty exp1 :< Defer exp1 exp2)
 
-  Do stmts -> scope src $ do
-    stmts <- traverse generate stmts
-    let matchExp stmt = case view value stmt of { StmtExp exp -> Just exp; _ -> Nothing }
-    requires [ newConstraint (t `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src | ((src, Just t) :< _) <- mapMaybe matchExp (init stmts) ]
-    case view value (last stmts) of
-      StmtExp ((_, Just t) :< _) -> return (t :< Do stmts)
-      _                          -> throwAt src ("do block must end in an expression" :: String)
-
   If condExp thenExp elseExp -> do
     condExp <- generateExp condExp
     (thenExp, elseExp) <- join src (generateExp thenExp) (generateExp elseExp)
@@ -362,6 +354,12 @@ generateExp = split $ \src -> \case
     exp2 <- generateExp exp2
     let t = TyPair (view ty exp1) (view ty exp2) `as` phantom KindType
     return (t :< Pair exp1 exp2)
+
+  Seq exp1 exp2 -> do
+    exp1 <- generateExp exp1
+    exp2 <- generateExp exp2
+    require $ newConstraint (view ty exp1 `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src
+    return (view ty exp2 :< Seq exp1 exp2)
 
   Sig exp t -> do
     exp <- generateExp exp

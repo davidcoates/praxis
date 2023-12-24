@@ -248,6 +248,7 @@ instance Term Exp where
     Mixfix ts    -> Mixfix <$> traverse f ts
     Read n a     -> Read n <$> f a
     Pair a b     -> Pair <$> f a <*> f b
+    Seq a b      -> Seq <$> f a <*> f b
     Sig e t      -> Sig <$> f e <*> f t
     Switch as    -> Switch <$> pairs f as
     Unit         -> pure Unit

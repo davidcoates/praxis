@@ -98,7 +98,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Cases [(Annotated Pat, Annotated Exp)]
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
-         | Do [Annotated Stmt]
+         | Do [Annotated Stmt] -- ^ Parsing only
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
          | Let (Annotated Bind) (Annotated Exp)
@@ -106,6 +106,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Mixfix [Annotated Tok] -- ^ Parsing only
          | Read Name (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
+         | Seq (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit

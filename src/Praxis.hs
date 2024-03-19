@@ -38,15 +38,10 @@ module Praxis
   , liftIO
   , liftIOUnsafe
 
-  , Mode(..)
-
   -- | Flag lenses
   , debug
-  , mode
 
   -- | Praxis lenses
-  , infile
-  , outfile
   , flags
   , fresh
   , stage
@@ -101,14 +96,8 @@ import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
 import           Value
 
-data Mode = ModeInteractive
-          | ModeInterpret
-          | ModeTranslate
-  deriving (Show)
-
 data Flags = Flags
   { _debug       :: Bool
-  , _mode        :: Mode
   , _silent      :: Bool -- silence IO (for tests, and for internal runs which are guaranteed not to throw / use IO)
   } deriving (Show)
 
@@ -149,9 +138,7 @@ data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name N
 makeLenses ''RewriteMap
 
 data PraxisState = PraxisState
-  { _infile     :: Maybe String
-  , _outfile    :: Maybe String
-  , _flags      :: Flags               -- ^ Flags
+  { _flags      :: Flags               -- ^ Flags
   , _fresh      :: Fresh
   , _stage      :: Stage               -- ^ Current stage of compilation
   , _opContext  :: OpContext
@@ -180,7 +167,7 @@ instance Functor f => Functor (PraxisT f) where
   fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
 
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = False, _mode = ModeInterpret, _silent = False }
+defaultFlags = Flags { _debug = False, _silent = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("^t"++) . show) [0..]
@@ -193,9 +180,7 @@ defaultFresh = Fresh
 
 emptyState :: PraxisState
 emptyState = PraxisState
-  { _infile       = Nothing
-  , _outfile      = Nothing
-  , _flags        = defaultFlags
+  { _flags        = defaultFlags
   , _fresh        = defaultFresh
   , _stage        = Unknown
   , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }

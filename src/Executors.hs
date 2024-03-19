@@ -4,14 +4,14 @@ module Executors
   , translateProgram
   ) where
 
-import           Check  (check)
+import           Check     (check)
 import           Common
 import qualified Eval
-import           Parse  (parse)
+import           Parse     (parse)
 import           Praxis
 import           Term
 import qualified Translate
-import           Value  (Value)
+import           Value     (Value)
 
 interpretExp :: String -> Praxis Value
 interpretExp text = do

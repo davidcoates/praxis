@@ -7,8 +7,8 @@ module PraxisSpec where
 
 import qualified Check             (check)
 import           Common
-import           Inbuilts
 import           Executors
+import           Inbuilts
 import           Introspect
 import qualified Parse             (parse)
 import           Praxis

@@ -5,7 +5,6 @@
 
 module Praxis
   ( Praxis
-  , PraxisT(..)
   , PraxisState
   , emptyState
 
@@ -157,14 +156,6 @@ instance Show PraxisState where
   show s = "<praxis state>"
 
 type Praxis = ExceptT String (StateT PraxisState IO)
-
-newtype PraxisT f a = PraxisT { runPraxisT :: f (Praxis a) }
-
-instance MonadTrans PraxisT where
-  lift x = PraxisT (pure <$> x)
-
-instance Functor f => Functor (PraxisT f) where
-  fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
 
 defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _silent = False }

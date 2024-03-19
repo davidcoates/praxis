@@ -38,9 +38,11 @@ module Praxis
   , liftIO
   , liftIOUnsafe
 
+  , Mode(..)
+
   -- | Flag lenses
   , debug
-  , interactive
+  , mode
 
   -- | Praxis lenses
   , infile
@@ -99,9 +101,14 @@ import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
 import           Value
 
+data Mode = ModeInteractive
+          | ModeInterpret
+          | ModeTranslate
+  deriving (Show)
+
 data Flags = Flags
   { _debug       :: Bool
-  , _interactive :: Bool
+  , _mode        :: Mode
   , _silent      :: Bool -- silence IO (for tests, and for internal runs which are guaranteed not to throw / use IO)
   } deriving (Show)
 
@@ -173,7 +180,7 @@ instance Functor f => Functor (PraxisT f) where
   fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
 
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = False, _interactive = False, _silent = False }
+defaultFlags = Flags { _debug = False, _mode = ModeInterpret, _silent = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("^t"++) . show) [0..]

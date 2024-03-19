@@ -4,7 +4,7 @@ import           Common
 import qualified Env.Env              as Env
 import qualified Env.LEnv             as LEnv
 import           Inbuilts             (initialState)
-import           Interpret
+import           Executors
 import           Praxis
 import           Term
 import           Value
@@ -39,8 +39,9 @@ instance Show Arg where
 args :: [Arg]
 args =
   [ Arg "d" "debug" (flags . debug .= True)
-  , Arg "i" "interactive" (flags . interactive .= True)
+  , Arg "i" "interactive" (flags . mode .= ModeInteractive)
   , Arg "h" "help" help
+  , Arg "t" "translate" (flags . mode .= ModeTranslate)
   ]
 
 help :: Praxis ()
@@ -70,8 +71,13 @@ opts (x : xs)
 opts [] = return ()
 
 file :: String -> Praxis ()
-file f = (interpretFile f :: Praxis (Annotated Program, ())) >> onFileSuccess
-  where onFileSuccess = use (flags . interactive) >>= (\i -> if i then repl else runMain)
+file f = do
+  text <- liftIO (readFile f)
+  mode <- use (flags . mode)
+  case mode of
+    ModeInteractive -> interpretProgram text >> repl
+    ModeInterpret   -> interpretProgram text >> runMain
+    ModeTranslate   -> translateProgram text >>= (\t -> liftIO (putStr t)) -- TODO
 
 runMain :: Praxis ()
 runMain = do
@@ -89,6 +95,6 @@ repl = forever $ do
 eval :: String -> Praxis ()
 eval s = do
   -- TODO fix this so we can have declarations
-  (_, v) <- interpret s :: Praxis (Annotated Exp, Value)
+  v <- interpretExp s
   liftIO $ print v
 

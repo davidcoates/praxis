@@ -8,7 +8,7 @@ module PraxisSpec where
 import qualified Check             (check)
 import           Common
 import           Inbuilts
-import qualified Interpret         (interpret)
+import           Executors
 import           Introspect
 import qualified Parse             (parse)
 import           Praxis
@@ -35,15 +35,14 @@ run p = do
 check :: String -> IO String
 check s = run (Parse.parse s >>= Check.check :: Praxis (Annotated Program))
 
+-- Helper for interperting a program followed by an expression and printing the resulting value
 interpret :: String -> String -> IO String
 interpret program exp = run $ do
-    Interpret.interpret program :: Praxis (Annotated Program, ())
-    (_, v) <- Interpret.interpret exp :: Praxis (Annotated Exp, Value)
-    return v
+    interpretProgram program
+    interpretExp exp
 
 trim :: String -> String
 trim = init . tail
-
 
 doBlock = describe "do" $ do
 

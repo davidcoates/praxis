@@ -1,5 +1,5 @@
-{-# LANGUAGE NamedFieldPuns         #-}
-{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Eval
   ( runExp

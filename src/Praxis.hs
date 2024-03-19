@@ -96,8 +96,8 @@ import           System.IO.Unsafe             (unsafePerformIO)
 import           Value
 
 data Flags = Flags
-  { _debug       :: Bool
-  , _silent      :: Bool -- silence IO (for tests, and for internal runs which are guaranteed not to throw / use IO)
+  { _debug  :: Bool
+  , _silent :: Bool -- silence IO (for tests, and for internal runs which are guaranteed not to throw / use IO)
   } deriving (Show)
 
 data Fresh = Fresh

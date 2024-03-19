@@ -1,11 +1,9 @@
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NamedFieldPuns         #-}
 {-# LANGUAGE OverloadedStrings      #-}
 
 module Eval
-  ( Evaluable(..)
+  ( runExp
+  , runProgram
   ) where
 
 import           Common
@@ -21,19 +19,17 @@ import           Data.Array.IO
 import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
 
-class Evaluable a b | a -> b where
-  eval' :: Annotated a -> Praxis b
-  eval  :: Annotated a -> Praxis b
-  eval term = save stage $ do
-    stage .= Evaluate
-    clearTerm `ifFlag` debug
-    eval' term
+runExp :: Annotated Exp -> Praxis Value
+runExp exp = save stage $ do
+  stage .= Evaluate
+  clearTerm `ifFlag` debug
+  evalExp exp
 
-instance Evaluable Program () where
-  eval' = evalProgram
-
-instance Evaluable Exp Value where
-  eval' = evalExp
+runProgram :: Annotated Program -> Praxis ()
+runProgram program = save stage $ do
+  stage .= Evaluate
+  clearTerm `ifFlag` debug
+  evalProgram program
 
 evalProgram :: Annotated Program -> Praxis ()
 evalProgram (_ :< Program decls) = do

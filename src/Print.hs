@@ -39,7 +39,7 @@ instance Unparser Printer where
     g x = Just $ case typeof (view value x) of
       ITyProp   -> prop
       IKindProp -> prop
-      i         -> [Print (mapIfNotNull (\c -> "[" <> c <> "]") (label x))] ++ body
+      _         -> Print (Printable $ \o -> let l = runPrintable (label x) o in if null l then Nil else "[" <> l <> "]") : body
       where
         body = force f (view value x)
         prop = [Print ("[" <> pretty (show (view source x)) <> "]")] ++ [Print (Printable (layout body) <> "\n|-> " <> label x)]
@@ -56,12 +56,11 @@ layout ts o = layout' (-1) Nil ts where
   layoutLines :: Int -> Colored String -> [Token] -> [Colored String]
   layoutLines depth prefix ts = case ts of
 
-    []      -> []
-
     Layout t : ts ->
       let
         depth' = case t of { '{' -> depth + 1 ; ';' -> depth ; '}' -> depth - 1 }
       in
+        -- Note: Here we suppress newline for the top-level block start (the first token for programs)
         layoutLines depth' ((if depth == (-1) then "" else "\n") <> Value (indent depth')) ts
 
     t : ts ->
@@ -71,6 +70,8 @@ layout ts o = layout' (-1) Nil ts where
         if null cs
           then layoutLines depth prefix ts
           else [ prefix <> cs <> layout' depth (Value " ") ts ]
+
+    [] -> []
 
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where

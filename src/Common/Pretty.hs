@@ -6,7 +6,6 @@ module Common.Pretty
   , Printable(..)
   , blank
   , Pretty(..)
-  , mapIfNotNull
   , quote
   , separate
   , module Data.Monoid.Colorful
@@ -56,9 +55,6 @@ instance Pretty (Colored String) where
 
 instance Pretty (Printable String) where
   pretty = id
-
-mapIfNotNull :: (Colored String -> Colored String) -> Printable String -> Printable String
-mapIfNotNull f p = Printable $ \o -> let x = runPrintable p o in if null x then x else f x
 
 quote :: Printable String -> Printable String
 quote p = Printable $ \o -> "'" <> runPrintable p o <> "'"

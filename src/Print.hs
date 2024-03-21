@@ -51,27 +51,24 @@ layout :: [Token] -> Option -> Colored String
 layout ts o = layout' (-1) Nil ts where
 
   layout' :: Int -> Colored String -> [Token] -> Colored String
-  layout' depth prefix ts = fold . intersperse (Value "\n") $ (layoutLines depth prefix ts)
-
-  layoutLines :: Int -> Colored String -> [Token] -> [Colored String]
-  layoutLines depth prefix ts = case ts of
+  layout' depth prefix ts = case ts of
 
     Layout t : ts ->
       let
         depth' = case t of { '{' -> depth + 1 ; ';' -> depth ; '}' -> depth - 1 }
       in
         -- Note: Here we suppress newline for the top-level block start (the first token for programs)
-        layoutLines depth' ((if depth == (-1) then "" else "\n") <> Value (indent depth')) ts
+        layout' depth' ((if depth == (-1) then "" else "\n") <> Value (indent depth')) ts
 
     t : ts ->
       let
         cs = runPrintable (pretty t) o
       in
         if null cs
-          then layoutLines depth prefix ts
-          else [ prefix <> cs <> layout' depth (Value " ") ts ]
+          then layout' depth prefix ts
+          else prefix <> cs <> layout' depth (Value " ") ts
 
-    [] -> []
+    [] -> Nil
 
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where

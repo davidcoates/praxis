@@ -107,12 +107,11 @@ sign : Int -> Int = \ [Int] n_0 -> [Int] switch
     interpret program "sign 10"   `shouldReturn` "1"
     interpret program "sign (-5)" `shouldReturn` "-1"
     interpret program "sign -5"   `shouldReturn` trim [r|
-error: found contradiction [<?>] Int ~ Int -> Int ∧ Int ~ Int
-|-> [<?>] ( Int , Int ) ~ ( Int -> Int , Int ) ∧ Int ~ ^t6
-|-> [<?>] ( Int , Int ) -> Int ~ ( Int -> Int , Int ) -> ^t6
+error: found contradiction [1:1] Int ~ Int -> Int ∧ Int ~ Int
+|-> [1:1] ( Int , Int ) ~ ( Int -> Int , Int ) ∧ Int ~ ^t6
+|-> [1:1] ( Int , Int ) -> Int ~ ( Int -> Int , Int ) -> ^t6
 |-> (function application)
 |]  -- Note: Parses as "sign - 5" (binary subtract)
--- FIXME improve derivation (why is source missing?)
 
 
 recursion = describe "recursion (factorial)" $ do

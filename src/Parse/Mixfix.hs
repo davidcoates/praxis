@@ -120,13 +120,13 @@ mixfix defns levels prec = exp where
     Closed  -> \[]    -> build name ps
 
   build :: Name -> [Annotated Exp] -> Annotated Exp
-  build n es = phantom $ Apply (phantom $ Var n) (fold es)
+  build n es = let es' = fold es in (view source es', Nothing) :< Apply (phantom $ Var n) es'
 
   fold :: [Annotated Exp] -> Annotated Exp
   fold = \case
     []     -> phantom Unit
     [e]    -> e
-    (e:es) -> phantom $ Pair e (fold es)
+    (e:es) -> let es' = fold es in (view source e <> view source es', Nothing) :< Pair e es'
 
   trim :: Fixity -> [Maybe Name] -> [Maybe Name]
   trim = \case

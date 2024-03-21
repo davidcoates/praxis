@@ -42,35 +42,35 @@ instance Unparser Printer where
       i         -> [Print (mapIfNotNull (\c -> "[" <> c <> "]") (label x))] ++ body
       where
         body = force f (view value x)
-        prop = (if view source x == Phantom then [] else [Print ("[" <> pretty (show (view source x)) <> "]")]) ++ body ++ [Print (label x)]
+        prop = [Print ("[" <> pretty (show (view source x)) <> "]")] ++ [Print (Printable (layout body) <> "\n|-> " <> label x)]
 
 indent :: Int -> String
 indent n = replicate (2*n) ' '
 
 layout :: [Token] -> Option -> Colored String
-layout ts o = foldLines (layout' False (-1) ts Nil) where
+layout ts o = layout' (-1) Nil ts where
 
-  foldLines :: [Colored String] -> Colored String
-  foldLines ls = fold . intersperse (Value "\n") $ concatMap (\cs -> [cs | not (null cs)]) ls where
+  layout' :: Int -> Colored String -> [Token] -> Colored String
+  layout' depth prefix ts = fold . intersperse (Value "\n") $ (layoutLines depth prefix ts)
 
-  layout' :: Bool -> Int -> [Token] -> Colored String -> [Colored String]
-  layout' needsSpace depth ts line = case ts of
+  layoutLines :: Int -> Colored String -> [Token] -> [Colored String]
+  layoutLines depth prefix ts = case ts of
 
-    []      -> [line]
+    []      -> []
 
-    Layout t : ts
-      | t == '{' -> line : layout' False (depth + 1) ts (Value (indent (depth + 1)))
-      | t == ';' -> line : layout' False depth ts (Value (indent depth))
-      | t == '}' -> layout' False (depth - 1) ts line
+    Layout t : ts ->
+      let
+        depth' = case t of { '{' -> depth + 1 ; ';' -> depth ; '}' -> depth - 1 }
+      in
+        layoutLines depth' ((if depth == (-1) then "" else "\n") <> Value (indent depth')) ts
 
-    t : ts -> let
-      cs = runPrintable (pretty t) o
-      endOfLine = case head (toList cs) of
-                    ('\n': _) -> True
-                    _         -> False
-      in if null cs
-         then layout' needsSpace depth ts line
-         else layout' True depth ts (line <> (if needsSpace && not endOfLine then Value " " else Nil) <> cs)
+    t : ts ->
+      let
+        cs = runPrintable (pretty t) o
+      in
+        if null cs
+          then layoutLines depth prefix ts
+          else [ prefix <> cs <> layout' depth (Value " ") ts ]
 
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where

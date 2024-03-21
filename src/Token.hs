@@ -17,7 +17,6 @@ data Token = QVarId (Qualified Name)
            | Print (Printable String)
            | Special Char
            | Uni String -- ^ A unification variable
-           | Annotation (Printable String)
   deriving Eq
 
 hint     = RGB 0xDE 0xFB 0xFF

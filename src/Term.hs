@@ -260,8 +260,8 @@ data Derivation a = Root String
                   | Antecedent (Annotated a)
 
 instance Pretty (Annotated a) => Pretty (Derivation a) where
-  pretty (Root r)       = "\n|-> (" <> pretty r <> ")"
-  pretty (Antecedent a) = "\n|-> " <> pretty a
+  pretty (Root r)       = "(" <> pretty r <> ")"
+  pretty (Antecedent a) = pretty a
 
 {- | A data constructor C for a type T, either has:
 

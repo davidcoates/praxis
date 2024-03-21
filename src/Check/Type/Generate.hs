@@ -263,8 +263,8 @@ generateDecl forwardT = splitTrivial $ \src -> \case
           Nothing                    -> introTy src name (mono (view ty exp))
         return $ DeclTerm name Nothing exp
 
-      Just sig@(_ :< Forall boundVars cosntraints t) -> do
-        our . axioms %= (++ [ axiom (view value c) | c <- cosntraints ]) -- Constraints in the signature are added as axioms
+      Just sig@(_ :< Forall boundVars constraints t) -> do
+        our . axioms %= (++ [ axiom (view value c) | c <- constraints ]) -- Constraints in the signature are added as axioms
         exp <- generateExp exp
         case forwardT of
           Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)

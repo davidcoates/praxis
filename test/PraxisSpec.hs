@@ -1,48 +1,15 @@
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE QuasiQuotes       #-}
-{-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE TypeOperators     #-}
 
 module PraxisSpec where
 
-import qualified Check             (check)
-import           Common
-import           Executors
-import           Inbuilts
-import           Introspect
-import qualified Parse             (parse)
-import           Praxis
 import           Prelude           hiding (either)
-import           Print
-import           Term
 import           Text.RawString.QQ
-import           Value             (Value (..))
-
 import           Control.Monad     (forM_)
 import           Test.Hspec
 
+import Introspect
+import Util
 
-instance (Term a, x ~ Annotation a) => Show (Tag (Source, Maybe x) a) where
-  show x = fold (runPrintable (pretty x) Types)
-
-run :: Show a => Praxis a -> IO String
-run p = do
-  x <- runSilent initialState p
-  case x of
-    Left e  -> return e
-    Right y -> return (show y)
-
-check :: String -> IO String
-check s = run (Parse.parse s >>= Check.check :: Praxis (Annotated Program))
-
--- Helper for interperting a program followed by an expression and printing the resulting value
-interpret :: String -> String -> IO String
-interpret program exp = run $ do
-    interpretProgram program
-    interpretExp exp
-
-trim :: String -> String
-trim = init . tail
 
 doBlock = describe "do" $ do
 
@@ -54,6 +21,10 @@ foo = do
   x + y
 |]
 
+  it "parses" $ parse program `shouldReturn` trim [r|
+foo = let x_0 = 1 in ( ) seq let y_0 = 2 in add_int ( x_0 , y_0 )
+|]
+
   it "type checks" $ check program `shouldReturn` trim [r|
 foo = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0 = [Int] 2 in [( Int , Int ) -> Int] add_int ( [Int] x_0 , [Int] y_0 )
 |]
@@ -62,6 +33,9 @@ foo = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0 =
 tuple = describe "tuple" $ do
 
   let program = "x = (1, True, \"abc\")"
+  it "parses" $ parse program `shouldReturn` trim [r|
+x = ( 1 , True , "abc" )
+|]
 
   it "type checks" $ check program `shouldReturn` trim [r|
 x = ( [Int] 1 , [Bool] True , [& 'l0 Array Char] "abc" )
@@ -74,8 +48,13 @@ ifThenElse = describe "if then else (min)" $ do
 
   let program = "min (x, y) = if x < y then x else y"
 
-  it "type checks" $ do
-    check program `shouldReturn` [r|min = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int ( [Int] x_0 , [Int] y_0 ) then [Int] x_0 else [Int] y_0|]
+  it "parses" $ parse program `shouldReturn` trim [r|
+min = \ ( x_0 , y_0 ) -> if lt_int ( x_0 , y_0 ) then x_0 else y_0
+|]
+
+  it "type checks" $ check program `shouldReturn` trim [r|
+min = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int ( [Int] x_0 , [Int] y_0 ) then [Int] x_0 else [Int] y_0
+|]
 
   it "evaluates" $ do
     interpret program "min (1, 2)" `shouldReturn` "1"
@@ -92,6 +71,13 @@ sign n = switch
   n  < 0 -> -1
   n == 0 ->  0
   n  > 0 -> +1
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+sign : Int -> Int = \ n_0 -> switch
+  lt_int ( n_0 , 0 ) -> negate_int 1
+  eq_int ( n_0 , 0 ) -> 0
+  gt_int ( n_0 , 0 ) -> unary_plus_int 1
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
@@ -120,6 +106,13 @@ rec
   fac = cases
     0 -> 1
     n -> n * fac (n - 1)
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+rec
+  fac = cases
+    0 -> 1
+    n_0 -> multiply_int ( n_0 , fac subtract_int ( n_0 , 1 ) )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
@@ -157,6 +150,19 @@ operator (_ <?> _ <:> _) = ifthenelse where
   precedence below (_ <-> _)
 |]
 
+  it "parses" $ parse program `shouldReturn` trim [r|
+implies : ( Bool , Bool ) -> Bool = \ ( a_0 , b_0 ) -> or ( b_0 , not a_0 )
+operator ( _ --> _ ) = implies
+iff : ( Bool , Bool ) -> Bool = \ ( a_1 , b_1 ) -> or ( and ( a_1 , b_1 ) , and ( not a_1 , not b_1 ) )
+operator ( _ <-> _ ) = iff where
+  precedence
+    below ( _ --> _ )
+ifthenelse : ( Bool , Int , Int ) -> Int = \ ( c_0 , a_2 , b_2 ) -> if c_0 then a_2 else b_2
+operator ( _ <?> _ <:> _ ) = ifthenelse where
+  precedence
+    below ( _ <-> _ )
+|]
+
   it "evaluates" $ do
     interpret program "False <-> True <?> 1 <:> 0" `shouldReturn` "0"
 
@@ -167,6 +173,10 @@ unusedVar = describe "unused variable" $ do
   let program = trim [r|
 fst : forall a b. (a, b) -> a
 fst (x, y) = x
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+fst : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
 |]
 
   it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
@@ -180,6 +190,10 @@ fst : forall a b. (a, b) -> a
 fst (x, _) = x
 |]
 
+  it "parses" $ parse bad `shouldReturn` trim [r|
+fst : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
+|]
+
   it "does not type check" $ check bad `shouldReturn` trim [r|
 error: found contradiction [2:5] Copy b_0
 |-> (variable '_0' is not disposed of)
@@ -188,6 +202,10 @@ error: found contradiction [2:5] Copy b_0
   let good = trim [r|
 fst : forall a b | Copy b. (a, b) -> a
 fst (x, _) = x
+|]
+
+  it "parses" $ parse good `shouldReturn` trim [r|
+fst : forall a_0 b_0 | Copy b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
 |]
 
   it "type checks" $ check good `shouldReturn` trim [r|
@@ -201,6 +219,10 @@ swap = describe "polymorphic function (swap)" $ do
   let program = [r|
 swap : forall a b. (a, b) -> (b, a)
 swap (a, b) = (b, a)
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+swap : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( a_0 , b_0 ) -> ( b_0 , a_0 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
@@ -223,6 +245,10 @@ copy : forall a | Copy a. a -> (a, a)
 copy x = (x, x)
 |]
 
+  it "parses" $ parse program `shouldReturn` trim [r|
+copy : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ x_0 -> ( x_0 , x_0 )
+|]
+
   it "type checks" $ check program `shouldReturn` trim [r|
 copy : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
 |]
@@ -239,6 +265,12 @@ either = describe "polymorphic data type (Either)" $ do
 type Either [a, b] = cases
     Left a
     Right b
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+type Either [ a_0 , b_0 ] = cases
+  Left a_0
+  Right b_0
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
@@ -266,6 +298,12 @@ id_fun : forall a. () -> Fun [a, a]
 id_fun () = Fun (\x -> x)
 |]
 
+  it "parses" $ parse program `shouldReturn` trim [r|
+type Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
+unbox_fun : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ Fun f_0 -> \ x_0 -> f_0 x_0
+id_fun : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ ( ) -> Fun ( \ x_1 -> x_1 )
+|]
+
   it "type checks" $ check program `shouldReturn` trim [r|
 type Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
 unbox_fun : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
@@ -288,6 +326,16 @@ rec
   m = cases
     0 -> 0
     n -> n - f m (n - 1)
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+rec
+  f = cases
+    0 -> 1
+    n_0 -> subtract_int ( n_0 , m f subtract_int ( n_0 , 1 ) )
+  m = cases
+    0 -> 0
+    n_1 -> subtract_int ( n_1 , f m subtract_int ( n_1 , 1 ) )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
@@ -318,7 +366,7 @@ rec
 
 
 
-list = describe "quantified type operators (list)" $ do
+list = describe "quantified type operators (List)" $ do
 
   let program = [r|
 type List a = cases
@@ -336,6 +384,20 @@ rec
   sum = cases
     Nil ()       -> 0
     Cons (x, xs) -> x + sum xs
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+type List a_0 = cases
+  Nil ( )
+  Cons ( a_0 , List a_0 )
+rec
+  map : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ f_0 -> cases
+    Nil ( ) -> Nil ( )
+    Cons ( x_0 , xs_0 ) -> Cons ( f_0 x_0 , ( map f_0 ) xs_0 )
+rec
+  sum : forall & r_0 . & r_0 List Int -> Int = cases
+    Nil ( ) -> 0
+    Cons ( x_1 , xs_1 ) -> add_int ( x_1 , sum xs_1 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
@@ -381,6 +443,16 @@ g x = f x where rec
     n -> f (n - 1) * n
 |]
 
+  it "parses" $ parse program `shouldReturn` trim [r|
+f = \ x_0 -> f_0 x_0 where
+  f_0 : Int -> Int = \ x_1 -> x_1
+g = \ x_2 -> f_1 x_2 where
+  rec
+    f_1 = cases
+      0 -> 1
+      n_0 -> multiply_int ( f_1 subtract_int ( n_0 , 1 ) , n_0 )
+|]
+
   it "type checks" $ check program `shouldReturn` trim [r|
 f = \ [Int] x_0 -> [Int] [Int -> Int] f_0 [Int] x_0 where
   f_0 : Int -> Int = \ [Int] x_1 -> [Int] x_1
@@ -406,6 +478,14 @@ type List a = cases
   Nil ()
   Cons (a, List a)
 
+box = Box "x"
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+type Box [ & v_0 , a_0 ] = Box & v_0 a_0
+type List a_1 = cases
+  Nil ( )
+  Cons ( a_1 , List a_1 )
 box = Box "x"
 |]
 
@@ -457,6 +537,10 @@ foo = do
   x
 |]
 
+  it "parses" $ parse program `shouldReturn` trim [r|
+foo = let x_0 = 1 in x_0 seq x_0
+|]
+
   it "does not type check" $ check program `shouldReturn` trim [r|
 error: found contradiction [3:3] Int ~ ( ) ∧ Int o~ ( )
 |-> [3:3] Int ~ ( )
@@ -471,7 +555,9 @@ fst : forall a. (a, a) -> a
 fst (a, a) = a
 |]
 
-  it "does not type check" $ check program `shouldReturn` "2:5 error: variables are not distinct"
+  it "does not parse" $ parse program `shouldReturn` trim [r|
+2:5 error: variables are not distinct
+|]
 
 
 redeclTyVar = describe "type variarble redeclaration" $ do
@@ -481,7 +567,7 @@ type Foo [a, a] = cases
     Foo a
 |]
 
-  it "does not type check" $ check program `shouldReturn` "1:10 error: type variables are not distinct"
+  it "does not parse" $ parse program `shouldReturn` "1:10 error: type variables are not distinct"
 
 
 readUnsafe = describe "read safety" $ do
@@ -497,6 +583,14 @@ y = read x in (1, x)
 
 |]
 
+  it "parses" $ parse program `shouldReturn` trim [r|
+type List a_0 = cases
+  Nil
+  Cons ( a_0 , List a_0 )
+x = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ) ) )
+y = read x in ( 1 , x )
+|]
+
   it "does not type check" $ check program `shouldReturn` "error: found contradiction [7:5] 'l0 ref-free ( Int , & 'l0 ^t0 )\n|-> (safe read)"
 
 
@@ -504,9 +598,6 @@ spec :: Spec
 spec = do
 
   describe "simple expressions" $ do
-
-    let parse :: String -> IO String
-        parse s = run (Parse.parse s :: Praxis (Annotated Exp))
 
     let expressions =
           [ ("1 + 2", "1 + 2")
@@ -522,19 +613,16 @@ spec = do
 
     forM_ expressions $ \(a, b) -> do
       it (show a ++ " parses like " ++ show b) $ do
-        x <- parse a
-        y <- parse b
+        x <- parseAs IExp a
+        y <- parseAs IExp b
         x `shouldBe` y
       it (show a ++ " parses idempotently") $ do
-        x <- parse a
-        y <- parse x
+        x <- parseAs IExp a
+        y <- parseAs IExp x
         x `shouldBe` y
 
 
   describe "simple types" $ do
-
-    let parse :: String -> IO String
-        parse s = run (Parse.parse s :: Praxis (Annotated QType))
 
     let types =
           [ ("Int -> Int -> Int", "Int -> (Int -> Int)")
@@ -547,12 +635,9 @@ spec = do
 
     forM_ types $ \(a, b) -> do
       it (show a ++ " parses like " ++ show b) $ do
-        a <- parse a
-        b <- parse b
+        a <- parseAs IQType  a
+        b <- parseAs IQType b
         a `shouldBe` b
-
-    let parse :: String -> IO String
-        parse s = run (Parse.parse s :: Praxis (Annotated QType))
 
     let types =
           [ "forall r &r. ()"
@@ -565,7 +650,7 @@ spec = do
 
     forM_ types $ \t -> do
       it (show t ++ " is not valid") $ do
-        t' <- parse t
+        t' <- parseAs IQType t
         t' `shouldBe` "1:1 error: type variables are not distinct"
 
 

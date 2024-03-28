@@ -337,9 +337,7 @@ generateExp = split $ \src -> \case
     Char _   -> return $ TyCon "Char"
     String _ -> do
       op <- freshViewUni RefOrValue
-      let arr = TyCon "Array" `as` phantom (KindFun (phantom KindType) (phantom KindType))
-          str = TyApply arr (TyCon "Char" `as` phantom KindType) `as` phantom KindType
-      return $ TyApply (View op `as` phantom KindView) str
+      return $ TyApply (View op `as` phantom KindView) (TyCon "String" `as` phantom KindType)
 
   Read var exp -> scope src $ do
     (refName, t) <- read src var

@@ -115,11 +115,11 @@ evalExp ((src, _) :< exp) = case exp of
     evalBind bind
     evalExp exp
 
-  Lit lit -> case lit of
-    Bool val   -> pure $ Value.Bool val
-    Char val   -> pure $ Value.Char val
-    Int val    -> pure $ Value.Int  val
-    String val -> Value.Array <$> Value.fromString val
+  Lit lit -> pure $ case lit of
+    Bool val   -> Value.Bool val
+    Char val   -> Value.Char val
+    Int val    -> Value.Int val
+    String val -> Value.String val
 
   Read _ exp -> evalExp exp
 

@@ -121,6 +121,7 @@ expIsRecSafe term = case view value term of
   Cases _    -> True
   _          -> False
 
+-- TODO: Array literals?
 data Lit = Bool Bool
          | Char Char
          | Int Int

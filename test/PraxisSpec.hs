@@ -30,6 +30,7 @@ foo = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0 =
 |]
 
 
+
 tuple = describe "tuple" $ do
 
   let program = "x = (1, True, \"abc\")"
@@ -38,9 +39,12 @@ x = ( 1 , True , "abc" )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-x = ( [Int] 1 , [Bool] True , [& 'l0 Array Char] "abc" )
+x = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
 |]
 
+  it "translates" $ translate program `shouldReturn` trim [r|
+/* 1:1 */ std::pair< int , std::pair< bool , std::string > > x = ( std::make_pair( ( 1 ) , ( std::make_pair( ( true ) , ( "abc" ) ) ) ) );
+|]
 
 
 
@@ -234,7 +238,7 @@ swap : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b
     interpret program "swap (True, 1)"   `shouldReturn` "(1, True)"
     interpret program "swap (1, 2, 3)"   `shouldReturn` "((2, 3), 1)"
     interpret program "swap ((2, 3), 1)" `shouldReturn` "(1, (2, 3))"
-    interpret program "swap (\"abc\", 0)" `shouldReturn` "(0, ['a', 'b', 'c'])"
+    interpret program "swap (\"abc\", 0)" `shouldReturn` "(0, \"abc\")"
 
 
 
@@ -494,7 +498,7 @@ type Box [ & v_0 , a_0 ] = [forall a_0 & v_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]]
 type List a_1 = cases
   [forall a_1 . ( ) -> List a_1] Nil ( )
   [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
-box = [& 'l0 Array Char -> Box [ & 'l0 , Array Char ]] Box [& 'l0 Array Char] "x"
+box = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
 |]
 
   -- TODO should also try with ? instead of &
@@ -629,8 +633,8 @@ spec = do
           , ("A B C", "A (B C)")
           , ("Maybe Maybe a -> Maybe b", "(Maybe (Maybe a)) -> (Maybe b)")
           , ("forall a b. (a, b)", "forall a b . ( a, b )")
-          , ("forall &r. &r Array Char -> ()", "forall &r . &r Array Char -> ()")
-          , ("forall ?r. ?r Array Char -> ()", "forall ?r . ?r Array Char -> ()")
+          , ("forall &r. &r Array Int -> ()", "forall &r . &r Array Int -> ()")
+          , ("forall ?r. ?r Array Int -> ()", "forall ?r . ?r Array Int -> ()")
           ]
 
     forM_ types $ \(a, b) -> do

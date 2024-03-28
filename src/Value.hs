@@ -1,8 +1,6 @@
 module Value
   ( Value(..)
   , len
-  , toString
-  , fromString
   , readArray
   , writeArray
   ) where
@@ -21,17 +19,10 @@ data Value = Con Name (Maybe Value)
            | Int Int
            | Bool Bool
            | Char Char
+           | String String
            | Array Array
            | Pair Value Value
            | Unit
-
-toString :: Array -> Praxis String
-toString a = liftIOUnsafe $ do
-  es <- ArrayIO.getElems a
-  return $ map (\(Char c) -> c) es
-
-fromString :: String -> Praxis Array
-fromString s = liftIOUnsafe (ArrayIO.newListArray (0, length s - 1) (map Char s))
 
 len :: Array -> Praxis Int
 len a = liftIOUnsafe (snd <$> ArrayIO.getBounds a)
@@ -51,6 +42,7 @@ showValue = \case
   Int i    -> return (show i)
   Bool b   -> return (show b)
   Char c   -> return (show c)
+  String s -> return (show s)
   Array a  -> do
     vs <- ArrayIO.getElems a
     vs' <- mapM showValue vs

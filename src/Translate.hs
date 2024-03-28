@@ -3,6 +3,7 @@
 
 module Translate
   ( runProgram
+  , prelude
   ) where
 
 import           Common
@@ -43,7 +44,7 @@ layout = layout' 0 "" where
 runProgram :: Annotated Program -> Praxis String
 runProgram program = save stage $ do
   stage .= Translate
-  return $ prelude ++ layout (translateProgram program)
+  return $ layout (translateProgram program)
 
 
 translateProgram :: Annotated Program -> [Token]
@@ -73,7 +74,13 @@ translateType (_ :< t) = case t of
 
   TyApply t1 t2 -> translateType t1 ++ [ Token "<" ] ++ translateType t2 ++ [ Token ">" ]
 
-  TyCon n -> [ Token n ]
+  TyCon n -> (\n -> [ Token n ]) $ case n of
+    "Int" -> "int"
+    "Array" -> "std::vector"
+    "Char" -> "char"
+    "Bool" -> "bool"
+    "String" -> "std::string"
+    _ -> n
 
   TyFun t1 t2 -> [ Token "std::function<" ] ++ translateType t2 ++ [ Token "(" ] ++ translateType t1 ++ [ Token ")>" ]
 
@@ -129,7 +136,11 @@ translateExp' (_ :< exp) = case exp of
 
   Let bind exp -> undefined
 
-  Lit lit -> undefined
+  Lit lit -> case lit of
+    Bool bool     -> [ if bool then Token "true" else Token "false" ]
+    Char char     -> [ Token (show char) ]
+    Int int       -> [ Token (show int) ]
+    String string -> [ Token (show string) ]
 
   Read name exp -> undefined
 
@@ -149,10 +160,9 @@ translateExp' (_ :< exp) = case exp of
 
 
 prelude :: String
-prelude = [r|
-
+prelude = [r|/* prelude */
 struct Unit
 {
 };
-
+/* prelude end */
 |]

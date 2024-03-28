@@ -55,14 +55,14 @@ inbuilts =
       Fun (\(Int x) -> pure (Int x)))
   , ("get_int",      poly "() -> Int",
       Fun (\Unit -> liftIOUnsafe (Int <$> readLn)))
-  , ("get_contents", poly "() -> Array Char",
-      Fun (\Unit -> liftIOUnsafe getContents >>= (\s -> Value.Array <$> (Value.fromString s)))) -- TODO need to make many of these functions strict?
+  , ("get_contents", poly "() -> String",
+      Fun (\Unit -> Value.String <$> liftIOUnsafe getContents)) -- TODO need to make many of these functions strict?
   , ("put_int",      poly "Int -> ()",
       Fun (\(Int x) -> liftIOUnsafe (print x >> pure Unit)))
-  , ("put_str",      poly "forall &r. &r Array Char -> ()",
-      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIOUnsafe (putStr s)) >> pure Unit))
-  , ("put_str_ln",   poly "forall &r. &r Array Char -> ()",
-      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIOUnsafe (putStrLn s)) >> pure Unit))
+  , ("put_str",      poly "forall &r. &r String -> ()",
+      Fun (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit))
+  , ("put_str_ln",   poly "forall &r. &r String -> ()",
+      Fun (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit))
   , ("compose",      poly "forall a b c. (b -> c, a -> b) -> a -> c",
       Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
   , ("print",        poly "forall &r a. &r a -> ()",
@@ -114,9 +114,6 @@ initialKEnv = Env.fromList inbuiltKinds
 
 -- TODO interfaces
 prelude = [r|
-
--- Type synonyms
-using String = Array Char
 
 -- Operators
 operator (_ + _) = add_int where

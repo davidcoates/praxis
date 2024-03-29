@@ -67,13 +67,6 @@ evalDecl (_ :< decl) = case decl of
   _ -> return ()
 
 
-evalStmt :: Annotated Stmt -> Praxis (Maybe Value)
-evalStmt (_ :< stmt) = case stmt of
-
-  StmtBind bind -> evalBind bind >> return Nothing
-
-  StmtExp exp   -> Just <$> evalExp exp
-
 
 evalExp :: Annotated Exp -> Praxis Value
 evalExp ((src, _) :< exp) = case exp of
@@ -109,7 +102,7 @@ evalExp ((src, _) :< exp) = case exp of
 
   Lambda pat exp -> do
     l <- use vEnv
-    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; forceBind src val pat; evalExp exp }
+    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; forceMatch src val pat; evalExp exp }
 
   Let bind exp -> save vEnv $ do
     evalBind bind
@@ -157,33 +150,33 @@ evalSwitch src ((condExp,bodyExp):alts) = do
 
 evalCases :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 evalCases src val [] = throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
-evalCases src val ((pat,exp):alts) = case tryBind val pat of
-  Just doBind -> save vEnv $ do
-    doBind
+evalCases src val ((pat,exp):alts) = case tryMatch val pat of
+  Just doMatch -> save vEnv $ do
+    doMatch
     evalExp exp
   Nothing ->
     evalCases src val alts
 
-forceBind :: Source -> Value -> Annotated Pat -> Praxis ()
-forceBind src val pat = case tryBind val pat of
-  Just doBind -> doBind
+forceMatch :: Source -> Value -> Annotated Pat -> Praxis ()
+forceMatch src val pat = case tryMatch val pat of
+  Just doMatch -> doMatch
   Nothing -> throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
 
 evalBind :: Annotated Bind -> Praxis ()
 evalBind ((src, _) :< Bind pat exp) = do
   exp <- evalExp exp
-  forceBind src exp pat
+  forceMatch src exp pat
 
-tryBind :: Value -> Annotated Pat -> Maybe (Praxis ())
-tryBind val (_ :< pat) = case pat of
+tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
+tryMatch val (_ :< pat) = case pat of
 
   PatAt name pat
-    -> (\doBind -> do { vEnv %= Env.intro name val; doBind }) <$> tryBind val pat
+    -> (\doMatch -> do { vEnv %= Env.intro name val; doMatch }) <$> tryMatch val pat
 
   PatCon patCon pat | Value.Con valCon val <- val
     -> if patCon /= valCon then Nothing else case (pat, val) of
       (Nothing, Nothing)   -> Just (return ())
-      (Just pat, Just val) -> tryBind val pat
+      (Just pat, Just val) -> tryMatch val pat
 
   PatHole
     -> Just (return ())
@@ -196,7 +189,7 @@ tryBind val (_ :< pat) = case pat of
       _                       -> False
 
   PatPair pat1 pat2 | Value.Pair val1 val2 <- val
-    -> liftA2 (>>) (tryBind val1 pat1) (tryBind val2 pat2)
+    -> liftA2 (>>) (tryMatch val1 pat1) (tryMatch val2 pat2)
 
   PatUnit
     -> Just (return ())

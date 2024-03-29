@@ -2,32 +2,58 @@ module Executors
   ( interpretExp
   , interpretProgram
   , translateProgram
+  , compileProgram
   ) where
 
-import           Check     (check)
+import           Check          (check)
 import           Common
 import qualified Eval
-import           Parse     (parse)
+import           Parse          (parse)
 import           Praxis
 import           Term
 import qualified Translate
-import           Value     (Value)
+import           Value          (Value)
+
+import           System.Exit    (ExitCode (..))
+import           System.IO
+import           System.IO.Temp
+import           System.Process
 
 interpretExp :: String -> Praxis Value
-interpretExp text = do
-  e <- parse text >>= check :: Praxis (Annotated Exp)
-  v <- Eval.runExp e
-  return v
+interpretExp exp = do
+  exp <- parse exp >>= check :: Praxis (Annotated Exp)
+  value <- Eval.runExp exp
+  return value
 
 interpretProgram :: String -> Praxis (Annotated Program)
-interpretProgram text = do
-  p <- parse text >>= check :: Praxis (Annotated Program)
-  () <- Eval.runProgram p
-  return p
+interpretProgram program = do
+  program <- parse program >>= check :: Praxis (Annotated Program)
+  () <- Eval.runProgram program
+  return program
 
 translateProgram :: String -> Praxis String
-translateProgram text = do
-  p <- parse text >>= check :: Praxis (Annotated Program)
-  t <- Translate.runProgram p
-  return t
+translateProgram program = do
+  program <- parse program >>= check :: Praxis (Annotated Program)
+  translation <- Translate.runProgram program
+  return translation
 
+compileProgram :: String -> Maybe FilePath -> Praxis ()
+compileProgram program outFile = do
+  program <- translateProgram program
+  errLog <- liftIO $ withSystemTempFile "praxis.cc" (compile (Translate.prelude ++ program))
+  case errLog of
+    Just errLog -> throw errLog
+    Nothing     -> return ()
+  where
+    compile :: String -> FilePath -> Handle -> IO (Maybe String)
+    compile program filepath handle = do
+      hPutStr handle program
+      hFlush handle
+      let
+        cmds = case outFile of
+          Just outFile -> [ filepath, "-o", outFile ]
+          Nothing      -> [ "-c", filepath, "-o", "/dev/null" ]
+      (errCode, _, errLog) <- readProcessWithExitCode "g++" cmds ""
+      case errCode of
+        ExitSuccess -> return Nothing
+        _           -> return (Just errLog)

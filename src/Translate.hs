@@ -14,7 +14,13 @@ import           Term
 import           Text.RawString.QQ
 
 
-data Token = LBrace | RBrace | Semi | Token String | Crumb Source
+data Token = LBrace | RBrace | Semi | Text String | Crumb Source
+
+freshTempVar :: Praxis Name
+freshTempVar = freshVar "temp"
+
+freshLabel :: Praxis Name
+freshLabel = freshVar "label"
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
@@ -34,9 +40,9 @@ layout = layout' 0 "" where
 
     Semi : ts -> ";" ++ layout' depth ("\n" ++ indent depth) ts
 
-    Token t : ts -> prefix ++ t ++ layout' depth " " ts
+    Text t : ts -> prefix ++ t ++ layout' depth "" ts
 
-    Crumb src : ts -> prefix ++ "/* " ++ show src ++ " */" ++ layout' depth " " ts
+    Crumb src : ts -> prefix ++ "/* " ++ show src ++ " */" ++ layout' depth ("\n" ++ indent depth) ts
 
     [] -> ""
 
@@ -44,125 +50,248 @@ layout = layout' 0 "" where
 runProgram :: Annotated Program -> Praxis String
 runProgram program = save stage $ do
   stage .= Translate
-  return $ layout (translateProgram program)
+  program <- translateProgram program
+  return $ layout program
 
 
-translateProgram :: Annotated Program -> [Token]
-translateProgram (_ :< Program decls) = concatMap translateDecl decls
+translateProgram :: Annotated Program -> Praxis [Token]
+translateProgram (_ :< Program decls) = foldMapA (translateDecl True) decls
 
 
-translateQTyVar :: Annotated QTyVar -> [Token]
+translateQTyVar :: Annotated QTyVar -> Praxis [Token]
 translateQTyVar (_ :< q) = case q of
 
-  QTyVar n     -> [ Token "typename", Token n ]
+  QTyVar n     -> return [ Text "typename", Text n ]
 
-  QViewVar _ n -> [ Token "typename", Token n ]
+  QViewVar _ n -> return [ Text "typename", Text n ]
 
 
 -- TODO... we need to know how QTypes are specialised
 
-translateType :: Annotated Type -> [Token]
+translateType :: Annotated Type -> Praxis [Token]
 translateType (_ :< t) = case t of
 
   TyApply t1 t2
     | (_ :< View _) <- t1 -> translateType t2
 
-  TyApply (_ :< TyCon n) t2 ->  [ Token n, Token "<" ] ++ intercalate [Token ","] (map translateType (unpack t2)) ++ [ Token ">" ] where
-    unpack :: Annotated Type -> [Annotated Type]
-    unpack t@(_ :< TyPack t1 t2) = t1 : unpack t2
-    unpack t                     = [t]
+  TyApply (_ :< TyCon n) t2 -> do
+    args <- intercalate [Text ", "] <$> mapM translateType (unpack t2)
+    return $ [ Text n, Text "<" ] ++ args ++ [ Text ">" ]
+    where
+      unpack :: Annotated Type -> [Annotated Type]
+      unpack t@(_ :< TyPack t1 t2) = t1 : unpack t2
+      unpack t                     = [t]
 
-  TyApply t1 t2 -> translateType t1 ++ [ Token "<" ] ++ translateType t2 ++ [ Token ">" ]
+  TyApply t1 t2 -> do
+    t1 <- translateType t1
+    t2 <- translateType t2
+    return $ t1 ++ [ Text "<" ] ++ t2 ++ [ Text ">" ]
 
-  TyCon n -> (\n -> [ Token n ]) $ case n of
-    "Int" -> "int"
-    "Array" -> "std::vector"
-    "Char" -> "char"
-    "Bool" -> "bool"
-    "String" -> "std::string"
-    _ -> n
+  TyCon n -> return [ Text (translateName n) ] where
+    translateName n = case n of
+      "Int"    -> "int"
+      "Array"  -> "std::vector"
+      "Char"   -> "char"
+      "Bool"   -> "bool"
+      "String" -> "std::string"
+      _        -> n
 
-  TyFun t1 t2 -> [ Token "std::function<" ] ++ translateType t2 ++ [ Token "(" ] ++ translateType t1 ++ [ Token ")>" ]
+  TyFun t1 t2 -> do
+    t1 <- translateType t1
+    t2 <- translateType t2
+    return $ [ Text "std::function<" ] ++ t2 ++ [ Text "(" ] ++ t1 ++ [ Text ")>" ]
 
-  TyPair t1 t2 -> [ Token "std::pair<" ] ++ translateType t1 ++ [ Token "," ] ++ translateType t2 ++ [ Token ">" ]
+  TyPair t1 t2 -> do
+    t1 <- translateType t1
+    t2 <- translateType t2
+    return $ [ Text "std::pair<" ] ++ t1 ++ [ Text ", " ] ++ t2 ++ [ Text ">" ]
 
-  TyUnit -> [ Token "Unit" ]
+  TyUnit -> return [ Text "Unit" ]
 
-  TyVar n -> [ Token n ]
+  TyVar n -> return [ Text n ]
 
 
-translateQType :: Annotated QType -> [Token]
+translateQType :: Annotated QType -> Praxis [Token]
 translateQType ((src, _) :< Forall vs _ t)
   | [] <- vs = translateType t
-  | otherwise = [ Token "template<" ] ++ intercalate [Token ","] (map translateQTyVar vs) ++ [ Token ">" ] ++ translateType t
+  | otherwise = do
+    vs <- mapM translateQTyVar vs
+    t <- translateType t
+    return $ [ Text "template<" ] ++ intercalate [ Text ", " ] vs ++ [ Text ">" ] ++ t
 
 
-translateDecl :: Annotated Decl -> [Token]
-translateDecl ((src, _) :< decl) = case decl of
+translateDecl :: Bool -> Annotated Decl -> Praxis [Token]
+translateDecl topLevel ((src, _) :< decl) = case decl of
 
-  DeclRec decls -> concatMap translateForwardDecl decls ++ concatMap translateDecl decls
+  DeclRec decls -> do
+    forwardDecls <- foldMapA translateForwardDecl decls
+    defns <- foldMapA (translateDecl topLevel) decls
+    return $ forwardDecls ++ defns
 
-  DeclTerm name sig exp -> [ Crumb src ] ++ translateDeclTermType sig exp ++ [ Token name, Token "=" ] ++ translateExp exp ++ [ Semi ]
+  DeclTerm name sig exp -> do
+    ty <- translateDeclTermType sig exp
+    exp <- translateExp topLevel exp
+    return $ [ Crumb src ] ++ ty ++ [ Text " ", Text name, Text " = " ] ++ exp ++ [ Semi ]
 
   where
-    translateDeclTermType :: Maybe (Annotated QType) -> Annotated Exp -> [Token]
+    translateDeclTermType :: Maybe (Annotated QType) -> Annotated Exp -> Praxis [Token]
     translateDeclTermType sig exp
       | Just q <- sig = translateQType q
       | otherwise     = translateType (view ty exp)
 
-    translateForwardDecl :: Annotated Decl -> [Token]
-    translateForwardDecl ((src, _) :< DeclTerm name sig exp) = [ Crumb src ] ++ translateDeclTermType sig exp ++ [ Token name, Semi ]
+    translateForwardDecl :: Annotated Decl -> Praxis [Token]
+    translateForwardDecl ((src, _) :< DeclTerm name sig exp) = do
+      ty <- translateDeclTermType sig exp
+      return $ [ Crumb src ] ++ ty ++ [ Text " ", Text name, Semi ]
 
 
-translateExp :: Annotated Exp -> [Token]
-translateExp exp = [ Token "(" ] ++ translateExp' exp ++ [ Token ")" ]
+translateLit :: Lit -> Praxis [Token]
+translateLit lit = return [ Text (translateLit' lit) ] where
+  translateLit' lit = case lit of
+    Bool bool     -> if bool then "true" else "false"
+    Char char     -> show char
+    Int int       -> show int
+    String string -> show string
 
-translateExp' :: Annotated Exp -> [Token]
-translateExp' (_ :< exp) = case exp of
+lambdaWrap :: Bool -> [Token] -> [Token]
+lambdaWrap nonLocal body = [ Text (if nonLocal then "[]()" else "[=]()"), LBrace ] ++ body ++ [ RBrace, Text "()" ]
 
-  Apply exp1 exp2 -> translateExp exp1 ++ [ Token "(" ] ++ translateExp exp2 ++ [ Token ")" ]
+translateExp :: Bool -> Annotated Exp -> Praxis [Token]
+translateExp nonLocal (_ :< exp) = case exp of
 
+  Apply exp1 exp2 -> do
+    exp1 <- translateExp nonLocal exp1
+    exp2 <- translateExp nonLocal exp2
+    return $ exp1 ++ [ Text "(" ] ++ exp2 ++ [ Text ")" ]
+
+  -- TODO
   Case exp alts -> undefined
 
+  -- TODO
   Cases alts -> undefined
 
-  Con name -> [ Token name ] -- TODO need to qualify with type ?
+  Con name -> return [ Text name ] -- TODO need to qualify with type ?
 
-  Defer exp1 exp2 -> [ LBrace, Token "auto ret ->" ] ++ translateExp exp1 ++ [ Semi ] ++ translateExp exp2 ++ [ Semi, Token "ret", Semi, RBrace ]
+  Defer exp1 exp2 -> do
+    tempVar <- freshTempVar
+    exp1 <- translateExp False exp1
+    exp2 <- translateExp False exp2
+    return $ lambdaWrap nonLocal ([ Text "auto ", Text tempVar, Text " = " ] ++ exp1 ++ [ Semi ] ++ exp2 ++ [ Semi, Text "return ", Text tempVar, Semi])
 
-  If condExp thenExp elseExp -> translateExp condExp ++ [ Token "?" ] ++ translateExp thenExp ++ [ Token ":" ] ++ translateExp elseExp
+  If condExp thenExp elseExp -> do
+    condExp <- translateExp nonLocal condExp
+    thenExp <- translateExp nonLocal thenExp
+    elseExp <- translateExp nonLocal elseExp
+    return $ [ Text "(" ] ++ condExp ++ [ Text ") ? (" ] ++ thenExp ++ [ Text ") : (" ] ++ elseExp ++ [ Text ")" ]
 
+  -- TODO
   Lambda pat exp -> undefined
 
-  Let bind exp -> undefined
+  Let ((src, _) :< Bind pat exp1) exp2 -> do
+    tempVar <- freshTempVar
+    exp1 <- translateExp False exp1
+    forceMatch <- translateForceMatch src tempVar pat exp2
+    return $ lambdaWrap nonLocal ([ Text "auto ", Text tempVar, Text " = " ] ++ exp1 ++ [ Semi ] ++ forceMatch)
 
-  Lit lit -> case lit of
-    Bool bool     -> [ if bool then Token "true" else Token "false" ]
-    Char char     -> [ Token (show char) ]
-    Int int       -> [ Token (show int) ]
-    String string -> [ Token (show string) ]
+  Lit lit -> translateLit lit
 
-  Read name exp -> undefined
+  Read _ exp -> translateExp nonLocal exp
 
-  Pair exp1 exp2 -> [ Token "std::make_pair(" ] ++ translateExp exp1 ++ [Token ","] ++ translateExp exp2 ++ [Token ")"]
+  Pair exp1 exp2 -> do
+    exp1 <- translateExp nonLocal exp1
+    exp2 <- translateExp nonLocal exp2
+    return $ [ Text "std::make_pair(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
 
-  Seq exp1 exp2 -> translateExp exp1 ++ [ Token "," ] ++ translateExp exp2
+  Seq exp1 exp2 -> do
+    exp1 <- translateExp nonLocal exp1
+    exp2 <- translateExp nonLocal exp2
+    return $ [ Text "(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
 
-  Sig exp _ -> translateExp' exp
+  Sig exp _ -> translateExp nonLocal exp
 
+  -- TODO
   Switch alts -> undefined
 
-  Unit -> [ Token "Unit{}" ]
+  Unit -> return [ Text "Unit{}" ]
 
-  Var name -> [ Token name ]
+  Var name -> return [ Text name ]
 
-  Where exp decls -> [ LBrace ] ++ concatMap translateDecl decls ++ translateExp exp ++ [ Semi, RBrace ]
+  Where exp decls -> do
+    decls <- foldMapA (translateDecl False) decls
+    exp <- translateExp False exp
+    return $ lambdaWrap nonLocal (decls ++ [ Text "return " ] ++ exp ++ [ Semi ])
+
+
+translateForceMatch :: Source -> Name -> Annotated Pat -> Annotated Exp -> Praxis [Token]
+translateForceMatch src var pat exp = do
+  expVar <- freshTempVar
+  expType <- translateType (view ty exp)
+  endLabel <- freshLabel
+  exp <- translateExp False exp
+  pat <- translateTryMatch var pat ([ Text expVar, Text " = " ] ++ exp ++ [ Semi, Text "goto ", Text endLabel, Semi ])
+  return $
+    [ Text "std::optional<" ] ++ expType ++ [ Text "> ", Text expVar, Semi ] ++
+    pat ++
+    [ Text endLabel, Text ": ", Semi, Text "if(", Text ("!" ++ expVar), Text ")", LBrace, Text ("throw MatchFail(\"" ++ show src ++ "\")"), Semi, RBrace, Text "return ", Text ("*" ++ expVar), Semi ]
+
+
+translateTryMatch :: Name -> Annotated Pat -> [Token] -> Praxis [Token]
+translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
+
+  PatAt var' pat -> do
+    pat <- translateTryMatch var' pat onMatch
+    return $ [ Text "auto ", Text var', Text " = ", Text var, Semi ] ++ pat
+
+  PatCon con pat -> do
+    conType <- translateType patTy
+    let tag = conType ++ [ Text ("::_TAG::" ++ con) ]
+    tempVar <- freshTempVar
+    case pat of
+      Just pat -> do
+        onMatch <- translateTryMatch tempVar pat onMatch
+        return $ [ Text "if(", Text (var ++ "._tag"), Text " == " ] ++ tag ++ [ Text ")", LBrace, Text "auto ", Text tempVar, Text " = ", Text (var ++ "._get<") ] ++ tag ++ [ Text ">()", Semi ] ++ onMatch ++ [ RBrace ]
+      Nothing -> return $ [ Text "if(", Text (var ++ "._tag"), Text " == " ] ++ tag ++ [ Text ")", LBrace ] ++ onMatch ++ [ RBrace ]
+
+  PatHole -> return onMatch
+
+  PatLit lit -> do
+    lit <- translateLit lit
+    return $ [ Text "if(", Text var, Text " == " ] ++ lit ++ [ Text ")", LBrace ] ++ onMatch ++ [ RBrace ]
+
+  PatPair pat1 pat2 -> do
+    var1 <- freshTempVar
+    var2 <- freshTempVar
+    pat2 <- translateTryMatch var2 pat2 onMatch
+    onMatch <- translateTryMatch var1 pat1 pat2
+    return $
+      [ Text var1, Text " = ", Text (var ++ ".first"), Semi ] ++
+      [ Text var2, Text " = ", Text (var ++ ".second"), Semi ] ++
+      onMatch
+
+  PatUnit -> return onMatch
+
+  PatVar var' -> return $ [ Text "auto ", Text var', Text " = ", Text var, Semi ] ++ onMatch
 
 
 prelude :: String
 prelude = [r|/* prelude */
+#include <utility>
+#include <vector>
+#include <string>
+#include <stdexcept>
+#include <algorithm>
+#include <optional>
+
 struct Unit
 {
 };
+
+struct MatchFail : public std::runtime_error
+{
+  using std::runtime_error::runtime_error;
+};
+
+std::function<int(std::pair<int, int>)> add_int = [](auto p) { return p.first + p.second; };
+
 /* prelude end */
 |]

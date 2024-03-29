@@ -1,20 +1,20 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeOperators     #-}
-{-# LANGUAGE GADTs     #-}
-{-# LANGUAGE ScopedTypeVariables     #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators       #-}
 
 module Util where
 
-import qualified Check             (check)
+import qualified Check      (check)
 import           Common
 import           Executors
 import           Inbuilts
 import           Introspect
-import qualified Parse             (parse)
+import qualified Parse      (parse)
 import           Praxis
 import           Print
 import           Term
-
+import qualified Translate  (prelude)
 
 instance (Term a, x ~ Annotation a) => Show (Tag (Source, Maybe x) a) where
   show x = fold (runPrintable (pretty x) Types)
@@ -24,10 +24,10 @@ run = runWith show
 
 runWith :: (a -> String) -> Praxis a -> IO String
 runWith show p = do
-  x <- runSilent initialState p
-  case x of
-    Left e  -> return e
-    Right y -> return (show y)
+  result <- runSilent initialState p
+  case result of
+    Left error   -> return error
+    Right result -> return (show result)
 
 check :: String -> IO String
 check program = run (Parse.parse program >>= Check.check :: Praxis (Annotated Program))
@@ -49,3 +49,10 @@ translate program = runWith id (translateProgram program)
 
 trim :: String -> String
 trim = init . tail
+
+compile :: String -> IO Bool
+compile program = do
+  (result, _) <- runPraxis (compileProgram program Nothing) initialState
+  case result of
+    Left error   -> return False
+    Right result -> return True

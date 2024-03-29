@@ -1,14 +1,14 @@
-{-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module PraxisSpec where
 
-import           Prelude           hiding (either)
-import           Text.RawString.QQ
 import           Control.Monad     (forM_)
+import           Prelude           hiding (either)
 import           Test.Hspec
+import           Text.RawString.QQ
 
-import Introspect
-import Util
+import           Introspect
+import           Util
 
 
 doBlock = describe "do" $ do
@@ -29,6 +29,41 @@ foo = let x_0 = 1 in ( ) seq let y_0 = 2 in add_int ( x_0 , y_0 )
 foo = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0 = [Int] 2 in [( Int , Int ) -> Int] add_int ( [Int] x_0 , [Int] y_0 )
 |]
 
+  it "translates" $ translate program `shouldReturn` trim [r|
+/* 2:1 */
+int foo = []()
+{
+  auto temp_0 = 1;
+  std::optional<int> temp_1;
+  auto x_0 = temp_0;
+  temp_1 = (Unit{}, [=]()
+  {
+    auto temp_2 = 2;
+    std::optional<int> temp_3;
+    auto y_0 = temp_2;
+    temp_3 = add_int(std::make_pair(x_0, y_0));
+    goto label_1;
+    label_1: ;
+    if(!temp_3)
+    {
+      throw MatchFail("5:7");
+    }
+    return *temp_3;
+  }
+  ());
+  goto label_0;
+  label_0: ;
+  if(!temp_1)
+  {
+    throw MatchFail("3:7");
+  }
+  return *temp_1;
+}
+();
+|]
+
+  it "compiles" $ compile program `shouldReturn` True
+
 
 
 tuple = describe "tuple" $ do
@@ -43,8 +78,11 @@ x = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
 |]
 
   it "translates" $ translate program `shouldReturn` trim [r|
-/* 1:1 */ std::pair< int , std::pair< bool , std::string > > x = ( std::make_pair( ( 1 ) , ( std::make_pair( ( true ) , ( "abc" ) ) ) ) );
+/* 1:1 */
+std::pair<int, std::pair<bool, std::string>> x = std::make_pair(1, std::make_pair(true, "abc"));
 |]
+
+  it "compiles" $ compile program `shouldReturn` True
 
 
 

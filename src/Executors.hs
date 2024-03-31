@@ -37,10 +37,16 @@ translateProgram program = do
   translation <- Translate.runProgram program
   return translation
 
+coerceMain :: Praxis String
+coerceMain = do
+  requireMain
+  return $ "\nint main(){ main_0(Unit{}); }"
+
 compileProgram :: String -> Maybe FilePath -> Praxis ()
 compileProgram program outFile = do
   program <- translateProgram program
-  errLog <- liftIO $ withSystemTempFile "praxis.cc" (compile (Translate.prelude ++ program))
+  postlude <- case outFile of { Just _ -> coerceMain; Nothing -> return ""; } -- If we are linking, then main needs to be defined.
+  errLog <- liftIO $ withSystemTempFile "praxis.cc" (compile (Translate.prelude ++ program ++ postlude))
   case errLog of
     Just errLog -> throw errLog
     Nothing     -> return ()

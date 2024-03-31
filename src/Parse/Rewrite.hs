@@ -210,6 +210,8 @@ rewriteDecl = splitTrivial $ \src -> \case
 
   DeclTerm name sig exp -> DeclTerm <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
 
+  DeclOp op name opRules -> (\name -> DeclOp op name opRules) <$> rewriteVar name
+
   decl -> recurse rewrite decl
 
 
@@ -225,7 +227,7 @@ rewritePat = splitTrivial $ \src -> \case
 
 rewriteProgram :: Annotated Program -> Praxis (Annotated Program)
 rewriteProgram (ann :< Program decls) = do
-  decls <- rewriteDecls' decls -- Note: Top level terms don't need to be rewritten
+  decls <- rewriteDecls decls
   return (ann :< Program decls)
 
 declTermNames :: Annotated Decl -> [Name]

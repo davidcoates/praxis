@@ -44,6 +44,7 @@ instance Unparser Printer where
         body = force f (view value x)
         prop = [Print ("[" <> pretty (show (view source x)) <> "]")] ++ [Print (Printable (layout body) <> "\n|-> " <> label x)]
 
+
 indent :: Int -> String
 indent n = replicate (2*n) ' '
 

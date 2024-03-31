@@ -84,7 +84,7 @@ closure src x = do
   tEnv %= LEnv.capture
   a <- scope src x
   l2 <- use tEnv
-  -- Restored captured bit but save used bit
+  -- Restore captured bit but save used bit
   tEnv .= Env.zipWith (\e1 e2 -> set LEnv.captured (view LEnv.captured e1) e2) l1 l2 -- This is disgusting
   return a
 

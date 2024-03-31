@@ -67,11 +67,14 @@ module Praxis
   , clearTerm
   , ifFlag
   , display
+
+  , requireMain
   )
   where
 
 import qualified Check.System                 as Check (System)
 import           Common
+import           Print
 import           Stage
 import           Term
 
@@ -303,3 +306,14 @@ freshVar var = do
   let i = Map.findWithDefault 0 var m
   fresh . freshVars .= (Map.insert var (i+1) m)
   return (var ++ "_" ++ show i)
+
+requireMain :: Praxis ()
+requireMain = do
+  ty <- tEnv `uses` LEnv.lookup "main_0"
+  case ty of
+    Nothing -> throw ("missing main function" :: String)
+    Just ty
+      | (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) <- ty
+        -> return ()
+      | otherwise
+        -> throwAt (view source ty) $ "main function has bad type " <> quote (pretty ty) <> ", expected () -> ()"

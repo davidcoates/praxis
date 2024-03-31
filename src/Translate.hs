@@ -17,10 +17,7 @@ import           Text.RawString.QQ
 data Token = LBrace | RBrace | Semi | Text String | Crumb Source
 
 freshTempVar :: Praxis Name
-freshTempVar = freshVar "temp"
-
-freshLabel :: Praxis Name
-freshLabel = freshVar "label"
+freshTempVar = freshVar "_temp"
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
@@ -50,8 +47,9 @@ layout = layout' 0 "" where
 runProgram :: Annotated Program -> Praxis String
 runProgram program = save stage $ do
   stage .= Translate
-  program <- translateProgram program
-  return $ layout program
+  program <- layout <$> translateProgram program
+  display program `ifFlag` debug
+  return program
 
 
 translateProgram :: Annotated Program -> Praxis [Token]
@@ -153,8 +151,11 @@ translateLit lit = return [ Text (translateLit' lit) ] where
     Int int       -> show int
     String string -> show string
 
+captureList :: Bool -> [Token]
+captureList nonLocal = [ Text (if nonLocal then "[]" else "[=]") ]
+
 lambdaWrap :: Bool -> [Token] -> [Token]
-lambdaWrap nonLocal body = [ Text (if nonLocal then "[]()" else "[=]()"), LBrace ] ++ body ++ [ RBrace, Text "()" ]
+lambdaWrap nonLocal body = captureList nonLocal ++ [ Text "()", LBrace ] ++ body ++ [ RBrace, Text "()" ]
 
 translateExp :: Bool -> Annotated Exp -> Praxis [Token]
 translateExp nonLocal (_ :< exp) = case exp of
@@ -185,12 +186,16 @@ translateExp nonLocal (_ :< exp) = case exp of
     return $ [ Text "(" ] ++ condExp ++ [ Text ") ? (" ] ++ thenExp ++ [ Text ") : (" ] ++ elseExp ++ [ Text ")" ]
 
   -- TODO
-  Lambda pat exp -> undefined
+  Lambda pat exp -> do
+    expTy <- translateType (view ty exp)
+    tempVar <- freshTempVar
+    body <- translateForceMatch tempVar pat exp
+    return $ captureList nonLocal ++ [ Text "(" ] ++ expTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ body ++ [ RBrace ]
 
-  Let ((src, _) :< Bind pat exp1) exp2 -> do
+  Let (_ :< Bind pat exp1) exp2 -> do
     tempVar <- freshTempVar
     exp1 <- translateExp False exp1
-    forceMatch <- translateForceMatch src tempVar pat exp2
+    forceMatch <- translateForceMatch tempVar pat exp2
     return $ lambdaWrap nonLocal ([ Text "auto ", Text tempVar, Text " = " ] ++ exp1 ++ [ Semi ] ++ forceMatch)
 
   Lit lit -> translateLit lit
@@ -222,17 +227,12 @@ translateExp nonLocal (_ :< exp) = case exp of
     return $ lambdaWrap nonLocal (decls ++ [ Text "return " ] ++ exp ++ [ Semi ])
 
 
-translateForceMatch :: Source -> Name -> Annotated Pat -> Annotated Exp -> Praxis [Token]
-translateForceMatch src var pat exp = do
-  expVar <- freshTempVar
-  expType <- translateType (view ty exp)
-  endLabel <- freshLabel
+translateForceMatch :: Name -> Annotated Pat -> Annotated Exp -> Praxis [Token]
+translateForceMatch var pat exp = do
+  let src = view source pat
   exp <- translateExp False exp
-  pat <- translateTryMatch var pat ([ Text expVar, Text " = " ] ++ exp ++ [ Semi, Text "goto ", Text endLabel, Semi ])
-  return $
-    [ Text "std::optional<" ] ++ expType ++ [ Text "> ", Text expVar, Semi ] ++
-    pat ++
-    [ Text endLabel, Text ": ", Semi, Text "if(", Text ("!" ++ expVar), Text ")", LBrace, Text ("throw MatchFail(\"" ++ show src ++ "\")"), Semi, RBrace, Text "return ", Text ("*" ++ expVar), Semi ]
+  pat <- translateTryMatch var pat ([ Text "return " ] ++ exp ++ [ Semi ])
+  return $ pat ++ [ Text ("throw MatchFail(\"" ++ show src ++ "\")"), Semi ]
 
 
 translateTryMatch :: Name -> Annotated Pat -> [Token] -> Praxis [Token]
@@ -249,14 +249,14 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
     case pat of
       Just pat -> do
         onMatch <- translateTryMatch tempVar pat onMatch
-        return $ [ Text "if(", Text (var ++ "._tag"), Text " == " ] ++ tag ++ [ Text ")", LBrace, Text "auto ", Text tempVar, Text " = ", Text (var ++ "._get<") ] ++ tag ++ [ Text ">()", Semi ] ++ onMatch ++ [ RBrace ]
-      Nothing -> return $ [ Text "if(", Text (var ++ "._tag"), Text " == " ] ++ tag ++ [ Text ")", LBrace ] ++ onMatch ++ [ RBrace ]
+        return $ [ Text "if (", Text (var ++ "._tag"), Text " == " ] ++ tag ++ [ Text ")", LBrace, Text "auto ", Text tempVar, Text " = ", Text (var ++ "._get<") ] ++ tag ++ [ Text ">()", Semi ] ++ onMatch ++ [ RBrace ]
+      Nothing -> return $ [ Text "if (", Text (var ++ "._tag"), Text " == " ] ++ tag ++ [ Text ")", LBrace ] ++ onMatch ++ [ RBrace ]
 
   PatHole -> return onMatch
 
   PatLit lit -> do
     lit <- translateLit lit
-    return $ [ Text "if(", Text var, Text " == " ] ++ lit ++ [ Text ")", LBrace ] ++ onMatch ++ [ RBrace ]
+    return $ [ Text "if (", Text var, Text " == " ] ++ lit ++ [ Text ")", LBrace ] ++ onMatch ++ [ RBrace ]
 
   PatPair pat1 pat2 -> do
     var1 <- freshTempVar

@@ -22,42 +22,28 @@ foo = do
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-foo = let x_0 = 1 in ( ) seq let y_0 = 2 in add_int ( x_0 , y_0 )
+foo_0 = let x_0 = 1 in ( ) seq let y_0 = 2 in add_int ( x_0 , y_0 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-foo = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0 = [Int] 2 in [( Int , Int ) -> Int] add_int ( [Int] x_0 , [Int] y_0 )
+foo_0 = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0 = [Int] 2 in [( Int , Int ) -> Int] add_int ( [Int] x_0 , [Int] y_0 )
 |]
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
-int foo = []()
+int foo_0 = []()
 {
-  auto temp_0 = 1;
-  std::optional<int> temp_1;
-  auto x_0 = temp_0;
-  temp_1 = (Unit{}, [=]()
+  auto _temp_0 = 1;
+  auto x_0 = _temp_0;
+  return (Unit{}, [=]()
   {
-    auto temp_2 = 2;
-    std::optional<int> temp_3;
-    auto y_0 = temp_2;
-    temp_3 = add_int(std::make_pair(x_0, y_0));
-    goto label_1;
-    label_1: ;
-    if(!temp_3)
-    {
-      throw MatchFail("5:7");
-    }
-    return *temp_3;
+    auto _temp_1 = 2;
+    auto y_0 = _temp_1;
+    return add_int(std::make_pair(x_0, y_0));
+    throw MatchFail("5:7");
   }
   ());
-  goto label_0;
-  label_0: ;
-  if(!temp_1)
-  {
-    throw MatchFail("3:7");
-  }
-  return *temp_1;
+  throw MatchFail("3:7");
 }
 ();
 |]
@@ -70,16 +56,16 @@ tuple = describe "tuple" $ do
 
   let program = "x = (1, True, \"abc\")"
   it "parses" $ parse program `shouldReturn` trim [r|
-x = ( 1 , True , "abc" )
+x_0 = ( 1 , True , "abc" )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-x = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
+x_0 = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
 |]
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-std::pair<int, std::pair<bool, std::string>> x = std::make_pair(1, std::make_pair(true, "abc"));
+std::pair<int, std::pair<bool, std::string>> x_0 = std::make_pair(1, std::make_pair(true, "abc"));
 |]
 
   it "compiles" $ compile program `shouldReturn` True
@@ -91,11 +77,11 @@ ifThenElse = describe "if then else (min)" $ do
   let program = "min (x, y) = if x < y then x else y"
 
   it "parses" $ parse program `shouldReturn` trim [r|
-min = \ ( x_0 , y_0 ) -> if lt_int ( x_0 , y_0 ) then x_0 else y_0
+min_0 = \ ( x_0 , y_0 ) -> if lt_int ( x_0 , y_0 ) then x_0 else y_0
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-min = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int ( [Int] x_0 , [Int] y_0 ) then [Int] x_0 else [Int] y_0
+min_0 = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int ( [Int] x_0 , [Int] y_0 ) then [Int] x_0 else [Int] y_0
 |]
 
   it "evaluates" $ do
@@ -116,14 +102,14 @@ sign n = switch
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-sign : Int -> Int = \ n_0 -> switch
+sign_0 : Int -> Int = \ n_0 -> switch
   lt_int ( n_0 , 0 ) -> negate_int 1
   eq_int ( n_0 , 0 ) -> 0
   gt_int ( n_0 , 0 ) -> unary_plus_int 1
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-sign : Int -> Int = \ [Int] n_0 -> [Int] switch
+sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
   [( Int , Int ) -> Bool] lt_int ( [Int] n_0 , [Int] 0 ) -> [Int -> Int] negate_int [Int] 1
   [( Int , Int ) -> Bool] eq_int ( [Int] n_0 , [Int] 0 ) -> [Int] 0
   [( Int , Int ) -> Bool] gt_int ( [Int] n_0 , [Int] 0 ) -> [Int -> Int] unary_plus_int [Int] 1
@@ -152,16 +138,16 @@ rec
 
   it "parses" $ parse program `shouldReturn` trim [r|
 rec
-  fac = cases
+  fac_0 = cases
     0 -> 1
-    n_0 -> multiply_int ( n_0 , fac subtract_int ( n_0 , 1 ) )
+    n_0 -> multiply_int ( n_0 , fac_0 subtract_int ( n_0 , 1 ) )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
 rec
-  fac = [Int -> Int] cases
+  fac_0 = [Int -> Int] cases
     [Int] 0 -> [Int] 1
-    [Int] n_0 -> [( Int , Int ) -> Int] multiply_int ( [Int] n_0 , [Int -> Int] fac [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) )
+    [Int] n_0 -> [( Int , Int ) -> Int] multiply_int ( [Int] n_0 , [Int -> Int] fac_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) )
 |]
 
   it "evaluates" $ do
@@ -193,14 +179,14 @@ operator (_ <?> _ <:> _) = ifthenelse where
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-implies : ( Bool , Bool ) -> Bool = \ ( a_0 , b_0 ) -> or ( b_0 , not a_0 )
-operator ( _ --> _ ) = implies
-iff : ( Bool , Bool ) -> Bool = \ ( a_1 , b_1 ) -> or ( and ( a_1 , b_1 ) , and ( not a_1 , not b_1 ) )
-operator ( _ <-> _ ) = iff where
+implies_0 : ( Bool , Bool ) -> Bool = \ ( a_0 , b_0 ) -> or ( b_0 , not a_0 )
+operator ( _ --> _ ) = implies_0
+iff_0 : ( Bool , Bool ) -> Bool = \ ( a_1 , b_1 ) -> or ( and ( a_1 , b_1 ) , and ( not a_1 , not b_1 ) )
+operator ( _ <-> _ ) = iff_0 where
   precedence
     below ( _ --> _ )
-ifthenelse : ( Bool , Int , Int ) -> Int = \ ( c_0 , a_2 , b_2 ) -> if c_0 then a_2 else b_2
-operator ( _ <?> _ <:> _ ) = ifthenelse where
+ifthenelse_0 : ( Bool , Int , Int ) -> Int = \ ( c_0 , a_2 , b_2 ) -> if c_0 then a_2 else b_2
+operator ( _ <?> _ <:> _ ) = ifthenelse_0 where
   precedence
     below ( _ <-> _ )
 |]
@@ -218,7 +204,7 @@ fst (x, y) = x
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-fst : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
+fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
 |]
 
   it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
@@ -233,7 +219,7 @@ fst (x, _) = x
 |]
 
   it "parses" $ parse bad `shouldReturn` trim [r|
-fst : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
+fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
 |]
 
   it "does not type check" $ check bad `shouldReturn` trim [r|
@@ -247,11 +233,11 @@ fst (x, _) = x
 |]
 
   it "parses" $ parse good `shouldReturn` trim [r|
-fst : forall a_0 b_0 | Copy b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
+fst_0 : forall a_0 b_0 | Copy b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
 |]
 
   it "type checks" $ check good `shouldReturn` trim [r|
-fst : forall a_0 b_0 | Copy b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _0 ) -> [a_0] x_0
+fst_0 : forall a_0 b_0 | Copy b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _0 ) -> [a_0] x_0
 |]
 
 
@@ -264,11 +250,11 @@ swap (a, b) = (b, a)
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-swap : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( a_0 , b_0 ) -> ( b_0 , a_0 )
+swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( a_0 , b_0 ) -> ( b_0 , a_0 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-swap : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b_0 ) -> ( [b_0] b_0 , [a_0] a_0 )
+swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b_0 ) -> ( [b_0] b_0 , [a_0] a_0 )
 |]
 
   it "evaluates" $ do
@@ -288,11 +274,11 @@ copy x = (x, x)
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-copy : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ x_0 -> ( x_0 , x_0 )
+copy_0 : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ x_0 -> ( x_0 , x_0 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-copy : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
+copy_0 : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
 |]
 
   it "evaluates" $ do
@@ -342,14 +328,14 @@ id_fun () = Fun (\x -> x)
 
   it "parses" $ parse program `shouldReturn` trim [r|
 type Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
-unbox_fun : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ Fun f_0 -> \ x_0 -> f_0 x_0
-id_fun : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ ( ) -> Fun ( \ x_1 -> x_1 )
+unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ Fun f_0 -> \ x_0 -> f_0 x_0
+id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ ( ) -> Fun ( \ x_1 -> x_1 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
 type Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
-unbox_fun : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
-id_fun : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
+unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
+id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
 
   it "evaluates" $ do
@@ -372,22 +358,22 @@ rec
 
   it "parses" $ parse program `shouldReturn` trim [r|
 rec
-  f = cases
+  f_0 = cases
     0 -> 1
-    n_0 -> subtract_int ( n_0 , m f subtract_int ( n_0 , 1 ) )
-  m = cases
+    n_0 -> subtract_int ( n_0 , m_0 f_0 subtract_int ( n_0 , 1 ) )
+  m_0 = cases
     0 -> 0
-    n_1 -> subtract_int ( n_1 , f m subtract_int ( n_1 , 1 ) )
+    n_1 -> subtract_int ( n_1 , f_0 m_0 subtract_int ( n_1 , 1 ) )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
 rec
-  f = [Int -> Int] cases
+  f_0 = [Int -> Int] cases
     [Int] 0 -> [Int] 1
-    [Int] n_0 -> [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int -> Int] m [Int -> Int] f [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) )
-  m = [Int -> Int] cases
+    [Int] n_0 -> [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int -> Int] m_0 [Int -> Int] f_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) )
+  m_0 = [Int -> Int] cases
     [Int] 0 -> [Int] 0
-    [Int] n_1 -> [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int -> Int] f [Int -> Int] m [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int] 1 ) )
+    [Int] n_1 -> [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int -> Int] f_0 [Int -> Int] m_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int] 1 ) )
 |]
 
   it "evaluates" $ do
@@ -433,13 +419,13 @@ type List a_0 = cases
   Nil ( )
   Cons ( a_0 , List a_0 )
 rec
-  map : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ f_0 -> cases
+  map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ f_0 -> cases
     Nil ( ) -> Nil ( )
-    Cons ( x_0 , xs_0 ) -> Cons ( f_0 x_0 , ( map f_0 ) xs_0 )
+    Cons ( x_0 , xs_0 ) -> Cons ( f_0 x_0 , ( map_0 f_0 ) xs_0 )
 rec
-  sum : forall & r_0 . & r_0 List Int -> Int = cases
+  sum_0 : forall & r_0 . & r_0 List Int -> Int = cases
     Nil ( ) -> 0
-    Cons ( x_1 , xs_1 ) -> add_int ( x_1 , sum xs_1 )
+    Cons ( x_1 , xs_1 ) -> add_int ( x_1 , sum_0 xs_1 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
@@ -447,13 +433,13 @@ type List a_0 = cases
   [forall a_0 . ( ) -> List a_0] Nil ( )
   [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
-  map : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 List a_1 -> List b_0] cases
+  map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 List a_1 -> List b_0] cases
     [? v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
-    [? v_0 List a_1] Cons ( [? v_0 a_1] x_0 , [? v_0 List a_1] xs_0 ) -> [( b_0 , List b_0 ) -> List b_0] Cons ( [? v_0 a_1 -> b_0] f_0 [? v_0 a_1] x_0 , ( [( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0] map [? v_0 a_1 -> b_0] f_0 ) [? v_0 List a_1] xs_0 )
+    [? v_0 List a_1] Cons ( [? v_0 a_1] x_0 , [? v_0 List a_1] xs_0 ) -> [( b_0 , List b_0 ) -> List b_0] Cons ( [? v_0 a_1 -> b_0] f_0 [? v_0 a_1] x_0 , ( [( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0] map_0 [? v_0 a_1 -> b_0] f_0 ) [? v_0 List a_1] xs_0 )
 rec
-  sum : forall & r_0 . & r_0 List Int -> Int = [& r_0 List Int -> Int] cases
+  sum_0 : forall & r_0 . & r_0 List Int -> Int = [& r_0 List Int -> Int] cases
     [& r_0 List Int] Nil [( )] ( ) -> [Int] 0
-    [& r_0 List Int] Cons ( [Int] x_1 , [& r_0 List Int] xs_1 ) -> [( Int , Int ) -> Int] add_int ( [Int] x_1 , [& r_0 List Int -> Int] sum [& r_0 List Int] xs_1 )
+    [& r_0 List Int] Cons ( [Int] x_1 , [& r_0 List Int] xs_1 ) -> [( Int , Int ) -> Int] add_int ( [Int] x_1 , [& r_0 List Int -> Int] sum_0 [& r_0 List Int] xs_1 )
 |]
 
   it "evaluates" $ do
@@ -486,23 +472,23 @@ g x = f x where rec
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-f = \ x_0 -> f_0 x_0 where
-  f_0 : Int -> Int = \ x_1 -> x_1
-g = \ x_2 -> f_1 x_2 where
+f_0 = \ x_0 -> f_1 x_0 where
+  f_1 : Int -> Int = \ x_1 -> x_1
+g_0 = \ x_2 -> f_2 x_2 where
   rec
-    f_1 = cases
+    f_2 = cases
       0 -> 1
-      n_0 -> multiply_int ( f_1 subtract_int ( n_0 , 1 ) , n_0 )
+      n_0 -> multiply_int ( f_2 subtract_int ( n_0 , 1 ) , n_0 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-f = \ [Int] x_0 -> [Int] [Int -> Int] f_0 [Int] x_0 where
-  f_0 : Int -> Int = \ [Int] x_1 -> [Int] x_1
-g = \ [Int] x_2 -> [Int] [Int -> Int] f_1 [Int] x_2 where
+f_0 = \ [Int] x_0 -> [Int] [Int -> Int] f_1 [Int] x_0 where
+  f_1 : Int -> Int = \ [Int] x_1 -> [Int] x_1
+g_0 = \ [Int] x_2 -> [Int] [Int -> Int] f_2 [Int] x_2 where
   rec
-    f_1 = [Int -> Int] cases
+    f_2 = [Int -> Int] cases
       [Int] 0 -> [Int] 1
-      [Int] n_0 -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f_1 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) , [Int] n_0 )
+      [Int] n_0 -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f_2 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) , [Int] n_0 )
 |]
 
   it "evaluates" $ do
@@ -528,7 +514,7 @@ type Box [ & v_0 , a_0 ] = Box & v_0 a_0
 type List a_1 = cases
   Nil ( )
   Cons ( a_1 , List a_1 )
-box = Box "x"
+box_0 = Box "x"
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
@@ -536,7 +522,7 @@ type Box [ & v_0 , a_0 ] = [forall a_0 & v_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]]
 type List a_1 = cases
   [forall a_1 . ( ) -> List a_1] Nil ( )
   [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
-box = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
+box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
 |]
 
   -- TODO should also try with ? instead of &
@@ -580,7 +566,7 @@ foo = do
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-foo = let x_0 = 1 in x_0 seq x_0
+foo_0 = let x_0 = 1 in x_0 seq x_0
 |]
 
   it "does not type check" $ check program `shouldReturn` trim [r|
@@ -629,8 +615,8 @@ y = read x in (1, x)
 type List a_0 = cases
   Nil
   Cons ( a_0 , List a_0 )
-x = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ) ) )
-y = read x in ( 1 , x )
+x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ) ) )
+y_0 = read x_0 in ( 1 , x_0 )
 |]
 
   it "does not type check" $ check program `shouldReturn` "error: found contradiction [7:5] 'l0 ref-free ( Int , & 'l0 ^t0 )\n|-> (safe read)"

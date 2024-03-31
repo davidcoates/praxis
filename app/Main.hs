@@ -1,17 +1,18 @@
 module Main where
 
 import           Common
-import qualified Env.Env            as Env
-import qualified Env.LEnv           as LEnv
+import qualified Env.Env               as Env
+import qualified Env.LEnv              as LEnv
 import           Executors
-import           Inbuilts           (initialState)
+import           Inbuilts              (initialState)
 import           Praxis
 import           Term
 import           Value
 
-import           Control.Monad      (void, when)
-import           Data.List          (delete)
+import           Control.Monad         (void, when)
+import           Data.List             (delete)
 import           System.Environment
+import           System.FilePath.Posix (dropExtension)
 import           System.IO
 
 main :: IO ()
@@ -21,7 +22,7 @@ main = hSetBuffering stdin LineBuffering >> do
 
 data Mode = Interactive (Maybe FilePath)
           | Interpret FilePath
-          | Translate FilePath
+          | Compile FilePath
 
 -- TODO could use a State monad but doesn't play nicely with the Praxis monad
 parseFilename :: [String] -> Praxis ([String], Maybe FilePath)
@@ -45,9 +46,9 @@ parseInteractive args = if "-i" `elem` args
   then return (delete "-i" args, True)
   else return (args, False)
 
-parseTranslate :: [String] -> Praxis ([String], Bool)
-parseTranslate args = if "-t" `elem` args
-  then return (delete "-t" args, True)
+parseCompile :: [String] -> Praxis ([String], Bool)
+parseCompile args = if "-c" `elem` args
+  then return (delete "-c" args, True)
   else return (args, False)
 
 parseOpts :: [String] -> Praxis Mode
@@ -56,14 +57,14 @@ parseOpts args = do
   args <- parseHelp args
   args <- parseDebug args
   (args, interactive) <- parseInteractive args
-  (args, translate) <- parseTranslate args
+  (args, compile) <- parseCompile args
   when (not (null args)) $ throw (pretty "unknown option " <> quote (pretty (unwords args)))
-  case (interactive, translate) of
-    (True, True)   -> throw (pretty "at most one of -i and -t can be specified")
-    (True, False)  -> case file of
-      Just file -> return (Translate file)
-      Nothing   -> throw (pretty "missing file (translate mode)")
-    (False, True) -> return (Interactive file)
+  case (interactive, compile) of
+    (True, True)   -> throw (pretty "at most one of -i and -c can be specified")
+    (False, True)  -> case file of
+      Just file -> return (Compile file)
+      Nothing   -> throw (pretty "missing file (compile mode)")
+    (True, False) -> return (Interactive file)
     (False, False) -> case file of
       Just file -> return (Interpret file)
       Nothing   -> throw (pretty "missing file (interpret mode)")
@@ -83,11 +84,10 @@ parse xs = do
       text <- liftIO (readFile file)
       interpretProgram text
       runMain
-    Translate file -> do
+    Compile file -> do
       text <- liftIO (readFile file)
-      translation <- translateProgram text
-      -- TODO write to out file
-      liftIO (putStr translation)
+      let outFile = dropExtension file
+      compileProgram text (Just outFile)
 
 help :: Praxis a
 help = Praxis.abort helpStr where
@@ -96,15 +96,14 @@ help = Praxis.abort helpStr where
     [ "-d debug"
     , "-i interactive"
     , "-h help"
-    , "-t translate" ]
+    , "-c compile" ]
 
 runMain :: Praxis ()
 runMain = do
-  ty <- tEnv `uses` LEnv.lookup "main"
-  case ty of Nothing -> throw "missing main function"
-             Just (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) ->
-               do { Just (Fun f) <- vEnv `uses` Env.lookup "main"; f Value.Unit; return () }
-             Just ty -> throwAt (view source ty) $ pretty "main function has bad type " <> quote (pretty ty) <> pretty ", expected () -> ()"
+  requireMain
+  Just (Fun f) <- vEnv `uses` Env.lookup "main_0"
+  f Value.Unit
+  return ()
 
 forever :: Praxis a -> Praxis a
 forever p = try p >> forever p

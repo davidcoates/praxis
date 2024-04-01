@@ -196,48 +196,65 @@ operator ( _ <?> _ <:> _ ) = ifthenelse_0 where
 
 
 
-unusedVar = describe "unused variable" $ do
+unusedVar = describe "unused variables" $ do
 
-  let program = trim [r|
+  describe "unused variable" $ do
+
+    let program = trim [r|
 fst : forall a b. (a, b) -> a
 fst (x, y) = x
 |]
 
-  it "parses" $ parse program `shouldReturn` trim [r|
+    it "parses" $ parse program `shouldReturn` trim [r|
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
 |]
 
-  it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
+    it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
 
 
+  describe "undescore may be unused" $ do
 
-disposal = describe "non-copyable terms must be disposed" $ do
-
-  let bad = trim [r|
+    let program = trim [r|
 fst : forall a b. (a, b) -> a
 fst (x, _) = x
 |]
 
-  it "parses" $ parse bad `shouldReturn` trim [r|
+    it "parses" $ parse program `shouldReturn` trim [r|
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
 |]
 
-  it "does not type check" $ check bad `shouldReturn` trim [r|
-error: found contradiction [2:5] Copy b_0
-|-> (variable '_0' is not disposed of)
+    it "type checks" $ check program `shouldReturn` trim [r|
+fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _0 ) -> [a_0] x_0
 |]
 
-  let good = trim [r|
-fst : forall a b | Copy b. (a, b) -> a
-fst (x, _) = x
+
+  describe "unused read variable" $ do
+
+    let program = trim [r|
+fst : forall a b. (a, b) -> a
+fst (x, y) = read y in x
 |]
 
-  it "parses" $ parse good `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 | Copy b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
+    it "parses" $ parse program `shouldReturn` trim [r|
+fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x_0
 |]
 
-  it "type checks" $ check good `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 | Copy b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _0 ) -> [a_0] x_0
+    it "does not type checks" $ check program `shouldReturn` "2:14 error: variable 'y_0' is not used"
+
+
+  describe "used read variable" $ do
+
+    let program = trim [r|
+fst : forall a b. (a, b) -> a
+fst (x, y) = read y in x defer y
+|]
+
+    it "parses" $ parse program `shouldReturn` trim [r|
+fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x_0 defer y_0
+|]
+
+    it "type checks" $ check program `shouldReturn` trim [r|
+fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] y_0 ) -> [a_0] [a_0] x_0 defer [& 'l0 b_0] y_0
 |]
 
 
@@ -446,14 +463,13 @@ rec
     interpret program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
-  sum &xs defer free xs
+  sum &xs
 |] `shouldReturn` "6"
     interpret program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
   let ys = (map (\x -> x * 2)) &xs
-  free xs
-  sum &ys defer free ys
+  sum &ys
 |] `shouldReturn` "12"
 
 
@@ -539,13 +555,14 @@ error: found contradiction [1:50] & ^v3 List Int o~ List Int
     interpret program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
-  read xs in free (Box xs) -- Note, Box xs can't escape the read
-  free xs
+  read xs in do
+    Box xs
+    () -- Note, Box xs can't escape the read
 |] `shouldReturn` "()"
 
 
 
-badDo1 = describe "do not ending in expression" $ do
+badDo = describe "do not ending in expression" $ do
 
   let program = trim [r|
 foo = do
@@ -554,26 +571,6 @@ foo = do
 |]
 
   it "does not parse" $ check program `shouldReturn` "3:3 error: do block must end in an expression"
-
-
-badDo2 = describe "do drops non-unit" $ do
-
-  let program = trim [r|
-foo = do
-  let x = 1
-  x
-  x
-|]
-
-  it "parses" $ parse program `shouldReturn` trim [r|
-foo_0 = let x_0 = 1 in x_0 seq x_0
-|]
-
-  it "does not type check" $ check program `shouldReturn` trim [r|
-error: found contradiction [3:3] Int ~ ( ) ∧ Int o~ ( )
-|-> [3:3] Int ~ ( )
-|-> (expression in do block returns a non-unit but is ignored)
-|]
 
 
 redeclVar = describe "variarble redeclaration" $ do
@@ -697,7 +694,6 @@ spec = do
     fun
     readUnsafe
     unusedVar
-    disposal
 
   describe "complex programs" $ do
     mutualRecursion
@@ -706,7 +702,6 @@ spec = do
     boxedReference
 
   describe "invalid programs" $ do
-    badDo1
-    badDo2
+    badDo
     redeclVar
     redeclTyVar

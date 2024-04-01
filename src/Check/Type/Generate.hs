@@ -32,7 +32,7 @@ import           Data.List          (nub, partition, sort)
 import           Data.Maybe         (isJust, mapMaybe)
 import           Data.Set           (Set)
 import qualified Data.Set           as Set
-import           Prelude            hiding (log, read)
+import           Prelude            hiding (log)
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
@@ -55,7 +55,6 @@ specialise s n vs cs = do
 specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type)
 specialiseQType s n (_ :< Forall vs cs t) = do
   t <- ($ t) <$> specialise s n vs cs
-
   -- Require polymorphic terms to be copyable.
   --
   -- This will give the compiler the freedom to allocate just once per (type-distinct) specialisation
@@ -63,7 +62,6 @@ specialiseQType s n (_ :< Forall vs cs t) = do
   --
   -- Ideally this check would happen at the definition of the polymorphic term, but that's not so easy.
   when (not (null vs)) $ require $ newConstraint (Copy t) (Specialisation n) s
-
   return t
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
@@ -75,13 +73,12 @@ join src f1 f2 = do
   y <- f2
   l2 <- use tEnv
   tEnv .= LEnv.join l1 l2
-  requires [ newConstraint (Copy t) (MixedUse n) src | (n, qTy@(_ :< Forall vs _ t)) <- LEnv.mixedUse l1 l2, null vs ]
   return (x, y)
 
 closure :: Source -> Praxis a -> Praxis a
 closure src x = do
   l1 <- use tEnv
-  tEnv %= LEnv.capture
+  tEnv %= LEnv.setCaptured
   a <- scope src x
   l2 <- use tEnv
   -- Restore captured bit but save used bit
@@ -95,35 +92,35 @@ scope src x = do
   Env l2 <- use tEnv
   let n = length l2 - length l1
       (newVars, oldVars) = splitAt n l2
-      unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, not (view LEnv.used e) ]
+      unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, not (view LEnv.used e) && not (view LEnv.read e) ]
   series $ [ throwAt src (Unused n) | (n, _) <- unusedVars, head n /= '_' ] -- hacky
-  -- Ideally we would use the specialised type here, although polymorphic types must have a Copy'able specialsation (see specialiseQType)
-  -- so it suffices to check monomorphic types
-  requires [ newConstraint (Copy t) (NotDisposed n) src | (n, _ :< Forall vs _ t) <- unusedVars, null vs ]
   tEnv .= Env oldVars
   return a
 
-
-read :: Source -> Name -> Praxis (Name, Annotated Type)
-read s n = do
+-- | Marks a variable as read, returning the view-type of the variable and the view ref-name.
+-- A Copy constraint will be generated if the variable has already been used or has been captured.
+readVar :: Source -> Name -> Praxis (Name, Annotated Type)
+readVar s n = do
   l <- use tEnv
   r@(_ :< ViewRef refName) <- freshViewRef
   case Env.lookup n l of
     Just entry -> do
       t <- specialiseQType s n (view LEnv.value entry)
+      tEnv %= LEnv.setRead n
       requires [ newConstraint (Copy t) (UnsafeRead n) s | view LEnv.used entry ]
       requires [ newConstraint (Copy t) (Captured n) s   | view LEnv.captured entry  ]
       return $ (refName, phantom (TyApply (phantom (View r)) t))
     Nothing -> throwAt s (NotInScope n)
 
--- |Marks a variable as used, and generate a Copy constraint if it has already been used.
-mark :: Source -> Name -> Praxis (Annotated Type)
-mark s n = do
+-- | Marks a variable as used, returning the type of the variable.
+-- A Copy constraint will be generated if the variable has already been used or has been captured.
+useVar :: Source -> Name -> Praxis (Annotated Type)
+useVar s n = do
   l <- use tEnv
   case Env.lookup n l of
     Just entry -> do
       t <- specialiseQType s n (view LEnv.value entry)
-      tEnv %= LEnv.mark n
+      tEnv %= LEnv.setUsed n
       requires [ newConstraint (Copy t) (MultiUse n) s | view LEnv.used entry ]
       requires [ newConstraint (Copy t) (Captured n) s | view LEnv.captured entry ]
       return t
@@ -310,7 +307,6 @@ generateExp = split $ \src -> \case
   Defer exp1 exp2 -> do
     exp1 <- generateExp exp1
     exp2 <- generateExp exp2
-    require $ newConstraint (view ty exp2 `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src
     return (view ty exp1 :< Defer exp1 exp2)
 
   If condExp thenExp elseExp -> do
@@ -340,10 +336,9 @@ generateExp = split $ \src -> \case
       return $ TyApply (View op `as` phantom KindView) (TyCon "String" `as` phantom KindType)
 
   Read var exp -> scope src $ do
-    (refName, t) <- read src var
-    tEnv %= LEnv.intro var (mono t)
+    (refName, refType) <- readVar src var
+    tEnv %= LEnv.intro var (mono refType)
     exp <- generateExp exp
-    tEnv %= Env.elim
     require $ newConstraint (RefFree refName (view ty exp)) SafeRead src
     return (view ty exp :< view value exp)
 
@@ -356,7 +351,6 @@ generateExp = split $ \src -> \case
   Seq exp1 exp2 -> do
     exp1 <- generateExp exp1
     exp2 <- generateExp exp2
-    require $ newConstraint (view ty exp1 `TEq` TyUnit `as` phantom KindType) NonUnitIgnored src
     return (view ty exp2 :< Seq exp1 exp2)
 
   Sig exp t -> do
@@ -376,7 +370,7 @@ generateExp = split $ \src -> \case
     return (t :< Unit)
 
   Var name -> do
-    t <- mark src name
+    t <- useVar src name
     return (t :< Var name)
 
   Where exp decls -> scope src $ do

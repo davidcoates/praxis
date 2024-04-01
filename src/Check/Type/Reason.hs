@@ -14,11 +14,8 @@ data Reason = BindCongruence
             | IfCondition
             | IfCongruence
             | Instance Name
-            | MixedUse Name
             | MultiAlias Name
             | MultiUse Name
-            | NonUnitIgnored
-            | NotDisposed Name
             | SafeRead
             | Specialisation Name
             | SwitchCondition
@@ -39,11 +36,8 @@ instance Show Reason where
     IfCondition      -> "type of 'if' condition must be Bool"
     IfCongruence     -> "branches of 'if' expression must have the same type"
     Instance n       -> "monomorphic usage of '" ++ n ++ "'"
-    MixedUse n       -> "variable '" ++ n ++ "' is used inconsistently across branches"
     MultiAlias n     -> "variable '" ++ n ++ "' is not a unique alias"
     MultiUse n       -> "variable '" ++ n ++ "' used more than once"
-    NonUnitIgnored   -> "expression in do block returns a non-unit but is ignored"
-    NotDisposed n    -> "variable '" ++ n ++ "' is not disposed of"
     SafeRead         -> "safe read"
     Specialisation n -> "specialisation of '" ++ n ++ "'"
     SwitchCondition  -> "type of 'switch' condition must be Bool"

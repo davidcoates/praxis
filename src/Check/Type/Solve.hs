@@ -114,19 +114,10 @@ trySolveCopy t = save our $ save tEnv $ solveDeep (trySolveCopy') (Copy t) where
     TyApply (_ :< View (_ :< ViewValue)) a     -> intro [ Copy a ]
     _                                          -> defer
 
-trySolveNoCopy t = do
-  r <- trySolveCopy t
-  return $ case r of
-    Just Top    -> Just Bottom
-    Just Bottom -> Just Top
-    Nothing     -> Nothing
-
 solveTy :: TypeSolver
 solveTy = (solveFromAxioms <|>) $ \c -> case c of
 
   Copy t -> trySolveCopy t
-
-  NoCopy t -> trySolveNoCopy t
 
   TEq t1 t2 | t1 == t2 -> tautology
 

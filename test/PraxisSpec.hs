@@ -34,12 +34,12 @@ foo_0 = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0
 int foo_0 = []()
 {
   auto _temp_0 = 1;
-  auto x_0 = _temp_0;
+  auto x_0 = std::move(_temp_0);
   return (Unit{}, [=]()
   {
     auto _temp_1 = 2;
-    auto y_0 = _temp_1;
-    return add_int(std::make_pair(x_0, y_0));
+    auto y_0 = std::move(_temp_1);
+    return std::move(add_int)(std::make_pair(std::move(x_0), std::move(y_0)));
     throw MatchFail("5:7");
   }
   ());

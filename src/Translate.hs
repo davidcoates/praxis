@@ -219,7 +219,7 @@ translateExp nonLocal (_ :< exp) = case exp of
 
   Unit -> return [ Text "Unit{}" ]
 
-  Var name -> return [ Text name ]
+  Var var -> return [ Text ("std::move(" ++ var ++ ")") ]
 
   Where exp decls -> do
     decls <- foldMapA (translateDecl False) decls
@@ -240,7 +240,7 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
 
   PatAt var' pat -> do
     pat <- translateTryMatch var' pat onMatch
-    return $ [ Text "auto ", Text var', Text " = ", Text var, Semi ] ++ pat
+    return $ [ Text "auto ", Text var', Text " = ", Text ("std::move(" ++ var ++ ")"), Semi ] ++ pat
 
   PatCon con pat -> do
     conType <- translateType patTy
@@ -270,7 +270,7 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
 
   PatUnit -> return onMatch
 
-  PatVar var' -> return $ [ Text "auto ", Text var', Text " = ", Text var, Semi ] ++ onMatch
+  PatVar var' -> return $ [ Text "auto ", Text var', Text " = ", Text ("std::move(" ++ var ++ ")"), Semi ] ++ onMatch
 
 
 prelude :: String

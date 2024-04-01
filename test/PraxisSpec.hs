@@ -212,7 +212,7 @@ fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
     it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
 
 
-  describe "undescore may be unused" $ do
+  describe "underscore may be unused" $ do
 
     let program = trim [r|
 fst : forall a b. (a, b) -> a

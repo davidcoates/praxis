@@ -33,17 +33,17 @@ foo_0 = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0
 /* 2:1 */
 int foo_0 = []()
 {
-  auto _temp_0 = 1;
-  auto x_0 = std::move(_temp_0);
-  return (Unit{}, [=]()
+  auto temp_0_ = 1;
+  auto x_0 = std::move(temp_0_);
+  return (praxis::Unit{}, [=]()
   {
-    auto _temp_1 = 2;
-    auto y_0 = std::move(_temp_1);
-    return std::move(add_int)(std::make_pair(std::move(x_0), std::move(y_0)));
-    throw MatchFail("5:7");
+    auto temp_1_ = 2;
+    auto y_0 = std::move(temp_1_);
+    return std::move(add_int)(pair(std::move(x_0), std::move(y_0)));
+    throw praxis::BindFail("5:7");
   }
   ());
-  throw MatchFail("3:7");
+  throw praxis::BindFail("3:7");
 }
 ();
 |]
@@ -65,7 +65,7 @@ x_0 = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-std::pair<int, std::pair<bool, std::string>> x_0 = std::make_pair(1, std::make_pair(true, "abc"));
+praxis::Pair<int, praxis::Pair<bool, typename praxis::Apply<praxis::View::REF, praxis::String>::Type>> x_0 = pair(1, pair(true, "abc"));
 |]
 
   it "compiles" $ compile program `shouldReturn` True
@@ -88,6 +88,21 @@ min_0 = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int (
     interpret program "min (1, 2)" `shouldReturn` "1"
     interpret program "min (2, 1)" `shouldReturn` "1"
     interpret program "min (1, 1)" `shouldReturn` "1"
+
+  it "translates" $ translate program `shouldReturn` trim [r|
+/* 1:1 */
+std::function<int(praxis::Pair<int, int>)> min_0 = [](praxis::Pair<int, int> temp_0_)
+{
+  auto temp_1_ = temp_0_.first();
+  auto temp_2_ = temp_0_.second();
+  auto x_0 = std::move(temp_1_);
+  auto y_0 = std::move(temp_2_);
+  return (std::move(lt_int)(pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
+  throw praxis::BindFail("1:5");
+};
+|]
+
+  it "compiles" $ compile program `shouldReturn` True
 
 
 
@@ -126,6 +141,35 @@ error: found contradiction [1:1] Int ~ Int -> Int ∧ Int ~ Int
 |-> (function application)
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
+  it "translates" $ translate program `shouldReturn` trim [r|
+/* 2:1 */
+std::function<int(int)> sign_0 = [](int temp_0_)
+{
+  auto n_0 = std::move(temp_0_);
+  return [=]()
+  {
+    if (std::move(lt_int)(pair(std::move(n_0), 0)))
+    {
+      return std::move(negate_int)(1);
+    }
+    if (std::move(eq_int)(pair(std::move(n_0), 0)))
+    {
+      return 0;
+    }
+    if (std::move(gt_int)(pair(std::move(n_0), 0)))
+    {
+      return std::move(unary_plus_int)(1);
+    }
+    throw praxis::SwitchFail("3:10");
+  }
+  ();
+  throw praxis::BindFail("3:6");
+};
+|]
+
+  it "compiles" $ compile program `shouldReturn` True
+
+
 
 recursion = describe "recursion (factorial)" $ do
 
@@ -154,6 +198,24 @@ rec
     interpret program "fac 0"  `shouldReturn` "1"
     interpret program "fac 5"  `shouldReturn` "120"
     interpret program "fac 15" `shouldReturn` "1307674368000"
+
+  it "translates" $ translate program `shouldReturn` trim [r|
+/* 3:3 */
+extern std::function<int(int)> fac_0;
+/* 3:3 */
+std::function<int(int)> fac_0 = [](int temp_0_)
+{
+  if (temp_0_ == 0)
+  {
+    return 1;
+  }
+  auto n_0 = std::move(temp_0_);
+  return std::move(multiply_int)(pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(pair(std::move(n_0), 1)))));
+  throw praxis::CaseFail("3:9");
+};
+|]
+
+  it "compiles" $ compile program `shouldReturn` True
 
 
 
@@ -256,6 +318,38 @@ fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x
     it "type checks" $ check program `shouldReturn` trim [r|
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] y_0 ) -> [a_0] [a_0] x_0 defer [& 'l0 b_0] y_0
 |]
+
+
+
+view = describe "polymorphic view pattern match" $ do
+
+  let program = [r|
+view : forall ?v a b. ?v (a, b) -> (?v b, ?v a)
+view (x, y) = (y, x)
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+view_0 : forall ? v_0 a_0 b_0 . ? v_0 ( a_0 , b_0 ) -> ( ? v_0 b_0 , ? v_0 a_0 ) = \ ( x_0 , y_0 ) -> ( y_0 , x_0 )
+|]
+
+  it "type checks" $ check program `shouldReturn` trim [r|
+view_0 : forall ? v_0 a_0 b_0 . ? v_0 ( a_0 , b_0 ) -> ( ? v_0 b_0 , ? v_0 a_0 ) = \ ( [? v_0 a_0] x_0 , [? v_0 b_0] y_0 ) -> ( [? v_0 b_0] y_0 , [? v_0 a_0] x_0 )
+|]
+
+  it "translates" $ translate program `shouldReturn` trim [r|
+/* 2:1 */
+template<praxis::View v_0, typename a_0, typename b_0> std::function<praxis::Pair<typename praxis::Apply<v_0, b_0>::Type, typename praxis::Apply<v_0, a_0>::Type>(typename praxis::Apply<v_0, praxis::Pair<a_0, b_0>>::Type)> view_0 = [](typename praxis::Apply<v_0, praxis::Pair<a_0, b_0>>::Type temp_0_)
+{
+  auto temp_1_ = temp_0_.first();
+  auto temp_2_ = temp_0_.second();
+  auto x_0 = std::move(temp_1_);
+  auto y_0 = std::move(temp_2_);
+  return pair(std::move(y_0), std::move(x_0));
+  throw praxis::BindFail("3:6");
+};
+|]
+
+  it "compiles" $ compile program `shouldReturn` True
 
 
 
@@ -688,6 +782,7 @@ spec = do
     mixfix
 
   describe "simple polymorphic programs" $ do
+    view
     swap
     copy
     either

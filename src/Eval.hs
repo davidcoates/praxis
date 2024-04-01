@@ -78,11 +78,11 @@ evalExp ((src, _) :< exp) = case exp of
 
   Case exp alts -> do
     val <- evalExp exp
-    evalCases src val alts
+    evalCase src val alts
 
   Cases alts -> do
     l <- use vEnv
-    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; evalCases src val alts }
+    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; evalCase src val alts }
 
   Con name -> do
     Just dataAlt <- daEnv `uses` Env.lookup name
@@ -148,14 +148,14 @@ evalSwitch src ((condExp,bodyExp):alts) = do
     Value.Bool True  -> evalExp bodyExp
     Value.Bool False -> evalSwitch src alts
 
-evalCases :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
-evalCases src val [] = throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
-evalCases src val ((pat,exp):alts) = case tryMatch val pat of
+evalCase :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
+evalCase src val [] = throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
+evalCase src val ((pat,exp):alts) = case tryMatch val pat of
   Just doMatch -> save vEnv $ do
     doMatch
     evalExp exp
   Nothing ->
-    evalCases src val alts
+    evalCase src val alts
 
 forceMatch :: Source -> Value -> Annotated Pat -> Praxis ()
 forceMatch src val pat = case tryMatch val pat of

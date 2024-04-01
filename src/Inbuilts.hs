@@ -55,7 +55,7 @@ inbuilts =
       Fun (\(Int x) -> pure (Int x)))
   , ("get_int",      poly "() -> Int",
       Fun (\Unit -> liftIOUnsafe (Int <$> readLn)))
-  , ("get_contents", poly "() -> String",
+  , ("get_str", poly "() -> String",
       Fun (\Unit -> Value.String <$> liftIOUnsafe getContents)) -- TODO need to make many of these functions strict?
   , ("put_int",      poly "Int -> ()",
       Fun (\(Int x) -> liftIOUnsafe (print x >> pure Unit)))

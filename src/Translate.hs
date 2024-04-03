@@ -224,7 +224,7 @@ translateExp nonLocal ((src, Just expTy) :< exp) = case exp of
   Pair exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
     exp2 <- translateExp nonLocal exp2
-    return $ [ Text "pair(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
+    return $ [ Text "praxis::Pair(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
 
   Seq exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
@@ -445,6 +445,9 @@ private:
   T2 second_;
 };
 
+template<class T1, class T2>
+Pair(T1, T2) -> Pair<std::decay_t<T1>, std::decay_t<T2>>;
+
 template<typename T1, typename T2>
 struct Copy<Pair<T1, T2>>
 {
@@ -467,12 +470,6 @@ struct SwitchFail : public std::runtime_error
 };
 
 } // namespace praxis
-
-template<typename T1, typename T2>
-inline auto pair(T1&& first, T2&& second) -> praxis::Pair<std::decay_t<T1>, std::decay_t<T2>>
-{
-  return praxis::Pair<std::decay_t<T1>, std::decay_t<T2>>(std::forward<T1>(first), std::forward<T2>(second));
-}
 
 #define BINARY_OP(name, ret_type, lhs_type, rhs_type, op) ret_type name(praxis::Pair<lhs_type, rhs_type> args) { return args.first() op args.second(); }
 #define UNARY_OP(name, ret_type, arg_type, op) ret_type name(arg_type arg) { return op arg; }

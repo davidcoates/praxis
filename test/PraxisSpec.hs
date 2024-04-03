@@ -39,7 +39,7 @@ int foo_0 = []()
   {
     auto temp_1_ = 2;
     auto y_0 = std::move(temp_1_);
-    return std::move(add_int)(pair(std::move(x_0), std::move(y_0)));
+    return std::move(add_int)(praxis::Pair(std::move(x_0), std::move(y_0)));
     throw praxis::BindFail("5:7");
   }
   ());
@@ -65,7 +65,7 @@ x_0 = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-praxis::Pair<int, praxis::Pair<bool, typename praxis::Apply<praxis::View::REF, praxis::String>::Type>> x_0 = pair(1, pair(true, "abc"));
+praxis::Pair<int, praxis::Pair<bool, typename praxis::Apply<praxis::View::REF, praxis::String>::Type>> x_0 = praxis::Pair(1, praxis::Pair(true, "abc"));
 |]
 
   it "compiles" $ compile program `shouldReturn` True
@@ -97,7 +97,7 @@ std::function<int(praxis::Pair<int, int>)> min_0 = [](praxis::Pair<int, int> tem
   auto temp_2_ = temp_0_.second();
   auto x_0 = std::move(temp_1_);
   auto y_0 = std::move(temp_2_);
-  return (std::move(lt_int)(pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
+  return (std::move(lt_int)(praxis::Pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
   throw praxis::BindFail("1:5");
 };
 |]
@@ -148,15 +148,15 @@ std::function<int(int)> sign_0 = [](int temp_0_)
   auto n_0 = std::move(temp_0_);
   return [=]()
   {
-    if (std::move(lt_int)(pair(std::move(n_0), 0)))
+    if (std::move(lt_int)(praxis::Pair(std::move(n_0), 0)))
     {
       return std::move(negate_int)(1);
     }
-    if (std::move(eq_int)(pair(std::move(n_0), 0)))
+    if (std::move(eq_int)(praxis::Pair(std::move(n_0), 0)))
     {
       return 0;
     }
-    if (std::move(gt_int)(pair(std::move(n_0), 0)))
+    if (std::move(gt_int)(praxis::Pair(std::move(n_0), 0)))
     {
       return std::move(unary_plus_int)(1);
     }
@@ -210,7 +210,7 @@ std::function<int(int)> fac_0 = [](int temp_0_)
     return 1;
   }
   auto n_0 = std::move(temp_0_);
-  return std::move(multiply_int)(pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(pair(std::move(n_0), 1)))));
+  return std::move(multiply_int)(praxis::Pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(praxis::Pair(std::move(n_0), 1)))));
   throw praxis::CaseFail("3:9");
 };
 |]
@@ -344,7 +344,7 @@ template<praxis::View v_0, typename a_0, typename b_0> std::function<praxis::Pai
   auto temp_2_ = temp_0_.second();
   auto x_0 = std::move(temp_1_);
   auto y_0 = std::move(temp_2_);
-  return pair(std::move(y_0), std::move(x_0));
+  return praxis::Pair(std::move(y_0), std::move(x_0));
   throw praxis::BindFail("3:6");
 };
 |]

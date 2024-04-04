@@ -59,19 +59,17 @@ translateProgram (_ :< Program decls) = foldMapA (translateDecl True) decls
 translateQTyVar :: Annotated QTyVar -> Praxis [Token]
 translateQTyVar (_ :< q) = case q of
 
-  QTyVar n     -> return [ Text "typename ", Text n ]
+  QTyVar n              -> return [ Text "typename ", Text n ]
 
-  QViewVar _ n -> return [ Text "praxis::View ", Text n ]
+  QViewVar RefOrValue n -> return [ Text "praxis::View ", Text n ]
 
-
--- TODO... we need to know how QTypes are specialised
 
 translateView :: Annotated View -> Praxis [Token]
 translateView (_ :< view) = case view of
 
-  ViewValue -> return [ Text "praxis::View::VALUE" ]
+  ViewValue   -> return [ Text "praxis::View::VALUE" ]
 
-  ViewRef _ -> return [ Text "praxis::View::REF" ]
+  ViewRef _   -> return [ Text "praxis::View::REF" ]
 
   ViewVar _ n -> return [ Text n ]
 
@@ -122,22 +120,31 @@ translateType (_ :< t) = case t of
   TyVar n -> return [ Text n ]
 
 
+-- QViewVar's with a ref domain (e.g. &r) are not needed past the type checking stage. They are dropped from the translated code.
+reifiableQTyVars :: [Annotated QTyVar] -> [Annotated QTyVar]
+reifiableQTyVars qTyVars = filter (\qTyVar -> case view value qTyVar of { QViewVar Ref _ -> False; _ -> True; } ) qTyVars
+
 translateQType :: Annotated QType -> Praxis [Token]
-translateQType ((src, _) :< Forall vs _ t)
-  | [] <- vs = translateType t
-  | otherwise = do
-    vs <- mapM translateQTyVar vs
-    t <- translateType t
-    return $ [ Text "template<" ] ++ intercalate [ Text ", " ] vs ++ [ Text "> " ] ++ t
+translateQType ((src, _) :< Forall vs _ t) = translateQType' (reifiableQTyVars vs) where
+  translateQType' vs
+    | [] <- vs = translateType t
+    | otherwise = do
+      vs <- mapM translateQTyVar vs
+      t <- translateType t
+      return $ [ Text "template<" ] ++ intercalate [ Text ", " ] vs ++ [ Text "> " ] ++ t
 
 
 translateDecl :: Bool -> Annotated Decl -> Praxis [Token]
 translateDecl topLevel ((src, _) :< decl) = case decl of
 
   DeclRec decls -> do
-    forwardDecls <- foldMapA translateForwardDecl decls
-    defns <- foldMapA (translateDecl topLevel) decls
-    return $ forwardDecls ++ defns
+    rec0 <- freshTempVar
+    rec1 <- freshTempVar
+    let unpack :: Name -> [Token]
+        unpack rec = [ Text "auto [" ] ++ intersperse (Text ", ") [ Text name | (_ :< DeclTerm name _ _) <- decls ] ++ [ Text "] = ", Text rec, Text "(", Text rec, Text ")", Semi ]
+    typeHint <- recTypeHint decls
+    decls <- mapM (\(_ :< DeclTerm _ _ exp) -> ([ Crumb src ] ++) <$> translateExp' (unpack rec1) False exp) decls
+    return $ [ Text "auto ", Text rec0, Text " = " ] ++ captureList topLevel ++ [ Text "(auto ", Text rec1, Text ")" ] ++ typeHint ++ [ LBrace, Text "return std::tuple", LBrace ] ++ intercalate [ Text "," ] decls ++ [ RBrace, Semi,  RBrace, Semi ] ++ unpack rec0
 
   DeclTerm name sig exp -> do
     ty <- translateDeclTermType sig exp
@@ -150,10 +157,16 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
       | Just q <- sig = translateQType q
       | otherwise     = translateType (view ty exp)
 
-    translateForwardDecl :: Annotated Decl -> Praxis [Token]
-    translateForwardDecl ((src, _) :< DeclTerm name sig exp) = do
-      ty <- translateDeclTermType sig exp
-      return $ [ Crumb src ] ++ [ Text "extern " ] ++ ty ++ [ Text " ", Text name, Semi ]
+    -- TODO auto deduction may not work if some decls are templated but some arent?
+    recTypeHint :: [Annotated Decl] -> Praxis [Token]
+    recTypeHint decls
+      | all (\(_ :< DeclTerm _ sig _) -> case sig of { Nothing -> True; Just (_ :< Forall vs _ t) -> null (reifiableQTyVars vs) }) decls
+        = do
+          -- all decls are non-templated
+          tys <- mapM (\(_ :< DeclTerm _ sig exp) -> translateDeclTermType sig exp) decls
+          return $ [ Text " -> std::tuple<" ] ++ intercalate [ Text ", " ] tys ++ [ Text ">" ]
+      | otherwise
+        = return []
 
 
 translateLit :: Lit -> Praxis [Token]
@@ -171,7 +184,10 @@ lambdaWrap :: Bool -> [Token] -> [Token]
 lambdaWrap nonLocal body = captureList nonLocal ++ [ Text "()", LBrace ] ++ body ++ [ RBrace, Text "()" ]
 
 translateExp :: Bool -> Annotated Exp -> Praxis [Token]
-translateExp nonLocal ((src, Just expTy) :< exp) = case exp of
+translateExp = translateExp' []
+
+translateExp' :: [Token] -> Bool -> Annotated Exp -> Praxis [Token]
+translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
 
   Apply exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
@@ -189,7 +205,7 @@ translateExp nonLocal ((src, Just expTy) :< exp) = case exp of
     let (_ :< TyFun tempVarTy _) = expTy
     tempVarTy <- translateType tempVarTy
     alts <- translateCase src tempVar alts
-    return $ captureList nonLocal ++ [ Text "(" ] ++ tempVarTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ alts ++ [ RBrace ]
+    return $ captureList nonLocal ++ [ Text "(" ] ++ tempVarTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ alts ++ [ RBrace ]
 
   Con name -> return [ Text name ] -- TODO need to qualify with type ?
 
@@ -209,7 +225,7 @@ translateExp nonLocal ((src, Just expTy) :< exp) = case exp of
     patTy <- translateType (view ty pat)
     tempVar <- freshTempVar
     body <- translateBind tempVar pat exp
-    return $ captureList nonLocal ++ [ Text "(" ] ++ patTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ body ++ [ RBrace ]
+    return $ captureList nonLocal ++ [ Text "(" ] ++ patTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ body ++ [ RBrace ]
 
   Let (_ :< Bind pat exp1) exp2 -> do
     tempVar <- freshTempVar
@@ -233,16 +249,14 @@ translateExp nonLocal ((src, Just expTy) :< exp) = case exp of
 
   Sig exp _ -> translateExp nonLocal exp
 
-  -- TODO
   Switch alts -> do
     alts <- translateSwitch src alts
     return $ lambdaWrap nonLocal alts
 
   Unit -> return [ Text "praxis::Unit{}" ]
 
-  -- FIXME if this is a poly function, we need to specify template parameters!
   Var var -> do
-    return [ Text ("std::move(" ++ var ++ ")") ]
+    return [ Text ("std::move(" ++ var ++ ")") ] -- TODO need to specialise for QTypes
 
   Where exp decls -> do
     decls <- foldMapA (translateDecl False) decls
@@ -322,6 +336,39 @@ prelude = [r|/* prelude */
 #include <iostream>
 
 namespace praxis {
+
+template<size_t I, typename F>
+decltype(auto) recursive(F f);
+
+template<size_t I, size_t J, typename F>
+struct Recursive
+{
+  F f;
+
+  explicit Recursive(F f)
+    : f(f)
+  {}
+
+  template<typename... Args>
+  decltype(auto) operator()(Args&&... args) const
+  {
+    return std::get<J>(std::apply(this->f, recursive<I, F>(this->f)))(std::forward<Args>(args)...);
+  }
+};
+
+template<size_t I, typename F, size_t... Is>
+decltype(auto) recursive_helper(F f, std::index_sequence<Is...>)
+{
+  return std::tuple<Recursive<I, Is, F>...>(
+    Recursive<I, Is, F>(f)...
+  );
+}
+
+template<size_t I, typename F>
+decltype(auto) recursive(F f)
+{
+  return recursive_helper<I, F>(f, std::make_index_sequence<I>{});
+}
 
 using String = std::string;
 
@@ -422,7 +469,7 @@ struct Pair
 {
   using Tag = void;
 
-  template<typename S1 = T1, typename S2 = T2>
+  template<typename S1, typename S2>
   Pair(S1&& first, S2&& second)
     : first_(std::forward<S1>(first))
     , second_(std::forward<S2>(second))
@@ -446,7 +493,7 @@ private:
 };
 
 template<class T1, class T2>
-Pair(T1, T2) -> Pair<std::decay_t<T1>, std::decay_t<T2>>;
+Pair(T1&&, T2&&) -> Pair<std::decay_t<T1>, std::decay_t<T2>>;
 
 template<typename T1, typename T2>
 struct Copy<Pair<T1, T2>>

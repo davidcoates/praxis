@@ -200,19 +200,25 @@ rec
     interpret program "fac 15" `shouldReturn` "1307674368000"
 
   it "translates" $ translate program `shouldReturn` trim [r|
-/* 3:3 */
-extern std::function<int(int)> fac_0;
-/* 3:3 */
-std::function<int(int)> fac_0 = [](int temp_0_)
+auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<int(int)>>
 {
-  if (temp_0_ == 0)
+  return std::tuple
   {
-    return 1;
-  }
-  auto n_0 = std::move(temp_0_);
-  return std::move(multiply_int)(praxis::Pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(praxis::Pair(std::move(n_0), 1)))));
-  throw praxis::CaseFail("3:9");
+    /* 2:1 */
+    [=](int temp_2_)
+    {
+      auto [fac_0] = temp_1_(temp_1_);
+      if (temp_2_ == 0)
+      {
+        return 1;
+      }
+      auto n_0 = std::move(temp_2_);
+      return std::move(multiply_int)(praxis::Pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(praxis::Pair(std::move(n_0), 1)))));
+      throw praxis::CaseFail("3:9");
+    }
+  };
 };
+auto [fac_0] = temp_0_(temp_0_);
 |]
 
   it "compiles" $ compile program `shouldReturn` True
@@ -458,50 +464,80 @@ mutualRecursion = describe "mutual recursion" $ do
 
   let program = [r|
 rec
-  f = cases
-    0 -> 1
-    n -> n - m f (n - 1)
+  is_even = cases
+    0 -> True
+    n -> is_odd (n - 1)
 
-  m = cases
-    0 -> 0
-    n -> n - f m (n - 1)
+  is_odd = cases
+    0 -> False
+    n -> is_even (n - 1)
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
 rec
-  f_0 = cases
-    0 -> 1
-    n_0 -> subtract_int ( n_0 , m_0 f_0 subtract_int ( n_0 , 1 ) )
-  m_0 = cases
-    0 -> 0
-    n_1 -> subtract_int ( n_1 , f_0 m_0 subtract_int ( n_1 , 1 ) )
+  is_even_0 = cases
+    0 -> True
+    n_0 -> is_odd_0 subtract_int ( n_0 , 1 )
+  is_odd_0 = cases
+    0 -> False
+    n_1 -> is_even_0 subtract_int ( n_1 , 1 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
 rec
-  f_0 = [Int -> Int] cases
-    [Int] 0 -> [Int] 1
-    [Int] n_0 -> [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int -> Int] m_0 [Int -> Int] f_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) )
-  m_0 = [Int -> Int] cases
-    [Int] 0 -> [Int] 0
-    [Int] n_1 -> [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int -> Int] f_0 [Int -> Int] m_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int] 1 ) )
+  is_even_0 = [Int -> Bool] cases
+    [Int] 0 -> [Bool] True
+    [Int] n_0 -> [Int -> Bool] is_odd_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 )
+  is_odd_0 = [Int -> Bool] cases
+    [Int] 0 -> [Bool] False
+    [Int] n_1 -> [Int -> Bool] is_even_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int] 1 )
 |]
 
+  it "translates" $ translate program `shouldReturn` trim [r|
+auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::function<bool(int)>>
+{
+  return std::tuple
+  {
+    /* 2:1 */
+    [=](int temp_2_)
+    {
+      auto [is_even_0, is_odd_0] = temp_1_(temp_1_);
+      if (temp_2_ == 0)
+      {
+        return true;
+      }
+      auto n_0 = std::move(temp_2_);
+      return std::move(is_odd_0)(std::move(subtract_int)(praxis::Pair(std::move(n_0), 1)));
+      throw praxis::CaseFail("3:13");
+    }
+    ,/* 2:1 */
+    [=](int temp_3_)
+    {
+      auto [is_even_0, is_odd_0] = temp_1_(temp_1_);
+      if (temp_3_ == 0)
+      {
+        return false;
+      }
+      auto n_1 = std::move(temp_3_);
+      return std::move(is_even_0)(std::move(subtract_int)(praxis::Pair(std::move(n_1), 1)));
+      throw praxis::CaseFail("7:12");
+    }
+  };
+};
+auto [is_even_0, is_odd_0] = temp_0_(temp_0_);
+|]
+
+  it "compiles" $ compile program `shouldReturn` True
+
   it "evaluates" $ do
-    interpret program "f 0" `shouldReturn` "1"
-    interpret program "f 1" `shouldReturn` "1"
-    interpret program "f 2" `shouldReturn` "2"
-    interpret program "f 3" `shouldReturn` "2"
-    interpret program "f 4" `shouldReturn` "3"
-    interpret program "f 5" `shouldReturn` "3"
-    interpret program "f 6" `shouldReturn` "4"
-    interpret program "m 0" `shouldReturn` "0"
-    interpret program "m 1" `shouldReturn` "0"
-    interpret program "m 2" `shouldReturn` "1"
-    interpret program "m 3" `shouldReturn` "2"
-    interpret program "m 4" `shouldReturn` "2"
-    interpret program "m 5" `shouldReturn` "3"
-    interpret program "m 6" `shouldReturn` "4"
+    interpret program "is_even 0" `shouldReturn` "True"
+    interpret program "is_even 1" `shouldReturn` "False"
+    interpret program "is_even 2" `shouldReturn` "True"
+    interpret program "is_even 3" `shouldReturn` "False"
+    interpret program "is_odd 0" `shouldReturn` "False"
+    interpret program "is_odd 1" `shouldReturn` "True"
+    interpret program "is_odd 2" `shouldReturn` "False"
+    interpret program "is_odd 3" `shouldReturn` "True"
 
 
 

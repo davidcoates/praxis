@@ -40,7 +40,7 @@ translateProgram program = do
 coerceMain :: Praxis String
 coerceMain = do
   requireMain
-  return $ "\nint main(){ main_0(Unit{}); }"
+  return $ "\nint main(){ main_0(praxis::Unit{}); }"
 
 compileProgram :: String -> Maybe FilePath -> Praxis ()
 compileProgram program outFile = do

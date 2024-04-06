@@ -63,3 +63,5 @@ compileProgram program outFile = do
       case errCode of
         ExitSuccess -> return Nothing
         _           -> return (Just errLog)
+
+-- compileAndRunProgram :: String -> Praxis String

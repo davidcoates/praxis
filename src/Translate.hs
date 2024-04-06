@@ -325,6 +325,8 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
   PatVar var' -> return $ [ Text "auto ", Text var', Text " = ", Text ("std::move(" ++ var ++ ")"), Semi ] ++ onMatch
 
 
+-- FIXME a lot of this should be moved to Inbuilts
+
 prelude :: String
 prelude = [r|/* prelude */
 #include <utility>
@@ -501,19 +503,24 @@ struct Copy<Pair<T1, T2>>
   static constexpr bool value = can_copy<T1> && can_copy<T2>;
 };
 
-struct BindFail : public std::runtime_error
+struct Exception : public std::runtime_error
 {
   using std::runtime_error::runtime_error;
 };
 
-struct CaseFail : public std::runtime_error
+struct BindFail : public Exception
 {
-  using std::runtime_error::runtime_error;
+  using Exception::Exception;
 };
 
-struct SwitchFail : public std::runtime_error
+struct CaseFail : public Exception
 {
-  using std::runtime_error::runtime_error;
+  using Exception::Exception;
+};
+
+struct SwitchFail : public Exception
+{
+  using Exception::Exception;
 };
 
 } // namespace praxis
@@ -536,12 +543,48 @@ BINARY_OP(neq_int, bool, int, int, !=);
 #undef UNARY_OP
 #undef BINARY_OP
 
-// get_int
-// get_contents
-// put_int
-// put_str
-// put_str_ln
-// compose
+/*
+std::function<int()> get_int = []()
+{
+  int x;
+  std::cin >> x;
+  if (std::cin.fail())
+    throw praxis::Exception("get_int: no parse");
+  return x;
+};
+
+std::function<std::string()> get_str = []()
+{
+  std::string x;
+  std::cin >> x;
+  if (std::cin.fail())
+    throw praxis::Exception("get_str: no parse");
+  return x;
+};
+
+std::function<void(int)> put_int = [](auto x)
+{
+  std::cout << x;
+};
+
+std::function<void(const char*)> put_str = [](auto x)
+{
+  std::cout << x;
+};
+
+std::function<void(const char*)> put_str_ln = [](auto x)
+{
+  std::cout << x << std::endl;
+};
+*/
+
+auto print = []<typename T>() -> std::function<void(praxis::Apply<praxis::View::REF, T>)>
+{
+  return [=](T t) -> void
+  {
+    std::cout << t << std::endl;
+  };
+};
 
 /* prelude end */
 |]

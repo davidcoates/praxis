@@ -109,9 +109,9 @@ generateTy = split $ \src -> \case
       require $ newConstraint (view kind ty2 `KEq` phantom KindType) FunType src
       return (phantom KindType :< TyFun ty1 ty2)
 
-    View op -> do
+    TyView op -> do
       op <- generateView op
-      return (phantom KindView :< View op)
+      return (phantom KindView :< TyView op)
 
     TyPair ty1 ty2 -> do
       ty1 <- generateTy ty1

@@ -290,7 +290,7 @@ viewDomain = _Ref <$> reservedOp "&" <|>
 
 ty1 :: Syntax f => f Type
 ty1 = right _TyApply ty0 <|> mark "type(1)" where
-  ty0 = _View  <$> annotated view' <|>
+  ty0 = _TyView  <$> annotated view' <|>
         _TyVar <$> varid <|>
         _TyCon <$> conid <|>
         unparseable (_TyUni <$> uni) <|>

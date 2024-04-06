@@ -109,7 +109,7 @@ readVar s n = do
       tEnv %= LEnv.setRead n
       requires [ newConstraint (Copy t) (UnsafeRead n) s | view LEnv.used entry ]
       requires [ newConstraint (Copy t) (Captured n) s   | view LEnv.captured entry  ]
-      return $ (refName, phantom (TyApply (phantom (View r)) t))
+      return $ (refName, phantom (TyApply (phantom (TyView r)) t))
     Nothing -> throwAt s (NotInScope n)
 
 -- | Marks a variable as used, returning the type of the variable.
@@ -190,7 +190,7 @@ patToTy :: Annotated TyPat -> Annotated Type
 patToTy = over value patToTy' where
   patToTy' = \case
     TyPatVar n       -> TyVar n
-    TyPatViewVar d n -> View (phantom (ViewVar d n))
+    TyPatViewVar d n -> TyView (phantom (ViewVar d n))
     TyPatPack a b    -> TyPack (patToTy a) (patToTy b)
 
 unis :: Annotated TyPat -> Set (Annotated QTyVar)
@@ -333,7 +333,7 @@ generateExp = split $ \src -> \case
     Char _   -> return $ TyCon "Char"
     String _ -> do
       op <- freshViewUni RefOrValue
-      return $ TyApply (View op `as` phantom KindView) (TyCon "String" `as` phantom KindType)
+      return $ TyApply (TyView op `as` phantom KindView) (TyCon "String" `as` phantom KindType)
 
   Read var exp -> scope src $ do
     (refName, refType) <- readVar src var
@@ -406,7 +406,7 @@ generateAlt op (pat, exp) = scope (view source pat) $ do
 generatePat :: Annotated View -> Annotated Pat -> Praxis (Annotated Pat)
 generatePat op pat = snd <$> generatePat' pat where
 
-  wrap t = TyApply (View op `as` phantom KindView) t `as` phantom KindType
+  wrap t = TyApply (TyView op `as` phantom KindView) t `as` phantom KindType
 
   generatePat' :: Annotated Pat -> Praxis (Annotated Type, Annotated Pat)
   generatePat' = splitPair $ \src -> \case

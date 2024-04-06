@@ -78,7 +78,7 @@ translateType :: Annotated Type -> Praxis [Token]
 translateType (_ :< t) = case t of
 
   TyApply t1 t2
-    | (_ :< View view) <- t1 -> do
+    | (_ :< TyView view) <- t1 -> do
       view <- translateView view
       t2 <- translateType t2
       return $ [ Text "typename praxis::Apply<" ] ++ view ++ [ Text ", " ] ++ t2 ++ [ Text ">::Type" ]

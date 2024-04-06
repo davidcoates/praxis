@@ -101,18 +101,18 @@ solveDeep s = \c -> do
 
 trySolveCopy t = save our $ save tEnv $ solveDeep (trySolveCopy') (Copy t) where
   trySolveCopy' = (solveFromAxioms <|>) $ \(Copy t) -> case view value t of
-    TyUnit                                     -> tautology
-    TyFun _ _                                  -> tautology
-    TyPair a b                                 -> intro [ Copy a, Copy b ]
-    TyVar _                                    -> contradiction
-    TyCon _                                    -> contradiction
-    TyApply (_ :< TyCon _) _                   -> contradiction
-    TyApply (_ :< View (_ :< ViewRef _)) _     -> tautology
-    TyApply (_ :< View (_ :< ViewUni Ref _)) _ -> tautology
-    TyApply (_ :< View (_ :< ViewVar Ref _)) _ -> tautology
-    TyApply (_ :< View (_ :< ViewVar _ _)) a   -> intro [ Copy a ]
-    TyApply (_ :< View (_ :< ViewValue)) a     -> intro [ Copy a ]
-    _                                          -> defer
+    TyUnit                                       -> tautology
+    TyFun _ _                                    -> tautology
+    TyPair a b                                   -> intro [ Copy a, Copy b ]
+    TyVar _                                      -> contradiction
+    TyCon _                                      -> contradiction
+    TyApply (_ :< TyCon _) _                     -> contradiction
+    TyApply (_ :< TyView (_ :< ViewRef _))   _   -> tautology
+    TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> tautology
+    TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> tautology
+    TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> intro [ Copy a ]
+    TyApply (_ :< TyView (_ :< ViewValue)) a     -> intro [ Copy a ]
+    _                                            -> defer
 
 solveTy :: TypeSolver
 solveTy = (solveFromAxioms <|>) $ \c -> case c of
@@ -135,9 +135,9 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
 
   TEq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> intro [ TEq t1 s1, TEq t2 s2 ]
 
-  TEq t1@(_ :< TyApply (_ :< View op1) t1') t2 -> intro [ TEq (stripOuterViews t1') (stripOuterViews t2), TOpEq t1 t2 ]
+  TEq t1@(_ :< TyApply (_ :< TyView op1) t1') t2 -> intro [ TEq (stripOuterViews t1') (stripOuterViews t2), TOpEq t1 t2 ]
 
-  TEq t1 t2@(_ :< TyApply (_:< View _) _) -> solveTy (t2 `TEq` t1) -- handled by the above case
+  TEq t1 t2@(_ :< TyApply (_:< TyView _) _) -> solveTy (t2 `TEq` t1) -- handled by the above case
 
   TOpEq t1 t2 | outerViews t1 == outerViews t2 -> tautology
 
@@ -181,9 +181,9 @@ solveFromAxioms c = use (our . axioms) >>= (\as -> solveFromAxioms' as c) where
 -- FIXME unused
 viewFree :: Annotated Type -> Bool
 viewFree t = case view value t of
-  TyUni _                 -> False
-  TyApply (_ :< View _) _ -> False
-  _                       -> True
+  TyUni _                   -> False
+  TyApply (_ :< TyView _) _ -> False
+  _                         -> True
 
 isOp :: Name -> View -> Praxis (Maybe TyProp)
 isOp n op = do
@@ -219,13 +219,13 @@ simplifyAll = do
 
 outerViews :: Annotated Type -> Set (Annotated View)
 outerViews ty = case view value ty of
-  TyApply (_ :< View op) ty -> Set.insert op (outerViews ty)
-  _                         -> Set.empty
+  TyApply (_ :< TyView op) ty -> Set.insert op (outerViews ty)
+  _                           -> Set.empty
 
 stripOuterViews :: Annotated Type -> Annotated Type
 stripOuterViews ty = case view value ty of
-  TyApply (_ :< View _) ty -> stripOuterViews ty
-  _                        -> ty
+  TyApply (_ :< TyView _) ty -> stripOuterViews ty
+  _                          -> ty
 
 
 simplifyOuterViews :: Annotated Type -> Annotated Type
@@ -234,7 +234,7 @@ simplifyOuterViews = simplifyOuterViews' [] where
   simplifyOuterViews' :: [View] -> Annotated Type -> Annotated Type
   simplifyOuterViews' ops (ann :< ty) = case ty of
 
-    TyApply f@(_ :< View (_ :< op)) innerTy -> case op of
+    TyApply f@(_ :< TyView (_ :< op)) innerTy -> case op of
 
       ViewValue    -> simplifyOuterViews' ops innerTy
 
@@ -253,9 +253,9 @@ normalise = introspect (embedVisit f) where
   f :: Annotated Type -> Visit Praxis () Type
   f ty = case view value ty of
 
-    TyApply (_ :< View _) _ -> case simplifyOuterViews ty of
+    TyApply (_ :< TyView _) _ -> case simplifyOuterViews ty of
 
-      ty@(_ :< TyApply (_ :< View _) innerTy) -> Resolve $ do
+      ty@(_ :< TyApply (_ :< TyView _) innerTy) -> Resolve $ do
         -- The view can be safely stripped if the /* stripped */ type is copyable.
         --
         -- E.g. we can not strip &a from &a &b List Int (because List Int is not copyable)

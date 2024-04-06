@@ -175,7 +175,7 @@ data Type = TyUni Name -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
           | TyFun (Annotated Type) (Annotated Type)
-          | View (Annotated View)
+          | TyView (Annotated View)
           | TyPack (Annotated Type) (Annotated Type)
           | TyPair (Annotated Type) (Annotated Type)
           | TyUnit

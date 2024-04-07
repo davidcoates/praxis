@@ -92,7 +92,7 @@ data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
           | DeclRec [Annotated Decl]
           | DeclSig Name (Annotated QType) -- ^ Parsing only
           | DeclSyn Name (Annotated Type) -- ^ Parsing only
-          | DeclTerm Name (Maybe (Annotated QType)) (Annotated Exp)
+          | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
 
 -- TODO constraints

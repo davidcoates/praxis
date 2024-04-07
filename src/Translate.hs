@@ -148,13 +148,13 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     rec0 <- freshTempVar
     rec1 <- freshTempVar
     let unpack :: Name -> [Token]
-        unpack rec = [ Text "auto [" ] ++ intersperse (Text ", ") [ Text name | (_ :< DeclTerm name _ _) <- decls ] ++ [ Text "] = ", Text rec, Text "(", Text rec, Text ")", Semi ]
+        unpack rec = [ Text "auto [" ] ++ intersperse (Text ", ") [ Text name | (_ :< DeclVar name _ _) <- decls ] ++ [ Text "] = ", Text rec, Text "(", Text rec, Text ")", Semi ]
     typeHint <- recTypeHint decls
-    decls <- mapM (\(_ :< DeclTerm _ sig exp) -> ([ Crumb src ] ++) <$> translateDeclTermBody sig (unpack rec1) False exp) decls
+    decls <- mapM (\(_ :< DeclVar _ sig exp) -> ([ Crumb src ] ++) <$> translateDeclVarBody sig (unpack rec1) False exp) decls
     return $ [ Text "auto ", Text rec0, Text " = " ] ++ captureList topLevel ++ [ Text "(auto ", Text rec1, Text ")" ] ++ typeHint ++ [ LBrace, Text "return std::tuple", LBrace ] ++ intercalate [ Text "," ] decls ++ [ RBrace, Semi,  RBrace, Semi ] ++ unpack rec0
 
-  DeclTerm name sig exp -> do
-    body <- translateDeclTermBody sig [] topLevel exp
+  DeclVar name sig exp -> do
+    body <- translateDeclVarBody sig [] topLevel exp
     return $ [ Crumb src, Text "auto ", Text name, Text " = " ] ++ body ++ [ Semi ]
 
   where
@@ -166,8 +166,8 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     isTemplated :: Maybe (Annotated QType) -> Bool
     isTemplated = not . null . templateVars
 
-    translateDeclTermBody :: Maybe (Annotated QType) -> [Token] -> Bool -> Annotated Exp -> Praxis [Token]
-    translateDeclTermBody sig recPrefix nonLocal exp = case templateVars sig of
+    translateDeclVarBody :: Maybe (Annotated QType) -> [Token] -> Bool -> Annotated Exp -> Praxis [Token]
+    translateDeclVarBody sig recPrefix nonLocal exp = case templateVars sig of
       [] -> translateExp' recPrefix nonLocal exp
       vs -> do
         vs <- mapM translateQTyVar vs
@@ -177,10 +177,10 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     -- TODO auto deduction may not work if some decls are templated but some arent?
     recTypeHint :: [Annotated Decl] -> Praxis [Token]
     recTypeHint decls
-      | all (\(_ :< DeclTerm _ sig _) -> not (isTemplated sig)) decls
+      | all (\(_ :< DeclVar _ sig _) -> not (isTemplated sig)) decls
         = do
           -- all decls are non-templated
-          tys <- mapM (\(_ :< DeclTerm _ _ exp) -> translateType (view ty exp)) decls
+          tys <- mapM (\(_ :< DeclVar _ _ exp) -> translateType (view ty exp)) decls
           return $ [ Text " -> std::tuple<" ] ++ intercalate [ Text ", " ] tys ++ [ Text ">" ]
       | otherwise
         = return []

@@ -50,7 +50,7 @@ evalDecl :: Annotated Decl -> Praxis ()
 evalDecl (_ :< decl) = case decl of
 
   DeclRec decls -> do
-    let (names, exps) = unzip [ (name, exp) | (_ :< DeclTerm name _ exp) <- decls ]
+    let (names, exps) = unzip [ (name, exp) | (_ :< DeclVar name _ exp) <- decls ]
     -- To support mutual recursion, each function needs to see the evaluation of all other functions (including itself).
     -- Leverage mfix to find the fixpoint.
     mfix $ \values -> do
@@ -60,7 +60,7 @@ evalDecl (_ :< decl) = case decl of
       mapM evalExp exps
     return ()
 
-  DeclTerm name _ exp -> do
+  DeclVar name _ exp -> do
     value <- evalExp exp
     vEnv %= Env.intro name value
 

@@ -250,7 +250,7 @@ generateDecl forwardT = splitTrivial $ \src -> \case
         Nothing -> mono <$> freshTyUni
         Just ty -> pure ty
       preDeclare decl = case decl of
-        ((src, _) :< DeclTerm name sig exp)
+        ((src, _) :< DeclVar name sig exp)
           | expIsRecSafe exp -> do { ty <- getTyFromSig sig; introTy src name ty; return (ty, decl) }
           | otherwise        -> throwAt src $ "non-function " <> quote (pretty name) <> " can not be recursive"
         _                    -> throwAt src ("illegal non-term in recursive block" :: String)
@@ -258,7 +258,7 @@ generateDecl forwardT = splitTrivial $ \src -> \case
 
   DeclSyn name t -> return $ DeclSyn name t
 
-  DeclTerm name sig exp -> do
+  DeclVar name sig exp -> do
 
     case sig of
 
@@ -267,7 +267,7 @@ generateDecl forwardT = splitTrivial $ \src -> \case
         case forwardT of
           Just (_ :< Forall [] [] t) -> equal t (view ty exp) (FunCongruence name) src
           Nothing                    -> introTy src name (mono (view ty exp))
-        return $ DeclTerm name Nothing exp
+        return $ DeclVar name Nothing exp
 
       Just sig@(_ :< Forall boundVars constraints t) -> do
         our . axioms %= (++ [ axiom (view value c) | c <- constraints ]) -- Constraints in the signature are added as axioms
@@ -276,7 +276,7 @@ generateDecl forwardT = splitTrivial $ \src -> \case
           Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)
           Nothing -> introTy src name sig
         equal t (view ty exp) (FunSignature name) src
-        return $ DeclTerm name (Just sig) exp
+        return $ DeclVar name (Just sig) exp
 
 
 generateExp :: Annotated Exp -> Praxis (Annotated Exp)

@@ -208,7 +208,7 @@ rewriteExp = splitTrivial $ \src -> \case
 rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
 rewriteDecl = splitTrivial $ \src -> \case
 
-  DeclTerm name sig exp -> DeclTerm <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
+  DeclVar name sig exp -> DeclVar <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
 
   DeclOp op name opRules -> (\name -> DeclOp op name opRules) <$> rewriteVar name
 
@@ -230,19 +230,19 @@ rewriteProgram (ann :< Program decls) = do
   decls <- rewriteDecls decls
   return (ann :< Program decls)
 
-declTermNames :: Annotated Decl -> [Name]
-declTermNames decl = case view value decl of
+declVarNames :: Annotated Decl -> [Name]
+declVarNames decl = case view value decl of
 
-  DeclTerm name _ _ -> [name]
+  DeclVar name _ _ -> [name]
 
-  DeclRec decls     -> concatMap declTermNames decls
+  DeclRec decls    -> concatMap declVarNames decls
 
-  _                 -> []
+  _                -> []
 
 
 rewriteDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
 rewriteDecls decls = do
-  let names = concatMap declTermNames decls
+  let names = concatMap declVarNames decls
   m' <- mkVarRewriteMap (view source (head decls)) names
   m <- use (rewriteMap . varMap)
   rewriteMap . varMap .= (m' `Map.union` m)
@@ -253,7 +253,7 @@ rewriteDecls' :: [Annotated Decl] -> Praxis [Annotated Decl]
 rewriteDecls' []             = pure []
 rewriteDecls' (decl : decls) = case view value decl of
 
-  DeclTerm name sig exp -> do
+  DeclVar name sig exp -> do
     decl <- case sig of
       Nothing  -> rewriteDecl decl
       Just sig -> saveTyVarMap (addRewriteFromQType sig >> rewriteDecl decl)

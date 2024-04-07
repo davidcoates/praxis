@@ -244,7 +244,7 @@ declTerm = prefix varid (_DeclSig, declSig) (_DeclDef, declDef) <|> declRec <|> 
   declRec = _DeclRec <$> blockLike (reservedId "rec") (annotated declTerm)
   declSig = reservedOp ":" *> annotated qTy
   declDef = annotated pat `until` reservedOp "=" <*> annotated exp
-  declVar = _DeclTerm <$> varid <*> (_Just <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
+  declVar = _DeclVar <$> varid <*> (_Just <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
 
 bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedOp "=" *> annotated exp <|> mark "binding"

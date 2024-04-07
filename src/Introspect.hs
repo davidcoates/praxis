@@ -222,7 +222,7 @@ instance Term Decl where
     DeclRec ds      -> DeclRec <$> traverse f ds
     DeclSig n t     -> DeclSig n <$> f t
     DeclSyn n t     -> DeclSyn n <$> f t
-    DeclTerm n t e   -> DeclTerm n <$> traverse f t <*> f e
+    DeclVar n t e   -> DeclVar n <$> traverse f t <*> f e
 
 
 pair :: (Term a, Term b) => Applicative f => (forall a. Term a => Annotated a -> f (Annotated a)) -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)

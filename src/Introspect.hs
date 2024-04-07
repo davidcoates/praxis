@@ -235,26 +235,27 @@ instance Term Exp where
   witness = IExp
   complete _ f x = f x
   recurse f = \case
-    Apply a b    -> Apply <$> f a <*> f b
-    Case a as    -> Case <$> f a <*> pairs f as
-    Cases as     -> Cases <$> pairs f as
-    Con n        -> pure (Con n)
-    Defer a b    -> Defer <$> f a <*> f b
-    Do ss        -> Do <$> traverse f ss
-    If a b c     -> If <$> f a <*> f b <*> f c
-    Lambda a b   -> Lambda <$> f a <*> f b
-    Let a b      -> Let <$> f a <*> f b
-    Lit l        -> pure (Lit l)
-    Mixfix ts    -> Mixfix <$> traverse f ts
-    Read n a     -> Read n <$> f a
-    Pair a b     -> Pair <$> f a <*> f b
-    Seq a b      -> Seq <$> f a <*> f b
-    Sig e t      -> Sig <$> f e <*> f t
-    Switch as    -> Switch <$> pairs f as
-    Unit         -> pure Unit
-    Var n        -> pure (Var n)
-    VarRef n     -> pure (VarRef n)
-    Where a bs   -> Where <$> f a <*> traverse f bs
+    Apply a b       -> Apply <$> f a <*> f b
+    Case a as       -> Case <$> f a <*> pairs f as
+    Cases as        -> Cases <$> pairs f as
+    Con n           -> pure (Con n)
+    Defer a b       -> Defer <$> f a <*> f b
+    Do ss           -> Do <$> traverse f ss
+    If a b c        -> If <$> f a <*> f b <*> f c
+    Lambda a b      -> Lambda <$> f a <*> f b
+    Let a b         -> Let <$> f a <*> f b
+    Lit l           -> pure (Lit l)
+    Mixfix ts       -> Mixfix <$> traverse f ts
+    Read n a        -> Read n <$> f a
+    Pair a b        -> Pair <$> f a <*> f b
+    Seq a b         -> Seq <$> f a <*> f b
+    Sig e t         -> Sig <$> f e <*> f t
+    Specialise e xs -> Specialise <$> f e <*> pairs f xs
+    Switch as       -> Switch <$> pairs f as
+    Unit            -> pure Unit
+    Var n           -> pure (Var n)
+    VarRef n        -> pure (VarRef n)
+    Where a bs      -> Where <$> f a <*> traverse f bs
 
 instance Term Pat where
   witness = IPat
@@ -337,7 +338,7 @@ instance Term Kind where
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
     KindFun a b    -> KindFun <$> f a <*> f b
-    KindView         -> pure KindView
+    KindView       -> pure KindView
     KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType
 

@@ -125,6 +125,8 @@ evalExp ((src, _) :< exp) = case exp of
 
   Sig exp _ -> evalExp exp
 
+  Specialise exp _ -> evalExp exp
+
   Switch alts -> evalSwitch src alts
 
   Term.Unit -> return Value.Unit

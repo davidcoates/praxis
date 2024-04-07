@@ -41,6 +41,8 @@ module Term
   , TyProp
   , KindProp
 
+  , Specialisation
+
   , Annotation
   , Annotated
   , source
@@ -93,6 +95,9 @@ data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
           | DeclTerm Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
 
+-- TODO constraints
+type Specialisation = [(Annotated QTyVar, Annotated Type)]
+
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
@@ -108,6 +113,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
+         | Specialise (Annotated Exp) Specialisation
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name -- FIXME Qualified Name

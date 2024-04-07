@@ -59,7 +59,7 @@ module Praxis
 
   , freshTyUni
   , freshKindUni
-  , freshViewUni
+  , freshTyViewUni
   , freshViewRef
   , freshTyVar
   , freshVar
@@ -275,11 +275,11 @@ freshTyUni = do
   fresh . freshTyUnis .= xs
   return (TyUni x `as` phantom KindType)
 
-freshViewUni :: ViewDomain -> Praxis (Annotated View)
-freshViewUni domain = do
+freshTyViewUni :: ViewDomain -> Praxis (Annotated Type)
+freshTyViewUni domain = do
   (o:os) <- use (fresh . freshViewUnis)
   fresh . freshViewUnis .= os
-  return (phantom (ViewUni domain o))
+  return (TyView (phantom (ViewUni domain o)) `as` phantom KindType)
 
 freshKindUni :: Praxis (Annotated Kind)
 freshKindUni = do

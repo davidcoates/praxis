@@ -56,6 +56,17 @@ translateProgram :: Annotated Program -> Praxis [Token]
 translateProgram (_ :< Program decls) = foldMapA (translateDecl True) decls
 
 
+-- QViewVar's with a ref domain (e.g. &r) are not needed past the type checking stage. They are dropped from the translated code.
+canTranslateQTyVar :: Annotated QTyVar -> Bool
+canTranslateQTyVar qTyVar = case view value qTyVar of
+  QViewVar Ref _ -> False
+  _              -> True
+
+
+translatableQTyVars :: [Annotated QTyVar] -> [Annotated QTyVar]
+translatableQTyVars = filter canTranslateQTyVar
+
+
 translateQTyVar :: Annotated QTyVar -> Praxis [Token]
 translateQTyVar (_ :< q) = case q of
 
@@ -81,7 +92,7 @@ translateType (_ :< t) = case t of
     | (_ :< TyView view) <- t1 -> do
       view <- translateView view
       t2 <- translateType t2
-      return $ [ Text "typename praxis::Apply<" ] ++ view ++ [ Text ", " ] ++ t2 ++ [ Text ">::Type" ]
+      return $ [ Text "praxis::apply<" ] ++ view ++ [ Text ", " ] ++ t2 ++ [ Text ">" ]
 
   TyApply (_ :< TyCon n) t2 -> do
     args <- intercalate [Text ", "] <$> mapM translateType (unpack t2)
@@ -120,12 +131,8 @@ translateType (_ :< t) = case t of
   TyVar n -> return [ Text n ]
 
 
--- QViewVar's with a ref domain (e.g. &r) are not needed past the type checking stage. They are dropped from the translated code.
-reifiableQTyVars :: [Annotated QTyVar] -> [Annotated QTyVar]
-reifiableQTyVars qTyVars = filter (\qTyVar -> case view value qTyVar of { QViewVar Ref _ -> False; _ -> True; } ) qTyVars
-
 translateQType :: Annotated QType -> Praxis [Token]
-translateQType ((src, _) :< Forall vs _ t) = translateQType' (reifiableQTyVars vs) where
+translateQType ((src, _) :< Forall vs _ t) = translateQType' (translatableQTyVars vs) where
   translateQType' vs
     | [] <- vs = translateType t
     | otherwise = do
@@ -143,27 +150,37 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     let unpack :: Name -> [Token]
         unpack rec = [ Text "auto [" ] ++ intersperse (Text ", ") [ Text name | (_ :< DeclTerm name _ _) <- decls ] ++ [ Text "] = ", Text rec, Text "(", Text rec, Text ")", Semi ]
     typeHint <- recTypeHint decls
-    decls <- mapM (\(_ :< DeclTerm _ _ exp) -> ([ Crumb src ] ++) <$> translateExp' (unpack rec1) False exp) decls
+    decls <- mapM (\(_ :< DeclTerm _ sig exp) -> ([ Crumb src ] ++) <$> translateDeclTermBody sig (unpack rec1) False exp) decls
     return $ [ Text "auto ", Text rec0, Text " = " ] ++ captureList topLevel ++ [ Text "(auto ", Text rec1, Text ")" ] ++ typeHint ++ [ LBrace, Text "return std::tuple", LBrace ] ++ intercalate [ Text "," ] decls ++ [ RBrace, Semi,  RBrace, Semi ] ++ unpack rec0
 
   DeclTerm name sig exp -> do
-    ty <- translateDeclTermType sig exp
-    exp <- translateExp topLevel exp
-    return $ [ Crumb src ] ++ ty ++ [ Text " ", Text name, Text " = " ] ++ exp ++ [ Semi ]
+    body <- translateDeclTermBody sig [] topLevel exp
+    return $ [ Crumb src, Text "auto ", Text name, Text " = " ] ++ body ++ [ Semi ]
 
   where
-    translateDeclTermType :: Maybe (Annotated QType) -> Annotated Exp -> Praxis [Token]
-    translateDeclTermType sig exp
-      | Just q <- sig = translateQType q
-      | otherwise     = translateType (view ty exp)
+    templateVars :: Maybe (Annotated QType) -> [Annotated QTyVar]
+    templateVars sig = case sig of
+      Nothing                   -> []
+      Just (_ :< Forall vs _ _) -> translatableQTyVars vs
+
+    isTemplated :: Maybe (Annotated QType) -> Bool
+    isTemplated = not . null . templateVars
+
+    translateDeclTermBody :: Maybe (Annotated QType) -> [Token] -> Bool -> Annotated Exp -> Praxis [Token]
+    translateDeclTermBody sig recPrefix nonLocal exp = case templateVars sig of
+      [] -> translateExp' recPrefix nonLocal exp
+      vs -> do
+        vs <- mapM translateQTyVar vs
+        exp <- translateExp' recPrefix False exp
+        return $ captureList nonLocal ++ [ Text "<" ] ++ intercalate [ Text ", " ] vs ++ [ Text ">()", LBrace, Text "return " ] ++ exp ++ [ Semi, RBrace ]
 
     -- TODO auto deduction may not work if some decls are templated but some arent?
     recTypeHint :: [Annotated Decl] -> Praxis [Token]
     recTypeHint decls
-      | all (\(_ :< DeclTerm _ sig _) -> case sig of { Nothing -> True; Just (_ :< Forall vs _ t) -> null (reifiableQTyVars vs) }) decls
+      | all (\(_ :< DeclTerm _ sig _) -> not (isTemplated sig)) decls
         = do
           -- all decls are non-templated
-          tys <- mapM (\(_ :< DeclTerm _ sig exp) -> translateDeclTermType sig exp) decls
+          tys <- mapM (\(_ :< DeclTerm _ _ exp) -> translateType (view ty exp)) decls
           return $ [ Text " -> std::tuple<" ] ++ intercalate [ Text ", " ] tys ++ [ Text ">" ]
       | otherwise
         = return []
@@ -205,7 +222,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     let (_ :< TyFun tempVarTy _) = expTy
     tempVarTy <- translateType tempVarTy
     alts <- translateCase src tempVar alts
-    return $ captureList nonLocal ++ [ Text "(" ] ++ tempVarTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ alts ++ [ RBrace ]
+    return $ [ Text "std::function(" ] ++ captureList nonLocal ++ [ Text "(" ] ++ tempVarTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ alts ++ [ RBrace, Text ")" ]
 
   Con name -> return [ Text name ] -- TODO need to qualify with type ?
 
@@ -225,7 +242,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     patTy <- translateType (view ty pat)
     tempVar <- freshTempVar
     body <- translateBind tempVar pat exp
-    return $ captureList nonLocal ++ [ Text "(" ] ++ patTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ body ++ [ RBrace ]
+    return $ [ Text "std::function(" ] ++ captureList nonLocal ++ [ Text "(" ] ++ patTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ body ++ [ RBrace, Text ")" ]
 
   Let (_ :< Bind pat exp1) exp2 -> do
     tempVar <- freshTempVar
@@ -248,6 +265,14 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     return $ [ Text "(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
 
   Sig exp _ -> translateExp nonLocal exp
+
+  Specialise exp specialisation -> do
+    exp <- translateExp nonLocal exp
+    let tyArgs = [ t | (qTyVar, t) <- specialisation, canTranslateQTyVar qTyVar ]
+    tyArgs <- mapM translateType tyArgs
+    return $ case tyArgs of
+      [] -> exp
+      _  -> exp ++ [ Text ".template operator()<" ] ++ intercalate [ Text ", " ] tyArgs ++ [ Text ">()" ]
 
   Switch alts -> do
     alts <- translateSwitch src alts
@@ -367,7 +392,7 @@ decltype(auto) recursive_helper(F f, std::index_sequence<Is...>)
 }
 
 template<size_t I, typename F>
-decltype(auto) recursive(F f)
+auto recursive(F f)
 {
   return recursive_helper<I, F>(f, std::make_index_sequence<I>{});
 }
@@ -445,8 +470,11 @@ struct Apply<View::REF, String>
   using Type = const char *;
 };
 
+template<View view, typename T>
+using apply = typename Apply<view, T>::Type;
+
 template<typename T>
-auto ref(const T& obj) -> typename Apply<View::REF, T>::Type
+auto ref(const T& obj) -> apply<View::REF, T>
 {
   if constexpr (can_copy<T>)
   {
@@ -578,11 +606,12 @@ std::function<void(const char*)> put_str_ln = [](auto x)
 };
 */
 
-auto print = []<typename T>() -> std::function<void(praxis::Apply<praxis::View::REF, T>)>
+auto print = []<typename T>() -> std::function<praxis::Unit(praxis::apply<praxis::View::REF, T>)>
 {
-  return [=](T t) -> void
+  return [=](T t) -> praxis::Unit
   {
     std::cout << t << std::endl;
+    return praxis::Unit{};
   };
 };
 

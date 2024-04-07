@@ -327,7 +327,8 @@ exp = exp5 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Var <$> varid <|> -- TODO qualified
          _Con <$> conid <|>
          _Lit <$> lit <|>
-         tuple _Unit _Pair exp <|>
+         unparseable (_Specialise <$> annotated exp <*> empty) <|>
+         tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          mark "expression(0)"
 
 switch :: Syntax f => f (Annotated Exp, Annotated Exp)

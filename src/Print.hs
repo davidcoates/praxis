@@ -80,10 +80,11 @@ instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
 hideLabel :: Term a => a -> Bool
 hideLabel x = case typeof x of
   IExp -> case x of
-    Pair _ _   -> True
-    Apply _ _  -> True
-    Lambda _ _ -> True
-    _          -> False
+    Pair _ _       -> True
+    Apply _ _      -> True
+    Lambda _ _     -> True
+    Specialise _ _ -> True
+    _              -> False
   IPat -> case x of
     PatPair _ _ -> True -- Note: Not trivial due to views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
     _           -> False

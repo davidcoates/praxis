@@ -1,12 +1,11 @@
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE NamedFieldPuns            #-}
-{-# LANGUAGE Rank2Types                #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE StandaloneDeriving        #-}
-{-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE Rank2Types            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module Introspect
   ( Visit(..)
@@ -15,7 +14,7 @@ module Introspect
   , Term(..)
   , typeof
   , visit
-  , introspect
+  , deepVisit
   , embedVisit
   , embedSub
   , embedMonoid
@@ -38,15 +37,12 @@ data Visit f a b = Visit (f a)
 skip :: Applicative f => Visit f () a
 skip = Visit (pure ())
 
+type Termformer f = forall a. Term a => Annotated a -> f (Annotated a)
+
 class Term a where
   witness :: I a
-  complete :: (Term a, Applicative f) => I a -> (forall a. Term a => Annotated a -> f (Annotated a)) -> Annotation a -> f (Annotation a)
-  recurse :: Applicative f => (forall a. Term a => Annotated a -> f (Annotated a)) -> a -> f a
-
-completion :: (Term a, Applicative f) => I a -> (forall a. Term a => Annotated a -> f (Annotated a)) -> Maybe (Annotation a) -> f (Maybe (Annotation a))
-completion i f = \case
-  Nothing -> pure Nothing
-  Just x  -> Just <$> complete i f x
+  recurse :: Applicative f => Termformer f -> a -> f a
+  recurseAnnotation :: (Term a, Applicative f) => I a -> Termformer f -> Annotation a -> f (Annotation a)
 
 -- TODO Lit? Fixity?
 data I a where
@@ -121,9 +117,9 @@ visit f x = case f x of
   Resolve r -> r
 
 -- Apply a visitor through the term, including through annotations
-introspect :: forall a f. (Term a, Applicative f) => (forall a. Term a => Annotated a -> Visit f () a) -> Annotated a -> f (Annotated a)
-introspect f x = set annotation <$> completion (witness :: I a) (introspect f) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
-  Visit c   -> c *> recurse (introspect f) (view value x)
+deepVisit :: forall a f. (Term a, Applicative f) => (forall a. Term a => Annotated a -> Visit f () a) -> Annotated a -> f (Annotated a)
+deepVisit f x = set annotation <$> traverse (recurseAnnotation (witness :: I a) (deepVisit f)) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
+  Visit c   -> c *> recurse (deepVisit f) (view value x)
   Resolve r -> r
   )
 
@@ -139,7 +135,7 @@ transferM :: forall a b f. (Term a, Term b) => (a -> Maybe a) -> b -> Maybe b
 transferM f x = switch (witness :: I a) (witness :: I b) (f x) Nothing
 
 sub :: forall a. Term a => (forall b. Term b => b -> Maybe b) -> Annotated a -> Annotated a
-sub f x = runIdentity $ introspect f' x where
+sub f x = runIdentity $ deepVisit f' x where
   f' :: forall b. Term b => Annotated b -> Visit Identity () b
   f' y = case f (view value y) of
     Nothing -> Visit (Identity ())
@@ -157,7 +153,7 @@ extractPartial f x = getConst $ visit f' x where
     (m, False) -> Resolve (Const m)
 
 deepExtract :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> m) -> Annotated a -> m
-deepExtract f x = getConst $ introspect f' x where
+deepExtract f x = getConst $ deepVisit f' x where
   f' :: forall c. Term c => Annotated c -> Visit (Const m) () c
   f' y = Visit (Const (f (view value y)))
 
@@ -171,50 +167,50 @@ embedMonoid f x = getConst $ transferA (Const . f) x
 
 -- TODO use template haskell to generate recurse
 
-trivial :: (Annotation a ~ Void, Term a, Applicative f) => I a -> (forall a. Term a => Annotated a -> f (Annotated a)) -> Annotation a -> f (Annotation a)
+trivial :: (Annotation a ~ Void, Term a, Applicative f) => I a -> Termformer f -> Annotation a -> f (Annotation a)
 trivial _ _ = absurd
 
 -- | Operators
 
 instance Term Assoc where
   witness = IAssoc
-  complete = trivial
+  recurseAnnotation = trivial
   recurse _ = pure
 
 instance Term Op where
   witness = IOp
-  complete = trivial
+  recurseAnnotation = trivial
   recurse _ = pure
 
 instance Term OpRules where
   witness = IOpRules
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     OpRules a ps    -> OpRules <$> traverse f a <*> traverse f ps
     OpMultiRules rs -> OpMultiRules <$> traverse (bitraverse f (traverse f)) rs
 
 instance Term Prec where
   witness = IPrec
-  complete = trivial
+  recurseAnnotation = trivial
   recurse _ = pure
 
 -- | T0
 
 instance Term Bind where
   witness = IBind
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     Bind a b -> Bind <$> f a <*> f b
 
 instance Term DataCon where
   witness = IDataCon
-  complete _ f (DataConInfo { fullType, argType, retType }) = (\fullType argType retType -> DataConInfo { fullType, argType, retType}) <$> f fullType <*> traverse f argType <*> f retType
+  recurseAnnotation _ f (DataConInfo { fullType, argType, retType }) = (\fullType argType retType -> DataConInfo { fullType, argType, retType}) <$> f fullType <*> traverse f argType <*> f retType
   recurse f = \case
     DataCon n at -> DataCon n <$> traverse f at
 
 instance Term Decl where
   witness = IDecl
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     DeclData n t ts -> DeclData n <$> traverse f t <*> traverse f ts
     DeclDef n ps e  -> DeclDef n <$> traverse f ps <*> f e
@@ -225,15 +221,15 @@ instance Term Decl where
     DeclVar n t e   -> DeclVar n <$> traverse f t <*> f e
 
 
-pair :: (Term a, Term b) => Applicative f => (forall a. Term a => Annotated a -> f (Annotated a)) -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)
+pair :: (Term a, Term b) => Applicative f => Termformer f -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)
 pair f (a, b) = (,) <$> f a <*> f b
 
-pairs :: (Term a, Term b) => Applicative f => (forall a. Term a => Annotated a -> f (Annotated a)) -> [(Annotated a, Annotated b)] -> f [(Annotated a, Annotated b)]
+pairs :: (Term a, Term b) => Applicative f => Termformer f -> [(Annotated a, Annotated b)] -> f [(Annotated a, Annotated b)]
 pairs f = traverse (pair f)
 
 instance Term Exp where
   witness = IExp
-  complete _ f x = f x
+  recurseAnnotation _ f x = f x
   recurse f = \case
     Apply a b       -> Apply <$> f a <*> f b
     Case a as       -> Case <$> f a <*> pairs f as
@@ -259,7 +255,7 @@ instance Term Exp where
 
 instance Term Pat where
   witness = IPat
-  complete _ f x = f x
+  recurseAnnotation _ f x = f x
   recurse f = \case
     PatAt n a   -> PatAt n <$> f a
     PatCon n p  -> PatCon n <$> traverse f p
@@ -271,20 +267,20 @@ instance Term Pat where
 
 instance Term Program where
   witness = IProgram
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     Program ds -> Program <$> traverse f ds
 
 instance Term Stmt where
   witness = IStmt
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     StmtBind b -> StmtBind <$> f b
     StmtExp e  -> StmtExp <$> f e
 
 instance Term Tok where
   witness = ITok
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     TExp e -> TExp <$> f e
     TOp o  -> pure (TOp o)
@@ -293,12 +289,12 @@ instance Term Tok where
 
 instance Term View where
   witness = IView
-  complete = trivial
+  recurseAnnotation = trivial
   recurse _ = pure
 
 instance Term TyPat where
   witness = ITyPat
-  complete _ f x = f x
+  recurseAnnotation _ f x = f x
   recurse f = \case
     TyPatVar n       -> pure (TyPatVar n)
     TyPatViewVar d n -> pure (TyPatViewVar d n)
@@ -306,7 +302,7 @@ instance Term TyPat where
 
 instance Term Type where
   witness = IType
-  complete _ f x = f x
+  recurseAnnotation _ f x = f x
   recurse f = \case
     TyUni n     -> pure (TyUni n)
     TyApply a b -> TyApply <$> f a <*> f b
@@ -320,20 +316,20 @@ instance Term Type where
 
 instance Term QType where
   witness = IQType
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     Forall vs cs t -> Forall <$> traverse f vs <*> traverse f cs <*> f t
 
 instance Term QTyVar where
   witness = IQTyVar
-  complete = trivial
+  recurseAnnotation = trivial
   recurse _ = pure
 
 -- | T2
 
 instance Term Kind where
   witness = IKind
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
@@ -346,7 +342,7 @@ instance Term Kind where
 
 instance Term TyConstraint where
   witness = ITyConstraint
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     Class t      -> Class <$> f t
     RefFree n t  -> RefFree n <$> f t
@@ -356,13 +352,13 @@ instance Term TyConstraint where
 
 instance Term KindConstraint where
   witness = IKindConstraint
-  complete = trivial
+  recurseAnnotation = trivial
   recurse f = \case
     KEq a b -> KEq <$> f a <*> f b
 
 instance Term TyProp where
   witness = ITyProp
-  complete _ f = \case
+  recurseAnnotation _ f = \case
     Root r       -> pure (Root r)
     Antecedent c -> Antecedent <$> f c
   recurse f = \case
@@ -373,7 +369,7 @@ instance Term TyProp where
 
 instance Term KindProp where
   witness = IKindProp
-  complete _ f = \case
+  recurseAnnotation _ f = \case
     Root r       -> pure (Root r)
     Antecedent c -> Antecedent <$> f c
   recurse f = \case

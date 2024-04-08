@@ -248,7 +248,7 @@ simplifyOuterViews = simplifyOuterViews' [] where
 
 
 normalise :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-normalise = introspect (embedVisit f) where
+normalise = deepVisit (embedVisit f) where
 
   f :: Annotated Type -> Visit Praxis () Type
   f ty = case view value ty of

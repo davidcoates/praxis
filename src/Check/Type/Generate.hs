@@ -175,7 +175,7 @@ generate term = ($ term) $ case witness :: I a of
   IDataCon -> error "standalone DataCon"
   IDecl    -> generateDecl Nothing
   IPat     -> error "standalone Pat"
-  _        -> value (recurse generate)
+  _        -> value (recurseTerm generate)
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc

@@ -51,7 +51,7 @@ desugar term = ($ term) $ case witness :: I a of
   IOp      -> desugarOp
   IOpRules -> error "standalone IOpRules"
   IDecl    -> error "standalone Decl"
-  _        -> value (recurse desugar)
+  _        -> value (recurseTerm desugar)
 
 
 -- Desugaring proper
@@ -137,7 +137,7 @@ desugarExp (ann@(src, _) :< exp) = case exp of
     decls <- desugarDecls decls
     return (ann :< Where exp decls)
 
-  _           -> (ann :<) <$> recurse desugar exp
+  _           -> (ann :<) <$> recurseTerm desugar exp
 
 
 
@@ -260,7 +260,7 @@ desugarPat (ann :< pat) = case pat of
 
   PatCon "False" Nothing -> pure (ann :< PatLit (Bool False))
 
-  _                      -> (ann :<) <$> recurse desugar pat
+  _                      -> (ann :<) <$> recurseTerm desugar pat
 
 
 desugarTy :: Annotated Type -> Praxis (Annotated Type)
@@ -273,7 +273,7 @@ desugarTy (ann :< ty) = case ty of
       Just ty -> ty
       Nothing -> ann :< TyCon name
 
-  _           -> (ann :<) <$> recurse desugar ty
+  _           -> (ann :<) <$> recurseTerm desugar ty
 
 
 -- (Operator precedence) graph helpers

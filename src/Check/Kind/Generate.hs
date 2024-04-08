@@ -46,7 +46,7 @@ generate term = ($ term) $ case witness :: I a of
   ITyPat   -> generateTyPat
   IQTyVar  -> generateQTyVar
   IDataCon -> generateDataCon
-  _        -> value (recurse generate)
+  _        -> value (recurseTerm generate)
 
 introKind :: Source -> Name -> Annotated Kind -> Praxis ()
 introKind s n k = do
@@ -184,4 +184,4 @@ generateDecl = splitTrivial $ \src -> \case
       Just arg -> require $ newConstraint (k `KEq` phantom (KindFun (view kind arg) (phantom KindType))) (DataType name) src
     return $ DeclData name arg alts
 
-  decl -> recurse generate decl
+  decl -> recurseTerm generate decl

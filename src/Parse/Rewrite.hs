@@ -36,7 +36,7 @@ run term = save stage $ do
 
 rewriteTopLevel :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 rewriteTopLevel term = case witness :: I a of
-  IQType -> saveTyVarMap $ addRewriteFromQType term >> value (recurse rewrite) term -- For testing
+  IQType -> saveTyVarMap $ addRewriteFromQType term >> value (recurseTerm rewrite) term -- For testing
   _ -> rewrite term
 
 rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
@@ -49,7 +49,7 @@ rewrite term = ($ term) $ case witness :: I a of
   IExp     -> rewriteExp
   IDecl    -> rewriteDecl
   IPat     -> rewritePat
-  _        -> value (recurse rewrite)
+  _        -> value (recurseTerm rewrite)
 
 
 saveVarMap :: Praxis a -> Praxis a
@@ -129,7 +129,7 @@ rewriteType = splitTrivial $ \src -> \case
 
   TyVar n -> TyVar <$> rewriteTyVar n
 
-  ty      -> recurse rewrite ty
+  ty      -> recurseTerm rewrite ty
 
 
 rewriteView  :: Annotated View -> Praxis (Annotated View)
@@ -137,7 +137,7 @@ rewriteView = splitTrivial $ \src -> \case
 
   ViewVar d n -> ViewVar d <$> rewriteTyVar n
 
-  view'       -> recurse rewrite view'
+  view'       -> recurseTerm rewrite view'
 
 
 rewriteTyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
@@ -147,7 +147,7 @@ rewriteTyPat = splitTrivial $ \src -> \case
 
   TyPatViewVar d n -> TyPatViewVar d <$> rewriteTyVar n
 
-  tyPat -> recurse rewrite tyPat
+  tyPat -> recurseTerm rewrite tyPat
 
 
 rewriteQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
@@ -195,14 +195,14 @@ rewriteExp = splitTrivial $ \src -> \case
 
   exp@(Lambda pat _) -> saveVarMap $ do
     addRewriteFromPat pat
-    recurse rewrite exp
+    recurseTerm rewrite exp
 
   Let bind exp -> saveVarMap $ do
     bind <- rewriteBind bind
     exp <- rewriteExp exp
     return $ Let bind exp
 
-  exp -> recurse rewrite exp
+  exp -> recurseTerm rewrite exp
 
 
 rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
@@ -212,7 +212,7 @@ rewriteDecl = splitTrivial $ \src -> \case
 
   DeclOp op name opRules -> (\name -> DeclOp op name opRules) <$> rewriteVar name
 
-  decl -> recurse rewrite decl
+  decl -> recurseTerm rewrite decl
 
 
 rewritePat :: Annotated Pat -> Praxis (Annotated Pat)
@@ -222,7 +222,7 @@ rewritePat = splitTrivial $ \src -> \case
 
   PatAt n p -> PatAt <$> rewriteVar n <*> rewritePat p
 
-  pat -> recurse rewrite pat
+  pat -> recurseTerm rewrite pat
 
 
 rewriteProgram :: Annotated Program -> Praxis (Annotated Program)

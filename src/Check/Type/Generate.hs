@@ -351,7 +351,11 @@ generateExp = split $ \src -> \case
     exp <- generateExp exp
     let t = view ty exp
     require $ newConstraint (RefFree refName t) SafeRead src
-    return (t :< Specialise exp specialisation)
+    -- Reading a polymorphic term is unnecessary (since it's Copyable).
+    -- We prohibit since we can't correctly wrap with Specialise (it only makes sense to wrap var, not Read var exp).
+    -- TODO should we prohibit all Copy-ables here? It would require a NoCopy / Not constraint.
+    when (not (null specialisation)) $ throwAt src $ "read variable " <> quote (pretty var) <> "is polymorphic (read is not necessary)"
+    return (t :< Read var exp)
 
   Pair exp1 exp2 -> do
     exp1 <- generateExp exp1

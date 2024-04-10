@@ -342,7 +342,7 @@ fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] y_0 ) -> [a_0] [a_0] x_0 defer [& 'l0 b_0] y_0
+fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] y_0 ) -> read y_0 in [a_0] [a_0] x_0 defer [& 'l0 b_0] y_0
 |]
 
 

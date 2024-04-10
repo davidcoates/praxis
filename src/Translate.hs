@@ -252,7 +252,10 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
 
   Lit lit -> translateLit lit
 
-  Read _ exp -> translateExp nonLocal exp
+  Read name exp -> do
+    tempVar <- freshTempVar
+    exp <- translateExp False exp
+    return $ lambdaWrap nonLocal ([ Text "const auto& ", Text tempVar, Text " = ", Text name, Semi, Text "auto ", Text name, Text " = praxis::ref(", Text tempVar, Text ")", Semi, Text "return " ] ++ exp ++ [ Semi ])
 
   Pair exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1

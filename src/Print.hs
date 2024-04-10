@@ -83,6 +83,7 @@ hideLabel x = case typeof x of
     Pair _ _       -> True
     Apply _ _      -> True
     Lambda _ _     -> True
+    Read _ _       -> True
     Specialise _ _ -> True
     _              -> False
   IPat -> case x of

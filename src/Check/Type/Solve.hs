@@ -69,7 +69,6 @@ tryDefault term@((src, _) :< _) = do
   return ()
 
 
-
 tyUnis :: forall a. Term a => Annotated a -> Set Name
 tyUnis = extract (embedMonoid f) where
   f = \case

@@ -81,7 +81,11 @@ is n k = do
 simplify :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 simplify x = do
   kinds <- use (our . sol)
-  return $ sub (embedSub (\case { KindUni n -> n `lookup` kinds; _ -> Nothing })) x
+  let simplify' :: Term a => Annotated a -> Maybe (Annotated a)
+      simplify' (a :< x) = (a :<) <$> case typeof x of
+        IKind -> case x of { KindUni n -> n `lookup` kinds; _ -> Nothing; }
+        _     -> Nothing
+  return $ sub simplify' x
 
 simplifyAll :: Praxis ()
 simplifyAll = do

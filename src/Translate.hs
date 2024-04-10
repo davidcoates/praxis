@@ -286,7 +286,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
   Unit -> return [ Text "praxis::Unit{}" ]
 
   Var var -> do
-    return [ Text ("std::move(" ++ var ++ ")") ] -- TODO need to specialise for QTypes
+    return [ Text ("std::move(" ++ var ++ ")") ]
 
   Where exp decls -> do
     decls <- foldMapA (translateDecl False) decls

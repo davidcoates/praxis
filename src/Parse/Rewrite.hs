@@ -4,7 +4,6 @@
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
 
 module Parse.Rewrite
   ( run
@@ -34,13 +33,13 @@ run term = save stage $ do
 -- Term rewriting. This is used to rewrite type-level variables to guarantee uniqueness which is needed for the solver.
 -- The rewrite mapping is stored so it can be applied in reverse when displaying diagnostics to the user.
 
-rewriteTopLevel :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-rewriteTopLevel term = case witness :: I a of
+rewriteTopLevel :: Term a => Annotated a -> Praxis (Annotated a)
+rewriteTopLevel term = case typeof (view value term) of
   IQType -> saveTyVarMap $ addRewriteFromQType term >> value (recurseTerm rewrite) term -- For testing
   _ -> rewrite term
 
-rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-rewrite term = ($ term) $ case witness :: I a of
+rewrite :: Term a => Annotated a -> Praxis (Annotated a)
+rewrite term = ($ term) $ case typeof (view value term) of
   IProgram -> rewriteProgram
   IType    -> rewriteType
   IView    -> rewriteView

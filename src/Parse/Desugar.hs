@@ -4,7 +4,6 @@
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
 
 module Parse.Desugar
   ( run
@@ -42,8 +41,8 @@ run term = save stage $ do
   display term `ifFlag` debug
   return term
 
-desugar :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-desugar term = ($ term) $ case witness :: I a of
+desugar :: Term a => Annotated a -> Praxis (Annotated a)
+desugar term = ($ term) $ case typeof (view value term) of
   IProgram -> desugarProgram
   IExp     -> desugarExp
   IPat     -> desugarPat
@@ -62,16 +61,17 @@ desugarProgram (ann :< Program decls) = do
   return (ann :< Program decls)
 
 collectFreeVars :: Annotated Exp -> Set Name
-collectFreeVars = extractPartial f where
-  f :: forall a. Term a => a -> (Set Name, Bool)
-  f x = case witness :: I a of
-    IExp  -> case x of
-      Var n -> (Set.singleton n, False)
-      _     -> (Set.empty,        True)
+collectFreeVars x = collectFreeVars' x where
+  collectFreeVars' :: Term a => Annotated a -> Set Name
+  collectFreeVars' (_ :< x) = case typeof x of
+    IExp -> case x of
+      Var n -> Set.singleton n
+      _     -> continue
     IDecl -> case x of
-      DeclVar n _ e -> (Set.delete n (collectFreeVars e), False)
-      _             -> (Set.empty,                         True)
-    _     -> (Set.empty, True)
+      DeclVar n _ e -> Set.delete n (collectFreeVars' e)
+      _             -> continue
+    _     -> continue
+    where continue = getConst $ recurseTerm (Const . collectFreeVars') x
 
 -- Helper for desugaring "&". It turns top-level VarRef into Var and returns the name of such variables
 desugarExpRef :: Annotated Exp -> Praxis (Annotated Exp, Set Name)

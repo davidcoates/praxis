@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Parse.Parse
   ( run
   ) where
@@ -14,7 +12,7 @@ import           Syntax
 import           Term
 import           Token
 
-run :: forall a. Term a => [Sourced Token] -> Praxis (Annotated a)
+run :: Term a => [Sourced Token] -> Praxis (Annotated a)
 run tokens = save stage $ do
   stage .= Parse
   term <- Parser.run parse tokens

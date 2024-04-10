@@ -2,7 +2,6 @@
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
@@ -180,10 +179,10 @@ join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p wher
     Just (x, y) -> Just (x, Just y)
     Nothing     -> Nothing
 
-right :: forall f a. (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+right :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
 right = rightWithSep (pure ())
 
-rightWithSep :: forall f a. (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
+rightWithSep :: (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
 rightWithSep s _P p = Prism f g <$> annotated p <*> (s *> (_Just <$> annotated (rightWithSep s _P p)) <|> _Nothing <$> pure ()) <|> unparseable p where
   f (p, Just q)  = construct _P (p, q)
   f (p, Nothing) = view value p

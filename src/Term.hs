@@ -230,6 +230,7 @@ type family Annotation a where
   Annotation Pat      = Annotated Type
   Annotation TyPat    = Annotated Kind
   Annotation Type     = Annotated Kind
+  Annotation QTyVar   = Annotated Kind
   Annotation DataCon  = DataConInfo
   Annotation TyProp   = Derivation TyProp
   Annotation KindProp = Derivation KindProp

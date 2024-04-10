@@ -3,7 +3,6 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NamedFieldPuns         #-}
 {-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeOperators          #-}
 
@@ -40,23 +39,23 @@ ty = annotation . just
 mono :: Annotated Type -> Annotated QType
 mono t = (view source t, Nothing) :< Forall [] [] t
 
-specialiseQTyVar :: Annotated QTyVar -> Praxis (Name, Type)
-specialiseQTyVar (_ :< qTyVar) = case qTyVar of
-  QTyVar n     -> (\t -> (n, view value t)) <$> freshTyUni
-  QViewVar d n -> (\t -> (n, view value t)) <$> freshTyViewUni d
+specialiseQTyVar :: Annotated QTyVar -> Praxis (Name, Annotated Type)
+specialiseQTyVar (a :< qTyVar) = case qTyVar of
+  QTyVar n     -> (\t -> (n, a :< view value t)) <$> freshTyUni
+  QViewVar d n -> (\t -> (n, a :< view value t)) <$> freshTyViewUni d
 
 specialise :: Source -> Name -> [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis (Annotated Type -> Annotated Type, Specialisation)
-specialise src name vs cs = do
+specialise src name vars cs = do
   -- Note: TyVar and TyView-Var names are disjoint (regardless of view domains)
-  vs' <- mapM specialiseQTyVar vs
-  let tyRewrite :: forall a. Term a => Annotated a -> Annotated a
+  specialisedVars <- mapM specialiseQTyVar vars
+  let tyRewrite :: Term a => Annotated a -> Annotated a
       tyRewrite = sub (embedSub f)
-      f :: Type -> Maybe Type
-      f = \case
-        TyVar n                   -> n `lookup` vs'
-        TyView (_ :< ViewVar _ n) -> n `lookup` vs'
+      f :: Annotated Type -> Maybe (Annotated Type)
+      f (_ :< t) = case t of
+        TyVar n                   -> n `lookup` specialisedVars
+        TyView (_ :< ViewVar _ n) -> n `lookup` specialisedVars
         _                         -> Nothing
-  let specialisation = zip vs (map (\(_, t) -> t `as` phantom KindType) vs') -- TODO gross annotation
+  let specialisation = zip  vars (map snd specialisedVars)
   requires [ newConstraint (view value (tyRewrite c)) (Specialisation name) src | c <- cs ]
   return (tyRewrite, specialisation)
 
@@ -168,8 +167,8 @@ run term = save stage $ do
     use daEnv >>= display
   return term
 
-generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-generate term = ($ term) $ case witness :: I a of
+generate :: Term a => Annotated a -> Praxis (Annotated a)
+generate term = ($ term) $ case typeof (view value term) of
   IExp     -> generateExp
   IBind    -> generateBind
   IDataCon -> error "standalone DataCon"

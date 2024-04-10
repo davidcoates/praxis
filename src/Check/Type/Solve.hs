@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE Rank2Types           #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -200,11 +199,11 @@ simplify :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 simplify x = do
   tys <- use (our . sol . tySol)
   views <- use (our . sol . viewSol)
-  let simplify' :: forall a. Term a => a -> Maybe a
-      simplify' x = case witness :: I a of {
-        IType -> case x of { TyUni     n -> n `lookup`   tys; _ -> Nothing };
-        IView -> case x of { ViewUni _ n -> n `lookup` views; _ -> Nothing };
-        _     -> Nothing}
+  let simplify' :: forall a. Term a => Annotated a -> Maybe (Annotated a)
+      simplify' (a :< x) = (a :<) <$> case typeof x of
+        IType -> case x of { TyUni     n -> n `lookup`   tys; _ -> Nothing }
+        IView -> case x of { ViewUni _ n -> n `lookup` views; _ -> Nothing }
+        _     -> Nothing
   normalise (sub simplify' x)
 
 
@@ -231,7 +230,7 @@ simplifyOuterViews :: Annotated Type -> Annotated Type
 simplifyOuterViews = simplifyOuterViews' [] where
 
   simplifyOuterViews' :: [View] -> Annotated Type -> Annotated Type
-  simplifyOuterViews' ops (ann :< ty) = case ty of
+  simplifyOuterViews' ops (a :< ty) = case ty of
 
     TyApply f@(_ :< TyView (_ :< op)) innerTy -> case op of
 
@@ -241,29 +240,32 @@ simplifyOuterViews = simplifyOuterViews' [] where
 
         | op `elem` ops -> simplifyOuterViews' ops innerTy
 
-        | otherwise     -> ann :< TyApply f (simplifyOuterViews' (op:ops) innerTy)
+        | otherwise     -> a :< TyApply f (simplifyOuterViews' (op:ops) innerTy)
 
-    _ -> ann :< ty
+    _ -> a :< ty
 
 
 normalise :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-normalise = deepVisit (embedVisit f) where
+normalise (a :< x) = case typeof x of
 
-  f :: Annotated Type -> Visit Praxis () Type
-  f ty = case view value ty of
+  IType -> case x of
 
-    TyApply (_ :< TyView _) _ -> case simplifyOuterViews ty of
+    TyApply (_ :< TyView _) _ -> case simplifyOuterViews (a :< x) of
 
-      ty@(_ :< TyApply (_ :< TyView _) innerTy) -> Resolve $ do
+      ty@(_ :< TyApply (_ :< TyView _) innerTy) -> do
         -- The view can be safely stripped if the /* stripped */ type is copyable.
         --
         -- E.g. we can not strip &a from &a &b List Int (because List Int is not copyable)
         -- But we can strip &a from &a &b Int, and then &b from &b Int.
         canStripOps <- trySolveCopy (stripOuterViews innerTy)
         case canStripOps of
-          Just Top -> view value <$> normalise (stripOuterViews innerTy)
-          _        -> return (view value ty)
+          Just Top -> normalise (stripOuterViews innerTy)
+          _        -> return ty
 
-      ty -> Resolve (view value <$> normalise ty)
+      ty -> return ty
 
-    _ -> skip
+    _ -> continue
+
+  _ -> continue
+
+  where continue = recurse normalise (a :< x)

@@ -2,7 +2,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeOperators          #-}
 
@@ -38,8 +37,8 @@ run term = save stage $ do
   return term
 
 -- TODO since we ignore annotation of input, could adjust this...
-generate :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-generate term = ($ term) $ case witness :: I a of
+generate :: Term a => Annotated a -> Praxis (Annotated a)
+generate term = ($ term) $ case typeof (view value term) of
   IDecl    -> generateDecl
   IType    -> generateTy
   IView    -> generateView
@@ -57,16 +56,17 @@ introKind s n k = do
 
 
 generateQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
-generateQTyVar = splitTrivial $ \src -> \case
+generateQTyVar = split $ \src -> \case
 
   QTyVar var -> do
     k <- freshKindUni
     introKind src var k
-    return (QTyVar var)
+    return (k :< QTyVar var)
 
   QViewVar domain var -> do
-    introKind src var undefined -- Note: The kind doesn't matter here, just introducting for in-scope checking.
-    return (QViewVar domain var)
+    let k = phantom KindView
+    introKind src var k
+    return (k :< QViewVar domain var)
 
 
 generateView :: Annotated View -> Praxis (Annotated View)

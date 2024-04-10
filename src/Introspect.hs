@@ -8,19 +8,14 @@
 {-# LANGUAGE TypeOperators         #-}
 
 module Introspect
-  ( Visit(..)
-  , skip
-  , I(..)
+  ( I(..)
   , Term(..)
+  , recurse
   , typeof
-  , visit
-  , deepVisit
-  , embedVisit
   , embedSub
   , embedMonoid
   , sub
   , extract
-  , extractPartial
   , deepExtract
   ) where
 
@@ -31,11 +26,6 @@ import           Data.Bitraversable (bitraverse)
 import qualified Data.Set           as Set (fromList, toList)
 import           GHC.Exts           (Constraint)
 
-data Visit f a b = Visit (f a)
-                 | Resolve (f b)
-
-skip :: Applicative f => Visit f () a
-skip = Visit (pure ())
 
 type Termformer f = forall a. Term a => Annotated a -> f (Annotated a)
 
@@ -43,6 +33,9 @@ class Term a where
   witness :: I a
   recurseTerm :: Applicative f => Termformer f -> a -> f a
   recurseAnnotation :: (Term a, Applicative f) => I a -> Termformer f -> Annotation a -> f (Annotation a)
+
+recurse :: forall a f. (Term a, Applicative f) => Termformer f -> Annotated a -> f (Annotated a)
+recurse f ((src, ann) :< x) = (\ann x -> (src, ann) :< x) <$> traverse (recurseAnnotation (witness :: I a) f) ann <*> recurseTerm f x
 
 -- TODO Lit? Fixity?
 data I a where
@@ -110,58 +103,28 @@ switch a b eq neq = case (a, b) of
   -- |
   _                                  -> neq
 
--- Apply a visitor through a term
-visit :: (Term a, Applicative f) => (forall a. Term a => Annotated a -> Visit f (Maybe (Annotation a)) (Annotated a)) -> Annotated a -> f (Annotated a)
-visit f x = case f x of
-  Visit c   -> (\a' x' -> (view source x, a') :< x') <$> c <*> recurseTerm (visit f) (view value x)
-  Resolve r -> r
 
--- Apply a visitor through the term, including through annotations
-deepVisit :: forall a f. (Term a, Applicative f) => (forall a. Term a => Annotated a -> Visit f () a) -> Annotated a -> f (Annotated a)
-deepVisit f x = set annotation <$> traverse (recurseAnnotation (witness :: I a) (deepVisit f)) (view annotation x) <*> ((\r -> set value r x) <$> case f x of
-  Visit c   -> c *> recurseTerm (deepVisit f) (view value x)
-  Resolve r -> r
-  )
-
-embedVisit :: forall a f. (Term a, Applicative f) => (Annotated a -> Visit f () a) -> (forall b. Term b => Annotated b -> Visit f () b)
-embedVisit f = g where
-  g :: forall b. Term b => Annotated b -> Visit f () b
-  g x = switch (witness :: I a) (witness :: I b) (f x) skip
-
-transferA :: forall a b f. (Term a, Term b, Applicative f) => (a -> f a) -> b -> f b
-transferA f x = switch (witness :: I a) (witness :: I b) (f x) (pure x)
-
-transferM :: forall a b f. (Term a, Term b) => (a -> Maybe a) -> b -> Maybe b
-transferM f x = switch (witness :: I a) (witness :: I b) (f x) Nothing
-
-sub :: forall a. Term a => (forall b. Term b => b -> Maybe b) -> Annotated a -> Annotated a
-sub f x = runIdentity $ deepVisit f' x where
-  f' :: forall b. Term b => Annotated b -> Visit Identity () b
-  f' y = case f (view value y) of
-    Nothing -> Visit (Identity ())
-    Just y' -> Resolve (Identity y')
+sub :: forall a. Term a => (forall b. Term b => Annotated b -> Maybe (Annotated b)) -> Annotated a -> Annotated a
+sub f x = case f x of
+  Just y  -> y
+  Nothing -> runIdentity $ recurse (Identity . sub f) x
 
 extract :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> m) -> Annotated a -> m
-extract f = extractPartial (\x -> (f x, True))
-
--- Similar to extract, but with control for whether or not to recurseTerm
-extractPartial :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> (m, Bool)) -> Annotated a -> m
-extractPartial f x = getConst $ visit f' x where
-  f' :: forall b. Term b => Annotated b -> Visit (Const m) (Maybe (Annotation b)) (Annotated b)
-  f' y = case f (view value y) of
-    (m, True)  -> Visit (Const m)
-    (m, False) -> Resolve (Const m)
+extract f (_ :< x) = f x <> (getConst $ recurseTerm (Const . extract f) x)
 
 deepExtract :: forall a m. (Term a, Monoid m) => (forall b. Term b => b -> m) -> Annotated a -> m
-deepExtract f x = getConst $ deepVisit f' x where
-  f' :: forall c. Term c => Annotated c -> Visit (Const m) () c
-  f' y = Visit (Const (f (view value y)))
+deepExtract f x = f (view value x) <> (getConst $ recurse (Const . deepExtract f) x)
 
-embedSub :: forall a b. Term a => (a -> Maybe a) -> (forall a. Term a => a -> Maybe a)
-embedSub f x = transferM f x
+embedSub :: forall a. Term a => (Annotated a -> Maybe (Annotated a)) -> (forall b. Term b => Annotated b -> Maybe (Annotated b))
+embedSub f x = transferM f x where
+  transferM :: forall a b f. (Term a, Term b) => (Annotated a -> Maybe (Annotated a)) -> Annotated b -> Maybe (Annotated b)
+  transferM f x = switch (witness :: I a) (witness :: I b) (f x) Nothing
 
 embedMonoid :: forall a b. (Monoid b, Term a) => (a -> b) -> (forall a. Term a => a -> b)
-embedMonoid f x = getConst $ transferA (Const . f) x
+embedMonoid f x = getConst $ transferA (Const . f) x where
+  transferA :: forall a b f. (Term a, Term b, Applicative f) => (a -> f a) -> b -> f b
+  transferA f x = switch (witness :: I a) (witness :: I b) (f x) (pure x)
+
 
 -- Implementations below here
 
@@ -322,7 +285,7 @@ instance Term QType where
 
 instance Term QTyVar where
   witness = IQTyVar
-  recurseAnnotation = trivial
+  recurseAnnotation _ f x = f x
   recurseTerm _ = pure
 
 -- | T2

@@ -14,7 +14,7 @@ import           Term
 import           Text.RawString.QQ
 
 
-data Token = LBrace | RBrace | Semi | Text String | Crumb Source
+data Token = LBrace | RBrace | Semi | Text String | Crumb Source | Newline
 
 freshTempVar :: Praxis Name
 freshTempVar = (++ "_") <$> freshVar "temp"
@@ -31,15 +31,17 @@ layout = layout' 0 "" where
   layout' :: Int -> String -> [Token] -> String
   layout' depth prefix ts = case ts of
 
-    LBrace : ts -> "\n" ++ indent depth ++ "{" ++ layout' (depth + 1) ("\n" ++ indent (depth + 1)) ts
+    LBrace : ts -> "{" ++ layout' (depth + 1) ("\n" ++ indent (depth + 1)) ts
 
-    RBrace : ts -> "\n" ++ indent (depth - 1) ++ "}" ++ layout' (depth - 1) ("\n" ++ indent (depth - 1)) ts
+    RBrace : ts -> "\n" ++ indent (depth - 1) ++ "}" ++ layout' (depth - 1) "" ts
 
     Semi : ts -> ";" ++ layout' depth ("\n" ++ indent depth) ts
 
     Text t : ts -> prefix ++ t ++ layout' depth "" ts
 
     Crumb src : ts -> prefix ++ "/* " ++ show src ++ " */" ++ layout' depth ("\n" ++ indent depth) ts
+
+    Newline : ts -> "\n" ++ layout' depth (indent depth) ts
 
     [] -> ""
 
@@ -151,7 +153,7 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
         unpack rec = [ Text "auto [" ] ++ intersperse (Text ", ") [ Text name | (_ :< DeclVar name _ _) <- decls ] ++ [ Text "] = ", Text rec, Text "(", Text rec, Text ")", Semi ]
     typeHint <- recTypeHint decls
     decls <- mapM (\(_ :< DeclVar _ sig exp) -> ([ Crumb src ] ++) <$> translateDeclVarBody sig (unpack rec1) False exp) decls
-    return $ [ Text "auto ", Text rec0, Text " = " ] ++ captureList topLevel ++ [ Text "(auto ", Text rec1, Text ")" ] ++ typeHint ++ [ LBrace, Text "return std::tuple", LBrace ] ++ intercalate [ Text "," ] decls ++ [ RBrace, Semi,  RBrace, Semi ] ++ unpack rec0
+    return $ [ Text "auto ", Text rec0, Text " = " ] ++ captureList topLevel ++ [ Text "(auto ", Text rec1, Text ")" ] ++ typeHint ++ [ LBrace, Text "return std::tuple", LBrace ] ++ intercalate [ Text ",", Newline ] decls ++ [ RBrace, Semi, RBrace, Semi ] ++ unpack rec0
 
   DeclVar name sig exp -> do
     body <- translateDeclVarBody sig [] topLevel exp
@@ -181,7 +183,7 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
         = do
           -- all decls are non-templated
           tys <- mapM (\(_ :< DeclVar _ _ exp) -> translateType (view ty exp)) decls
-          return $ [ Text " -> std::tuple<" ] ++ intercalate [ Text ", " ] tys ++ [ Text ">" ]
+          return $ [ Text " -> std::tuple<" ] ++ intercalate [ Text ", " ] tys ++ [ Text "> " ]
       | otherwise
         = return []
 
@@ -298,7 +300,7 @@ translateSwitch src ((cond, exp):alts) = do
   cond <- translateExp False cond
   exp <- translateExp False exp
   alts <- translateSwitch src alts
-  return $ [ Text "if (" ] ++ cond ++ [ Text ")", LBrace, Text "return " ] ++ exp ++ [ Semi, RBrace ] ++ alts
+  return $ [ Text "if (" ] ++ cond ++ [ Text ") ", LBrace, Text "return " ] ++ exp ++ [ Semi, RBrace, Newline ] ++ alts
 
 
 translateCase :: Source -> Name -> [(Annotated Pat, Annotated Exp)] -> Praxis [Token]
@@ -330,13 +332,13 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
     let tag = conType ++ [ Text ("::Tag::" ++ con) ]
     tempVar <- freshTempVar
     onMatch <- case pat of { Just pat -> translateTryMatch tempVar pat onMatch; Nothing -> return onMatch; }
-    return $ [ Text "if (", Text (var ++ ".tag()"), Text " == " ] ++ tag ++ [ Text ")", LBrace, Text "auto ", Text tempVar, Text " = ", Text (var ++ ".template get<") ] ++ tag ++ [ Text ">()", Semi ] ++ onMatch ++ [ RBrace ]
+    return $ [ Text "if (", Text (var ++ ".tag()"), Text " == " ] ++ tag ++ [ Text ") ", LBrace, Text "auto ", Text tempVar, Text " = ", Text (var ++ ".template get<") ] ++ tag ++ [ Text ">()", Semi ] ++ onMatch ++ [ RBrace, Newline ]
 
   PatHole -> return onMatch
 
   PatLit lit -> do
     lit <- translateLit lit
-    return $ [ Text "if (", Text var, Text " == " ] ++ lit ++ [ Text ")", LBrace ] ++ onMatch ++ [ RBrace ]
+    return $ [ Text "if (", Text var, Text " == " ] ++ lit ++ [ Text ") ", LBrace ] ++ onMatch ++ [ RBrace, Newline ]
 
   PatPair pat1 pat2 -> do
     var1 <- freshTempVar

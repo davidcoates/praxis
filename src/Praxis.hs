@@ -5,7 +5,6 @@
 
 module Praxis
   ( Praxis
-  , PraxisT(..)
   , PraxisState
   , emptyState
 
@@ -40,11 +39,8 @@ module Praxis
 
   -- | Flag lenses
   , debug
-  , interactive
 
   -- | Praxis lenses
-  , infile
-  , outfile
   , flags
   , fresh
   , stage
@@ -63,7 +59,7 @@ module Praxis
 
   , freshTyUni
   , freshKindUni
-  , freshViewUni
+  , freshTyViewUni
   , freshViewRef
   , freshTyVar
   , freshVar
@@ -71,11 +67,14 @@ module Praxis
   , clearTerm
   , ifFlag
   , display
+
+  , requireMain
   )
   where
 
 import qualified Check.System                 as Check (System)
 import           Common
+import           Print
 import           Stage
 import           Term
 
@@ -100,9 +99,8 @@ import           System.IO.Unsafe             (unsafePerformIO)
 import           Value
 
 data Flags = Flags
-  { _debug       :: Bool
-  , _interactive :: Bool
-  , _silent      :: Bool -- silence IO (for tests, and for internal runs which are guaranteed not to throw / use IO)
+  { _debug  :: Bool
+  , _silent :: Bool -- silence IO (for tests, and for internal runs which are guaranteed not to throw / use IO)
   } deriving (Show)
 
 data Fresh = Fresh
@@ -142,9 +140,7 @@ data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name N
 makeLenses ''RewriteMap
 
 data PraxisState = PraxisState
-  { _infile     :: Maybe String
-  , _outfile    :: Maybe String
-  , _flags      :: Flags               -- ^ Flags
+  { _flags      :: Flags               -- ^ Flags
   , _fresh      :: Fresh
   , _stage      :: Stage               -- ^ Current stage of compilation
   , _opContext  :: OpContext
@@ -164,16 +160,8 @@ instance Show PraxisState where
 
 type Praxis = ExceptT String (StateT PraxisState IO)
 
-newtype PraxisT f a = PraxisT { runPraxisT :: f (Praxis a) }
-
-instance MonadTrans PraxisT where
-  lift x = PraxisT (pure <$> x)
-
-instance Functor f => Functor (PraxisT f) where
-  fmap f (PraxisT x) = PraxisT (fmap (fmap f) x)
-
 defaultFlags :: Flags
-defaultFlags = Flags { _debug = False, _interactive = False, _silent = False }
+defaultFlags = Flags { _debug = False, _silent = False }
 
 defaultFresh = Fresh
   { _freshTyUnis   = map (("^t"++) . show) [0..]
@@ -186,9 +174,7 @@ defaultFresh = Fresh
 
 emptyState :: PraxisState
 emptyState = PraxisState
-  { _infile       = Nothing
-  , _outfile      = Nothing
-  , _flags        = defaultFlags
+  { _flags        = defaultFlags
   , _fresh        = defaultFresh
   , _stage        = Unknown
   , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
@@ -289,11 +275,11 @@ freshTyUni = do
   fresh . freshTyUnis .= xs
   return (TyUni x `as` phantom KindType)
 
-freshViewUni :: ViewDomain -> Praxis (Annotated View)
-freshViewUni domain = do
+freshTyViewUni :: ViewDomain -> Praxis (Annotated Type)
+freshTyViewUni domain = do
   (o:os) <- use (fresh . freshViewUnis)
   fresh . freshViewUnis .= os
-  return (phantom (ViewUni domain o))
+  return (TyView (phantom (ViewUni domain o)) `as` phantom KindType)
 
 freshKindUni :: Praxis (Annotated Kind)
 freshKindUni = do
@@ -320,3 +306,14 @@ freshVar var = do
   let i = Map.findWithDefault 0 var m
   fresh . freshVars .= (Map.insert var (i+1) m)
   return (var ++ "_" ++ show i)
+
+requireMain :: Praxis ()
+requireMain = do
+  ty <- tEnv `uses` LEnv.lookup "main_0"
+  case ty of
+    Nothing -> throw ("missing main function" :: String)
+    Just ty
+      | (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) <- ty
+        -> return ()
+      | otherwise
+        -> throwAt (view source ty) $ "main function has bad type " <> quote (pretty ty) <> ", expected () -> ()"

@@ -41,6 +41,8 @@ module Term
   , TyProp
   , KindProp
 
+  , Specialisation
+
   , Annotation
   , Annotated
   , source
@@ -90,8 +92,11 @@ data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
           | DeclRec [Annotated Decl]
           | DeclSig Name (Annotated QType) -- ^ Parsing only
           | DeclSyn Name (Annotated Type) -- ^ Parsing only
-          | DeclTerm Name (Maybe (Annotated QType)) (Annotated Exp)
+          | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
+
+-- TODO constraints
+type Specialisation = [(Annotated QTyVar, Annotated Type)]
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
@@ -108,6 +113,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
+         | Specialise (Annotated Exp) Specialisation
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name -- FIXME Qualified Name
@@ -121,6 +127,7 @@ expIsRecSafe term = case view value term of
   Cases _    -> True
   _          -> False
 
+-- TODO: Array literals?
 data Lit = Bool Bool
          | Char Char
          | Int Int
@@ -174,7 +181,7 @@ data Type = TyUni Name -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
           | TyFun (Annotated Type) (Annotated Type)
-          | View (Annotated View)
+          | TyView (Annotated View)
           | TyPack (Annotated Type) (Annotated Type)
           | TyPair (Annotated Type) (Annotated Type)
           | TyUnit
@@ -197,7 +204,6 @@ data Kind = KindUni Name
 
 data TyConstraint = Class (Annotated Type)
                   | Copy (Annotated Type)
-                  | NoCopy (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated Type) (Annotated Type)
                   | RefFree Name (Annotated Type)

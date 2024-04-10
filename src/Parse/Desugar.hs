@@ -51,7 +51,7 @@ desugar term = ($ term) $ case witness :: I a of
   IOp      -> desugarOp
   IOpRules -> error "standalone IOpRules"
   IDecl    -> error "standalone Decl"
-  _        -> value (recurse desugar)
+  _        -> value (recurseTerm desugar)
 
 
 -- Desugaring proper
@@ -69,8 +69,8 @@ collectFreeVars = extractPartial f where
       Var n -> (Set.singleton n, False)
       _     -> (Set.empty,        True)
     IDecl -> case x of
-      DeclTerm n _ e -> (Set.delete n (collectFreeVars e), False)
-      _              -> (Set.empty,                         True)
+      DeclVar n _ e -> (Set.delete n (collectFreeVars e), False)
+      _             -> (Set.empty,                         True)
     _     -> (Set.empty, True)
 
 -- Helper for desugaring "&". It turns top-level VarRef into Var and returns the name of such variables
@@ -137,7 +137,7 @@ desugarExp (ann@(src, _) :< exp) = case exp of
     decls <- desugarDecls decls
     return (ann :< Where exp decls)
 
-  _           -> (ann :<) <$> recurse desugar exp
+  _           -> (ann :<) <$> recurseTerm desugar exp
 
 
 
@@ -181,13 +181,13 @@ desugarDecls (ann@(src, _) :< decl : decls) = case decl of
   DeclDef name args exp -> do
     args <- mapM desugar args
     exp <- desugar exp
-    let decl = ann :< DeclTerm name Nothing (curry args exp)
+    let decl = ann :< DeclVar name Nothing (curry args exp)
         curry :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
         curry     [] e = e
         curry (p:ps) e = (src, Nothing) :< Lambda p (curry ps e)
     desugarDecls decls >>= \case
       [] -> return $ [decl]
-      (_ :< DeclTerm name' _ _) : _
+      (_ :< DeclVar name' _ _) : _
         | name == name' -> throwAt src $ "multiple definitions for " <> quote (pretty name)
       decls -> return $ decl:decls
 
@@ -241,8 +241,8 @@ desugarDecls (ann@(src, _) :< decl : decls) = case decl of
   DeclSig name ty -> do
     ty <- desugar ty
     desugarDecls decls >>= \case
-      (ann' :< DeclTerm name' Nothing exp) : decls
-        | name == name' -> return $ ((ann <> ann') :< DeclTerm name (Just ty) exp) : decls
+      (ann' :< DeclVar name' Nothing exp) : decls
+        | name == name' -> return $ ((ann <> ann') :< DeclVar name (Just ty) exp) : decls
       _ -> throwAt src $ "declaration of " <> quote (pretty name) <> " lacks an accompanying binding"
 
   DeclSyn name ty -> do
@@ -260,7 +260,7 @@ desugarPat (ann :< pat) = case pat of
 
   PatCon "False" Nothing -> pure (ann :< PatLit (Bool False))
 
-  _                      -> (ann :<) <$> recurse desugar pat
+  _                      -> (ann :<) <$> recurseTerm desugar pat
 
 
 desugarTy :: Annotated Type -> Praxis (Annotated Type)
@@ -273,7 +273,7 @@ desugarTy (ann :< ty) = case ty of
       Just ty -> ty
       Nothing -> ann :< TyCon name
 
-  _           -> (ann :<) <$> recurse desugar ty
+  _           -> (ann :<) <$> recurseTerm desugar ty
 
 
 -- (Operator precedence) graph helpers

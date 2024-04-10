@@ -36,7 +36,7 @@ run term = save stage $ do
 
 rewriteTopLevel :: forall a. Term a => Annotated a -> Praxis (Annotated a)
 rewriteTopLevel term = case witness :: I a of
-  IQType -> saveTyVarMap $ addRewriteFromQType term >> value (recurse rewrite) term -- For testing
+  IQType -> saveTyVarMap $ addRewriteFromQType term >> value (recurseTerm rewrite) term -- For testing
   _ -> rewrite term
 
 rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
@@ -49,7 +49,7 @@ rewrite term = ($ term) $ case witness :: I a of
   IExp     -> rewriteExp
   IDecl    -> rewriteDecl
   IPat     -> rewritePat
-  _        -> value (recurse rewrite)
+  _        -> value (recurseTerm rewrite)
 
 
 saveVarMap :: Praxis a -> Praxis a
@@ -129,7 +129,7 @@ rewriteType = splitTrivial $ \src -> \case
 
   TyVar n -> TyVar <$> rewriteTyVar n
 
-  ty      -> recurse rewrite ty
+  ty      -> recurseTerm rewrite ty
 
 
 rewriteView  :: Annotated View -> Praxis (Annotated View)
@@ -137,7 +137,7 @@ rewriteView = splitTrivial $ \src -> \case
 
   ViewVar d n -> ViewVar d <$> rewriteTyVar n
 
-  view'       -> recurse rewrite view'
+  view'       -> recurseTerm rewrite view'
 
 
 rewriteTyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
@@ -147,7 +147,7 @@ rewriteTyPat = splitTrivial $ \src -> \case
 
   TyPatViewVar d n -> TyPatViewVar d <$> rewriteTyVar n
 
-  tyPat -> recurse rewrite tyPat
+  tyPat -> recurseTerm rewrite tyPat
 
 
 rewriteQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
@@ -195,22 +195,24 @@ rewriteExp = splitTrivial $ \src -> \case
 
   exp@(Lambda pat _) -> saveVarMap $ do
     addRewriteFromPat pat
-    recurse rewrite exp
+    recurseTerm rewrite exp
 
   Let bind exp -> saveVarMap $ do
     bind <- rewriteBind bind
     exp <- rewriteExp exp
     return $ Let bind exp
 
-  exp -> recurse rewrite exp
+  exp -> recurseTerm rewrite exp
 
 
 rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
 rewriteDecl = splitTrivial $ \src -> \case
 
-  DeclTerm name sig exp -> DeclTerm <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
+  DeclVar name sig exp -> DeclVar <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
 
-  decl -> recurse rewrite decl
+  DeclOp op name opRules -> (\name -> DeclOp op name opRules) <$> rewriteVar name
+
+  decl -> recurseTerm rewrite decl
 
 
 rewritePat :: Annotated Pat -> Praxis (Annotated Pat)
@@ -220,27 +222,27 @@ rewritePat = splitTrivial $ \src -> \case
 
   PatAt n p -> PatAt <$> rewriteVar n <*> rewritePat p
 
-  pat -> recurse rewrite pat
+  pat -> recurseTerm rewrite pat
 
 
 rewriteProgram :: Annotated Program -> Praxis (Annotated Program)
 rewriteProgram (ann :< Program decls) = do
-  decls <- rewriteDecls' decls -- Note: Top level terms don't need to be rewritten
+  decls <- rewriteDecls decls
   return (ann :< Program decls)
 
-declTermNames :: Annotated Decl -> [Name]
-declTermNames decl = case view value decl of
+declVarNames :: Annotated Decl -> [Name]
+declVarNames decl = case view value decl of
 
-  DeclTerm name _ _ -> [name]
+  DeclVar name _ _ -> [name]
 
-  DeclRec decls     -> concatMap declTermNames decls
+  DeclRec decls    -> concatMap declVarNames decls
 
-  _                 -> []
+  _                -> []
 
 
 rewriteDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
 rewriteDecls decls = do
-  let names = concatMap declTermNames decls
+  let names = concatMap declVarNames decls
   m' <- mkVarRewriteMap (view source (head decls)) names
   m <- use (rewriteMap . varMap)
   rewriteMap . varMap .= (m' `Map.union` m)
@@ -251,7 +253,7 @@ rewriteDecls' :: [Annotated Decl] -> Praxis [Annotated Decl]
 rewriteDecls' []             = pure []
 rewriteDecls' (decl : decls) = case view value decl of
 
-  DeclTerm name sig exp -> do
+  DeclVar name sig exp -> do
     decl <- case sig of
       Nothing  -> rewriteDecl decl
       Just sig -> saveTyVarMap (addRewriteFromQType sig >> rewriteDecl decl)

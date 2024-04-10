@@ -31,6 +31,9 @@ dependencies:
 - terminal-size
 - raw-strings-qq
 - mtl >= 2.2.2
+- temporary >= 1.3
+- process >= 1.6
+- filepath >= 1.4
 
 library:
   source-dirs: src

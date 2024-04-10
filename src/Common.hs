@@ -112,7 +112,6 @@ instance Show (Qualified Name) where
 unqualified :: a -> Qualified a
 unqualified x = Qualified { qualification = [], unqualify = x }
 
-
 (%%=) :: MonadState s m => Lens' s a -> (a -> m a) -> m ()
 (%%=) l f = do
   x <- use l
@@ -120,3 +119,4 @@ unqualified x = Qualified { qualification = [], unqualify = x }
   l .= x'
 
 infix 4 %%=
+

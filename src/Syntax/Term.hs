@@ -193,7 +193,6 @@ rightWithSep s _P p = Prism f g <$> annotated p <*> (s *> (_Just <$> annotated (
 
 tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Copy <$> reservedCon "Copy" *> annotated ty <|>
-               _NoCopy <$> reservedCon "NoCopy" *> annotated ty <|>
                _Class <$> annotated ty <|>
                unparseable (_RefFree <$> varid <*> reservedId "ref-free" *> annotated ty) <|>
                _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
@@ -245,7 +244,7 @@ declTerm = prefix varid (_DeclSig, declSig) (_DeclDef, declDef) <|> declRec <|> 
   declRec = _DeclRec <$> blockLike (reservedId "rec") (annotated declTerm)
   declSig = reservedOp ":" *> annotated qTy
   declDef = annotated pat `until` reservedOp "=" <*> annotated exp
-  declVar = _DeclTerm <$> varid <*> (_Just <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
+  declVar = _DeclVar <$> varid <*> (_Just <$> reservedOp ":" *> annotated qTy) <*> reservedOp "=" *> annotated exp
 
 bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedOp "=" *> annotated exp <|> mark "binding"
@@ -291,7 +290,7 @@ viewDomain = _Ref <$> reservedOp "&" <|>
 
 ty1 :: Syntax f => f Type
 ty1 = right _TyApply ty0 <|> mark "type(1)" where
-  ty0 = _View  <$> annotated view' <|>
+  ty0 = _TyView  <$> annotated view' <|>
         _TyVar <$> varid <|>
         _TyCon <$> conid <|>
         unparseable (_TyUni <$> uni) <|>
@@ -328,7 +327,8 @@ exp = exp5 `join` (_Sig, reservedOp ":" *> annotated ty) <|> mark "expression" w
          _Var <$> varid <|> -- TODO qualified
          _Con <$> conid <|>
          _Lit <$> lit <|>
-         tuple _Unit _Pair exp <|>
+         unparseable (_Specialise <$> annotated exp <*> empty) <|>
+         tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          mark "expression(0)"
 
 switch :: Syntax f => f (Annotated Exp, Annotated Exp)

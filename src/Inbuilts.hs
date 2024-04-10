@@ -33,7 +33,7 @@ initialState1 = set vEnv initialVEnv $ set tEnv initialTEnv $ initialState0
 initialState :: PraxisState
 initialState = fixup (runInternal initialState1 ((parse prelude :: Praxis (Annotated Program)) >> lift State.get)) where
   -- TODO a nicer way to do this. Undo all the things except the fields we care about.
-  fixup = set outfile (view outfile emptyState) . set infile (view infile emptyState) . set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set system (view system emptyState)
+  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set system (view system emptyState)
 
 mono :: String -> Annotated Type
 mono s = runInternal initialState0 (parse s :: Praxis (Annotated Type))
@@ -55,14 +55,14 @@ inbuilts =
       Fun (\(Int x) -> pure (Int x)))
   , ("get_int",      poly "() -> Int",
       Fun (\Unit -> liftIOUnsafe (Int <$> readLn)))
-  , ("get_contents", poly "() -> Array Char",
-      Fun (\Unit -> liftIOUnsafe getContents >>= (\s -> Value.Array <$> (Value.fromString s)))) -- TODO need to make many of these functions strict?
+  , ("get_str", poly "() -> String",
+      Fun (\Unit -> Value.String <$> liftIOUnsafe getContents)) -- TODO need to make many of these functions strict?
   , ("put_int",      poly "Int -> ()",
       Fun (\(Int x) -> liftIOUnsafe (print x >> pure Unit)))
-  , ("put_str",      poly "forall &r. &r Array Char -> ()",
-      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIOUnsafe (putStr s)) >> pure Unit))
-  , ("put_str_ln",   poly "forall &r. &r Array Char -> ()",
-      Fun (\(Array a) -> Value.toString a >>= (\s -> liftIOUnsafe (putStrLn s)) >> pure Unit))
+  , ("put_str",      poly "forall &r. &r String -> ()",
+      Fun (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit))
+  , ("put_str_ln",   poly "forall &r. &r String -> ()",
+      Fun (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit))
   , ("compose",      poly "forall a b c. (b -> c, a -> b) -> a -> c",
       Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
   , ("print",        poly "forall &r a. &r a -> ()",
@@ -82,7 +82,6 @@ inbuilts =
   , ("gt_int",       poly "(Int, Int) -> Bool", liftE (>))
   , ("lte_int",      poly "(Int, Int) -> Bool", liftE (<=))
   , ("gte_int",      poly "(Int, Int) -> Bool", liftE (>=))
-  , ("free",         poly "forall r | NoCopy r . r -> ()", Fun (\_ -> pure Unit)) -- TODO eval
   ]
   where
     liftI :: (Int -> Int -> Int) -> Value
@@ -100,7 +99,6 @@ inbuiltKinds =
   , ("Char",   kind "Type")
   , ("Array",  kind "Type -> Type")
   , ("Copy",   kind "Type -> Constraint")
-  , ("NoCopy", kind "Type -> Constraint")
   ]
 
 initialVEnv :: VEnv
@@ -114,9 +112,6 @@ initialKEnv = Env.fromList inbuiltKinds
 
 -- TODO interfaces
 prelude = [r|
-
--- Type synonyms
-using String = Array Char
 
 -- Operators
 operator (_ + _) = add_int where

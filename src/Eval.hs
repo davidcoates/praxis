@@ -1,11 +1,9 @@
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE NamedFieldPuns         #-}
-{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Eval
-  ( Evaluable(..)
+  ( runExp
+  , runProgram
   ) where
 
 import           Common
@@ -21,19 +19,17 @@ import           Data.Array.IO
 import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
 
-class Evaluable a b | a -> b where
-  eval' :: Annotated a -> Praxis b
-  eval  :: Annotated a -> Praxis b
-  eval term = save stage $ do
-    stage .= Evaluate
-    clearTerm `ifFlag` debug
-    eval' term
+runExp :: Annotated Exp -> Praxis Value
+runExp exp = save stage $ do
+  stage .= Evaluate
+  clearTerm `ifFlag` debug
+  evalExp exp
 
-instance Evaluable Program () where
-  eval' = evalProgram
-
-instance Evaluable Exp Value where
-  eval' = evalExp
+runProgram :: Annotated Program -> Praxis ()
+runProgram program = save stage $ do
+  stage .= Evaluate
+  clearTerm `ifFlag` debug
+  evalProgram program
 
 evalProgram :: Annotated Program -> Praxis ()
 evalProgram (_ :< Program decls) = do
@@ -54,7 +50,7 @@ evalDecl :: Annotated Decl -> Praxis ()
 evalDecl (_ :< decl) = case decl of
 
   DeclRec decls -> do
-    let (names, exps) = unzip [ (name, exp) | (_ :< DeclTerm name _ exp) <- decls ]
+    let (names, exps) = unzip [ (name, exp) | (_ :< DeclVar name _ exp) <- decls ]
     -- To support mutual recursion, each function needs to see the evaluation of all other functions (including itself).
     -- Leverage mfix to find the fixpoint.
     mfix $ \values -> do
@@ -64,19 +60,12 @@ evalDecl (_ :< decl) = case decl of
       mapM evalExp exps
     return ()
 
-  DeclTerm name _ exp -> do
+  DeclVar name _ exp -> do
     value <- evalExp exp
     vEnv %= Env.intro name value
 
   _ -> return ()
 
-
-evalStmt :: Annotated Stmt -> Praxis (Maybe Value)
-evalStmt (_ :< stmt) = case stmt of
-
-  StmtBind bind -> evalBind bind >> return Nothing
-
-  StmtExp exp   -> Just <$> evalExp exp
 
 
 evalExp :: Annotated Exp -> Praxis Value
@@ -89,11 +78,11 @@ evalExp ((src, _) :< exp) = case exp of
 
   Case exp alts -> do
     val <- evalExp exp
-    evalCases src val alts
+    evalCase src val alts
 
   Cases alts -> do
     l <- use vEnv
-    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; evalCases src val alts }
+    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; evalCase src val alts }
 
   Con name -> do
     Just dataAlt <- daEnv `uses` Env.lookup name
@@ -113,17 +102,17 @@ evalExp ((src, _) :< exp) = case exp of
 
   Lambda pat exp -> do
     l <- use vEnv
-    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; forceBind src val pat; evalExp exp }
+    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; forceMatch src val pat; evalExp exp }
 
   Let bind exp -> save vEnv $ do
     evalBind bind
     evalExp exp
 
-  Lit lit -> case lit of
-    Bool val   -> pure $ Value.Bool val
-    Char val   -> pure $ Value.Char val
-    Int val    -> pure $ Value.Int  val
-    String val -> Value.Array <$> Value.fromString val
+  Lit lit -> pure $ case lit of
+    Bool val   -> Value.Bool val
+    Char val   -> Value.Char val
+    Int val    -> Value.Int val
+    String val -> Value.String val
 
   Read _ exp -> evalExp exp
 
@@ -135,6 +124,8 @@ evalExp ((src, _) :< exp) = case exp of
     return val
 
   Sig exp _ -> evalExp exp
+
+  Specialise exp _ -> evalExp exp
 
   Switch alts -> evalSwitch src alts
 
@@ -159,35 +150,35 @@ evalSwitch src ((condExp,bodyExp):alts) = do
     Value.Bool True  -> evalExp bodyExp
     Value.Bool False -> evalSwitch src alts
 
-evalCases :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
-evalCases src val [] = throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
-evalCases src val ((pat,exp):alts) = case tryBind val pat of
-  Just doBind -> save vEnv $ do
-    doBind
+evalCase :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
+evalCase src val [] = throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
+evalCase src val ((pat,exp):alts) = case tryMatch val pat of
+  Just doMatch -> save vEnv $ do
+    doMatch
     evalExp exp
   Nothing ->
-    evalCases src val alts
+    evalCase src val alts
 
-forceBind :: Source -> Value -> Annotated Pat -> Praxis ()
-forceBind src val pat = case tryBind val pat of
-  Just doBind -> doBind
+forceMatch :: Source -> Value -> Annotated Pat -> Praxis ()
+forceMatch src val pat = case tryMatch val pat of
+  Just doMatch -> doMatch
   Nothing -> throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
 
 evalBind :: Annotated Bind -> Praxis ()
 evalBind ((src, _) :< Bind pat exp) = do
   exp <- evalExp exp
-  forceBind src exp pat
+  forceMatch src exp pat
 
-tryBind :: Value -> Annotated Pat -> Maybe (Praxis ())
-tryBind val (_ :< pat) = case pat of
+tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
+tryMatch val (_ :< pat) = case pat of
 
   PatAt name pat
-    -> (\doBind -> do { vEnv %= Env.intro name val; doBind }) <$> tryBind val pat
+    -> (\doMatch -> do { vEnv %= Env.intro name val; doMatch }) <$> tryMatch val pat
 
   PatCon patCon pat | Value.Con valCon val <- val
     -> if patCon /= valCon then Nothing else case (pat, val) of
       (Nothing, Nothing)   -> Just (return ())
-      (Just pat, Just val) -> tryBind val pat
+      (Just pat, Just val) -> tryMatch val pat
 
   PatHole
     -> Just (return ())
@@ -200,7 +191,7 @@ tryBind val (_ :< pat) = case pat of
       _                       -> False
 
   PatPair pat1 pat2 | Value.Pair val1 val2 <- val
-    -> liftA2 (>>) (tryBind val1 pat1) (tryBind val2 pat2)
+    -> liftA2 (>>) (tryMatch val1 pat1) (tryMatch val2 pat2)
 
   PatUnit
     -> Just (return ())

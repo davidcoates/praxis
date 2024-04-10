@@ -10,6 +10,7 @@ module Env.LEnv
 
   , value
   , used
+  , read
   , captured
 
   , empty
@@ -18,11 +19,11 @@ module Env.LEnv
   , adjust
   , fromList
 
-  , mark
-  , capture
+  , setUsed
+  , setRead
+  , setCaptured
 
   , join
-  , mixedUse
   )
 where
 
@@ -31,18 +32,18 @@ import           Env.Env      (Env (..))
 import qualified Env.Env      as Env
 
 import           Control.Lens (makeLenses)
-import           Prelude      hiding (lookup)
+import           Prelude      hiding (lookup, read)
 import qualified Prelude      (lookup)
 
-data Entry a = Entry { _value :: a, _used :: Bool, _captured :: Bool }
+data Entry a = Entry { _value :: a, _used :: Bool, _read :: Bool, _captured :: Bool }
 
 mkEntry :: a -> Entry a
-mkEntry x = Entry { _value = x, _used = False, _captured = False }
+mkEntry x = Entry { _value = x, _used = False, _read = False, _captured = False }
 
 makeLenses ''Entry
 
 instance Semigroup (Entry a) where
-  e1 <> e2 = Entry { _value = view value e1, _used = view used e1 || view used e2, _captured = view captured e1 || view captured e2 }
+  e1 <> e2 = Entry { _value = view value e1, _used = view used e1 || view used e2, _read = view read e1 || view read e2, _captured = view captured e1 || view captured e2 }
 
 {-
 deriving instance Functor Entry
@@ -51,11 +52,7 @@ deriving instance Traversable Entry
 -}
 
 instance Pretty a => Pretty (Entry a) where
-  pretty Entry{ _value, _used, _captured } = (<> pretty _value) $ case (_used, _captured) of
-    (True, True)   -> "[uc] "
-    (True, False)  -> "[u] "
-    (False, True)  -> "[c] "
-    (False, False) -> ""
+  pretty Entry{ _value, _used, _read, _captured } = (<> pretty _value) $ ((if _used then "(u)" else "") <> (if _read then "(r)" else "") <> (if _captured then "(c)" else ""))
 
 -- Linear environment
 type LEnv a = Env (Entry a)
@@ -77,14 +74,14 @@ fromList = \case
   []        -> empty
   ((k,v):l) -> intro k v (fromList l)
 
-mark :: Name -> LEnv a -> LEnv a
-mark k l = Env.adjust (\v -> v { _used = True} ) k l
+setUsed :: Name -> LEnv a -> LEnv a
+setUsed k l = Env.adjust (\v -> v { _used = True} ) k l
 
-capture :: LEnv a -> LEnv a
-capture l = fmap (\v -> v { _captured = True}) l
+setRead :: Name -> LEnv a -> LEnv a
+setRead k l = Env.adjust (\v -> v { _read = True} ) k l
+
+setCaptured :: LEnv a -> LEnv a
+setCaptured l = fmap (\v -> v { _captured = True }) l
 
 join :: LEnv a -> LEnv a -> LEnv a
 join = Env.zipWith (<>)
-
-mixedUse :: LEnv a -> LEnv a -> [(Name, a)]
-mixedUse (Env l1) (Env l2) = [ (k, view value e1) | ((k, e1), (_, e2)) <- zip l1 l2, view used e1 /= view used e2 ]

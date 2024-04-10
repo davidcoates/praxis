@@ -1,85 +1,112 @@
 module Main where
 
 import           Common
-import qualified Env.Env              as Env
-import qualified Env.LEnv             as LEnv
-import           Inbuilts             (initialState)
-import           Interpret
+import qualified Env.Env               as Env
+import qualified Env.LEnv              as LEnv
+import           Executors
+import           Inbuilts              (initialState)
 import           Praxis
 import           Term
 import           Value
 
-import           Control.Lens.Reified (ReifiedLens (..), ReifiedLens')
-import           Control.Monad        (void, when)
-import           Data.List            (find, intercalate, stripPrefix)
+import           Control.Monad         (void, when)
+import           Data.List             (delete)
 import           System.Environment
+import           System.FilePath.Posix (dropExtension)
 import           System.IO
-
-forever :: Praxis a -> Praxis a
-forever p = try p >> forever p
 
 main :: IO ()
 main = hSetBuffering stdin LineBuffering >> do
   args <- getArgs
   void $ runPraxis (parse args) initialState
 
+data Mode = Interactive (Maybe FilePath)
+          | Interpret FilePath
+          | Compile FilePath
+
+-- TODO could use a State monad but doesn't play nicely with the Praxis monad
+parseFilename :: [String] -> Praxis ([String], Maybe FilePath)
+parseFilename args = return $ case args of
+  (('-':_):_) -> (args, Nothing)
+  (file:args) -> (args, Just file)
+  _           -> (args, Nothing)
+
+parseHelp :: [String] -> Praxis [String]
+parseHelp args = if "-h" `elem` args then help else return args
+
+parseDebug :: [String] -> Praxis [String]
+parseDebug args = if "-d" `elem` args
+  then do
+    flags . debug .= True
+    return (delete "-d" args)
+  else return args
+
+parseInteractive :: [String] -> Praxis ([String], Bool)
+parseInteractive args = if "-i" `elem` args
+  then return (delete "-i" args, True)
+  else return (args, False)
+
+parseCompile :: [String] -> Praxis ([String], Bool)
+parseCompile args = if "-c" `elem` args
+  then return (delete "-c" args, True)
+  else return (args, False)
+
+parseOpts :: [String] -> Praxis Mode
+parseOpts args = do
+  (args, file) <- parseFilename args
+  args <- parseHelp args
+  args <- parseDebug args
+  (args, interactive) <- parseInteractive args
+  (args, compile) <- parseCompile args
+  when (not (null args)) $ throw (pretty "unknown option " <> quote (pretty (unwords args)))
+  case (interactive, compile) of
+    (True, True)   -> throw (pretty "at most one of -i and -c can be specified")
+    (False, True)  -> case file of
+      Just file -> return (Compile file)
+      Nothing   -> throw (pretty "missing file (compile mode)")
+    (True, False) -> return (Interactive file)
+    (False, False) -> case file of
+      Just file -> return (Interpret file)
+      Nothing   -> throw (pretty "missing file (interpret mode)")
+
 parse :: [String] -> Praxis ()
 parse xs = do
-  opts xs
-  f <- use infile
-  case f of
-    Nothing -> repl
-    Just f  -> file f
+  mode <- parseOpts xs
+  case mode of
+    Interactive file -> do
+      case file of
+        Just file -> do
+          text <- liftIO (readFile file)
+          interpretProgram text
+          repl
+        Nothing   -> repl
+    Interpret file -> do
+      text <- liftIO (readFile file)
+      interpretProgram text
+      runMain
+    Compile file -> do
+      text <- liftIO (readFile file)
+      let outFile = dropExtension file
+      compileProgram text (Just outFile)
 
-data Arg = Arg { short :: String, long :: String, action :: Praxis () }
-
-instance Show Arg where
-  show x = ("-" ++ short x ++ " " ++ long x)
-
-args :: [Arg]
-args =
-  [ Arg "d" "debug" (flags . debug .= True)
-  , Arg "i" "interactive" (flags . interactive .= True)
-  , Arg "h" "help" help
-  ]
-
-help :: Praxis ()
+help :: Praxis a
 help = Praxis.abort helpStr where
-  helpStr :: String
-  helpStr = "usage: praxis [infile] [-o outfile] [OPTION]...\n\n" ++ unlines (map show args)
-
-opts :: [String] -> Praxis ()
-opts (x : xs)
-  | x == "-o" = case xs of
-    (y:ys) -> do
-      f <- use outfile
-      case f of
-        Nothing -> (outfile .= Just y) >> opts ys
-        Just _  -> throw "multiple outfile"
-    []     -> throw "missing argument to -o"
-  | ('-':_) <- x = do
-    let opt = find (\a -> ("-" ++ short a) == x) args
-    case opt of
-      Just a  -> action a >> opts xs
-      Nothing -> throw (pretty "unknown option " <> quote (pretty x))
-  | otherwise = do
-    f <- use infile
-    case f of
-      Nothing -> (infile .= Just x) >> opts xs
-      Just _  -> throw "multiple infile"
-opts [] = return ()
-
-file :: String -> Praxis ()
-file f = (interpretFile f :: Praxis (Annotated Program, ())) >> onFileSuccess
-  where onFileSuccess = use (flags . interactive) >>= (\i -> if i then repl else runMain)
+  helpStr = "usage: praxis [infile] [OPTION]...\n\n" ++ unlines helpOpts
+  helpOpts =
+    [ "-d debug"
+    , "-i interactive"
+    , "-h help"
+    , "-c compile" ]
 
 runMain :: Praxis ()
 runMain = do
-  ty <- tEnv `uses` LEnv.lookup "main"
-  case ty of Nothing -> throw "missing main function"
-             Just (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) ->
-               do { Just (Fun f) <- vEnv `uses` Env.lookup "main"; f Value.Unit; return () }
-             Just ty -> throwAt (view source ty) $ pretty "main function has bad type " <> quote (pretty ty) <> pretty ", expected () -> ()"
+  requireMain
+  Just (Fun f) <- vEnv `uses` Env.lookup "main_0"
+  f Value.Unit
+  return ()
+
+forever :: Praxis a -> Praxis a
+forever p = try p >> forever p
 
 repl :: Praxis ()
 repl = forever $ do
@@ -89,6 +116,6 @@ repl = forever $ do
 eval :: String -> Praxis ()
 eval s = do
   -- TODO fix this so we can have declarations
-  (_, v) <- interpret s :: Praxis (Annotated Exp, Value)
+  v <- interpretExp s
   liftIO $ print v
 

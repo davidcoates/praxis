@@ -48,7 +48,11 @@ translate :: String -> IO String
 translate program = runWith id (translateProgram program)
 
 trim :: String -> String
-trim = init . tail
+trim = rtrim . ltrim where
+  ltrim s = case s of
+    ('\n':s) -> ltrim s
+    s        -> s
+  rtrim = reverse . ltrim . reverse
 
 compile :: String -> IO Bool
 compile program = do
@@ -56,3 +60,11 @@ compile program = do
   case result of
     Left error   -> return False
     Right result -> return True
+
+compileAndRun :: String -> String -> IO String
+compileAndRun program exp  = do
+  let program' = program ++ "\n" ++ "main : () -> ()\n" ++ "main () = print (" ++ exp ++ ")"
+  (result, _) <- runPraxis (compileAndRunProgram program') initialState
+  case result of
+    Left error   -> return error
+    Right result -> return (trim result)

@@ -50,6 +50,8 @@ auto foo_0 = []()
 
   it "compiles" $ compile program `shouldReturn` True
 
+  it "runs" $ compileAndRun program "foo" `shouldReturn` "3"
+
 
 
 tuple = describe "tuple" $ do
@@ -104,6 +106,11 @@ auto min_0 = std::function([](praxis::Pair<int, int> temp_0_)
 |]
 
   it "compiles" $ compile program `shouldReturn` True
+
+  it "runs" $ do
+    compileAndRun program "min (1, 2)" `shouldReturn` "1"
+    compileAndRun program "min (2, 1)" `shouldReturn` "1"
+    compileAndRun program "min (1, 1)" `shouldReturn` "1"
 
 
 
@@ -171,6 +178,11 @@ auto sign_0 = std::function([](int temp_0_)
 
   it "compiles" $ compile program `shouldReturn` True
 
+  it "runs" $ do
+    compileAndRun program "sign 0"    `shouldReturn` "0"
+    compileAndRun program "sign 10"   `shouldReturn` "1"
+    compileAndRun program "sign (-5)" `shouldReturn` "-1"
+
 
 
 recursion = describe "recursion (factorial)" $ do
@@ -225,6 +237,11 @@ auto [fac_0] = temp_0_(temp_0_);
 |]
 
   it "compiles" $ compile program `shouldReturn` True
+
+  it "runs" $ do
+    compileAndRun program "fac 0"  `shouldReturn` "1"
+    compileAndRun program "fac 5"  `shouldReturn` "120"
+    compileAndRun program "fac 15" `shouldReturn` "2004310016" -- overflow moment (TODO should use fixed width)
 
 
 

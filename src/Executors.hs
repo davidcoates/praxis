@@ -3,6 +3,7 @@ module Executors
   , interpretProgram
   , translateProgram
   , compileProgram
+  , compileAndRunProgram
   ) where
 
 import           Check          (check)
@@ -46,22 +47,37 @@ compileProgram :: String -> Maybe FilePath -> Praxis ()
 compileProgram program outFile = do
   program <- translateProgram program
   postlude <- case outFile of { Just _ -> coerceMain; Nothing -> return ""; } -- If we are linking, then main needs to be defined.
-  errLog <- liftIO $ withSystemTempFile "praxis.cc" (compile (Translate.prelude ++ program ++ postlude))
-  case errLog of
-    Just errLog -> throw errLog
-    Nothing     -> return ()
+  withSystemTempDirectory "praxis" (compile (Translate.prelude ++ program ++ postlude))
   where
-    compile :: String -> FilePath -> Handle -> IO (Maybe String)
-    compile program filepath handle = do
-      hPutStr handle program
-      hFlush handle
+    compile :: String -> FilePath -> Praxis ()
+    compile program dir = do
+      let sourceFile = dir ++ "/praxis.cc"
+      liftIO $ writeFile sourceFile program
       let
         cmds = case outFile of
-          Just outFile -> [ filepath, "-o", outFile ]
-          Nothing      -> [ "-c", filepath, "-o", "/dev/null" ]
-      (errCode, _, errLog) <- readProcessWithExitCode "g++" cmds ""
-      case errCode of
-        ExitSuccess -> return Nothing
-        _           -> return (Just errLog)
+          Just outFile -> [ sourceFile, "-o", outFile ]
+          Nothing      -> [ "-c", sourceFile, "-o", "/dev/null" ]
+      (exitCode, _, errLog) <- liftIO $ readProcessWithExitCode "g++" cmds ""
+      case exitCode of
+        ExitSuccess -> return ()
+        _           -> throw errLog
 
--- compileAndRunProgram :: String -> Praxis String
+compileAndRunProgram :: String -> Praxis String
+compileAndRunProgram program = do
+  program <- translateProgram program
+  postlude <- coerceMain
+  withSystemTempDirectory "praxis" (compileAndRun (Translate.prelude ++ program ++ postlude))
+  where
+    compileAndRun :: String -> FilePath -> Praxis String
+    compileAndRun program dir = do
+      let sourceFile = dir ++ "/praxis.cc"
+      let outFile = dir ++ "/praxis.bin"
+      liftIO $ writeFile sourceFile program
+      (exitCode, _, errLog) <- liftIO $ readProcessWithExitCode "g++" [ sourceFile, "-o", outFile ] ""
+      case exitCode of
+        ExitSuccess -> do
+          (exitCode, outLog, errLog) <- liftIO $ readProcessWithExitCode outFile [] ""
+          case exitCode of
+            ExitSuccess -> return outLog
+            _           -> throw errLog
+        _           -> throw errLog

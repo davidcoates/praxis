@@ -35,7 +35,7 @@ class Term a where
   recurseAnnotation :: (Term a, Applicative f) => I a -> Termformer f -> Annotation a -> f (Annotation a)
 
 recurse :: forall a f. (Term a, Applicative f) => Termformer f -> Annotated a -> f (Annotated a)
-recurse f ((src, ann) :< x) = (\ann x -> (src, ann) :< x) <$> traverse (recurseAnnotation (witness :: I a) f) ann <*> recurseTerm f x
+recurse f ((src, a) :< x) = (\a x -> (src, a) :< x) <$> traverse (recurseAnnotation (witness :: I a) f) a <*> recurseTerm f x
 
 -- TODO Lit? Fixity?
 data I a where

@@ -219,7 +219,7 @@ generateDataCon qTyVars retType ((src, Nothing) :< DataCon name argType) = do
 
 
 generateDecl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
-generateDecl forwardT = splitTrivial $ \src -> \case
+generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   -- TODO Copy constraints needed!
   DeclData name arg alts -> do
@@ -279,7 +279,7 @@ generateDecl forwardT = splitTrivial $ \src -> \case
 
 
 generateExp :: Annotated Exp -> Praxis (Annotated Exp)
-generateExp = split $ \src -> \case
+generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp of
 
   Apply f x -> do
     rTy <- freshTyUni
@@ -310,8 +310,7 @@ generateExp = split $ \src -> \case
   Con name -> do
     DataConInfo { fullType } <- getData src name
     (t, specialisation) <- specialiseQType src name fullType
-    return (t :< Specialise ((src, Just t) :< Con name) specialisation) -- TODO ugly
-    -- return (t :< Con name)
+    return (t :< Specialise ((src, Just t) :< Con name) specialisation)
 
   Defer exp1 exp2 -> do
     exp1 <- generateExp exp1
@@ -385,7 +384,7 @@ generateExp = split $ \src -> \case
 
   Var name -> do
     (t, specialisation) <- useVar src name
-    return (t :< Specialise ((src, Just t) :< Var name) specialisation) -- TODO ugly
+    return (t :< Specialise ((src, Just t) :< Var name) specialisation)
 
   Where exp decls -> scope src $ do
     decls <- traverse (generateDecl Nothing) decls
@@ -400,15 +399,12 @@ equals es = equals' (map (\e -> (view source e, view ty e)) es) where
 
 
 generateBind :: Annotated Bind -> Praxis (Annotated Bind)
-generateBind = splitTrivial $ \src -> \case
-
-  Bind pat exp -> do
+generateBind (a :< Bind pat exp) = do
     exp <- generateExp exp
     op <- freshTyViewUni RefOrValue
     pat <- generatePat op pat
     equal (view ty pat) (view ty exp) (BindCongruence) (view source pat <> view source exp)
-    return $ Bind pat exp
-
+    return (a :< Bind pat exp)
 
 generateAlt :: Annotated Type -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
 generateAlt op (pat, exp) = scope (view source pat) $ do
@@ -423,7 +419,7 @@ generatePat op pat = snd <$> generatePat' pat where
   wrap t = TyApply op t `as` phantom KindType
 
   generatePat' :: Annotated Pat -> Praxis (Annotated Type, Annotated Pat)
-  generatePat' = splitPair $ \src -> \case
+  generatePat' ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)) <$> case pat of
 
     PatAt name pat -> do
       (t, pat) <- generatePat' pat

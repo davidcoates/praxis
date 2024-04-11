@@ -1,9 +1,4 @@
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE GADTs #-}
 
 module Parse.Rewrite
   ( run
@@ -29,7 +24,6 @@ run term = save stage $ do
   display term `ifFlag` debug
   return term
 
-
 -- Term rewriting. This is used to rewrite type-level variables to guarantee uniqueness which is needed for the solver.
 -- The rewrite mapping is stored so it can be applied in reverse when displaying diagnostics to the user.
 
@@ -50,7 +44,6 @@ rewrite term = ($ term) $ case typeof (view value term) of
   IPat     -> rewritePat
   _        -> value (recurseTerm rewrite)
 
-
 saveVarMap :: Praxis a -> Praxis a
 saveVarMap c = do
   m <- use (rewriteMap . varMap)
@@ -70,14 +63,14 @@ isUnique xs = length (nub xs) == length xs
 
 mkVarRewriteMap :: Source -> [Name] -> Praxis (Map Name Name)
 mkVarRewriteMap src varNames = do
-  when (not (isUnique varNames)) $ throwAt src $ ("variables are not distinct" :: String)
+  when (not (isUnique varNames)) $ throwAt src "variables are not distinct"
   vars <- series $ [ (\m -> (n, m)) <$> freshVar n | n <- varNames ]
   return (Map.fromList vars)
 
 mkTyRewriteMap :: Source -> [Name] -> Praxis (Map Name Name)
 mkTyRewriteMap src tyVarNames = do
   tyVars <- series $ [ (\m -> (n, m)) <$> freshTyVar n | n <- tyVarNames ]
-  when (not (isUnique (map fst tyVars))) $ throwAt src $ ("type variables are not distinct" :: String)
+  when (not (isUnique (map fst tyVars))) $ throwAt src "type variables are not distinct"
   return (Map.fromList tyVars)
 
 addRewriteFromTyPat :: Annotated TyPat -> Praxis ()
@@ -124,37 +117,38 @@ rewriteVar n = do
     Just n  -> n
 
 rewriteType :: Annotated Type -> Praxis (Annotated Type)
-rewriteType = splitTrivial $ \src -> \case
+rewriteType (a :< ty) = (a :<) <$> case ty of
 
   TyVar n -> TyVar <$> rewriteTyVar n
 
-  ty      -> recurseTerm rewrite ty
+  _       -> recurseTerm rewrite ty
 
 
 rewriteView  :: Annotated View -> Praxis (Annotated View)
-rewriteView = splitTrivial $ \src -> \case
+rewriteView (a :< view) = (a :<) <$> case view of
 
   ViewVar d n -> ViewVar d <$> rewriteTyVar n
 
-  view'       -> recurseTerm rewrite view'
+  _           -> recurseTerm rewrite view
 
 
 rewriteTyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
-rewriteTyPat = splitTrivial $ \src -> \case
+rewriteTyPat (a :< tyPat) = (a :<) <$> case tyPat of
 
-  TyPatVar n -> TyPatVar <$> rewriteTyVar n
+  TyPatVar n       -> TyPatVar <$> rewriteTyVar n
 
   TyPatViewVar d n -> TyPatViewVar d <$> rewriteTyVar n
 
-  tyPat -> recurseTerm rewrite tyPat
+  _                -> recurseTerm rewrite tyPat
 
 
 rewriteQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
-rewriteQTyVar = splitTrivial $ \src -> \case
+rewriteQTyVar (a :< qTyVar) = (a :<) <$> case qTyVar of
 
-  QTyVar n -> QTyVar <$> rewriteTyVar n
+  QTyVar n     -> QTyVar <$> rewriteTyVar n
 
   QViewVar d n -> QViewVar d <$> rewriteTyVar n
+
 
 rewriteAlt :: (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
 rewriteAlt (pat, exp) = saveVarMap $ do
@@ -164,15 +158,14 @@ rewriteAlt (pat, exp) = saveVarMap $ do
   return (pat, exp)
 
 rewriteBind :: Annotated Bind -> Praxis (Annotated Bind)
-rewriteBind (ann :< Bind pat exp) = do
+rewriteBind (a :< Bind pat exp) = do
   exp <- rewriteExp exp
   addRewriteFromPat pat
   pat <- rewritePat pat
-  return (ann :< Bind pat exp)
-
+  return (a :< Bind pat exp)
 
 rewriteExp :: Annotated Exp -> Praxis (Annotated Exp)
-rewriteExp = splitTrivial $ \src -> \case
+rewriteExp (a :< exp) = (a :<) <$> case exp of
 
   Var name -> Var <$> rewriteVar name
 
@@ -201,33 +194,33 @@ rewriteExp = splitTrivial $ \src -> \case
     exp <- rewriteExp exp
     return $ Let bind exp
 
-  exp -> recurseTerm rewrite exp
+  _ -> recurseTerm rewrite exp
 
 
 rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
-rewriteDecl = splitTrivial $ \src -> \case
+rewriteDecl (a :< decl) = (a :<) <$> case decl of
 
   DeclVar name sig exp -> DeclVar <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
 
   DeclOp op name opRules -> (\name -> DeclOp op name opRules) <$> rewriteVar name
 
-  decl -> recurseTerm rewrite decl
+  _ -> recurseTerm rewrite decl
 
 
 rewritePat :: Annotated Pat -> Praxis (Annotated Pat)
-rewritePat = splitTrivial $ \src -> \case
+rewritePat (a :< pat) = (a :<) <$> case pat of
 
-  PatVar n -> PatVar <$> rewriteVar n
+  PatVar n  -> PatVar <$> rewriteVar n
 
   PatAt n p -> PatAt <$> rewriteVar n <*> rewritePat p
 
-  pat -> recurseTerm rewrite pat
+  _         -> recurseTerm rewrite pat
 
 
 rewriteProgram :: Annotated Program -> Praxis (Annotated Program)
-rewriteProgram (ann :< Program decls) = do
+rewriteProgram (a :< Program decls) = do
   decls <- rewriteDecls decls
-  return (ann :< Program decls)
+  return (a :< Program decls)
 
 declVarNames :: Annotated Decl -> [Name]
 declVarNames decl = case view value decl of

@@ -56,33 +56,33 @@ introKind s n k = do
 
 
 generateQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
-generateQTyVar = split $ \src -> \case
+generateQTyVar (a@(src, _) :< qTyVar) = case qTyVar of
 
   QTyVar var -> do
     k <- freshKindUni
     introKind src var k
-    return (k :< QTyVar var)
+    return ((src, Just k) :< QTyVar var)
 
   QViewVar domain var -> do
     let k = phantom KindView
     introKind src var k
-    return (k :< QViewVar domain var)
+    return ((src, Just k) :< QViewVar domain var)
 
 
 generateView :: Annotated View -> Praxis (Annotated View)
-generateView = splitTrivial $ \src -> \case
+generateView (a@(src, _) :< view) = (a :<) <$> case view of
 
-  op@(ViewVar _ var) -> do
+  ViewVar _ var -> do
     entry <- kEnv `uses` Env.lookup var
     case entry of
-      Just _  -> return op
+      Just _  -> return view
       Nothing -> throwAt src (NotInScope var)
 
-  op -> return op
+  _ -> return view
 
 
 generateTy :: Annotated Type -> Praxis (Annotated Type)
-generateTy = split $ \src -> \case
+generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty of
 
     TyApply f x -> do
       f <- generateTy f
@@ -136,7 +136,7 @@ generateTy = split $ \src -> \case
 
 
 generateTyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
-generateTyPat = split $ \src -> \case
+generateTyPat (a@(src, _) :< tyPat) = (\(k :< t) -> (src, Just k) :< t) <$> case tyPat of
 
   TyPatVar var -> do
     k <- freshKindUni
@@ -154,22 +154,18 @@ generateTyPat = split $ \src -> \case
 
 
 generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
-generateDataCon = splitTrivial $ \src -> \case
-
-  DataCon name arg -> do
-    case arg of
-      Nothing -> return $ DataCon name Nothing
-      Just arg -> do
-        arg <- generate arg
-        require $ newConstraint (view kind arg `KEq` phantom KindType) (DataConType name) src -- TODO should just match kind of data type?
-        return $ DataCon name (Just arg)
-
+generateDataCon (a@(src, _) :< DataCon name arg)
+  | Nothing  <- arg = return (a :< DataCon name arg)
+  | Just arg <- arg = do
+      arg <- generate arg
+      require $ newConstraint (view kind arg `KEq` phantom KindType) (DataConType name) src -- TODO should just match kind of data type?
+      return (a :< DataCon name (Just arg))
 
 fun :: Annotated Kind -> Annotated Kind -> Annotated Kind
 fun a b = phantom (KindFun a b)
 
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
-generateDecl = splitTrivial $ \src -> \case
+generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   -- TODO check no duplicated patterns
   DeclData name arg alts -> do

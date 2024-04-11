@@ -56,9 +56,9 @@ desugar term = ($ term) $ case typeof (view value term) of
 -- Desugaring proper
 
 desugarProgram :: Annotated Program -> Praxis (Annotated Program)
-desugarProgram (ann :< Program decls) = do
+desugarProgram (a :< Program decls) = do
   decls <- desugarDecls decls
-  return (ann :< Program decls)
+  return (a :< Program decls)
 
 collectFreeVars :: Annotated Exp -> Set Name
 collectFreeVars x = collectFreeVars' x where
@@ -75,26 +75,26 @@ collectFreeVars x = collectFreeVars' x where
 
 -- Helper for desugaring "&". It turns top-level VarRef into Var and returns the name of such variables
 desugarExpRef :: Annotated Exp -> Praxis (Annotated Exp, Set Name)
-desugarExpRef (ann :< exp) = case exp of
+desugarExpRef (a :< exp) = case exp of
 
   Sig exp ty -> do
     (exp, readVars) <- desugarExpRef exp
-    return (ann :< Sig exp ty, readVars)
+    return (a :< Sig exp ty, readVars)
 
   Pair exp1 exp2 -> do
     (exp1, readVars1) <- desugarExpRef exp1
     (exp2, readVars2) <- desugarExpRef exp2
-    return (ann :< Pair exp1 exp2, readVars1 `Set.union` readVars2)
+    return (a :< Pair exp1 exp2, readVars1 `Set.union` readVars2)
 
-  VarRef var -> return (ann :< Var var, Set.singleton var)
+  VarRef var -> return (a :< Var var, Set.singleton var)
 
   _ -> do
-    exp <- desugar (ann :< exp)
+    exp <- desugar (a :< exp)
     return (exp, Set.empty)
 
 
 desugarExp :: Annotated Exp -> Praxis (Annotated Exp)
-desugarExp (ann@(src, _) :< exp) = case exp of
+desugarExp (a@(src, _) :< exp) = case exp of
 
   Apply f x -> do
     f <- desugar f
@@ -102,8 +102,8 @@ desugarExp (ann@(src, _) :< exp) = case exp of
     (x, readVars) <- desugarExpRef x
     let mixedVars = freeVars `Set.intersection` readVars
     when (not (null mixedVars)) $ throwAt src $ "variable(s) " <> separate ", " (map (quote . pretty) (Set.elems mixedVars)) <> " used in a read context"
-    let unrollReads []     = (ann :< Apply f x)
-        unrollReads (v:vs) = (ann :< Read v (unrollReads vs))
+    let unrollReads []     = (a :< Apply f x)
+        unrollReads (v:vs) = (a :< Read v (unrollReads vs))
     return (unrollReads (Set.elems readVars))
 
   Do stmts -> desugarStmts stmts where
@@ -115,29 +115,29 @@ desugarExp (ann@(src, _) :< exp) = case exp of
       | (_ :< StmtExp exp) <- stmt = do
         exp1 <- desugarExp exp
         exp2 <- desugarStmts stmts
-        let ann = (view source exp1 <> view source exp2, Nothing)
-        return (ann :< Seq exp1 exp2)
+        let a = (view source exp1 <> view source exp2, Nothing)
+        return (a :< Seq exp1 exp2)
       | (_ :< StmtBind bind) <- stmt = do
         bind <- desugar bind
         exp <- desugarStmts stmts
-        let ann = (view source bind <> view source exp, Nothing)
-        return (ann :< Let bind exp)
+        let a = (view source bind <> view source exp, Nothing)
+        return (a :< Let bind exp)
 
     -- Call Mixfix.parse to fold the token sequence into a single expression, then desugar that expression
   Mixfix tokens -> Mixfix.parse src tokens >>= desugar
 
   VarRef var -> throwAt src $ "observed variable " <> quote (pretty var) <> " is not in a valid read context"
 
-  Con "True" -> pure (ann :< Lit (Bool True))
+  Con "True" -> pure (a :< Lit (Bool True))
 
-  Con "False" -> pure (ann :< Lit (Bool False))
+  Con "False" -> pure (a :< Lit (Bool False))
 
   Where exp decls -> do
     exp <- desugar exp
     decls <- desugarDecls decls
-    return (ann :< Where exp decls)
+    return (a :< Where exp decls)
 
-  _           -> (ann :<) <$> recurseTerm desugar exp
+  _           -> (a :<) <$> recurseTerm desugar exp
 
 
 
@@ -155,7 +155,7 @@ desugarOp op@((src, _) :< Op parts) = do
 
 
 desugarOpRules :: Annotated Op -> Annotated OpRules -> Praxis (Annotated OpRules)
-desugarOpRules op (ann@(src, _) :< OpMultiRules rules) = do
+desugarOpRules op (a@(src, _) :< OpMultiRules rules) = do
 
     -- FIXME check the precedence operators exist?
 
@@ -165,23 +165,23 @@ desugarOpRules op (ann@(src, _) :< OpMultiRules rules) = do
     when (length assocs > 1) $ throwAt src ("more than one associativity specified for op " <> quote (pretty op))
     when (length  precs > 1) $ throwAt src ("more than one precedence block specified for op " <> quote (pretty op))
 
-    return (ann :< OpRules (listToMaybe assocs) (concat precs))
+    return (a :< OpRules (listToMaybe assocs) (concat precs))
 
 
 desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
 desugarDecls []            = pure []
-desugarDecls (ann@(src, _) :< decl : decls) = case decl of
+desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
   DeclData name tyPat alts -> do
     tyPat <- traverse desugar tyPat
     alts <- traverse desugar alts
     decls <- desugarDecls decls
-    return (ann :< DeclData name tyPat alts : decls)
+    return (a :< DeclData name tyPat alts : decls)
 
   DeclDef name args exp -> do
     args <- mapM desugar args
     exp <- desugar exp
-    let decl = ann :< DeclVar name Nothing (curry args exp)
+    let decl = a :< DeclVar name Nothing (curry args exp)
         curry :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
         curry     [] e = e
         curry (p:ps) e = (src, Nothing) :< Lambda p (curry ps e)
@@ -230,50 +230,50 @@ desugarDecls (ann@(src, _) :< decl : decls) = case decl of
     opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
 
     decls <- desugarDecls decls
-    return (ann :< DeclOp op name rules : decls)
+    return (a :< DeclOp op name rules : decls)
 
 
   DeclRec recDecls -> do
     recDecls <- desugarDecls recDecls
     decls <- desugarDecls decls
-    return (ann :< DeclRec recDecls : decls)
+    return (a :< DeclRec recDecls : decls)
 
   DeclSig name ty -> do
     ty <- desugar ty
     desugarDecls decls >>= \case
-      (ann' :< DeclVar name' Nothing exp) : decls
-        | name == name' -> return $ ((ann <> ann') :< DeclVar name (Just ty) exp) : decls
+      (a' :< DeclVar name' Nothing exp) : decls
+        | name == name' -> return $ ((a <> a') :< DeclVar name (Just ty) exp) : decls
       _ -> throwAt src $ "declaration of " <> quote (pretty name) <> " lacks an accompanying binding"
 
   DeclSyn name ty -> do
     ty <- desugar ty
     tySynonyms %= Map.insert name ty
     decls <- desugarDecls decls
-    return (ann :< DeclSyn name ty : decls)
+    return (a :< DeclSyn name ty : decls)
 
 
 -- TODO check for overlapping patterns?
 desugarPat :: Annotated Pat -> Praxis (Annotated Pat)
-desugarPat (ann :< pat) = case pat of
+desugarPat (a :< pat) = case pat of
 
-  PatCon "True" Nothing  -> pure (ann :< PatLit (Bool True))
+  PatCon "True" Nothing  -> pure (a :< PatLit (Bool True))
 
-  PatCon "False" Nothing -> pure (ann :< PatLit (Bool False))
+  PatCon "False" Nothing -> pure (a :< PatLit (Bool False))
 
-  _                      -> (ann :<) <$> recurseTerm desugar pat
+  _                      -> (a :<) <$> recurseTerm desugar pat
 
 
 desugarTy :: Annotated Type -> Praxis (Annotated Type)
-desugarTy (ann :< ty) = case ty of
+desugarTy (a :< ty) = case ty of
 
   -- TODO allow more generic type synonyms
   TyCon name -> do
     syn <- tySynonyms `uses` Map.lookup name
     return $ case syn of
       Just ty -> ty
-      Nothing -> ann :< TyCon name
+      Nothing -> a :< TyCon name
 
-  _           -> (ann :<) <$> recurseTerm desugar ty
+  _           -> (a :<) <$> recurseTerm desugar ty
 
 
 -- (Operator precedence) graph helpers

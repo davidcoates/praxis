@@ -47,9 +47,6 @@ module Term
   , Annotated
   , source
   , annotation
-  , split
-  , splitPair
-  , splitTrivial
   , phantom
   , as
   , covalue
@@ -243,15 +240,6 @@ source = tag . first
 
 annotation :: Functor f => (Maybe (Annotation a) -> f (Maybe (Annotation a))) -> Annotated a -> f (Annotated a)
 annotation = tag . second
-
-split :: Functor f => (Source -> a -> f (Tag (Annotation a) a)) -> Annotated a -> f (Annotated a)
-split f ((s, _) :< x) = (\(a :< x) -> ((s, Just a)) :< x) <$> f s x
-
-splitPair :: Functor f => (Source -> a -> f (b, Tag (Annotation a) a)) -> Annotated a -> f (b, Annotated a)
-splitPair f = runPairT . split (\s a -> PairT (f s a))
-
-splitTrivial :: Functor f => (Source -> a -> f a) -> Annotated a -> f (Annotated a)
-splitTrivial f ((s, _) :< x) = (\x -> ((s, Nothing) :< x)) <$> f s x
 
 phantom :: a -> Annotated a
 phantom x = (Phantom, Nothing) :< x

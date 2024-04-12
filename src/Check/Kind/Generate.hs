@@ -90,10 +90,10 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
         (_ :< KindView _) -> do
           require $ newConstraint (view kind x `KEq` phantom KindType) ViewApplication src
           return (phantom KindType :< TyApply f x)
-        funKind -> do
+        _ -> do
           k1 <- freshKindUni
           k2 <- freshKindUni
-          require $ newConstraint (funKind `KEq` phantom (KindFun k1 k2)) TyFunApplication src
+          require $ newConstraint (view kind f `KEq` phantom (KindFun k1 k2)) TyFunApplication src
           require $ newConstraint (view kind x `KSub` k1) TyFunApplication src
           return (k2 :< TyApply f x)
 

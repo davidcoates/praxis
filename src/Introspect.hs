@@ -317,7 +317,8 @@ instance Term KindConstraint where
   witness = IKindConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
-    KEq a b -> KEq <$> f a <*> f b
+    KEq a b  -> KEq <$> f a <*> f b
+    KSub a b -> KSub <$> f a <*> f b
 
 instance Term TyProp where
   witness = ITyProp

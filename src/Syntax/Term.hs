@@ -194,13 +194,14 @@ tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Copy <$> reservedCon "Copy" *> annotated ty <|>
                _Class <$> annotated ty <|>
                unparseable (_RefFree <$> varid <*> reservedId "ref-free" *> annotated ty) <|>
-               _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
+               unparseable (_TEq <$> annotated ty <*> reservedOp "~" *> annotated ty) <|>
                unparseable (_TOpEq <$> annotated ty <*> reservedOp "o~" *> annotated ty) <|>
                mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
-kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|>
-                mark "kind constraint"
+kindConstraint = unparseable (_KEq <$> annotated kind <*> reservedOp "~" *> annotated kind) <|>
+                 unparseable (_KSub <$> annotated kind <*> reservedOp "<" *> annotated kind) <|>
+                 mark "kind constraint"
 
 tyProp :: Syntax f => f TyProp
 tyProp = _Exactly <$> tyConstraint <|>

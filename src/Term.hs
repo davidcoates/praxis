@@ -160,7 +160,7 @@ data Tok = TExp (Annotated Exp)
          | TOp Name
   deriving (Eq, Ord)
 
-data ViewDomain = RefOrValue | Ref -- Note: The order here matters for the solver
+data ViewDomain = Ref | RefOrValue -- Note: The order here matters for the solvers
   deriving (Eq, Ord)
 
 data View = ViewUni ViewDomain Name
@@ -210,6 +210,7 @@ infixl 8 `TEq`
 infixl 8 `TOpEq`
 
 data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
+                    | KSub (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
 data Prop a = Top

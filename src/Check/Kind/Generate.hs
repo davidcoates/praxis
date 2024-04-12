@@ -91,9 +91,11 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
           require $ newConstraint (view kind x `KEq` phantom KindType) ViewApplication src
           return (phantom KindType :< TyApply f x)
         funKind -> do
-          k <- freshKindUni
-          require $ newConstraint (funKind `KEq` phantom (KindFun (view kind x) k)) TyFunApplication src
-          return (k :< TyApply f x)
+          k1 <- freshKindUni
+          k2 <- freshKindUni
+          require $ newConstraint (funKind `KEq` phantom (KindFun k1 k2)) TyFunApplication src
+          require $ newConstraint (view kind x `KSub` k1) TyFunApplication src
+          return (k2 :< TyApply f x)
 
     TyCon con -> do
       entry <- kEnv `uses` Env.lookup con

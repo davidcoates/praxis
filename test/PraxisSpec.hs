@@ -137,9 +137,9 @@ sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
     interpret program "sign 10"   `shouldReturn` "1"
     interpret program "sign (-5)" `shouldReturn` "-1"
     interpret program "sign -5"   `shouldReturn` trim [r|
-error: found contradiction [1:1] Int ~ Int -> Int ∧ Int ~ Int
-|-> [1:1] ( Int , Int ) ~ ( Int -> Int , Int ) ∧ Int ~ ^t6
-|-> [1:1] ( Int , Int ) -> Int ~ ( Int -> Int , Int ) -> ^t6
+error: found contradiction [1:1] Int = Int -> Int and Int = Int
+|-> [1:1] ( Int , Int ) = ( Int -> Int , Int ) and Int = ^t6
+|-> [1:1] ( Int , Int ) -> Int = ( Int -> Int , Int ) -> ^t6
 |-> (function application)
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
@@ -687,10 +687,10 @@ box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
   it "evaluates" $ do
 
     interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
-error: found contradiction [1:50] & ^v3 List Int o~ List Int
-|-> [1:50] List Int ~ List Int ∧ & ^v3 List Int o~ List Int
-|-> [1:50] & ^v3 List Int ~ List Int ∧ Box [ & ^v3 , List Int ] ~ Box [ & ^v3 , List Int ]
-|-> [1:50] & ^v3 List Int -> Box [ & ^v3 , List Int ] ~ List Int -> Box [ & ^v3 , List Int ]
+error: found contradiction [1:50] & ^v3 List Int ?= List Int
+|-> [1:50] List Int = List Int and & ^v3 List Int ?= List Int
+|-> [1:50] & ^v3 List Int = List Int and Box [ & ^v3 , List Int ] = Box [ & ^v3 , List Int ]
+|-> [1:50] & ^v3 List Int -> Box [ & ^v3 , List Int ] = List Int -> Box [ & ^v3 , List Int ]
 |-> (function application)
 |]
 
@@ -728,8 +728,8 @@ type Bar [?v, a] = Bar (Foo [?v, a])
   |]
 
     it "does not kind check" $ check program `shouldReturn` trim [r|
-error: found contradiction [3:24] View ? < View & ∧ ^k3 < Type
-|-> [3:24] ( View ? , ^k3 ) < ( View & , Type )
+error: found contradiction [3:24] View ? ≤ View & and ^k3 ≤ Type
+|-> [3:24] ( View ? , ^k3 ) ≤ ( View & , Type )
 |-> (type function application)
 |]
 

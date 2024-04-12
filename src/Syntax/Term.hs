@@ -194,26 +194,26 @@ tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Copy <$> reservedCon "Copy" *> annotated ty <|>
                _Class <$> annotated ty <|>
                unparseable (_RefFree <$> varid <*> reservedId "ref-free" *> annotated ty) <|>
-               unparseable (_TEq <$> annotated ty <*> reservedOp "~" *> annotated ty) <|>
-               unparseable (_TOpEq <$> annotated ty <*> reservedOp "o~" *> annotated ty) <|>
+               unparseable (_TEq <$> annotated ty <*> reservedOp "=" *> annotated ty) <|>
+               unparseable (_TOpEq <$> annotated ty <*> reservedOp "?=" *> annotated ty) <|>
                mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
-kindConstraint = unparseable (_KEq <$> annotated kind <*> reservedOp "~" *> annotated kind) <|>
-                 unparseable (_KSub <$> annotated kind <*> reservedOp "<" *> annotated kind) <|>
+kindConstraint = unparseable (_KEq <$> annotated kind <*> reservedOp "=" *> annotated kind) <|>
+                 unparseable (_KSub <$> annotated kind <*> reservedOp "≤" *> annotated kind) <|>
                  mark "kind constraint"
 
 tyProp :: Syntax f => f TyProp
 tyProp = _Exactly <$> tyConstraint <|>
          _Top <$> special '⊤' <|>
          _Bottom <$> special '⊥' <|>
-         _And <$> tyProp <*> special '∧' *> tyProp
+         _And <$> tyProp <*> reservedId "and" *> tyProp
 
 kindProp :: Syntax f => f KindProp
 kindProp = _Exactly <$> kindConstraint <|>
            _Top <$> special '⊤' <|>
            _Bottom <$> special '⊥' <|>
-           _And <$> kindProp <*> special '∧' *> kindProp
+           _And <$> kindProp <*> reservedId "and" *> kindProp
 
 program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) where -- TODO module

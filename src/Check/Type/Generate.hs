@@ -29,8 +29,6 @@ import           Control.Monad      (replicateM)
 import           Data.Foldable      (foldMap, foldlM)
 import           Data.List          (nub, partition, sort)
 import           Data.Maybe         (isJust, mapMaybe)
-import           Data.Set           (Set)
-import qualified Data.Set           as Set
 import           Prelude            hiding (log)
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
@@ -201,12 +199,12 @@ patToTy = over value patToTy' where
     TyPatViewVar d n -> TyView (phantom (ViewVar d n))
     TyPatPack a b    -> TyPack (patToTy a) (patToTy b)
 
-unis :: Annotated TyPat -> Set (Annotated QTyVar)
-unis = extract (embedMonoid f) where
+tyPatToQTyVars :: Annotated TyPat -> [Annotated QTyVar]
+tyPatToQTyVars = extract (embedMonoid f) where
   f = \case
-    TyPatVar n       -> Set.singleton (phantom $ QTyVar n)
-    TyPatViewVar d n -> Set.singleton (phantom $ QViewVar d n)
-    _                -> Set.empty
+    TyPatVar n       -> [ phantom $ QTyVar n ]
+    TyPatViewVar d n -> [ phantom $ QViewVar d n ]
+    _                -> []
 
 generateDataCon :: [Annotated QTyVar] -> Annotated Type -> Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon qTyVars retType ((src, Nothing) :< DataCon name argType) = do
@@ -232,7 +230,9 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
           Just arg
             | KindFun k1 k2 <- view value k -> TyApply (TyCon name `as` k) (patToTy arg) `as` k2
 
-        vars = Set.toList (foldMap unis arg)
+        vars = case arg of
+          Nothing  -> []
+          Just arg -> tyPatToQTyVars arg
 
     alts <- traverse (generateDataCon vars returnTy) alts
     return $ DeclData name arg alts

@@ -676,7 +676,7 @@ box_0 = Box "x"
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Box [ & v_0 , a_0 ] = [forall a_0 & v_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
+type Box [ & v_0 , a_0 ] = [forall & v_0 a_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
 type List a_1 = cases
   [forall a_1 . ( ) -> List a_1] Nil ( )
   [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )

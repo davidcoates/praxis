@@ -64,10 +64,8 @@ canTranslateQTyVar qTyVar = case view value qTyVar of
   QViewVar Ref _ -> False
   _              -> True
 
-
 translatableQTyVars :: [Annotated QTyVar] -> [Annotated QTyVar]
 translatableQTyVars = filter canTranslateQTyVar
-
 
 translateQTyVar :: Annotated QTyVar -> Praxis [Token]
 translateQTyVar (_ :< q) = case q of
@@ -158,6 +156,9 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
   DeclVar name sig exp -> do
     body <- translateDeclVarBody sig [] topLevel exp
     return $ [ Crumb src, Text "auto ", Text name, Text " = " ] ++ body ++ [ Semi ]
+
+  DeclData name tyPat alts -> do
+    throw "TODO"
 
   where
     templateVars :: Maybe (Annotated QType) -> [Annotated QTyVar]

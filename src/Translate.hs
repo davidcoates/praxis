@@ -262,7 +262,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
   Pair exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
     exp2 <- translateExp nonLocal exp2
-    return $ [ Text "praxis::Pair(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
+    return $ [ Text "praxis::pair(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
 
   Seq exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
@@ -366,6 +366,7 @@ prelude = [r|/* prelude */
 #include <functional>
 #include <optional>
 #include <iostream>
+#include <memory>
 
 namespace praxis {
 
@@ -407,11 +408,48 @@ using String = std::string;
 template<typename T>
 struct Copy
 {
+  static constexpr bool value = false;
+};
+
+template<>
+struct Copy<int>
+{
+  static constexpr bool value = true;
+};
+
+template<>
+struct Copy<char>
+{
+  static constexpr bool value = true;
+};
+
+template<>
+struct Copy<bool>
+{
   static constexpr bool value = true;
 };
 
 template<typename T>
 inline constexpr bool can_copy = Copy<T>::value;
+
+template<typename T>
+using Wrap = typename std::conditional<can_copy<T>, T, std::unique_ptr<T>>::type;
+
+template<typename T>
+const T& unwrap(const Wrap<T>& x) {
+  if constexpr (can_copy<T>)
+    return x;
+  else
+    return *x;
+}
+
+template<typename T>
+T& unwrap(Wrap<T>& x) {
+  if constexpr (can_copy<T>)
+    return x;
+  else
+    return *x;
+}
 
 template<typename T>
 struct Ref
@@ -466,7 +504,7 @@ struct Apply<View::VALUE, T>
 template<typename T>
 struct Apply<View::REF, T>
 {
-  using Type = typename std::conditional<Copy<T>::value, T, const T*>::type;
+  using Type = typename std::conditional<can_copy<T>, T, const T*>::type;
 };
 
 template<>
@@ -499,13 +537,19 @@ struct Unit
 {
 };
 
+template<>
+struct Copy<Unit>
+{
+  static constexpr bool value = true;
+};
+
 template<typename T1, typename T2>
-struct Pair
+struct PairImpl
 {
   using Tag = void;
 
   template<typename S1, typename S2>
-  Pair(S1&& first, S2&& second)
+  PairImpl(S1&& first, S2&& second)
     : first_(std::forward<S1>(first))
     , second_(std::forward<S2>(second))
   {}
@@ -516,7 +560,7 @@ struct Pair
   inline const T2& second() const { return second_; }
   inline T2& second() { return second_; }
 
-  friend std::ostream& operator<< (std::ostream& ostream, const Pair& pair)
+  friend std::ostream& operator<< (std::ostream& ostream, const PairImpl& pair)
   {
     ostream << "(" << pair.first_ << ", " << pair.second_ << ")";
     return ostream;
@@ -527,11 +571,24 @@ private:
   T2 second_;
 };
 
+template<typename T1, typename T2>
+using Pair = Wrap<PairImpl<T1, T2>>;
+
 template<class T1, class T2>
-Pair(T1&&, T2&&) -> Pair<std::decay_t<T1>, std::decay_t<T2>>;
+auto pair(T1&& first, T2&& second) -> Pair<std::decay_t<T1>, std::decay_t<T2>>
+{
+  if constexpr (can_copy<std::decay_t<T1>> && can_copy<std::decay_t<T2>>)
+  {
+    return PairImpl<std::decay_t<T1>, std::decay_t<T2>>(std::move(first), std::move(second));
+  }
+  else
+  {
+    return std::make_unique<PairImpl<std::decay_t<T1>, std::decay_t<T2>>>(std::move(first), std::move(second));
+  }
+}
 
 template<typename T1, typename T2>
-struct Copy<Pair<T1, T2>>
+struct Copy<PairImpl<T1, T2>>
 {
   static constexpr bool value = can_copy<T1> && can_copy<T2>;
 };

@@ -37,7 +37,7 @@ auto foo_0 = [](){
   return (praxis::Unit{}, [=](){
     auto temp_1_ = 2;
     auto y_0 = std::move(temp_1_);
-    return std::move(add_int)(praxis::Pair(std::move(x_0), std::move(y_0)));
+    return std::move(add_int)(praxis::pair(std::move(x_0), std::move(y_0)));
     throw praxis::BindFail("5:7");
   }());
   throw praxis::BindFail("3:7");
@@ -63,7 +63,7 @@ x_0 = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-auto x_0 = praxis::Pair(1, praxis::Pair(true, "abc"));
+auto x_0 = praxis::pair(1, praxis::pair(true, "abc"));
 |]
 
   it "compiles" $ compile program `shouldReturn` True
@@ -94,7 +94,7 @@ auto min_0 = std::function([](praxis::Pair<int, int> temp_0_){
   auto temp_2_ = temp_0_.second();
   auto x_0 = std::move(temp_1_);
   auto y_0 = std::move(temp_2_);
-  return (std::move(lt_int)(praxis::Pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
+  return (std::move(lt_int)(praxis::pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
   throw praxis::BindFail("1:5");
 });
 |]
@@ -148,13 +148,13 @@ error: found contradiction [1:1] Int ~ Int -> Int ∧ Int ~ Int
 auto sign_0 = std::function([](int temp_0_){
   auto n_0 = std::move(temp_0_);
   return [=](){
-    if (std::move(lt_int)(praxis::Pair(std::move(n_0), 0))) {
+    if (std::move(lt_int)(praxis::pair(std::move(n_0), 0))) {
       return std::move(negate_int)(1);
     }
-    if (std::move(eq_int)(praxis::Pair(std::move(n_0), 0))) {
+    if (std::move(eq_int)(praxis::pair(std::move(n_0), 0))) {
       return 0;
     }
-    if (std::move(gt_int)(praxis::Pair(std::move(n_0), 0))) {
+    if (std::move(gt_int)(praxis::pair(std::move(n_0), 0))) {
       return std::move(unary_plus_int)(1);
     }
     throw praxis::SwitchFail("3:10");
@@ -210,7 +210,7 @@ auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<int(int)>> {
         return 1;
       }
       auto n_0 = std::move(temp_2_);
-      return std::move(multiply_int)(praxis::Pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(praxis::Pair(std::move(n_0), 1)))));
+      return std::move(multiply_int)(praxis::pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(praxis::pair(std::move(n_0), 1)))));
       throw praxis::CaseFail("3:9");
     })
   };
@@ -352,7 +352,7 @@ auto view_0 = []<praxis::View v_0, typename a_0, typename b_0>(){
     auto temp_2_ = temp_0_.second();
     auto x_0 = std::move(temp_1_);
     auto y_0 = std::move(temp_2_);
-    return praxis::Pair(std::move(y_0), std::move(x_0));
+    return praxis::pair(std::move(y_0), std::move(x_0));
     throw praxis::BindFail("3:6");
   });
 };
@@ -392,7 +392,7 @@ auto swap_0 = []<typename a_0, typename b_0>(){
     auto temp_2_ = temp_0_.second();
     auto a_0 = std::move(temp_1_);
     auto b_0 = std::move(temp_2_);
-    return praxis::Pair(std::move(b_0), std::move(a_0));
+    return praxis::pair(std::move(b_0), std::move(a_0));
     throw praxis::BindFail("3:6");
   });
 };
@@ -520,7 +520,7 @@ auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::fun
         return true;
       }
       auto n_0 = std::move(temp_2_);
-      return std::move(is_odd_0)(std::move(subtract_int)(praxis::Pair(std::move(n_0), 1)));
+      return std::move(is_odd_0)(std::move(subtract_int)(praxis::pair(std::move(n_0), 1)));
       throw praxis::CaseFail("3:13");
     }),
     /* 2:1 */
@@ -530,7 +530,7 @@ auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::fun
         return false;
       }
       auto n_1 = std::move(temp_3_);
-      return std::move(is_even_0)(std::move(subtract_int)(praxis::Pair(std::move(n_1), 1)));
+      return std::move(is_even_0)(std::move(subtract_int)(praxis::pair(std::move(n_1), 1)));
       throw praxis::CaseFail("7:12");
     })
   };
@@ -612,6 +612,7 @@ do
   let ys = (map (\x -> x * 2)) &xs
   sum &ys
 |] `shouldReturn` "12"
+
 
 
 shadowing = describe "shadowing" $ do

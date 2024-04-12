@@ -64,21 +64,20 @@ generateQTyVar (a@(src, _) :< qTyVar) = case qTyVar of
     return ((src, Just k) :< QTyVar var)
 
   QViewVar domain var -> do
-    let k = phantom KindView
+    let k = phantom (KindView domain)
     introKind src var k
     return ((src, Just k) :< QViewVar domain var)
 
 
 generateView :: Annotated View -> Praxis (Annotated View)
-generateView (a@(src, _) :< view) = (a :<) <$> case view of
+generateView ((src, _) :< view) = case view of
 
   ViewVar _ var -> do
     entry <- kEnv `uses` Env.lookup var
     case entry of
-      Just _  -> return view
+      Just k  -> return ((src, Just k) :< view)
       Nothing -> throwAt src (NotInScope var)
 
-  _ -> return view
 
 
 generateTy :: Annotated Type -> Praxis (Annotated Type)
@@ -88,7 +87,7 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
       f <- generateTy f
       x <- generateTy x
       case view kind f of
-        (_ :< KindView) -> do
+        (_ :< KindView _) -> do
           require $ newConstraint (view kind x `KEq` phantom KindType) ViewApplication src
           return (phantom KindType :< TyApply f x)
         funKind -> do
@@ -109,9 +108,9 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
       require $ newConstraint (view kind ty2 `KEq` phantom KindType) FunType src
       return (phantom KindType :< TyFun ty1 ty2)
 
-    TyView op -> do
-      op <- generateView op
-      return (phantom KindView :< TyView op)
+    TyView v -> do
+      v <- generateView v
+      return (view kind v :< TyView v)
 
     TyPair ty1 ty2 -> do
       ty1 <- generateTy ty1
@@ -144,8 +143,8 @@ generateTyPat (a@(src, _) :< tyPat) = (\(k :< t) -> (src, Just k) :< t) <$> case
     return (k :< TyPatVar var)
 
   TyPatViewVar domain var -> do
-    introKind src var (phantom KindView)
-    return (phantom KindView :< TyPatViewVar domain var)
+    introKind src var (phantom (KindView domain))
+    return (phantom (KindView domain) :< TyPatViewVar domain var)
 
   TyPatPack tyPat1 tyPat2 -> do
     tyPat1 <- generateTyPat tyPat1

@@ -30,6 +30,7 @@ module Praxis
   , try
 
   , runPraxis
+  , runDebug
   , runSilent
   , runInternal
 
@@ -240,6 +241,11 @@ try p = do
     Left e  -> lift (State.put s) >> return Nothing
     Right y -> lift (State.put t) >> return (Just y)
 
+runDebug :: PraxisState -> Praxis a -> IO (Either String a)
+runDebug s c = do
+  (x, _) <- runPraxis (flags . debug .= True >> c) s
+  return x
+
 runSilent :: PraxisState -> Praxis a -> IO (Either String a)
 runSilent s c = do
   (x, _) <- runPraxis (flags . silent .= True >> c) s
@@ -279,7 +285,7 @@ freshTyViewUni :: ViewDomain -> Praxis (Annotated Type)
 freshTyViewUni domain = do
   (o:os) <- use (fresh . freshViewUnis)
   fresh . freshViewUnis .= os
-  return (TyView (phantom (ViewUni domain o)) `as` phantom KindType)
+  return (TyView (ViewUni domain o `as` phantom (KindView domain)) `as` phantom (KindView domain))
 
 freshKindUni :: Praxis (Annotated Kind)
 freshKindUni = do
@@ -291,7 +297,7 @@ freshViewRef :: Praxis (Annotated View)
 freshViewRef = do
   (l:ls) <- use (fresh . freshViewRefs)
   fresh . freshViewRefs .= ls
-  return (phantom (ViewRef l))
+  return (ViewRef l `as` phantom (KindView Ref))
 
 freshTyVar :: Name -> Praxis Name
 freshTyVar var = do

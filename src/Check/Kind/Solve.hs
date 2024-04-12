@@ -72,6 +72,7 @@ solveKind = \case
 
   _ -> contradiction
 
+
 is :: Name -> Kind -> Praxis (Maybe KindProp)
 is n k = do
   our . sol %= ((n, k):)

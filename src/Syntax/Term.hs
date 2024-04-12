@@ -258,7 +258,7 @@ pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern
 
 kind :: Syntax f => f Kind
 kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind" where
-  kind0 = _KindView <$> reservedCon "View" <|>
+  kind0 = _KindView <$> reservedCon "View" *> viewDomain <|>
           _KindType <$> reservedCon "Type" <|>
           unparseable (_KindUni <$> uni) <|>
           _KindConstraint <$> reservedCon "Constraint" <|>

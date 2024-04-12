@@ -252,7 +252,7 @@ instance Term Tok where
 
 instance Term View where
   witness = IView
-  recurseAnnotation = trivial
+  recurseAnnotation _ f x = f x
   recurseTerm _ = pure
 
 instance Term TyPat where
@@ -271,7 +271,7 @@ instance Term Type where
     TyApply a b -> TyApply <$> f a <*> f b
     TyCon n     -> pure (TyCon n)
     TyFun a b   -> TyFun <$> f a <*> f b
-    TyView op   -> TyView <$> f op
+    TyView v    -> TyView <$> f v
     TyPack a b  -> TyPack <$> f a <*> f b
     TyPair a b  -> TyPair <$> f a <*> f b
     TyUnit      -> pure TyUnit
@@ -297,7 +297,7 @@ instance Term Kind where
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
     KindFun a b    -> KindFun <$> f a <*> f b
-    KindView       -> pure KindView
+    KindView d     -> pure (KindView d)
     KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType
 

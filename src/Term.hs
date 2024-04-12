@@ -194,7 +194,7 @@ data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)
 data Kind = KindUni Name
           | KindConstraint
           | KindFun (Annotated Kind) (Annotated Kind)
-          | KindView
+          | KindView ViewDomain
           | KindPair (Annotated Kind) (Annotated Kind)
           | KindType
   deriving (Eq, Ord)
@@ -228,6 +228,7 @@ type family Annotation a where
   Annotation TyPat    = Annotated Kind
   Annotation Type     = Annotated Kind
   Annotation QTyVar   = Annotated Kind
+  Annotation View     = Annotated Kind
   Annotation DataCon  = DataConInfo
   Annotation TyProp   = Derivation TyProp
   Annotation KindProp = Derivation KindProp

@@ -82,7 +82,9 @@ translateView (_ :< view) = case view of
 
   ViewRef _   -> return [ Text "praxis::View::REF" ]
 
-  ViewVar _ n -> return [ Text n ]
+  ViewVar Ref _ -> return [ Text "praxis::View::REF" ]
+
+  ViewVar RefOrValue n -> return [ Text n ]
 
 
 translateType :: Annotated Type -> Praxis [Token]
@@ -130,6 +132,8 @@ translateType (_ :< t) = case t of
 
   TyVar n -> return [ Text n ]
 
+  TyView v -> translateView v
+
 
 translateQType :: Annotated QType -> Praxis [Token]
 translateQType ((src, _) :< Forall vs _ t) = translateQType' (translatableQTyVars vs) where
@@ -139,6 +143,46 @@ translateQType ((src, _) :< Forall vs _ t) = translateQType' (translatableQTyVar
       vs <- mapM translateQTyVar vs
       t <- translateType t
       return $ [ Text "template<" ] ++ intercalate [ Text ", " ] vs ++ [ Text "> " ] ++ t
+
+
+translateDeclData :: Name -> Maybe (Annotated TyPat) -> [Annotated DataCon] -> Praxis [Token]
+translateDeclData name tyPat alts = do
+
+  let tyPats = case tyPat of { Just tyPat -> unpackTyPat tyPat; Nothing -> []; }
+
+  let
+    tyPatsDecl = case tyPats of
+      [] -> []
+      _  -> [ Text "template<" ] ++ intercalate [ Text ", " ] (map tyPatDecl tyPats) ++ [ Text ">", Newline ]
+
+    tyPatsInst = case tyPats of
+      [] -> []
+      _  -> [ Text "<" ] ++ intercalate [ Text ", " ] (map tyPatInst tyPats) ++ [ Text ">" ]
+
+    forwardDecl = tyPatsDecl ++ [ Text "struct ", Text name, Text "Impl", Semi ] ++ tyPatsDecl ++ [ Text "using ", Text name, Text " = praxis::Box<", Text name, Text "Impl" ] ++ tyPatsInst ++ [ Text ">", Semi ]
+    defn = tyPatsDecl ++ [ Text "struct ", Text name, Text "Impl : std::variant<", Text ">", LBrace ] ++ [ RBrace, Semi ]
+
+  return $ forwardDecl ++ defn
+
+  where
+    tyPatDecl :: Annotated TyPat -> [Token]
+    tyPatDecl tyPat = case view value tyPat of
+      TyPatVar name                -> [ Text "typename ", Text name ]
+      TyPatViewVar RefOrValue name -> [ Text "praxis::View ", Text name ]
+
+    tyPatInst :: Annotated TyPat -> [Token]
+    tyPatInst tyPat = case view value tyPat of
+      TyPatVar name                -> [ Text name ]
+      TyPatViewVar RefOrValue name -> [ Text name ]
+
+    -- unpack to a list of TyPatVar and TyPatViewVar, skipping Ref domain TyPatViewVar
+    unpackTyPat :: Annotated TyPat -> [Annotated TyPat]
+    unpackTyPat tyPat = case view value tyPat of
+      TyPatPack p1 p2           -> unpackTyPat p1 ++ unpackTyPat p2
+      TyPatVar _                -> [tyPat]
+      TyPatViewVar RefOrValue _ -> [tyPat]
+      TyPatViewVar Ref _        -> []
+
 
 
 translateDecl :: Bool -> Annotated Decl -> Praxis [Token]
@@ -157,8 +201,7 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     body <- translateDeclVarBody sig [] topLevel exp
     return $ [ Crumb src, Text "auto ", Text name, Text " = " ] ++ body ++ [ Semi ]
 
-  DeclData name tyPat alts -> do
-    throw "TODO"
+  DeclData name tyPat alts -> translateDeclData name tyPat alts
 
   where
     templateVars :: Maybe (Annotated QType) -> [Annotated QTyVar]
@@ -227,7 +270,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     alts <- translateCase src tempVar alts
     return $ [ Text "std::function(" ] ++ captureList nonLocal ++ [ Text "(" ] ++ tempVarTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ alts ++ [ RBrace, Text ")" ]
 
-  Con name -> return [ Text name ] -- TODO need to qualify with type ?
+  Con name -> return [ Text "mk", Text name ]
 
   Defer exp1 exp2 -> do
     tempVar <- freshTempVar
@@ -263,7 +306,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
   Pair exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
     exp2 <- translateExp nonLocal exp2
-    return $ [ Text "praxis::pair(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
+    return $ [ Text "praxis::mkPair(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
 
   Seq exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
@@ -330,10 +373,9 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
 
   PatCon con pat -> do
     conType <- translateType patTy
-    let tag = conType ++ [ Text ("::Tag::" ++ con) ]
     tempVar <- freshTempVar
     onMatch <- case pat of { Just pat -> translateTryMatch tempVar pat onMatch; Nothing -> return onMatch; }
-    return $ [ Text "if (", Text (var ++ ".tag()"), Text " == " ] ++ tag ++ [ Text ") ", LBrace, Text "auto ", Text tempVar, Text " = ", Text (var ++ ".template get<") ] ++ tag ++ [ Text ">()", Semi ] ++ onMatch ++ [ RBrace, Newline ]
+    return $ [ Text "if (", Text (var ++ ".index()"), Text " == ", Text con, Text ") ", LBrace, Text "auto ", Text tempVar, Text " = ", Text var, Text ".template get<", Text con, Text ">()", Semi ] ++ onMatch ++ [ RBrace, Newline ]
 
   PatHole -> return onMatch
 
@@ -358,7 +400,6 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
 
 -- FIXME a lot of this should be moved to Inbuilts
 
-prelude :: String
 prelude = [r|/* prelude */
 #include <utility>
 #include <vector>
@@ -368,6 +409,7 @@ prelude = [r|/* prelude */
 #include <optional>
 #include <iostream>
 #include <memory>
+#include <variant>
 
 namespace praxis {
 
@@ -430,60 +472,75 @@ struct Copy<bool>
   static constexpr bool value = true;
 };
 
+template<>
+struct Copy<const char *>
+{
+  static constexpr bool value = true;
+};
+
 template<typename T>
 inline constexpr bool can_copy = Copy<T>::value;
 
 template<typename T>
-using Wrap = typename std::conditional<can_copy<T>, T, std::unique_ptr<T>>::type;
-
-template<typename T>
-const T& unwrap(const Wrap<T>& x) {
-  if constexpr (can_copy<T>)
-    return x;
-  else
-    return *x;
-}
-
-template<typename T>
-T& unwrap(Wrap<T>& x) {
-  if constexpr (can_copy<T>)
-    return x;
-  else
-    return *x;
-}
-
-template<typename T>
-struct Ref
+struct Boxed : public std::unique_ptr<T>
 {
-  explicit Ref(const T* data)
-    : data(data)
-  {}
-
-  inline auto first() const
+  Boxed(std::unique_ptr<T>&& ptr)
+    : std::unique_ptr<T>(std::move(ptr))
   {
-    return ref(data->first());
   }
 
-  inline auto second() const
+  inline auto&& first()
   {
-    return ref(data->first());
+    return static_cast<std::unique_ptr<T>*>(this)->get()->first();
   }
 
-  inline auto tag() const
+  inline auto&& second()
   {
-    return data->tag();
+    return static_cast<std::unique_ptr<T>*>(this)->get()->second();
   }
 
-  template<typename S>
-  inline auto get() const
+  inline const auto& first() const
   {
-    return ref(data->template get<S>());
+    return static_cast<const std::unique_ptr<T>*>(this)->get()->first();
   }
 
-  using Tag = typename T::Tag;
+  inline const auto& second() const
+  {
+    return static_cast<const std::unique_ptr<T>*>(this)->get()->second();
+  }
 
-  const T* data;
+  template<size_t index>
+  inline auto&& get()
+  {
+    return static_cast<std::unique_ptr<T>*>(this)->get()->template get<index>();
+  }
+
+  template<size_t index>
+  inline const auto& get() const
+  {
+    return static_cast<const std::unique_ptr<T>*>(this)->get()->template get<index>();
+  }
+
+  inline auto index() const
+  {
+    return static_cast<const std::unique_ptr<T>*>(this)->get()->index();
+  }
 };
+
+template<typename T>
+using Box = typename std::conditional<can_copy<T>, T, Boxed<T>>::type;
+
+template<typename T, typename... Args>
+auto mkBox(Args&&... args) -> Box<T>
+{
+  if constexpr (can_copy<T>)
+    return T(std::forward<Args>(args)...);
+	else
+		return Boxed<T>(std::make_unique<T>(std::forward<Args>(args)...));
+}
+
+template<typename T>
+struct Ref;
 
 enum class View
 {
@@ -505,7 +562,7 @@ struct Apply<View::VALUE, T>
 template<typename T>
 struct Apply<View::REF, T>
 {
-  using Type = typename std::conditional<can_copy<T>, T, const T*>::type;
+  using Type = typename std::conditional<can_copy<T>, T, Ref<T>>::type;
 };
 
 template<>
@@ -521,18 +578,49 @@ template<typename T>
 auto ref(const T& obj) -> apply<View::REF, T>
 {
   if constexpr (can_copy<T>)
-  {
     return obj;
-  }
   else if constexpr (std::is_same_v<T, String>)
-  {
     return Ref(obj.data());
-  }
   else
-  {
     return Ref(&obj);
-  }
 }
+
+template<typename T>
+struct Ref
+{
+  explicit Ref(const T* data)
+    : data(data)
+  {}
+
+  inline auto first() const
+  {
+    return ref(data->first());
+  }
+
+  inline auto second() const
+  {
+    return ref(data->second());
+  }
+
+  template<size_t index>
+  inline auto get() const
+  {
+    return ref(data->template get<index>());
+  }
+
+  inline auto index() const
+  {
+    return data->index();
+  }
+
+  const T* data;
+};
+
+template<typename T>
+struct Copy<Ref<T>>
+{
+  static constexpr bool value = true;
+};
 
 struct Unit
 {
@@ -555,11 +643,11 @@ struct PairImpl
     , second_(std::forward<S2>(second))
   {}
 
-  inline T1& first() { return first_; }
+  inline T1&& first() { return std::move(first_); }
   inline const T1& first() const { return first_; }
 
+  inline T2&& second() { return std::move(second_); }
   inline const T2& second() const { return second_; }
-  inline T2& second() { return second_; }
 
   friend std::ostream& operator<< (std::ostream& ostream, const PairImpl& pair)
   {
@@ -573,26 +661,19 @@ private:
 };
 
 template<typename T1, typename T2>
-using Pair = Wrap<PairImpl<T1, T2>>;
-
-template<class T1, class T2>
-auto pair(T1&& first, T2&& second) -> Pair<std::decay_t<T1>, std::decay_t<T2>>
-{
-  if constexpr (can_copy<std::decay_t<T1>> && can_copy<std::decay_t<T2>>)
-  {
-    return PairImpl<std::decay_t<T1>, std::decay_t<T2>>(std::move(first), std::move(second));
-  }
-  else
-  {
-    return std::make_unique<PairImpl<std::decay_t<T1>, std::decay_t<T2>>>(std::move(first), std::move(second));
-  }
-}
-
-template<typename T1, typename T2>
 struct Copy<PairImpl<T1, T2>>
 {
   static constexpr bool value = can_copy<T1> && can_copy<T2>;
 };
+
+template<typename T1, typename T2>
+using Pair = Box<PairImpl<T1, T2>>;
+
+template<class T1, class T2>
+auto mkPair(T1&& first, T2&& second) -> Pair<std::decay_t<T1>, std::decay_t<T2>>
+{
+	return mkBox<Pair<std::decay_t<T1>, std::decay_t<T2>>>(std::move(first), std::move(second));
+}
 
 struct Exception : public std::runtime_error
 {

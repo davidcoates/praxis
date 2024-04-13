@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes   #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Translate
@@ -150,6 +151,8 @@ translateDeclData name tyPat alts = do
 
   let tyPats = case tyPat of { Just tyPat -> unpackTyPat tyPat; Nothing -> []; }
 
+  alts <- mapM (\(_ :< DataCon name ty) -> (name,) <$> translateType ty) alts
+
   let
     tyPatsDecl = case tyPats of
       [] -> []
@@ -160,9 +163,26 @@ translateDeclData name tyPat alts = do
       _  -> [ Text "<" ] ++ intercalate [ Text ", " ] (map tyPatInst tyPats) ++ [ Text ">" ]
 
     forwardDecl = tyPatsDecl ++ [ Text "struct ", Text name, Text "Impl", Semi ] ++ tyPatsDecl ++ [ Text "using ", Text name, Text " = praxis::Box<", Text name, Text "Impl" ] ++ tyPatsInst ++ [ Text ">", Semi ]
-    defn = tyPatsDecl ++ [ Text "struct ", Text name, Text "Impl : std::variant<", Text ">", LBrace ] ++ [ RBrace, Semi ]
+    variantTy = [ Text "std::variant<" ] ++ intercalate [ Text ", " ] (map snd alts) ++ [ Text ">" ]
+    body = [ Text "using " ] ++ variantTy ++ [ Text "::variant", Semi ] ++ [ Text "template<size_t index>", Newline, Text "inline const auto& get() const { return std::get<index>(*this); }", Newline, Text "template<size_t index>", Newline, Text "inline auto& get() { return std::get<index>(*this); }" ]
+    defn = tyPatsDecl ++ [ Text "struct ", Text name, Text "Impl", Text " : " ] ++ variantTy ++ [ Text " ", LBrace ] ++ body ++ [ RBrace, Semi ]
 
-  return $ forwardDecl ++ defn
+    indices = concat [ [ Text "static constexpr size_t ", Text name, Text " = ", Text (show i), Semi ] | (name, i) <- zip (map fst alts) [0..] ]
+
+    selfTy = [ Text name ] ++ tyPatsInst
+    selfImplTy = [ Text name, Text "Impl" ] ++ tyPatsInst
+
+    mkConstructorBody :: Name -> [Token] -> [Token]
+    mkConstructorBody name ty = [ Text "std::function([](" ] ++ ty ++ [ Text "&& arg) -> "] ++ selfTy ++ [ Text " ", LBrace, Text "return praxis::mkBox<" ] ++ selfImplTy ++ [ Text ">(std::in_place_index<", Text name, Text ">, std::move(arg))", Semi, RBrace, Text ")" ]
+
+    mkConstructor :: Name -> [Token] -> [Token]
+    mkConstructor name ty = [ Text "auto mk", Text name, Text " = " ] ++ case tyPats of
+      [] -> mkConstructorBody name ty
+      _  -> [ Text "[]<" ] ++ intercalate [ Text ", " ] (map tyPatDecl tyPats) ++ [ Text ">()", LBrace, Text "return " ] ++ mkConstructorBody name ty ++ [ Semi, RBrace, Semi ]
+
+    constructors = concat [ mkConstructor name ty | (name, ty) <- alts ]
+
+  return $ forwardDecl ++ defn ++ indices ++ constructors
 
   where
     tyPatDecl :: Annotated TyPat -> [Token]
@@ -243,7 +263,7 @@ translateLit lit = return [ Text (translateLit' lit) ] where
     String string -> show string
 
 captureList :: Bool -> [Token]
-captureList nonLocal = [ Text (if nonLocal then "[]" else "[=]") ]
+captureList nonLocal = [ Text (if nonLocal then "[]" else "[&]") ]
 
 lambdaWrap :: Bool -> [Token] -> [Token]
 lambdaWrap nonLocal body = captureList nonLocal ++ [ Text "()", LBrace ] ++ body ++ [ RBrace, Text "()" ]
@@ -679,7 +699,7 @@ using Pair = Box<PairImpl<T1, T2>>;
 template<class T1, class T2>
 auto mkPair(T1&& first, T2&& second) -> Pair<std::decay_t<T1>, std::decay_t<T2>>
 {
-	return mkBox<Pair<std::decay_t<T1>, std::decay_t<T2>>>(std::move(first), std::move(second));
+	return mkBox<PairImpl<std::decay_t<T1>, std::decay_t<T2>>>(std::move(first), std::move(second));
 }
 
 struct Exception : public std::runtime_error

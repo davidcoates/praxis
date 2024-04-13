@@ -34,7 +34,7 @@ foo_0 = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0
 auto foo_0 = [](){
   auto temp_0_ = 1;
   auto x_0 = std::move(temp_0_);
-  return (praxis::Unit{}, [=](){
+  return (praxis::Unit{}, [&](){
     auto temp_1_ = 2;
     auto y_0 = std::move(temp_1_);
     return std::move(add_int)(praxis::mkPair(std::move(x_0), std::move(y_0)));
@@ -147,7 +147,7 @@ error: found contradiction [1:1] Int = Int -> Int and Int = Int
 /* 2:1 */
 auto sign_0 = std::function([](int temp_0_){
   auto n_0 = std::move(temp_0_);
-  return [=](){
+  return [&](){
     if (std::move(lt_int)(praxis::mkPair(std::move(n_0), 0))) {
       return std::move(negate_int)(1);
     }
@@ -204,7 +204,7 @@ rec
 auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<int(int)>> {
   return std::tuple{
     /* 2:1 */
-    std::function([=](int temp_2_){
+    std::function([&](int temp_2_){
       auto [fac_0] = temp_1_(temp_1_);
       if (temp_2_ == 0) {
         return 1;
@@ -303,7 +303,7 @@ enum Color {
 /* 4:1 */
 auto color_to_char_0 = std::function([](Color temp_0_){
   auto color_0 = std::move(temp_0_);
-  return [=](){
+  return [&](){
     auto temp_1_ = std::move(color_0);
     if (temp_1_ == Red) {
       return 'R';
@@ -408,7 +408,7 @@ view_0 : forall ? v_0 a_0 b_0 . ? v_0 ( a_0 , b_0 ) -> ( ? v_0 b_0 , ? v_0 a_0 )
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto view_0 = []<praxis::View v_0, typename a_0, typename b_0>(){
-  return std::function([=](praxis::apply<v_0, praxis::Pair<a_0, b_0>> temp_0_){
+  return std::function([&](praxis::apply<v_0, praxis::Pair<a_0, b_0>> temp_0_){
     auto temp_1_ = temp_0_.first();
     auto temp_2_ = temp_0_.second();
     auto x_0 = std::move(temp_1_);
@@ -448,7 +448,7 @@ swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0]
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto swap_0 = []<typename a_0, typename b_0>(){
-  return std::function([=](praxis::Pair<a_0, b_0> temp_0_){
+  return std::function([&](praxis::Pair<a_0, b_0> temp_0_){
     auto temp_1_ = temp_0_.first();
     auto temp_2_ = temp_0_.second();
     auto a_0 = std::move(temp_1_);
@@ -569,7 +569,7 @@ rec
 auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::function<bool(int)>> {
   return std::tuple{
     /* 2:1 */
-    std::function([=](int temp_2_){
+    std::function([&](int temp_2_){
       auto [is_even_0, is_odd_0] = temp_1_(temp_1_);
       if (temp_2_ == 0) {
         return true;
@@ -579,7 +579,7 @@ auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::fun
       throw praxis::CaseFail("3:13");
     }),
     /* 2:1 */
-    std::function([=](int temp_3_){
+    std::function([&](int temp_3_){
       auto [is_even_0, is_odd_0] = temp_1_(temp_1_);
       if (temp_3_ == 0) {
         return false;
@@ -669,6 +669,7 @@ template<typename a_0>
 using List = praxis::Box<ListImpl<a_0>>;
 template<typename a_0>
 struct ListImpl : std::variant<praxis::Unit, praxis::Pair<a_0, List<a_0>>> {
+  using std::variant<praxis::Unit, praxis::Pair<a_0, List<a_0>>>::variant;
   template<size_t index>
   inline const auto& get() const { return std::get<index>(*this); }
   template<size_t index>
@@ -677,23 +678,23 @@ struct ListImpl : std::variant<praxis::Unit, praxis::Pair<a_0, List<a_0>>> {
 static constexpr size_t Nil = 0;
 static constexpr size_t Cons = 1;
 auto mkNil = []<typename a_0>(){
-  return std::function([](praxis::Unit&& arg){
-    return praxis::mkBox<List>(std::in_place_index<Nil>, std::move(arg));
+  return std::function([](praxis::Unit&& arg) -> List<a_0> {
+    return praxis::mkBox<ListImpl<a_0>>(std::in_place_index<Nil>, std::move(arg));
   });
 };
 auto mkCons = []<typename a_0>(){
-  return std::function([](praxis::Pair<a_0, List<a_0>>&& arg){
-    return praxis::mkBox<List>(std::in_place_index<Cons>, std::move(arg));
+  return std::function([](praxis::Pair<a_0, List<a_0>>&& arg) -> List<a_0> {
+    return praxis::mkBox<ListImpl<a_0>>(std::in_place_index<Cons>, std::move(arg));
   });
 };
 auto temp_0_ = [](auto temp_1_){
   return std::tuple{
     /* 4:1 */
-    [=]<praxis::View v_0, typename a_1, typename b_0>(){
-      return std::function([=](std::function<b_0(praxis::apply<v_0, a_1>)> temp_2_){
+    [&]<praxis::View v_0, typename a_1, typename b_0>(){
+      return std::function([&](std::function<b_0(praxis::apply<v_0, a_1>)> temp_2_){
         auto [map_0] = temp_1_(temp_1_);
         auto f_0 = std::move(temp_2_);
-        return std::function([=](praxis::apply<v_0, List<a_1>> temp_3_){
+        return std::function([&](praxis::apply<v_0, List<a_1>> temp_3_){
           if (temp_3_.index() == Nil) {
             auto temp_4_ = temp_3_.template get<Nil>();
             return mkNil.template operator()<b_0>()(praxis::Unit{});
@@ -717,7 +718,7 @@ auto [map_0] = temp_0_(temp_0_);
 auto temp_8_ = [](auto temp_9_) -> std::tuple<std::function<int(praxis::apply<praxis::View::REF, List<int>>)>> {
   return std::tuple{
     /* 10:1 */
-    std::function([=](praxis::apply<praxis::View::REF, List<int>> temp_10_){
+    std::function([&](praxis::apply<praxis::View::REF, List<int>> temp_10_){
       auto [sum_0] = temp_9_(temp_9_);
       if (temp_10_.index() == Nil) {
         auto temp_11_ = temp_10_.template get<Nil>();
@@ -738,6 +739,16 @@ auto temp_8_ = [](auto temp_9_) -> std::tuple<std::function<int(praxis::apply<pr
 auto [sum_0] = temp_8_(temp_8_);
 |]
 
+  it "compiles" $ compile program `shouldReturn` True
+
+-- FIXME
+{-
+  it "runs" $ compileAndRun program [r|
+do
+  let xs = Cons (1, Cons (2, Cons (3, Nil ())))
+  sum &xs
+|] `shouldReturn` "6"
+-}
 
 
 shadowing = describe "shadowing" $ do

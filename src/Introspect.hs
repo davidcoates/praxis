@@ -167,9 +167,9 @@ instance Term Bind where
 
 instance Term DataCon where
   witness = IDataCon
-  recurseAnnotation _ f (DataConInfo { fullType, argType, retType }) = (\fullType argType retType -> DataConInfo { fullType, argType, retType}) <$> f fullType <*> traverse f argType <*> f retType
+  recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    DataCon n at -> DataCon n <$> traverse f at
+    DataCon n t -> DataCon n <$> f t
 
 instance Term Decl where
   witness = IDecl
@@ -221,7 +221,8 @@ instance Term Pat where
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
     PatAt n a   -> PatAt n <$> f a
-    PatCon n p  -> PatCon n <$> traverse f p
+    PatData n p -> PatData n <$> f p
+    PatEnum n   -> pure (PatEnum n)
     PatHole     -> pure PatHole
     PatLit l    -> pure (PatLit l)
     PatPair a b -> PatPair <$> f a <*> f b

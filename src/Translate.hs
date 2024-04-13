@@ -78,11 +78,11 @@ translateQTyVar (_ :< q) = case q of
 translateView :: Annotated View -> Praxis [Token]
 translateView (_ :< view) = case view of
 
-  ViewValue   -> return [ Text "praxis::View::VALUE" ]
+  ViewValue            -> return [ Text "praxis::View::VALUE" ]
 
-  ViewRef _   -> return [ Text "praxis::View::REF" ]
+  ViewRef _            -> return [ Text "praxis::View::REF" ]
 
-  ViewVar Ref _ -> return [ Text "praxis::View::REF" ]
+  ViewVar Ref _        -> return [ Text "praxis::View::REF" ]
 
   ViewVar RefOrValue n -> return [ Text n ]
 
@@ -371,11 +371,13 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
     pat <- translateTryMatch var' pat onMatch
     return $ [ Text "auto ", Text var', Text " = ", Text ("std::move(" ++ var ++ ")"), Semi ] ++ pat
 
-  PatCon con pat -> do
-    conType <- translateType patTy
+  PatData name pat -> do
     tempVar <- freshTempVar
-    onMatch <- case pat of { Just pat -> translateTryMatch tempVar pat onMatch; Nothing -> return onMatch; }
-    return $ [ Text "if (", Text (var ++ ".index()"), Text " == ", Text con, Text ") ", LBrace, Text "auto ", Text tempVar, Text " = ", Text var, Text ".template get<", Text con, Text ">()", Semi ] ++ onMatch ++ [ RBrace, Newline ]
+    onMatch <- translateTryMatch tempVar pat onMatch
+    return $ [ Text "if (", Text (var ++ ".index()"), Text " == ", Text name, Text ") ", LBrace, Text "auto ", Text tempVar, Text " = ", Text var, Text ".template get<", Text name, Text ">()", Semi ] ++ onMatch ++ [ RBrace, Newline ]
+
+  PatEnum name -> do
+    return $ [ Text "if (", Text var, Text " == ", Text name, Text ") ", LBrace ] ++ onMatch ++ [ RBrace, Newline ]
 
   PatHole -> return onMatch
 

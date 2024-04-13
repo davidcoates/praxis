@@ -279,7 +279,7 @@ fst (x, y) = x
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
 |]
 
-    it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
+    it "does not type check" $ check program `shouldReturn` "2:5 error: 'y_0' is not used"
 
 
   describe "underscore may be unused" $ do
@@ -309,7 +309,7 @@ fst (x, y) = read y in x
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x_0
 |]
 
-    it "does not type checks" $ check program `shouldReturn` "2:14 error: variable 'y_0' is not used"
+    it "does not type checks" $ check program `shouldReturn` "2:14 error: 'y_0' is not used"
 
 
   describe "used read variable" $ do
@@ -848,10 +848,10 @@ readUnsafe = describe "read safety" $ do
 
   let program = trim [r|
 type List a = cases
-  Nil
+  Nil ()
   Cons (a, List a)
 
-x = Cons (1, Cons (2, Cons (3, Nil)))
+x = Cons (1, Cons (2, Cons (3, Nil ())))
 
 y = read x in (1, x)
 
@@ -859,9 +859,9 @@ y = read x in (1, x)
 
   it "parses" $ parse program `shouldReturn` trim [r|
 type List a_0 = cases
-  Nil
+  Nil ( )
   Cons ( a_0 , List a_0 )
-x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ) ) )
+x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
 y_0 = read x_0 in ( 1 , x_0 )
 |]
 

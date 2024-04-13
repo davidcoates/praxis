@@ -154,16 +154,14 @@ generateTyPat (a@(src, _) :< tyPat) = (\(k :< t) -> (src, Just k) :< t) <$> case
     return (phantom (KindPair (view kind tyPat1) (view kind tyPat2)) :< TyPatPack tyPat1 tyPat2)
 
 
-generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
-generateDataCon (a@(src, _) :< DataCon name arg)
-  | Nothing  <- arg = return (a :< DataCon name arg)
-  | Just arg <- arg = do
-      arg <- generate arg
-      require $ newConstraint (view kind arg `KEq` phantom KindType) (DataConType name) src -- TODO should just match kind of data type?
-      return (a :< DataCon name (Just arg))
-
 fun :: Annotated Kind -> Annotated Kind -> Annotated Kind
 fun a b = phantom (KindFun a b)
+
+generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
+generateDataCon (a@(src, _) :< DataCon name arg) = do
+  arg <- generate arg
+  require $ newConstraint (view kind arg `KEq` phantom KindType) (DataConType name) src -- TODO should just match kind of data type?
+  return (a :< DataCon name arg)
 
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
 generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of

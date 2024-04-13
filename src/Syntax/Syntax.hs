@@ -16,6 +16,7 @@ module Syntax.Syntax
   , some
   , optional
   , prefix
+  , prefix'
   ) where
 
 import           Common
@@ -78,10 +79,18 @@ definePrisms ''Either
 
 prefix :: Syntax f => f a -> (Prism d (a, b), f b) -> (Prism d (a, c), f c) -> f d
 prefix a (l, b) (r, c) = Prism f g <$> a <*> (_Left <$> b <|> _Right <$> c) where
-  f (a, Left x)  = construct l (a, x)
-  f (a, Right x) = construct r (a, x)
+  f (a, Left b)  = construct l (a, b)
+  f (a, Right c) = construct r (a, c)
   g d = case (destruct l d, destruct r d) of
     (Just (a, x), Nothing) -> Just (a, Left x)
     (Nothing, Just (a, x)) -> Just (a, Right x)
     (Nothing, Nothing)     -> Nothing
 
+prefix' :: Syntax f => f a -> (Prism d (a, b), f b) -> Prism d a -> f d
+prefix' a (l, b) r = Prism f g <$> a <*> (_Just <$> b <|> _Nothing <$> pure ()) where
+  f (a, Just b)  = construct l (a, b)
+  f (a, Nothing) = construct r a
+  g d = case (destruct l d, destruct r d) of
+    (Just (a, b), Nothing) -> Just (a, Just b)
+    (Nothing, Just a)      -> Just (a, Nothing)
+    (Nothing, Nothing)     -> Nothing

@@ -80,7 +80,7 @@ data Prec = Prec Ordering Op
 data Bind = Bind (Annotated Pat) (Annotated Exp)
   deriving (Eq, Ord)
 
-data DataCon = DataCon Name (Maybe (Annotated Type))
+data DataCon = DataCon Name (Annotated Type)
   deriving (Eq, Ord)
 
 data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
@@ -140,7 +140,8 @@ instance Show Lit where
     String s -> show s
 
 data Pat = PatAt Name (Annotated Pat)
-         | PatCon Name (Maybe (Annotated Pat))
+         | PatData Name (Annotated Pat)
+         | PatEnum Name
          | PatHole
          | PatLit Lit
          | PatPair (Annotated Pat) (Annotated Pat)
@@ -230,7 +231,7 @@ type family Annotation a where
   Annotation Type     = Annotated Kind
   Annotation QTyVar   = Annotated Kind
   Annotation View     = Annotated Kind
-  Annotation DataCon  = DataConInfo
+  Annotation DataCon  = Annotated QType
   Annotation TyProp   = Derivation TyProp
   Annotation KindProp = Derivation KindProp
   Annotation a        = Void
@@ -260,15 +261,7 @@ instance Pretty (Annotated a) => Pretty (Derivation a) where
   pretty (Root r)       = "(" <> pretty r <> ")"
   pretty (Antecedent a) = pretty a
 
-{- | A data constructor C for a type T, either has:
-
-C : forall vs. A -> T vs
-or
-C : forall vs. T vs
-
-Here "A" is the argType, "T vs" is the retType.
--}
-data DataConInfo = DataConInfo { fullType :: Annotated QType, argType :: Maybe (Annotated Type), retType :: Annotated Type }
+data DataConInfo = DataConInfo { fullType :: Annotated QType, argType :: Annotated Type, retType :: Annotated Type }
 
 instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataConInfo where
   pretty (DataConInfo { fullType }) = pretty fullType

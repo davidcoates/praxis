@@ -230,7 +230,7 @@ declData = _DeclData <$> reservedId "type" *> conid <*> optional (annotated tyPa
   _Singleton = Prism (\x -> [x]) (\case { [x] -> Just x; _ -> Nothing }) -- short definition for a single constructor
 
 dataAlt :: Syntax f => f DataCon
-dataAlt = _DataCon <$> conid <*> optional (annotated ty1)
+dataAlt = _DataCon <$> conid <*> annotated ty1
 
 tyPat :: Syntax f => f TyPat
 tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
@@ -250,7 +250,7 @@ bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedOp "=" *> annotated exp <|> mark "binding"
 
 pat :: Syntax f => f Pat
-pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern" where
+pat = prefix' conid (_PatData, annotated pat0) _PatEnum <|> pat0 <|> mark "pattern" where
   pat0 = _PatHole <$> special '_' <|>
          _PatLit <$> litNoString <|> -- TODO allow string literals
          _PatVar <$> varid <|>

@@ -139,19 +139,19 @@ introTy s n t = do
     Just _ -> throwAt s $ "variable " <> quote (pretty n) <> " redeclared"
     _      -> tEnv %= LEnv.intro n t
 
-getType :: Source -> Name -> Praxis (Annotated QType)
-getType s n = do
-  l <- use tEnv
-  case LEnv.lookup n l of
+introConTy :: Source -> Name -> Annotated QType -> Praxis ()
+introConTy s n t = do
+  l <- use cEnv
+  case Env.lookup n l of
+    Just _ -> throwAt s $ "constructor " <> quote (pretty n) <> " redeclared"
+    _      -> cEnv %= Env.intro n t
+
+getConTy :: Source -> Name -> Praxis (Annotated QType)
+getConTy s n = do
+  l <- use cEnv
+  case Env.lookup n l of
     Just t  -> return t
     Nothing -> throwAt s (NotInScope n)
-
-getData :: Source -> Name -> Praxis DataConInfo
-getData s n = do
-  l <- use daEnv
-  case Env.lookup n l of
-    Just v  -> return (view (annotation . just) v)
-    Nothing -> throwAt s $ "data constructor " <> quote (pretty n) <> " is not in scope"
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = save stage $ do
@@ -162,7 +162,7 @@ run term = save stage $ do
   (`ifFlag` debug) $ do
     display (separate "\n\n" (nub . sort $ cs))
     use tEnv >>= display
-    use daEnv >>= display
+    use cEnv >>= display
   return term
 
 generate :: Term a => Annotated a -> Praxis (Annotated a)
@@ -206,36 +206,37 @@ tyPatToQTyVars = extract (embedMonoid f) where
     TyPatViewVar d n -> [ phantom $ QViewVar d n ]
     _                -> []
 
-generateDataCon :: [Annotated QTyVar] -> Annotated Type -> Annotated DataCon -> Praxis (Annotated DataCon)
-generateDataCon qTyVars retType ((src, Nothing) :< DataCon name argType) = do
-  let fullType = phantom $ Forall qTyVars [] $ case argType of -- Type of the constructor -- FIXME constraints???
-        Just argType -> fun argType retType
-        Nothing      -> retType
-      dataCon = ((src, Just (DataConInfo {fullType, argType, retType})) :< DataCon name argType)
-  daEnv %= Env.intro name dataCon
-  return dataCon
-
-
 generateDecl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
 generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   -- TODO Copy constraints needed!
   DeclData name arg alts -> do
+
     -- TODO could be kind annotated to avoid this lookup
     Just k <- kEnv `uses` Env.lookup name
 
-    -- The return type of the constructors
-    let returnTy = case arg of
-          Nothing -> TyCon name `as` k
-          Just arg
-            | KindFun k1 k2 <- view value k -> TyApply (TyCon name `as` k) (patToTy arg) `as` k2
+    let
+      -- The return type of the constructors
+      retTy :: Annotated Type
+      retTy = case arg of
+        Nothing
+          -> TyCon name `as` k
+        Just arg | KindFun k1 k2 <- view value k
+          -> TyApply (TyCon name `as` k) (patToTy arg) `as` k2
 
-        vars = case arg of
-          Nothing  -> []
-          Just arg -> tyPatToQTyVars arg
+      qTyVars = case arg of
+        Nothing  -> []
+        Just arg -> tyPatToQTyVars arg
 
-    alts <- traverse (generateDataCon vars returnTy) alts
+      generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
+      generateDataCon ((src, Nothing) :< DataCon name argTy) = do
+        let qTy = phantom $ Forall qTyVars [] (fun argTy retTy) -- TODO add src?
+        introConTy src name qTy
+        return ((src, Just qTy) :< DataCon name argTy)
+
+    alts <- traverse generateDataCon alts
     return $ DeclData name arg alts
+
 
   op@(DeclOp _ _ _) -> return op
 
@@ -308,8 +309,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     return (fun ty1 ty2 :< Cases alts)
 
   Con name -> do
-    DataConInfo { fullType } <- getData src name
-    (t, specialisation) <- specialiseQType src name fullType
+    qTy <- getConTy src name
+    (t, specialisation) <- specialiseQType src name qTy
     return (t :< Specialise ((src, Just t) :< Con name) specialisation)
 
   Defer exp1 exp2 -> do
@@ -427,22 +428,25 @@ generatePat op pat = snd <$> generatePat' pat where
       require $ newConstraint (Copy t) (MultiAlias name) src
       return (t, wrap t :< PatAt name pat)
 
-    PatCon name pat -> do
-      -- Lookup the data alternative with this name
-      DataConInfo { fullType, argType, retType } <- getData src name
-      when (isJust argType /= isJust pat) $ throwAt src $ "wrong number of arguments applied to data constructor " <> quote (pretty name)
-
-      let Forall boundVars constraints _ = view value fullType
-      (tyRewrite, _) <- specialise src name boundVars constraints
-      let retType' = tyRewrite retType
-
-      case pat of
-        Nothing -> return (retType', wrap retType' :< PatCon name Nothing)
-        Just pat -> do
+    PatData name pat -> do
+      qTy <- getConTy src name
+      let (_ :< Forall vs cs t) = qTy
+      case t of
+        (_ :< TyFun argTy retTy) -> do
+          (tyRewrite, _) <- specialise src name vs cs
+          let (argTy', retTy') = (tyRewrite argTy, tyRewrite retTy)
           (patArgType, pat) <- generatePat' pat
-          let Just argType' = argType
-          require $ newConstraint (patArgType `TEq` tyRewrite argType') (ConPattern name) src
-          return (retType', wrap retType' :< PatCon name (Just pat))
+          require $ newConstraint (patArgType `TEq` argTy') (ConPattern name) src
+          return (retTy', wrap retTy' :< PatData name pat)
+        _ -> throwAt src $ "missing argument in constructor pattern " <> quote (pretty name)
+
+    PatEnum name -> do
+      qTy <- getConTy src name
+      let (_ :< Forall vs cs t) = qTy
+      case t of
+        (_ :< TyFun _ _) -> throwAt src $ "unexpected argument in enum pattern " <> quote (pretty name)
+        _                -> do
+          return (t, t :< PatEnum name)
 
     PatHole -> do
       -- Treat this is a variable for drop analysis

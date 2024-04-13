@@ -10,7 +10,7 @@ module Praxis
 
   , KEnv(..)
   , TEnv(..)
-  , DAEnv(..)
+  , CEnv(..)
   , VEnv(..)
 
   -- | Operators
@@ -48,7 +48,7 @@ module Praxis
   , opContext
   , kEnv
   , tEnv
-  , daEnv
+  , cEnv
   , vEnv
   , rewriteMap
   , tySynonyms
@@ -120,9 +120,9 @@ type VEnv = Env Value
 
 type TEnv = LEnv (Annotated QType)
 
-type KEnv = Env (Annotated Kind)
+type CEnv = Env (Annotated QType)
 
-type DAEnv = Env (Annotated DataCon)
+type KEnv = Env (Annotated Kind)
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix
@@ -147,7 +147,7 @@ data PraxisState = PraxisState
   , _opContext  :: OpContext
   , _kEnv       :: KEnv                -- ^ Kind environment
   , _tEnv       :: TEnv                -- ^ Type environment
-  , _daEnv      :: DAEnv               -- ^ Data alternative environment
+  , _cEnv       :: CEnv                -- ^ Constructor environment
   , _vEnv       :: VEnv                -- ^ Value environment for interpreter
   -- TODO encapsulate within desugarer?
   , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
@@ -181,7 +181,7 @@ emptyState = PraxisState
   , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
   , _kEnv         = Env.empty
   , _tEnv         = LEnv.empty
-  , _daEnv        = Env.empty
+  , _cEnv         = Env.empty
   , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }

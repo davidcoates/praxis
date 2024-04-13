@@ -256,11 +256,11 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
 desugarPat :: Annotated Pat -> Praxis (Annotated Pat)
 desugarPat (a :< pat) = case pat of
 
-  PatCon "True" Nothing  -> pure (a :< PatLit (Bool True))
+  PatEnum "True"  -> pure (a :< PatLit (Bool True))
 
-  PatCon "False" Nothing -> pure (a :< PatLit (Bool False))
+  PatEnum "False" -> pure (a :< PatLit (Bool False))
 
-  _                      -> (a :<) <$> recurseTerm desugar pat
+  _               -> (a :<) <$> recurseTerm desugar pat
 
 
 desugarTy :: Annotated Type -> Praxis (Annotated Type)

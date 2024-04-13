@@ -67,9 +67,8 @@ evalDecl (_ :< decl) = case decl of
   _ -> return ()
 
 
-
 evalExp :: Annotated Exp -> Praxis Value
-evalExp ((src, _) :< exp) = case exp of
+evalExp ((src, Just t) :< exp) = case exp of
 
   Apply f x -> do
     Value.Fun f <- evalExp f
@@ -85,11 +84,9 @@ evalExp ((src, _) :< exp) = case exp of
     return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; evalCase src val alts }
 
   Con name -> do
-    Just dataAlt <- daEnv `uses` Env.lookup name
-    let DataConInfo { argType } = view (annotation . just) dataAlt
-    return $ case argType of
-      Nothing -> Value.Con name Nothing
-      Just _  -> Value.Fun (\val -> return $ Value.Con name (Just val))
+    case t of
+      (_ :< TyFun _ _) -> return $ Value.Fun (\val -> return $ Value.Data name val)
+      _                -> return $ Value.Enum name
 
   Defer exp1 exp2 -> do
     val <- evalExp exp1
@@ -175,10 +172,11 @@ tryMatch val (_ :< pat) = case pat of
   PatAt name pat
     -> (\doMatch -> do { vEnv %= Env.intro name val; doMatch }) <$> tryMatch val pat
 
-  PatCon patCon pat | Value.Con valCon val <- val
-    -> if patCon /= valCon then Nothing else case (pat, val) of
-      (Nothing, Nothing)   -> Just (return ())
-      (Just pat, Just val) -> tryMatch val pat
+  PatData name pat | Value.Data name' val <- val
+    -> if name == name' then tryMatch val pat else Nothing
+
+  PatEnum name | Value.Enum name' <- val
+    -> if name == name' then Just (return ()) else Nothing
 
   PatHole
     -> Just (return ())

@@ -102,9 +102,9 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unt
   inner :: Tokeniser String
   inner = concat <$> while (satisfy (/= '"')) (escape stringEscapeSeqs <|> ((:[]) <$> consume))
 
-reservedIds = ["read", "in", "if", "then", "else", "using", "datatype", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec", "defer"]
-reservedCons = ["Type", "Constraint", "Copy", "Op"]
-reservedOps = [":", "=", "\\", "->", "@", "&", "?"]
+reservedIds = ["read", "in", "if", "then", "else", "using", "datatype", "enum", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec", "defer"]
+reservedCons = ["Type", "Constraint", "Copy"]
+reservedOps = [":", "=", "\\", "->", "@", "&", "?"] -- TODO should more of these be "contextual" ?
 
 -- Possibly qualified, possibly reserved conid / varid / consym / varsym
 stuff :: Tokeniser Token

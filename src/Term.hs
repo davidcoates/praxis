@@ -85,6 +85,7 @@ data DataCon = DataCon Name (Annotated Type)
 
 data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
           | DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
+          | DeclEnum Name [Name]
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
           | DeclRec [Annotated Decl]
           | DeclSig Name (Annotated QType) -- ^ Parsing only

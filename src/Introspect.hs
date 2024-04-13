@@ -175,8 +175,9 @@ instance Term Decl where
   witness = IDecl
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclData n t ts -> DeclData n <$> traverse f t <*> traverse f ts
+    DeclData n t as -> DeclData n <$> traverse f t <*> traverse f as
     DeclDef n ps e  -> DeclDef n <$> traverse f ps <*> f e
+    DeclEnum n as   -> pure (DeclEnum n as)
     DeclOp o d rs   -> DeclOp <$> f o <*> pure d <*> f rs
     DeclRec ds      -> DeclRec <$> traverse f ds
     DeclSig n t     -> DeclSig n <$> f t

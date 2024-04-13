@@ -237,6 +237,11 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
     alts <- traverse generateDataCon alts
     return $ DeclData name arg alts
 
+  DeclEnum name alts -> do
+    Just k <- kEnv `uses` Env.lookup name
+    let qTy = phantom $ Forall [] [] (TyCon name `as` k)
+    mapM_ (\alt -> introConTy src alt qTy) alts
+    return $ DeclEnum name alts
 
   op@(DeclOp _ _ _) -> return op
 

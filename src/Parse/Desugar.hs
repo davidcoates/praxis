@@ -191,6 +191,10 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
         | name == name' -> throwAt src $ "multiple definitions for " <> quote (pretty name)
       decls -> return $ decl:decls
 
+  DeclEnum n ns -> do
+    decls <- desugarDecls decls
+    return (a :< decl : decls)
+
   DeclOp op name rules -> do
 
     op@(_ :< Op parts) <- desugar op

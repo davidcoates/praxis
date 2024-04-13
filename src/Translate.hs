@@ -184,7 +184,6 @@ translateDeclData name tyPat alts = do
       TyPatViewVar Ref _        -> []
 
 
-
 translateDecl :: Bool -> Annotated Decl -> Praxis [Token]
 translateDecl topLevel ((src, _) :< decl) = case decl of
 
@@ -202,6 +201,9 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     return $ [ Crumb src, Text "auto ", Text name, Text " = " ] ++ body ++ [ Semi ]
 
   DeclData name tyPat alts -> translateDeclData name tyPat alts
+
+  DeclEnum name alts -> do
+    return $ [ Text "enum ", Text name, Text " ", LBrace ] ++ intersperse (Text ", ") [ Text alt | alt <- alts ] ++ [ RBrace, Semi ]
 
   where
     templateVars :: Maybe (Annotated QType) -> [Annotated QTyVar]
@@ -270,7 +272,10 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     alts <- translateCase src tempVar alts
     return $ [ Text "std::function(" ] ++ captureList nonLocal ++ [ Text "(" ] ++ tempVarTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ alts ++ [ RBrace, Text ")" ]
 
-  Con name -> return [ Text "mk", Text name ]
+  Con name -> do
+    case expTy of
+      (_ :< TyFun _ _) -> return [ Text "mk", Text name ]
+      _                -> return [ Text name ]
 
   Defer exp1 exp2 -> do
     tempVar <- freshTempVar

@@ -219,7 +219,7 @@ program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) where -- TODO module
 
 decl :: Syntax f => f Decl
-decl = declSyn <|> declData <|> declOp <|> declTerm -- TODO imports
+decl = declSyn <|> declData <|> declEnum <|> declOp <|> declTerm -- TODO imports
 
 declSyn :: Syntax f => f Decl
 declSyn = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
@@ -227,6 +227,10 @@ declSyn = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotat
 declData :: Syntax f => f Decl
 declData = _DeclData <$> reservedId "datatype" *> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where
   alts = _Cons <$> annotated dataAlt <*> many (contextualOp "|" *> annotated dataAlt)
+
+declEnum :: Syntax f => f Decl
+declEnum = _DeclEnum <$> reservedId "enum" *> conid <*> reservedOp "=" *> alts where
+  alts = _Cons <$> conid <*> many (contextualOp "|" *> conid)
 
 dataAlt :: Syntax f => f DataCon
 dataAlt = _DataCon <$> conid <*> annotated ty1

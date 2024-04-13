@@ -179,4 +179,8 @@ generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
       Just arg -> require $ newConstraint (k `KEq` phantom (KindFun (view kind arg) (phantom KindType))) (DataType name) src
     return $ DeclData name arg alts
 
+  DeclEnum name alts -> do
+    introKind src name (phantom KindType)
+    return $ DeclEnum name alts
+
   decl -> recurseTerm generate decl

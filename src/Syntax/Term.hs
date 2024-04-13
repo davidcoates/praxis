@@ -225,9 +225,8 @@ declSyn :: Syntax f => f Decl
 declSyn = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
 
 declData :: Syntax f => f Decl
-declData = _DeclData <$> reservedId "type" *> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where
-  alts = _Singleton <$> annotated dataAlt <|> reservedId "cases" *> block (annotated dataAlt)
-  _Singleton = Prism (\x -> [x]) (\case { [x] -> Just x; _ -> Nothing }) -- short definition for a single constructor
+declData = _DeclData <$> reservedId "datatype" *> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where
+  alts = _Cons <$> annotated dataAlt <*> many (contextualOp "|" *> annotated dataAlt)
 
 dataAlt :: Syntax f => f DataCon
 dataAlt = _DataCon <$> conid <*> annotated ty1

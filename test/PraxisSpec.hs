@@ -424,21 +424,15 @@ copy_0 : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x
 either = describe "polymorphic data type (Either)" $ do
 
   let program = [r|
-type Either [a, b] = cases
-    Left a
-    Right b
+datatype Either [a, b] = Left a | Right b
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type Either [ a_0 , b_0 ] = cases
-  Left a_0
-  Right b_0
+datatype Either [ a_0 , b_0 ] = Left a_0 | Right b_0
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Either [ a_0 , b_0 ] = cases
-  [forall a_0 b_0 . a_0 -> Either [ a_0 , b_0 ]] Left a_0
-  [forall a_0 b_0 . b_0 -> Either [ a_0 , b_0 ]] Right b_0
+datatype Either [ a_0 , b_0 ] = [forall a_0 b_0 . a_0 -> Either [ a_0 , b_0 ]] Left a_0 | [forall a_0 b_0 . b_0 -> Either [ a_0 , b_0 ]] Right b_0
 |]
 
   it "evaluates" $ do
@@ -450,7 +444,7 @@ type Either [ a_0 , b_0 ] = cases
 fun = describe "polymorphic data type (Fun)" $ do
 
   let program = [r|
-type Fun [a, b] = Fun (a -> b)
+datatype Fun [a, b] = Fun (a -> b)
 
 unbox_fun : forall a b. Fun [a, b] -> a -> b
 unbox_fun (Fun f) x = f x
@@ -461,13 +455,13 @@ id_fun () = Fun (\x -> x)
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
+datatype Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
 unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ Fun f_0 -> \ x_0 -> f_0 x_0
 id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ ( ) -> Fun ( \ x_1 -> x_1 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
+datatype Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
 unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
 id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
@@ -555,9 +549,7 @@ auto [is_even_0, is_odd_0] = temp_0_(temp_0_);
 list = describe "quantified type operators (List)" $ do
 
   let program = [r|
-type List a = cases
-  Nil ()
-  Cons (a, List a)
+datatype List a = Nil () | Cons (a, List a)
 
 rec
   map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
@@ -573,9 +565,7 @@ rec
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type List a_0 = cases
-  Nil ( )
-  Cons ( a_0 , List a_0 )
+datatype List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
 rec
   map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ f_0 -> cases
     Nil ( ) -> Nil ( )
@@ -587,9 +577,7 @@ rec
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type List a_0 = cases
-  [forall a_0 . ( ) -> List a_0] Nil ( )
-  [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
+datatype List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
   map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 List a_1 -> List b_0] cases
     [? v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
@@ -639,7 +627,7 @@ auto mkCons = []<typename a_0>(){
 };
 auto temp_0_ = [](auto temp_1_){
   return std::tuple{
-    /* 6:1 */
+    /* 4:1 */
     [=]<praxis::View v_0, typename a_1, typename b_0>(){
       return std::function([=](std::function<b_0(praxis::apply<v_0, a_1>)> temp_2_){
         auto [map_0] = temp_1_(temp_1_);
@@ -657,9 +645,9 @@ auto temp_0_ = [](auto temp_1_){
             auto xs_0 = std::move(temp_7_);
             return mkCons.template operator()<b_0>()(praxis::mkPair(std::move(f_0)(std::move(x_0)), std::move(map_0).template operator()<v_0, a_1, b_0>()(std::move(f_0))(std::move(xs_0))));
           }
-          throw praxis::CaseFail("8:11");
+          throw praxis::CaseFail("6:11");
         });
-        throw praxis::BindFail("8:7");
+        throw praxis::BindFail("6:7");
       });
     }
   };
@@ -667,7 +655,7 @@ auto temp_0_ = [](auto temp_1_){
 auto [map_0] = temp_0_(temp_0_);
 auto temp_8_ = [](auto temp_9_) -> std::tuple<std::function<int(praxis::apply<praxis::View::REF, List<int>>)>> {
   return std::tuple{
-    /* 12:1 */
+    /* 10:1 */
     std::function([=](praxis::apply<praxis::View::REF, List<int>> temp_10_){
       auto [sum_0] = temp_9_(temp_9_);
       if (temp_10_.index() == Nil) {
@@ -682,7 +670,7 @@ auto temp_8_ = [](auto temp_9_) -> std::tuple<std::function<int(praxis::apply<pr
         auto xs_1 = std::move(temp_14_);
         return std::move(add_int)(praxis::mkPair(std::move(x_1), std::move(sum_0)(std::move(xs_1))));
       }
-      throw praxis::CaseFail("14:9");
+      throw praxis::CaseFail("12:9");
     })
   };
 };
@@ -734,28 +722,22 @@ g_0 = \ [Int] x_2 -> [Int] [Int -> Int] f_2 [Int] x_2 where
 boxedReference = describe "boxed references" $ do
 
   let program = trim [r|
-type Box [&v, a] = Box &v a
+datatype Box [&v, a] = Box &v a
 
-type List a = cases
-  Nil ()
-  Cons (a, List a)
+datatype List a = Nil () | Cons (a, List a)
 
 box = Box "x"
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type Box [ & v_0 , a_0 ] = Box & v_0 a_0
-type List a_1 = cases
-  Nil ( )
-  Cons ( a_1 , List a_1 )
+datatype Box [ & v_0 , a_0 ] = Box & v_0 a_0
+datatype List a_1 = Nil ( ) | Cons ( a_1 , List a_1 )
 box_0 = Box "x"
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Box [ & v_0 , a_0 ] = [forall & v_0 a_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
-type List a_1 = cases
-  [forall a_1 . ( ) -> List a_1] Nil ( )
-  [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
+datatype Box [ & v_0 , a_0 ] = [forall & v_0 a_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
+datatype List a_1 = [forall a_1 . ( ) -> List a_1] Nil ( ) | [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
 box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
 |]
 
@@ -785,27 +767,27 @@ viewKinds = describe "view kinds" $ do
   describe "View & is a subkind of View ?" $ do
 
     let program = trim [r|
-type Foo [?v, a] = Foo ?v a
+datatype Foo [?v, a] = Foo ?v a
 
-type Bar [&v, a] = Bar (Foo [&v, a])
+datatype Bar [&v, a] = Bar (Foo [&v, a])
   |]
 
     it "kind checks" $ check program `shouldReturn` trim [r|
-type Foo [ ? v_0 , a_0 ] = [forall ? v_0 a_0 . ? v_0 a_0 -> Foo [ ? v_0 , a_0 ]] Foo ? v_0 a_0
-type Bar [ & v_1 , a_1 ] = [forall & v_1 a_1 . Foo [ & v_1 , a_1 ] -> Bar [ & v_1 , a_1 ]] Bar Foo [ & v_1 , a_1 ]
+datatype Foo [ ? v_0 , a_0 ] = [forall ? v_0 a_0 . ? v_0 a_0 -> Foo [ ? v_0 , a_0 ]] Foo ? v_0 a_0
+datatype Bar [ & v_1 , a_1 ] = [forall & v_1 a_1 . Foo [ & v_1 , a_1 ] -> Bar [ & v_1 , a_1 ]] Bar Foo [ & v_1 , a_1 ]
 |]
 
   describe "View ? is not a subkind of View &" $ do
 
     let program = trim [r|
-type Foo [&v, a] = Foo &v a
+datatype Foo [&v, a] = Foo &v a
 
-type Bar [?v, a] = Bar (Foo [?v, a])
+datatype Bar [?v, a] = Bar (Foo [?v, a])
   |]
 
     it "does not kind check" $ check program `shouldReturn` trim [r|
-error: found contradiction [3:24] View ? ≤ View & and ^k3 ≤ Type
-|-> [3:24] ( View ? , ^k3 ) ≤ ( View & , Type )
+error: found contradiction [3:28] View ? ≤ View & and ^k3 ≤ Type
+|-> [3:28] ( View ? , ^k3 ) ≤ ( View & , Type )
 |-> (type function application)
 |]
 
@@ -837,19 +819,16 @@ fst (a, a) = a
 redeclTyVar = describe "type variarble redeclaration" $ do
 
   let program = trim [r|
-type Foo [a, a] = cases
-    Foo a
+datatype Foo [a, a] = Foo a
 |]
 
-  it "does not parse" $ parse program `shouldReturn` "1:10 error: type variables are not distinct"
+  it "does not parse" $ parse program `shouldReturn` "1:14 error: type variables are not distinct"
 
 
 readUnsafe = describe "read safety" $ do
 
   let program = trim [r|
-type List a = cases
-  Nil ()
-  Cons (a, List a)
+datatype List a = Nil () | Cons (a, List a)
 
 x = Cons (1, Cons (2, Cons (3, Nil ())))
 
@@ -858,14 +837,12 @@ y = read x in (1, x)
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type List a_0 = cases
-  Nil ( )
-  Cons ( a_0 , List a_0 )
+datatype List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
 x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
 y_0 = read x_0 in ( 1 , x_0 )
 |]
 
-  it "does not type check" $ check program `shouldReturn` "error: found contradiction [7:5] 'l0 ref-free ( Int , & 'l0 ^t0 )\n|-> (safe read)"
+  it "does not type check" $ check program `shouldReturn` "error: found contradiction [5:5] 'l0 ref-free ( Int , & 'l0 ^t0 )\n|-> (safe read)"
 
 
 spec :: Spec

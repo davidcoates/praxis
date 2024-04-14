@@ -34,7 +34,6 @@ rewriteTopLevel term = case typeof (view value term) of
 
 rewrite :: Term a => Annotated a -> Praxis (Annotated a)
 rewrite term = ($ term) $ case typeof (view value term) of
-  IProgram -> rewriteProgram
   IType    -> rewriteType
   IView    -> rewriteView
   ITyPat   -> rewriteTyPat
@@ -61,17 +60,17 @@ saveTyVarMap c = do
 isUnique :: Eq a => [a] -> Bool
 isUnique xs = length (nub xs) == length xs
 
-mkVarRewriteMap :: Source -> [Name] -> Praxis (Map Name Name)
-mkVarRewriteMap src varNames = do
+addVarRewrites :: Source -> [Name] -> Praxis ()
+addVarRewrites src varNames = do
   when (not (isUnique varNames)) $ throwAt src "variables are not distinct"
   vars <- series $ [ (\m -> (n, m)) <$> freshVar n | n <- varNames ]
-  return (Map.fromList vars)
+  rewriteMap . varMap %= (Map.fromList vars `Map.union`)
 
-mkTyRewriteMap :: Source -> [Name] -> Praxis (Map Name Name)
-mkTyRewriteMap src tyVarNames = do
+addTyVarRewrites :: Source -> [Name] -> Praxis ()
+addTyVarRewrites src tyVarNames = do
   tyVars <- series $ [ (\m -> (n, m)) <$> freshTyVar n | n <- tyVarNames ]
   when (not (isUnique (map fst tyVars))) $ throwAt src "type variables are not distinct"
-  return (Map.fromList tyVars)
+  rewriteMap . tyVarMap %= (Map.fromList tyVars `Map.union`)
 
 addRewriteFromTyPat :: Annotated TyPat -> Praxis ()
 addRewriteFromTyPat tyPat = do
@@ -80,16 +79,12 @@ addRewriteFromTyPat tyPat = do
         TyPatVar n       -> [n]
         TyPatViewVar _ n -> [n]
         _                -> []
-  m' <- mkTyRewriteMap (view source tyPat) tyVars
-  m <- use (rewriteMap . tyVarMap)
-  rewriteMap . tyVarMap .= (m' `Map.union` m)
+  addTyVarRewrites (view source tyPat) tyVars
 
 addRewriteFromQType :: Annotated QType -> Praxis ()
 addRewriteFromQType ((src, _) :< Forall vs _ _) = do
   let tyVars = [ n | QTyVar n <- map (view value) vs ] ++ [ n | QViewVar _ n <- map (view value) vs ]
-  m' <- mkTyRewriteMap src tyVars
-  m <- use (rewriteMap . tyVarMap)
-  rewriteMap . tyVarMap .= (m' `Map.union` m)
+  addTyVarRewrites src tyVars
 
 addRewriteFromPat :: Annotated Pat -> Praxis ()
 addRewriteFromPat pat = do
@@ -98,9 +93,7 @@ addRewriteFromPat pat = do
         PatVar n  -> [n]
         PatAt n _ -> [n]
         _         -> []
-  m' <- mkVarRewriteMap (view source pat) vars
-  m <- use (rewriteMap . varMap)
-  rewriteMap . varMap .= (m' `Map.union` m)
+  addVarRewrites (view source pat) vars
 
 rewriteTyVar :: Name -> Praxis Name
 rewriteTyVar n = do
@@ -172,7 +165,7 @@ rewriteExp (a :< exp) = (a :<) <$> case exp of
   Read name exp -> Read <$> rewriteVar name <*> rewriteExp exp
 
   Where exp decls -> saveVarMap $ do
-    decls <- rewriteDecls decls
+    decls <- traverse rewriteDecl decls
     exp <- rewriteExp exp
     return $ Where exp decls
 
@@ -197,16 +190,6 @@ rewriteExp (a :< exp) = (a :<) <$> case exp of
   _ -> recurseTerm rewrite exp
 
 
-rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
-rewriteDecl (a :< decl) = (a :<) <$> case decl of
-
-  DeclVar name sig exp -> DeclVar <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
-
-  DeclOp op name opRules -> (\name -> DeclOp op name opRules) <$> rewriteVar name
-
-  _ -> recurseTerm rewrite decl
-
-
 rewritePat :: Annotated Pat -> Praxis (Annotated Pat)
 rewritePat (a :< pat) = (a :<) <$> case pat of
 
@@ -217,55 +200,35 @@ rewritePat (a :< pat) = (a :<) <$> case pat of
   _         -> recurseTerm rewrite pat
 
 
-rewriteProgram :: Annotated Program -> Praxis (Annotated Program)
-rewriteProgram (a :< Program decls) = do
-  decls <- rewriteDecls decls
-  return (a :< Program decls)
-
-declVarNames :: Annotated Decl -> [Name]
-declVarNames decl = case view value decl of
-
-  DeclVar name _ _ -> [name]
-
-  DeclRec decls    -> concatMap declVarNames decls
-
-  _                -> []
-
-
-rewriteDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
-rewriteDecls decls = do
-  let names = concatMap declVarNames decls
-  m' <- mkVarRewriteMap (view source (head decls)) names
-  m <- use (rewriteMap . varMap)
-  rewriteMap . varMap .= (m' `Map.union` m)
-  decls <- rewriteDecls' decls
-  return decls
-
-rewriteDecls' :: [Annotated Decl] -> Praxis [Annotated Decl]
-rewriteDecls' []             = pure []
-rewriteDecls' (decl : decls) = case view value decl of
+rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
+rewriteDecl ((src, a) :< decl) = ((src, a) :<) <$> case decl of
 
   DeclVar name sig exp -> do
-    decl <- case sig of
-      Nothing  -> rewriteDecl decl
-      Just sig -> saveTyVarMap (addRewriteFromQType sig >> rewriteDecl decl)
-    decls <- rewriteDecls' decls
-    return (decl : decls)
+    name' <- freshVar name
+    let rewriteBody = (,) <$> traverse rewrite sig <*> rewriteExp exp
+    (sig, exp) <- case sig of
+      Nothing  -> rewriteBody
+      Just sig -> saveTyVarMap (addRewriteFromQType sig >> rewriteBody)
+    rewriteMap . varMap %= (Map.insert name name')
+    return (DeclVar name' sig exp)
 
-  DeclData name tyPat alts -> do
-    decl <- case tyPat of
-      Nothing    -> rewriteDecl decl
-      Just tyPat -> saveTyVarMap (addRewriteFromTyPat tyPat >> rewriteDecl decl)
-    decls <- rewriteDecls' decls
-    return (decl : decls)
+  DeclData name tyPat alts -> case tyPat of
+    Nothing    -> recurseTerm rewrite decl
+    Just tyPat -> saveTyVarMap (addRewriteFromTyPat tyPat >> recurseTerm rewrite decl)
 
-  DeclRec recDecls -> do
-    recDecls <- rewriteDecls' recDecls
-    let decl' = (view tag decl) :< DeclRec recDecls
-    decls <- rewriteDecls' decls
-    return (decl' : decls)
+  DeclEnum name alts -> return $ DeclEnum name alts
 
-  _ -> do
-    decl <- rewriteDecl decl
-    decls <- rewriteDecls' decls
-    return (decl : decls)
+  DeclRec decls -> do
+    addVarRewrites src (map (\(_ :< DeclVar name _ _) -> name) decls)
+    decls <- traverse (value rewriteDeclVar) decls
+    return (DeclRec decls)
+    where
+      rewriteDeclVar :: Decl -> Praxis Decl
+      rewriteDeclVar decl@(DeclVar name sig exp) = case sig of
+        Nothing  -> rewriteDeclVar' decl
+        Just sig -> saveTyVarMap (addRewriteFromQType sig >> rewriteDeclVar' decl)
+      rewriteDeclVar' :: Decl -> Praxis Decl
+      rewriteDeclVar' (DeclVar name sig exp) = DeclVar <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
+
+  DeclOp op name opRules -> (\name -> DeclOp op name opRules) <$> rewriteVar name
+

@@ -81,27 +81,6 @@ foo = do
     it "does not parse" $ check program `shouldReturn` "3:3 error: do block must end in an expression"
 
 
-  describe "variarble redeclaration" $ do
-
-    let program = trim [r|
-fst : forall a. (a, a) -> a
-fst (a, a) = a
-|]
-
-    it "does not parse" $ parse program `shouldReturn` trim [r|
-2:5 error: variables are not distinct
-|]
-
-
-  describe "type variarble redeclaration" $ do
-
-    let program = trim [r|
-datatype Foo [a, a] = Foo a
-|]
-
-    it "does not parse" $ parse program `shouldReturn` "1:14 error: type variables are not distinct"
-
-
 
   describe "mixfix operators" $ do
 

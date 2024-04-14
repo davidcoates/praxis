@@ -155,7 +155,7 @@ translateType (_ :< t) = case t of
   TyPair t1 t2 -> do
     t1 <- translateType t1
     t2 <- translateType t2
-    return $ "praxis::Pair<" <> t1 <> ", " <> t2 <> ">"
+    return $ "std::pair<" <> t1 <> ", " <> t2 <> ">"
 
   TyUnit -> return "std::monostate"
 
@@ -358,7 +358,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
   Pair exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
     exp2 <- translateExp nonLocal exp2
-    return $ "praxis::mkPair(" <> exp1 <> ", " <> exp2 <> ")"
+    return $ "std::make_pair(" <> exp1 <> ", " <> exp2 <> ")"
 
   Seq exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
@@ -442,8 +442,8 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
     pat2 <- translateTryMatch var2 pat2 onMatch
     onMatch <- translateTryMatch var1 pat1 pat2
     return $
-      "auto " <> Text var1 <> " = " <> Text var <> ".first()" <> Semi <>
-      "auto " <> Text var2 <> " = " <> Text var <> ".second()" <> Semi <>
+      "auto " <> Text var1 <> " = praxis::first(" <> Text var <> ")" <> Semi <>
+      "auto " <> Text var2 <> " = praxis::second(" <> Text var <> ")" <> Semi <>
       onMatch
 
   PatUnit -> return onMatch
@@ -542,26 +542,6 @@ struct Boxed : public std::unique_ptr<T>
   {
   }
 
-  inline auto&& first()
-  {
-    return static_cast<std::unique_ptr<T>*>(this)->get()->first();
-  }
-
-  inline auto&& second()
-  {
-    return static_cast<std::unique_ptr<T>*>(this)->get()->second();
-  }
-
-  inline const auto& first() const
-  {
-    return static_cast<const std::unique_ptr<T>*>(this)->get()->first();
-  }
-
-  inline const auto& second() const
-  {
-    return static_cast<const std::unique_ptr<T>*>(this)->get()->second();
-  }
-
   template<size_t index>
   inline auto&& get()
   {
@@ -615,7 +595,7 @@ struct Apply<View::VALUE, T>
 template<typename T>
 struct Apply<View::REF, T>
 {
-  using Type = typename std::conditional<can_copy<T>, T, Ref<T>>::type;
+  using Type = typename std::conditional<can_copy<T>, const T&, Ref<T>>::type;
 };
 
 template<>
@@ -645,16 +625,6 @@ struct Ref
     : data(data)
   {}
 
-  inline auto first() const
-  {
-    return ref(data->first());
-  }
-
-  inline auto second() const
-  {
-    return ref(data->second());
-  }
-
   template<size_t index>
   inline auto get() const
   {
@@ -669,6 +639,42 @@ struct Ref
   const T* data;
 };
 
+template<typename T1, typename T2>
+inline auto first(const std::pair<T1, T2>& pair) -> const T1&
+{
+  return pair.first;
+}
+
+template<typename T1, typename T2>
+inline auto first(std::pair<T1, T2>&& pair) -> T1&&
+{
+  return std::move(pair.first);
+}
+
+template<typename T1, typename T2>
+inline auto first(Ref<std::pair<T1, T2>> pair) -> apply<View::REF, T1>
+{
+  return ref(pair.data->first);
+}
+
+template<typename T1, typename T2>
+inline auto second(const std::pair<T1, T2>& pair) -> const T2&
+{
+  return pair.second;
+}
+
+template<typename T1, typename T2>
+inline auto second(std::pair<T1, T2>&& pair) -> T2&&
+{
+  return std::move(pair.second);
+}
+
+template<typename T1, typename T2>
+inline auto second(Ref<std::pair<T1, T2>> pair) -> apply<View::REF, T2>
+{
+  return ref(pair.data->second);
+}
+
 template<typename T>
 struct Copy<Ref<T>>
 {
@@ -681,47 +687,21 @@ struct Copy<std::monostate>
   static constexpr bool value = true;
 };
 
-template<typename T1, typename T2>
-struct PairImpl
+std::ostream& operator<<(std::ostream& ostream, const std::monostate&)
 {
-  using Tag = void;
-
-  template<typename S1, typename S2>
-  PairImpl(S1&& first, S2&& second)
-    : first_(std::forward<S1>(first))
-    , second_(std::forward<S2>(second))
-  {}
-
-  inline T1&& first() { return std::move(first_); }
-  inline const T1& first() const { return first_; }
-
-  inline T2&& second() { return std::move(second_); }
-  inline const T2& second() const { return second_; }
-
-  friend std::ostream& operator<< (std::ostream& ostream, const PairImpl& pair)
-  {
-    ostream << "(" << pair.first_ << ", " << pair.second_ << ")";
-    return ostream;
-  }
-
-private:
-  T1 first_;
-  T2 second_;
-};
+  ostream << "()";
+}
 
 template<typename T1, typename T2>
-struct Copy<PairImpl<T1, T2>>
+struct Copy<std::pair<T1, T2>>
 {
   static constexpr bool value = can_copy<T1> && can_copy<T2>;
 };
 
 template<typename T1, typename T2>
-using Pair = Box<PairImpl<T1, T2>>;
-
-template<class T1, class T2>
-auto mkPair(T1&& first, T2&& second) -> Pair<std::decay_t<T1>, std::decay_t<T2>>
+std::ostream& operator<<(std::ostream& ostream, const std::pair<T1, T2>& pair)
 {
-	return mkBox<PairImpl<std::decay_t<T1>, std::decay_t<T2>>>(std::move(first), std::move(second));
+  ostream << "(" << pair.first << ", " << pair.second << ")";
 }
 
 struct Exception : public std::runtime_error
@@ -746,7 +726,7 @@ struct SwitchFail : public Exception
 
 } // namespace praxis
 
-#define BINARY_OP(name, ret_type, lhs_type, rhs_type, op) ret_type name(praxis::Pair<lhs_type, rhs_type> args) { return args.first() op args.second(); }
+#define BINARY_OP(name, ret_type, lhs_type, rhs_type, op) ret_type name(std::pair<lhs_type, rhs_type> args) { return args.first op args.second; }
 #define UNARY_OP(name, ret_type, arg_type, op) ret_type name(arg_type arg) { return op arg; }
 
 BINARY_OP(add_int, int, int, int, +);

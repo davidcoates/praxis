@@ -37,7 +37,7 @@ auto foo_0 = [](){
   return (std::monostate{}, [&](){
     auto temp_1_ = 2;
     auto y_0 = std::move(temp_1_);
-    return std::move(add_int)(praxis::mkPair(std::move(x_0), std::move(y_0)));
+    return std::move(add_int)(std::make_pair(std::move(x_0), std::move(y_0)));
     throw praxis::BindFail("5:7");
   }());
   throw praxis::BindFail("3:7");
@@ -63,7 +63,7 @@ x_0 = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-auto x_0 = praxis::mkPair(1, praxis::mkPair(true, "abc"));
+auto x_0 = std::make_pair(1, std::make_pair(true, "abc"));
 |]
 
   it "compiles" $ compile program `shouldReturn` True
@@ -89,12 +89,12 @@ min_0 = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int (
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-auto min_0 = std::function([](praxis::Pair<int, int> temp_0_){
-  auto temp_1_ = temp_0_.first();
-  auto temp_2_ = temp_0_.second();
+auto min_0 = std::function([](std::pair<int, int> temp_0_){
+  auto temp_1_ = praxis::first(temp_0_);
+  auto temp_2_ = praxis::second(temp_0_);
   auto x_0 = std::move(temp_1_);
   auto y_0 = std::move(temp_2_);
-  return (std::move(lt_int)(praxis::mkPair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
+  return (std::move(lt_int)(std::make_pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
   throw praxis::BindFail("1:5");
 });
 |]
@@ -148,13 +148,13 @@ error: found contradiction [1:1] Int = Int -> Int and Int = Int
 auto sign_0 = std::function([](int temp_0_){
   auto n_0 = std::move(temp_0_);
   return [&](){
-    if (std::move(lt_int)(praxis::mkPair(std::move(n_0), 0))) {
+    if (std::move(lt_int)(std::make_pair(std::move(n_0), 0))) {
       return std::move(negate_int)(1);
     }
-    if (std::move(eq_int)(praxis::mkPair(std::move(n_0), 0))) {
+    if (std::move(eq_int)(std::make_pair(std::move(n_0), 0))) {
       return 0;
     }
-    if (std::move(gt_int)(praxis::mkPair(std::move(n_0), 0))) {
+    if (std::move(gt_int)(std::make_pair(std::move(n_0), 0))) {
       return std::move(unary_plus_int)(1);
     }
     throw praxis::SwitchFail("3:10");
@@ -210,7 +210,7 @@ auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<int(int)>> {
         return 1;
       }
       auto n_0 = std::move(temp_2_);
-      return std::move(multiply_int)(praxis::mkPair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(praxis::mkPair(std::move(n_0), 1)))));
+      return std::move(multiply_int)(std::make_pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(std::make_pair(std::move(n_0), 1)))));
       throw praxis::CaseFail("3:9");
     })
   };
@@ -408,12 +408,12 @@ view_0 : forall ? v_0 a_0 b_0 . ? v_0 ( a_0 , b_0 ) -> ( ? v_0 b_0 , ? v_0 a_0 )
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto view_0 = []<praxis::View v_0, typename a_0, typename b_0>(){
-  return std::function([&](praxis::apply<v_0, praxis::Pair<a_0, b_0>> temp_0_){
-    auto temp_1_ = temp_0_.first();
-    auto temp_2_ = temp_0_.second();
+  return std::function([&](praxis::apply<v_0, std::pair<a_0, b_0>> temp_0_){
+    auto temp_1_ = praxis::first(temp_0_);
+    auto temp_2_ = praxis::second(temp_0_);
     auto x_0 = std::move(temp_1_);
     auto y_0 = std::move(temp_2_);
-    return praxis::mkPair(std::move(y_0), std::move(x_0));
+    return std::make_pair(std::move(y_0), std::move(x_0));
     throw praxis::BindFail("3:6");
   });
 };
@@ -448,12 +448,12 @@ swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0]
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto swap_0 = []<typename a_0, typename b_0>(){
-  return std::function([&](praxis::Pair<a_0, b_0> temp_0_){
-    auto temp_1_ = temp_0_.first();
-    auto temp_2_ = temp_0_.second();
+  return std::function([&](std::pair<a_0, b_0> temp_0_){
+    auto temp_1_ = praxis::first(temp_0_);
+    auto temp_2_ = praxis::second(temp_0_);
     auto a_0 = std::move(temp_1_);
     auto b_0 = std::move(temp_2_);
-    return praxis::mkPair(std::move(b_0), std::move(a_0));
+    return std::make_pair(std::move(b_0), std::move(a_0));
     throw praxis::BindFail("3:6");
   });
 };
@@ -575,7 +575,7 @@ auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::fun
         return true;
       }
       auto n_0 = std::move(temp_2_);
-      return std::move(is_odd_0)(std::move(subtract_int)(praxis::mkPair(std::move(n_0), 1)));
+      return std::move(is_odd_0)(std::move(subtract_int)(std::make_pair(std::move(n_0), 1)));
       throw praxis::CaseFail("3:13");
     }),
     /* 2:1 */
@@ -585,7 +585,7 @@ auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::fun
         return false;
       }
       auto n_1 = std::move(temp_3_);
-      return std::move(is_even_0)(std::move(subtract_int)(praxis::mkPair(std::move(n_1), 1)));
+      return std::move(is_even_0)(std::move(subtract_int)(std::make_pair(std::move(n_1), 1)));
       throw praxis::CaseFail("7:12");
     })
   };
@@ -668,8 +668,8 @@ struct ListImpl;
 template<typename a_0>
 using List = praxis::Box<ListImpl<a_0>>;
 template<typename a_0>
-struct ListImpl : std::variant<std::monostate, praxis::Pair<a_0, List<a_0>>> {
-  using std::variant<std::monostate, praxis::Pair<a_0, List<a_0>>>::variant;
+struct ListImpl : std::variant<std::monostate, std::pair<a_0, List<a_0>>> {
+  using std::variant<std::monostate, std::pair<a_0, List<a_0>>>::variant;
   template<size_t index>
   inline const auto& get() const { return std::get<index>(*this); }
   template<size_t index>
@@ -683,7 +683,7 @@ auto mkNil = []<typename a_0>(){
   });
 };
 auto mkCons = []<typename a_0>(){
-  return std::function([](praxis::Pair<a_0, List<a_0>>&& arg) -> List<a_0> {
+  return std::function([](std::pair<a_0, List<a_0>>&& arg) -> List<a_0> {
     return praxis::mkBox<ListImpl<a_0>>(std::in_place_index<Cons>, std::move(arg));
   });
 };
@@ -701,11 +701,11 @@ auto temp_0_ = [](auto temp_1_){
           }
           if (temp_3_.index() == Cons) {
             auto temp_5_ = temp_3_.template get<Cons>();
-            auto temp_6_ = temp_5_.first();
-            auto temp_7_ = temp_5_.second();
+            auto temp_6_ = praxis::first(temp_5_);
+            auto temp_7_ = praxis::second(temp_5_);
             auto x_0 = std::move(temp_6_);
             auto xs_0 = std::move(temp_7_);
-            return mkCons.template operator()<b_0>()(praxis::mkPair(std::move(f_0)(std::move(x_0)), std::move(map_0).template operator()<v_0, a_1, b_0>()(std::move(f_0))(std::move(xs_0))));
+            return mkCons.template operator()<b_0>()(std::make_pair(std::move(f_0)(std::move(x_0)), std::move(map_0).template operator()<v_0, a_1, b_0>()(std::move(f_0))(std::move(xs_0))));
           }
           throw praxis::CaseFail("6:11");
         });
@@ -726,11 +726,11 @@ auto temp_8_ = [](auto temp_9_) -> std::tuple<std::function<int(praxis::apply<pr
       }
       if (temp_10_.index() == Cons) {
         auto temp_12_ = temp_10_.template get<Cons>();
-        auto temp_13_ = temp_12_.first();
-        auto temp_14_ = temp_12_.second();
+        auto temp_13_ = praxis::first(temp_12_);
+        auto temp_14_ = praxis::second(temp_12_);
         auto x_1 = std::move(temp_13_);
         auto xs_1 = std::move(temp_14_);
-        return std::move(add_int)(praxis::mkPair(std::move(x_1), std::move(sum_0)(std::move(xs_1))));
+        return std::move(add_int)(std::make_pair(std::move(x_1), std::move(sum_0)(std::move(xs_1))));
       }
       throw praxis::CaseFail("12:9");
     })

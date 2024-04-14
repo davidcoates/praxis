@@ -34,7 +34,7 @@ foo_0 = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0
 auto foo_0 = [](){
   auto temp_0_ = 1;
   auto x_0 = std::move(temp_0_);
-  return (praxis::Unit{}, [&](){
+  return (std::monostate{}, [&](){
     auto temp_1_ = 2;
     auto y_0 = std::move(temp_1_);
     return std::move(add_int)(praxis::mkPair(std::move(x_0), std::move(y_0)));
@@ -668,8 +668,8 @@ struct ListImpl;
 template<typename a_0>
 using List = praxis::Box<ListImpl<a_0>>;
 template<typename a_0>
-struct ListImpl : std::variant<praxis::Unit, praxis::Pair<a_0, List<a_0>>> {
-  using std::variant<praxis::Unit, praxis::Pair<a_0, List<a_0>>>::variant;
+struct ListImpl : std::variant<std::monostate, praxis::Pair<a_0, List<a_0>>> {
+  using std::variant<std::monostate, praxis::Pair<a_0, List<a_0>>>::variant;
   template<size_t index>
   inline const auto& get() const { return std::get<index>(*this); }
   template<size_t index>
@@ -678,7 +678,7 @@ struct ListImpl : std::variant<praxis::Unit, praxis::Pair<a_0, List<a_0>>> {
 static constexpr size_t Nil = 0;
 static constexpr size_t Cons = 1;
 auto mkNil = []<typename a_0>(){
-  return std::function([](praxis::Unit&& arg) -> List<a_0> {
+  return std::function([](std::monostate&& arg) -> List<a_0> {
     return praxis::mkBox<ListImpl<a_0>>(std::in_place_index<Nil>, std::move(arg));
   });
 };
@@ -697,7 +697,7 @@ auto temp_0_ = [](auto temp_1_){
         return std::function([&](praxis::apply<v_0, List<a_1>> temp_3_){
           if (temp_3_.index() == Nil) {
             auto temp_4_ = temp_3_.template get<Nil>();
-            return mkNil.template operator()<b_0>()(praxis::Unit{});
+            return mkNil.template operator()<b_0>()(std::monostate{});
           }
           if (temp_3_.index() == Cons) {
             auto temp_5_ = temp_3_.template get<Cons>();

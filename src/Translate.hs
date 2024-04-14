@@ -157,7 +157,7 @@ translateType (_ :< t) = case t of
     t2 <- translateType t2
     return $ "praxis::Pair<" <> t1 <> ", " <> t2 <> ">"
 
-  TyUnit -> return "praxis::Unit"
+  TyUnit -> return "std::monostate"
 
   TyVar n -> return (Text n)
 
@@ -379,7 +379,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     alts <- translateSwitch src alts
     return $ lambdaWrap nonLocal alts
 
-  Unit -> return "praxis::Unit{}"
+  Unit -> return "std::monostate{}"
 
   Var var -> return $ "std::move(" <> Text var <> ")"
 
@@ -675,12 +675,8 @@ struct Copy<Ref<T>>
   static constexpr bool value = true;
 };
 
-struct Unit
-{
-};
-
 template<>
-struct Copy<Unit>
+struct Copy<std::monostate>
 {
   static constexpr bool value = true;
 };
@@ -803,12 +799,12 @@ std::function<void(const char*)> put_str_ln = [](auto x)
 };
 */
 
-auto print = []<typename T>() -> std::function<praxis::Unit(praxis::apply<praxis::View::REF, T>)>
+auto print = []<typename T>() -> std::function<std::monostate(praxis::apply<praxis::View::REF, T>)>
 {
-  return [=](T t) -> praxis::Unit
+  return [=](T t) -> std::monostate
   {
     std::cout << t << std::endl;
-    return praxis::Unit{};
+    return std::monostate{};
   };
 };
 

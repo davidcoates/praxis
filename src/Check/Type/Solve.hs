@@ -149,13 +149,13 @@ solveTy = (solveFromAxioms <|>) $ \c -> case c of
             if all (\v -> case view value v of { ViewUni RefOrValue _ -> True; _ -> False }) vs
             then mapM (\(_ :< ViewUni _ n) -> n `isOp` ViewValue) vs >> solved
             else contradiction
-          -- Note: RefOrValue < Ref
-          ([_ :< ViewUni RefOrValue n], [_ :< op])             -> n `isOp` op
-          ([_ :< ViewUni Ref n], [_ :< ViewValue])             -> contradiction
-          ([_ :< ViewUni Ref n], [_ :< ViewVar RefOrValue _])  -> contradiction
-          ([_ :< ViewUni Ref n], [_ :< op@(ViewVar Ref _)]) -> n `isOp` op
-          ([_ :< ViewUni Ref n], [_ :< op@(ViewRef _)])     -> n `isOp` op
-          ([_ :< ViewUni Ref n], [_ :< op@(ViewUni Ref m)]) -> n `isOp` op
+          -- TODO do we need occurs checks here?
+          ([_ :< op@(ViewUni _ _)], [_ :< ViewUni _ n])       -> n `isOp` op -- Note: Ref < RefOrValue (i.e. restrain the more general one)
+          ([_ :< ViewUni RefOrValue n], [_ :< op])            -> n `isOp` op
+          ([_ :< ViewUni Ref n], [_ :< ViewValue])            -> contradiction
+          ([_ :< ViewUni Ref n], [_ :< ViewVar RefOrValue _]) -> contradiction
+          ([_ :< ViewUni Ref n], [_ :< op@(ViewVar Ref _)])   -> n `isOp` op
+          ([_ :< ViewUni Ref n], [_ :< op@(ViewRef _)])       -> n `isOp` op
           _ -> defer
       _ -> defer
 

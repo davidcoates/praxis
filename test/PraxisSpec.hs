@@ -34,10 +34,10 @@ foo_0 = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0
 auto foo_0 = [](){
   auto temp_0_ = 1;
   auto x_0 = std::move(temp_0_);
-  return (praxis::Unit{}, [=](){
+  return (std::monostate{}, [&](){
     auto temp_1_ = 2;
     auto y_0 = std::move(temp_1_);
-    return std::move(add_int)(praxis::Pair(std::move(x_0), std::move(y_0)));
+    return std::move(add_int)(std::make_pair(std::move(x_0), std::move(y_0)));
     throw praxis::BindFail("5:7");
   }());
   throw praxis::BindFail("3:7");
@@ -63,7 +63,7 @@ x_0 = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-auto x_0 = praxis::Pair(1, praxis::Pair(true, "abc"));
+auto x_0 = std::make_pair(1, std::make_pair(true, "abc"));
 |]
 
   it "compiles" $ compile program `shouldReturn` True
@@ -89,12 +89,12 @@ min_0 = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int (
 
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-auto min_0 = std::function([](praxis::Pair<int, int> temp_0_){
-  auto temp_1_ = temp_0_.first();
-  auto temp_2_ = temp_0_.second();
+auto min_0 = std::function([](std::pair<int, int> temp_0_){
+  auto temp_1_ = praxis::first(temp_0_);
+  auto temp_2_ = praxis::second(temp_0_);
   auto x_0 = std::move(temp_1_);
   auto y_0 = std::move(temp_2_);
-  return (std::move(lt_int)(praxis::Pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
+  return (std::move(lt_int)(std::make_pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
   throw praxis::BindFail("1:5");
 });
 |]
@@ -137,9 +137,9 @@ sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
     interpret program "sign 10"   `shouldReturn` "1"
     interpret program "sign (-5)" `shouldReturn` "-1"
     interpret program "sign -5"   `shouldReturn` trim [r|
-error: found contradiction [1:1] Int ~ Int -> Int ∧ Int ~ Int
-|-> [1:1] ( Int , Int ) ~ ( Int -> Int , Int ) ∧ Int ~ ^t6
-|-> [1:1] ( Int , Int ) -> Int ~ ( Int -> Int , Int ) -> ^t6
+error: found contradiction [1:1] Int = Int -> Int and Int = Int
+|-> [1:1] ( Int , Int ) = ( Int -> Int , Int ) and Int = ^t6
+|-> [1:1] ( Int , Int ) -> Int = ( Int -> Int , Int ) -> ^t6
 |-> (function application)
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
@@ -147,14 +147,14 @@ error: found contradiction [1:1] Int ~ Int -> Int ∧ Int ~ Int
 /* 2:1 */
 auto sign_0 = std::function([](int temp_0_){
   auto n_0 = std::move(temp_0_);
-  return [=](){
-    if (std::move(lt_int)(praxis::Pair(std::move(n_0), 0))) {
+  return [&](){
+    if (std::move(lt_int)(std::make_pair(std::move(n_0), 0))) {
       return std::move(negate_int)(1);
     }
-    if (std::move(eq_int)(praxis::Pair(std::move(n_0), 0))) {
+    if (std::move(eq_int)(std::make_pair(std::move(n_0), 0))) {
       return 0;
     }
-    if (std::move(gt_int)(praxis::Pair(std::move(n_0), 0))) {
+    if (std::move(gt_int)(std::make_pair(std::move(n_0), 0))) {
       return std::move(unary_plus_int)(1);
     }
     throw praxis::SwitchFail("3:10");
@@ -204,13 +204,13 @@ rec
 auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<int(int)>> {
   return std::tuple{
     /* 2:1 */
-    std::function([=](int temp_2_){
+    std::function([&](int temp_2_){
       auto [fac_0] = temp_1_(temp_1_);
       if (temp_2_ == 0) {
         return 1;
       }
       auto n_0 = std::move(temp_2_);
-      return std::move(multiply_int)(praxis::Pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(praxis::Pair(std::move(n_0), 1)))));
+      return std::move(multiply_int)(std::make_pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(std::make_pair(std::move(n_0), 1)))));
       throw praxis::CaseFail("3:9");
     })
   };
@@ -266,6 +266,67 @@ operator ( _ <?> _ <:> _ ) = ifthenelse_0 where
 
 
 
+enum = describe "enum" $ do
+
+  let program = [r|
+enum Color = Red | Green | Blue
+
+color_to_char color = case color of
+  Red   -> 'R'
+  Green -> 'G'
+  Blue  -> 'B'
+|]
+
+  it "parses" $ parse program `shouldReturn` trim [r|
+enum Color = Red | Green | Blue
+color_to_char_0 = \ color_0 -> case color_0 of
+  Red -> 'R'
+  Green -> 'G'
+  Blue -> 'B'
+|]
+
+  it "type checks" $ check program `shouldReturn` trim [r|
+enum Color = Red | Green | Blue
+color_to_char_0 = \ [Color] color_0 -> [Char] case [Color] color_0 of
+  [Color] Red -> [Char] 'R'
+  [Color] Green -> [Char] 'G'
+  [Color] Blue -> [Char] 'B'
+|]
+
+  it "evaluates" $ do
+    interpret program "color_to_char Blue" `shouldReturn` "'B'"
+
+  it "translates" $ translate program `shouldReturn` trim [r|
+enum Color {
+  Red, Green, Blue
+};
+/* 4:1 */
+auto color_to_char_0 = std::function([](Color temp_0_){
+  auto color_0 = std::move(temp_0_);
+  return [&](){
+    auto temp_1_ = std::move(color_0);
+    if (temp_1_ == Red) {
+      return 'R';
+    }
+    if (temp_1_ == Green) {
+      return 'G';
+    }
+    if (temp_1_ == Blue) {
+      return 'B';
+    }
+    throw praxis::CaseFail("4:23");
+  }();
+  throw praxis::BindFail("4:15");
+});
+|]
+
+  it "compiles" $ compile program `shouldReturn` True
+
+  it "runs" $ do
+    compileAndRun program "color_to_char Blue" `shouldReturn` "B"
+
+
+
 unusedVar = describe "unused variables" $ do
 
   describe "unused variable" $ do
@@ -279,7 +340,7 @@ fst (x, y) = x
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
 |]
 
-    it "does not type check" $ check program `shouldReturn` "2:5 error: variable 'y_0' is not used"
+    it "does not type check" $ check program `shouldReturn` "2:5 error: 'y_0' is not used"
 
 
   describe "underscore may be unused" $ do
@@ -309,7 +370,7 @@ fst (x, y) = read y in x
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x_0
 |]
 
-    it "does not type checks" $ check program `shouldReturn` "2:14 error: variable 'y_0' is not used"
+    it "does not type checks" $ check program `shouldReturn` "2:14 error: 'y_0' is not used"
 
 
   describe "used read variable" $ do
@@ -347,12 +408,12 @@ view_0 : forall ? v_0 a_0 b_0 . ? v_0 ( a_0 , b_0 ) -> ( ? v_0 b_0 , ? v_0 a_0 )
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto view_0 = []<praxis::View v_0, typename a_0, typename b_0>(){
-  return std::function([=](praxis::apply<v_0, praxis::Pair<a_0, b_0>> temp_0_){
-    auto temp_1_ = temp_0_.first();
-    auto temp_2_ = temp_0_.second();
+  return std::function([&](praxis::apply<v_0, std::pair<a_0, b_0>> temp_0_){
+    auto temp_1_ = praxis::first(temp_0_);
+    auto temp_2_ = praxis::second(temp_0_);
     auto x_0 = std::move(temp_1_);
     auto y_0 = std::move(temp_2_);
-    return praxis::Pair(std::move(y_0), std::move(x_0));
+    return std::make_pair(std::move(y_0), std::move(x_0));
     throw praxis::BindFail("3:6");
   });
 };
@@ -387,12 +448,12 @@ swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0]
   it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto swap_0 = []<typename a_0, typename b_0>(){
-  return std::function([=](praxis::Pair<a_0, b_0> temp_0_){
-    auto temp_1_ = temp_0_.first();
-    auto temp_2_ = temp_0_.second();
+  return std::function([&](std::pair<a_0, b_0> temp_0_){
+    auto temp_1_ = praxis::first(temp_0_);
+    auto temp_2_ = praxis::second(temp_0_);
     auto a_0 = std::move(temp_1_);
     auto b_0 = std::move(temp_2_);
-    return praxis::Pair(std::move(b_0), std::move(a_0));
+    return std::make_pair(std::move(b_0), std::move(a_0));
     throw praxis::BindFail("3:6");
   });
 };
@@ -424,21 +485,15 @@ copy_0 : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x
 either = describe "polymorphic data type (Either)" $ do
 
   let program = [r|
-type Either [a, b] = cases
-    Left a
-    Right b
+datatype Either [a, b] = Left a | Right b
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type Either [ a_0 , b_0 ] = cases
-  Left a_0
-  Right b_0
+datatype Either [ a_0 , b_0 ] = Left a_0 | Right b_0
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Either [ a_0 , b_0 ] = cases
-  [forall a_0 b_0 . a_0 -> Either [ a_0 , b_0 ]] Left a_0
-  [forall a_0 b_0 . b_0 -> Either [ a_0 , b_0 ]] Right b_0
+datatype Either [ a_0 , b_0 ] = [forall a_0 b_0 . a_0 -> Either [ a_0 , b_0 ]] Left a_0 | [forall a_0 b_0 . b_0 -> Either [ a_0 , b_0 ]] Right b_0
 |]
 
   it "evaluates" $ do
@@ -450,7 +505,7 @@ type Either [ a_0 , b_0 ] = cases
 fun = describe "polymorphic data type (Fun)" $ do
 
   let program = [r|
-type Fun [a, b] = Fun (a -> b)
+datatype Fun [a, b] = Fun (a -> b)
 
 unbox_fun : forall a b. Fun [a, b] -> a -> b
 unbox_fun (Fun f) x = f x
@@ -461,13 +516,13 @@ id_fun () = Fun (\x -> x)
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
+datatype Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
 unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ Fun f_0 -> \ x_0 -> f_0 x_0
 id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ ( ) -> Fun ( \ x_1 -> x_1 )
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
+datatype Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
 unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
 id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
@@ -514,23 +569,23 @@ rec
 auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::function<bool(int)>> {
   return std::tuple{
     /* 2:1 */
-    std::function([=](int temp_2_){
+    std::function([&](int temp_2_){
       auto [is_even_0, is_odd_0] = temp_1_(temp_1_);
       if (temp_2_ == 0) {
         return true;
       }
       auto n_0 = std::move(temp_2_);
-      return std::move(is_odd_0)(std::move(subtract_int)(praxis::Pair(std::move(n_0), 1)));
+      return std::move(is_odd_0)(std::move(subtract_int)(std::make_pair(std::move(n_0), 1)));
       throw praxis::CaseFail("3:13");
     }),
     /* 2:1 */
-    std::function([=](int temp_3_){
+    std::function([&](int temp_3_){
       auto [is_even_0, is_odd_0] = temp_1_(temp_1_);
       if (temp_3_ == 0) {
         return false;
       }
       auto n_1 = std::move(temp_3_);
-      return std::move(is_even_0)(std::move(subtract_int)(praxis::Pair(std::move(n_1), 1)));
+      return std::move(is_even_0)(std::move(subtract_int)(std::make_pair(std::move(n_1), 1)));
       throw praxis::CaseFail("7:12");
     })
   };
@@ -555,9 +610,7 @@ auto [is_even_0, is_odd_0] = temp_0_(temp_0_);
 list = describe "quantified type operators (List)" $ do
 
   let program = [r|
-type List a = cases
-  Nil ()
-  Cons (a, List a)
+datatype List a = Nil () | Cons (a, List a)
 
 rec
   map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
@@ -573,9 +626,7 @@ rec
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type List a_0 = cases
-  Nil ( )
-  Cons ( a_0 , List a_0 )
+datatype List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
 rec
   map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ f_0 -> cases
     Nil ( ) -> Nil ( )
@@ -587,9 +638,7 @@ rec
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type List a_0 = cases
-  [forall a_0 . ( ) -> List a_0] Nil ( )
-  [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
+datatype List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
   map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 List a_1 -> List b_0] cases
     [? v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
@@ -612,6 +661,94 @@ do
   let ys = (map (\x -> x * 2)) &xs
   sum &ys
 |] `shouldReturn` "12"
+
+  it "translates" $ translate program `shouldReturn` trim [r|
+template<typename a_0>
+struct ListImpl;
+template<typename a_0>
+using List = praxis::Box<ListImpl<a_0>>;
+template<typename a_0>
+struct ListImpl : std::variant<std::monostate, std::pair<a_0, List<a_0>>> {
+  using std::variant<std::monostate, std::pair<a_0, List<a_0>>>::variant;
+  template<size_t index>
+  inline const auto& get() const { return std::get<index>(*this); }
+  template<size_t index>
+  inline auto& get() { return std::get<index>(*this); }
+};
+static constexpr size_t Nil = 0;
+static constexpr size_t Cons = 1;
+auto mkNil = []<typename a_0>(){
+  return std::function([](std::monostate&& arg) -> List<a_0> {
+    return praxis::mkBox<ListImpl<a_0>>(std::in_place_index<Nil>, std::move(arg));
+  });
+};
+auto mkCons = []<typename a_0>(){
+  return std::function([](std::pair<a_0, List<a_0>>&& arg) -> List<a_0> {
+    return praxis::mkBox<ListImpl<a_0>>(std::in_place_index<Cons>, std::move(arg));
+  });
+};
+auto temp_0_ = [](auto temp_1_){
+  return std::tuple{
+    /* 4:1 */
+    [&]<praxis::View v_0, typename a_1, typename b_0>(){
+      return std::function([&](std::function<b_0(praxis::apply<v_0, a_1>)> temp_2_){
+        auto [map_0] = temp_1_(temp_1_);
+        auto f_0 = std::move(temp_2_);
+        return std::function([&](praxis::apply<v_0, List<a_1>> temp_3_){
+          if (temp_3_.index() == Nil) {
+            auto temp_4_ = temp_3_.template get<Nil>();
+            return mkNil.template operator()<b_0>()(std::monostate{});
+          }
+          if (temp_3_.index() == Cons) {
+            auto temp_5_ = temp_3_.template get<Cons>();
+            auto temp_6_ = praxis::first(temp_5_);
+            auto temp_7_ = praxis::second(temp_5_);
+            auto x_0 = std::move(temp_6_);
+            auto xs_0 = std::move(temp_7_);
+            return mkCons.template operator()<b_0>()(std::make_pair(std::move(f_0)(std::move(x_0)), std::move(map_0).template operator()<v_0, a_1, b_0>()(std::move(f_0))(std::move(xs_0))));
+          }
+          throw praxis::CaseFail("6:11");
+        });
+        throw praxis::BindFail("6:7");
+      });
+    }
+  };
+};
+auto [map_0] = temp_0_(temp_0_);
+auto temp_8_ = [](auto temp_9_) -> std::tuple<std::function<int(praxis::apply<praxis::View::REF, List<int>>)>> {
+  return std::tuple{
+    /* 10:1 */
+    std::function([&](praxis::apply<praxis::View::REF, List<int>> temp_10_){
+      auto [sum_0] = temp_9_(temp_9_);
+      if (temp_10_.index() == Nil) {
+        auto temp_11_ = temp_10_.template get<Nil>();
+        return 0;
+      }
+      if (temp_10_.index() == Cons) {
+        auto temp_12_ = temp_10_.template get<Cons>();
+        auto temp_13_ = praxis::first(temp_12_);
+        auto temp_14_ = praxis::second(temp_12_);
+        auto x_1 = std::move(temp_13_);
+        auto xs_1 = std::move(temp_14_);
+        return std::move(add_int)(std::make_pair(std::move(x_1), std::move(sum_0)(std::move(xs_1))));
+      }
+      throw praxis::CaseFail("12:9");
+    })
+  };
+};
+auto [sum_0] = temp_8_(temp_8_);
+|]
+
+  it "compiles" $ compile program `shouldReturn` True
+
+-- FIXME
+{-
+  it "runs" $ compileAndRun program [r|
+do
+  let xs = Cons (1, Cons (2, Cons (3, Nil ())))
+  sum &xs
+|] `shouldReturn` "6"
+-}
 
 
 shadowing = describe "shadowing" $ do
@@ -657,28 +794,22 @@ g_0 = \ [Int] x_2 -> [Int] [Int -> Int] f_2 [Int] x_2 where
 boxedReference = describe "boxed references" $ do
 
   let program = trim [r|
-type Box [&v, a] = Box &v a
+datatype Box [&v, a] = Box &v a
 
-type List a = cases
-  Nil ()
-  Cons (a, List a)
+datatype List a = Nil () | Cons (a, List a)
 
 box = Box "x"
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type Box [ & v_0 , a_0 ] = Box & v_0 a_0
-type List a_1 = cases
-  Nil ( )
-  Cons ( a_1 , List a_1 )
+datatype Box [ & v_0 , a_0 ] = Box & v_0 a_0
+datatype List a_1 = Nil ( ) | Cons ( a_1 , List a_1 )
 box_0 = Box "x"
 |]
 
   it "type checks" $ check program `shouldReturn` trim [r|
-type Box [ & v_0 , a_0 ] = [forall a_0 & v_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
-type List a_1 = cases
-  [forall a_1 . ( ) -> List a_1] Nil ( )
-  [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
+datatype Box [ & v_0 , a_0 ] = [forall & v_0 a_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
+datatype List a_1 = [forall a_1 . ( ) -> List a_1] Nil ( ) | [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
 box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
 |]
 
@@ -686,10 +817,10 @@ box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
   it "evaluates" $ do
 
     interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
-error: found contradiction [1:50] & ^v3 List Int o~ List Int
-|-> [1:50] List Int ~ List Int ∧ & ^v3 List Int o~ List Int
-|-> [1:50] & ^v3 List Int ~ List Int ∧ Box [ & ^v3 , List Int ] ~ Box [ & ^v3 , List Int ]
-|-> [1:50] & ^v3 List Int -> Box [ & ^v3 , List Int ] ~ List Int -> Box [ & ^v3 , List Int ]
+error: found contradiction [1:50] & ^v3 List Int ?= List Int
+|-> [1:50] List Int = List Int and & ^v3 List Int ?= List Int
+|-> [1:50] & ^v3 List Int = List Int and Box [ & ^v3 , List Int ] = Box [ & ^v3 , List Int ]
+|-> [1:50] & ^v3 List Int -> Box [ & ^v3 , List Int ] = List Int -> Box [ & ^v3 , List Int ]
 |-> (function application)
 |]
 
@@ -700,6 +831,37 @@ do
     Box xs
     () -- Note, Box xs can't escape the read
 |] `shouldReturn` "()"
+
+
+
+viewKinds = describe "view kinds" $ do
+
+  describe "View & is a subkind of View ?" $ do
+
+    let program = trim [r|
+datatype Foo [?v, a] = Foo ?v a
+
+datatype Bar [&v, a] = Bar (Foo [&v, a])
+  |]
+
+    it "kind checks" $ check program `shouldReturn` trim [r|
+datatype Foo [ ? v_0 , a_0 ] = [forall ? v_0 a_0 . ? v_0 a_0 -> Foo [ ? v_0 , a_0 ]] Foo ? v_0 a_0
+datatype Bar [ & v_1 , a_1 ] = [forall & v_1 a_1 . Foo [ & v_1 , a_1 ] -> Bar [ & v_1 , a_1 ]] Bar Foo [ & v_1 , a_1 ]
+|]
+
+  describe "View ? is not a subkind of View &" $ do
+
+    let program = trim [r|
+datatype Foo [&v, a] = Foo &v a
+
+datatype Bar [?v, a] = Bar (Foo [?v, a])
+  |]
+
+    it "does not kind check" $ check program `shouldReturn` trim [r|
+error: found contradiction [3:28] View ? ≤ View & and ^k3 ≤ Type
+|-> [3:28] ( View ? , ^k3 ) ≤ ( View & , Type )
+|-> (type function application)
+|]
 
 
 
@@ -729,35 +891,30 @@ fst (a, a) = a
 redeclTyVar = describe "type variarble redeclaration" $ do
 
   let program = trim [r|
-type Foo [a, a] = cases
-    Foo a
+datatype Foo [a, a] = Foo a
 |]
 
-  it "does not parse" $ parse program `shouldReturn` "1:10 error: type variables are not distinct"
+  it "does not parse" $ parse program `shouldReturn` "1:14 error: type variables are not distinct"
 
 
 readUnsafe = describe "read safety" $ do
 
   let program = trim [r|
-type List a = cases
-  Nil
-  Cons (a, List a)
+datatype List a = Nil () | Cons (a, List a)
 
-x = Cons (1, Cons (2, Cons (3, Nil)))
+x = Cons (1, Cons (2, Cons (3, Nil ())))
 
 y = read x in (1, x)
 
 |]
 
   it "parses" $ parse program `shouldReturn` trim [r|
-type List a_0 = cases
-  Nil
-  Cons ( a_0 , List a_0 )
-x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ) ) )
+datatype List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
+x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
 y_0 = read x_0 in ( 1 , x_0 )
 |]
 
-  it "does not type check" $ check program `shouldReturn` "error: found contradiction [7:5] 'l0 ref-free ( Int , & 'l0 ^t0 )\n|-> (safe read)"
+  it "does not type check" $ check program `shouldReturn` "error: found contradiction [5:5] 'l0 ref-free ( Int , & 'l0 ^t0 )\n|-> (safe read)"
 
 
 spec :: Spec
@@ -827,6 +984,7 @@ spec = do
     switch
     recursion
     mixfix
+    enum
 
   describe "simple polymorphic programs" $ do
     view
@@ -842,6 +1000,7 @@ spec = do
     list
     shadowing
     boxedReference
+    viewKinds
 
   describe "invalid programs" $ do
     badDo

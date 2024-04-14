@@ -66,11 +66,28 @@ solveKind = \case
 
   KEq k1 k2@(_ :< KindUni _) -> solveKind (k2 `KEq` k1) -- handled by the above case
 
-  KEq (_ :< KindFun s1 s2) (_ :< KindFun t1 t2) -> intro [ KEq s1 t1, KEq s2 t2 ]
+  KEq (_ :< KindFun k1 k2) (_ :< KindFun l1 l2) -> intro [ KEq k1 l1, KEq k2 l2 ]
 
-  KEq (_ :< KindPair s1 s2) (_ :< KindPair t1 t2) -> intro [ KEq s1 t1, KEq s2 t2 ]
+  KEq (_ :< KindPair k1 k2) (_ :< KindPair l1 l2) -> intro [ KEq k1 l1, KEq k2 l2 ]
+
+  KSub k1 k2 | k1 == k2 -> tautology
+
+  KSub (_ :< KindUni x) (_ :< KindType) -> x `is` KindType
+
+  KSub (_ :< KindType) (_ :< KindUni x) -> x `is` KindType
+
+  KSub (_ :< KindPair k1 k2) (_ :< KindPair l1 l2) -> intro [ KSub k1 l1, KSub k2 l2 ]
+
+  KSub (_ :< KindView d1) (_ :< KindView d2)
+    | d1 <= d2  -> tautology
+    | otherwise -> contradiction
+
+  KSub (_ :< KindUni _) _ -> defer
+
+  KSub _ (_ :< KindUni _) -> defer
 
   _ -> contradiction
+
 
 is :: Name -> Kind -> Praxis (Maybe KindProp)
 is n k = do

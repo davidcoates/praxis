@@ -64,21 +64,20 @@ generateQTyVar (a@(src, _) :< qTyVar) = case qTyVar of
     return ((src, Just k) :< QTyVar var)
 
   QViewVar domain var -> do
-    let k = phantom KindView
+    let k = phantom (KindView domain)
     introKind src var k
     return ((src, Just k) :< QViewVar domain var)
 
 
 generateView :: Annotated View -> Praxis (Annotated View)
-generateView (a@(src, _) :< view) = (a :<) <$> case view of
+generateView ((src, _) :< view) = case view of
 
   ViewVar _ var -> do
     entry <- kEnv `uses` Env.lookup var
     case entry of
-      Just _  -> return view
+      Just k  -> return ((src, Just k) :< view)
       Nothing -> throwAt src (NotInScope var)
 
-  _ -> return view
 
 
 generateTy :: Annotated Type -> Praxis (Annotated Type)
@@ -88,13 +87,15 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
       f <- generateTy f
       x <- generateTy x
       case view kind f of
-        (_ :< KindView) -> do
+        (_ :< KindView _) -> do
           require $ newConstraint (view kind x `KEq` phantom KindType) ViewApplication src
           return (phantom KindType :< TyApply f x)
-        funKind -> do
-          k <- freshKindUni
-          require $ newConstraint (funKind `KEq` phantom (KindFun (view kind x) k)) TyFunApplication src
-          return (k :< TyApply f x)
+        _ -> do
+          k1 <- freshKindUni
+          k2 <- freshKindUni
+          require $ newConstraint (view kind f `KEq` phantom (KindFun k1 k2)) TyFunApplication src
+          require $ newConstraint (view kind x `KSub` k1) TyFunApplication src
+          return (k2 :< TyApply f x)
 
     TyCon con -> do
       entry <- kEnv `uses` Env.lookup con
@@ -109,9 +110,9 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
       require $ newConstraint (view kind ty2 `KEq` phantom KindType) FunType src
       return (phantom KindType :< TyFun ty1 ty2)
 
-    TyView op -> do
-      op <- generateView op
-      return (phantom KindView :< TyView op)
+    TyView v -> do
+      v <- generateView v
+      return (view kind v :< TyView v)
 
     TyPair ty1 ty2 -> do
       ty1 <- generateTy ty1
@@ -144,8 +145,8 @@ generateTyPat (a@(src, _) :< tyPat) = (\(k :< t) -> (src, Just k) :< t) <$> case
     return (k :< TyPatVar var)
 
   TyPatViewVar domain var -> do
-    introKind src var (phantom KindView)
-    return (phantom KindView :< TyPatViewVar domain var)
+    introKind src var (phantom (KindView domain))
+    return (phantom (KindView domain) :< TyPatViewVar domain var)
 
   TyPatPack tyPat1 tyPat2 -> do
     tyPat1 <- generateTyPat tyPat1
@@ -153,16 +154,14 @@ generateTyPat (a@(src, _) :< tyPat) = (\(k :< t) -> (src, Just k) :< t) <$> case
     return (phantom (KindPair (view kind tyPat1) (view kind tyPat2)) :< TyPatPack tyPat1 tyPat2)
 
 
-generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
-generateDataCon (a@(src, _) :< DataCon name arg)
-  | Nothing  <- arg = return (a :< DataCon name arg)
-  | Just arg <- arg = do
-      arg <- generate arg
-      require $ newConstraint (view kind arg `KEq` phantom KindType) (DataConType name) src -- TODO should just match kind of data type?
-      return (a :< DataCon name (Just arg))
-
 fun :: Annotated Kind -> Annotated Kind -> Annotated Kind
 fun a b = phantom (KindFun a b)
+
+generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
+generateDataCon (a@(src, _) :< DataCon name arg) = do
+  arg <- generate arg
+  require $ newConstraint (view kind arg `KEq` phantom KindType) (DataConType name) src -- TODO should just match kind of data type?
+  return (a :< DataCon name arg)
 
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
 generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
@@ -179,5 +178,9 @@ generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
       Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (DataType name) src
       Just arg -> require $ newConstraint (k `KEq` phantom (KindFun (view kind arg) (phantom KindType))) (DataType name) src
     return $ DeclData name arg alts
+
+  DeclEnum name alts -> do
+    introKind src name (phantom KindType)
+    return $ DeclEnum name alts
 
   decl -> recurseTerm generate decl

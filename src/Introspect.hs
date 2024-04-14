@@ -167,16 +167,17 @@ instance Term Bind where
 
 instance Term DataCon where
   witness = IDataCon
-  recurseAnnotation _ f (DataConInfo { fullType, argType, retType }) = (\fullType argType retType -> DataConInfo { fullType, argType, retType}) <$> f fullType <*> traverse f argType <*> f retType
+  recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    DataCon n at -> DataCon n <$> traverse f at
+    DataCon n t -> DataCon n <$> f t
 
 instance Term Decl where
   witness = IDecl
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclData n t ts -> DeclData n <$> traverse f t <*> traverse f ts
+    DeclData n t as -> DeclData n <$> traverse f t <*> traverse f as
     DeclDef n ps e  -> DeclDef n <$> traverse f ps <*> f e
+    DeclEnum n as   -> pure (DeclEnum n as)
     DeclOp o d rs   -> DeclOp <$> f o <*> pure d <*> f rs
     DeclRec ds      -> DeclRec <$> traverse f ds
     DeclSig n t     -> DeclSig n <$> f t
@@ -221,7 +222,8 @@ instance Term Pat where
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
     PatAt n a   -> PatAt n <$> f a
-    PatCon n p  -> PatCon n <$> traverse f p
+    PatData n p -> PatData n <$> f p
+    PatEnum n   -> pure (PatEnum n)
     PatHole     -> pure PatHole
     PatLit l    -> pure (PatLit l)
     PatPair a b -> PatPair <$> f a <*> f b
@@ -252,7 +254,7 @@ instance Term Tok where
 
 instance Term View where
   witness = IView
-  recurseAnnotation = trivial
+  recurseAnnotation _ f x = f x
   recurseTerm _ = pure
 
 instance Term TyPat where
@@ -271,7 +273,7 @@ instance Term Type where
     TyApply a b -> TyApply <$> f a <*> f b
     TyCon n     -> pure (TyCon n)
     TyFun a b   -> TyFun <$> f a <*> f b
-    TyView op   -> TyView <$> f op
+    TyView v    -> TyView <$> f v
     TyPack a b  -> TyPack <$> f a <*> f b
     TyPair a b  -> TyPair <$> f a <*> f b
     TyUnit      -> pure TyUnit
@@ -297,7 +299,7 @@ instance Term Kind where
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
     KindFun a b    -> KindFun <$> f a <*> f b
-    KindView       -> pure KindView
+    KindView d     -> pure (KindView d)
     KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType
 
@@ -317,7 +319,8 @@ instance Term KindConstraint where
   witness = IKindConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
-    KEq a b -> KEq <$> f a <*> f b
+    KEq a b  -> KEq <$> f a <*> f b
+    KSub a b -> KSub <$> f a <*> f b
 
 instance Term TyProp where
   witness = ITyProp

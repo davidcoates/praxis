@@ -41,7 +41,7 @@ translateProgram program = do
 coerceMain :: Praxis String
 coerceMain = do
   requireMain
-  return $ "\nint main(){ main_0(praxis::Unit{}); }"
+  return $ "\nint main(){ main_0(std::monostate{}); }"
 
 compileProgram :: String -> Maybe FilePath -> Praxis ()
 compileProgram program outFile = do

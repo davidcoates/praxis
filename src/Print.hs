@@ -106,10 +106,10 @@ label ((s, a) :< x) = case a of
   Just a | not (hideLabel x) -> case typeof x of
     IExp      -> prettyIf Types a
     IPat      -> prettyIf Types a
+    IDataCon  -> prettyIf Types a
     ITyPat    -> prettyIf Kinds a
     IType     -> prettyIf Kinds a
     ITyProp   -> pretty a
     IKindProp -> pretty a
-    IDataCon  -> pretty a
     _         -> blank
   _ -> blank

@@ -80,11 +80,12 @@ data Prec = Prec Ordering Op
 data Bind = Bind (Annotated Pat) (Annotated Exp)
   deriving (Eq, Ord)
 
-data DataCon = DataCon Name (Maybe (Annotated Type))
+data DataCon = DataCon Name (Annotated Type)
   deriving (Eq, Ord)
 
 data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
           | DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
+          | DeclEnum Name [Name]
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
           | DeclRec [Annotated Decl]
           | DeclSig Name (Annotated QType) -- ^ Parsing only
@@ -140,7 +141,8 @@ instance Show Lit where
     String s -> show s
 
 data Pat = PatAt Name (Annotated Pat)
-         | PatCon Name (Maybe (Annotated Pat))
+         | PatData Name (Annotated Pat)
+         | PatEnum Name
          | PatHole
          | PatLit Lit
          | PatPair (Annotated Pat) (Annotated Pat)
@@ -160,7 +162,7 @@ data Tok = TExp (Annotated Exp)
          | TOp Name
   deriving (Eq, Ord)
 
-data ViewDomain = RefOrValue | Ref -- Note: The order here matters for the solver
+data ViewDomain = Ref | RefOrValue -- Note: The order here matters for the solvers
   deriving (Eq, Ord)
 
 data View = ViewUni ViewDomain Name
@@ -194,7 +196,7 @@ data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)
 data Kind = KindUni Name
           | KindConstraint
           | KindFun (Annotated Kind) (Annotated Kind)
-          | KindView
+          | KindView ViewDomain
           | KindPair (Annotated Kind) (Annotated Kind)
           | KindType
   deriving (Eq, Ord)
@@ -210,6 +212,7 @@ infixl 8 `TEq`
 infixl 8 `TOpEq`
 
 data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
+                    | KSub (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
 data Prop a = Top
@@ -228,7 +231,8 @@ type family Annotation a where
   Annotation TyPat    = Annotated Kind
   Annotation Type     = Annotated Kind
   Annotation QTyVar   = Annotated Kind
-  Annotation DataCon  = DataConInfo
+  Annotation View     = Annotated Kind
+  Annotation DataCon  = Annotated QType
   Annotation TyProp   = Derivation TyProp
   Annotation KindProp = Derivation KindProp
   Annotation a        = Void
@@ -258,15 +262,7 @@ instance Pretty (Annotated a) => Pretty (Derivation a) where
   pretty (Root r)       = "(" <> pretty r <> ")"
   pretty (Antecedent a) = pretty a
 
-{- | A data constructor C for a type T, either has:
-
-C : forall vs. A -> T vs
-or
-C : forall vs. T vs
-
-Here "A" is the argType, "T vs" is the retType.
--}
-data DataConInfo = DataConInfo { fullType :: Annotated QType, argType :: Maybe (Annotated Type), retType :: Annotated Type }
+data DataConInfo = DataConInfo { fullType :: Annotated QType, argType :: Annotated Type, retType :: Annotated Type }
 
 instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataConInfo where
   pretty (DataConInfo { fullType }) = pretty fullType

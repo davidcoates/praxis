@@ -10,7 +10,7 @@ module Praxis
 
   , KEnv(..)
   , TEnv(..)
-  , DAEnv(..)
+  , CEnv(..)
   , VEnv(..)
 
   -- | Operators
@@ -30,6 +30,7 @@ module Praxis
   , try
 
   , runPraxis
+  , runDebug
   , runSilent
   , runInternal
 
@@ -47,7 +48,7 @@ module Praxis
   , opContext
   , kEnv
   , tEnv
-  , daEnv
+  , cEnv
   , vEnv
   , rewriteMap
   , tySynonyms
@@ -119,9 +120,9 @@ type VEnv = Env Value
 
 type TEnv = LEnv (Annotated QType)
 
-type KEnv = Env (Annotated Kind)
+type CEnv = Env (Annotated QType)
 
-type DAEnv = Env (Annotated DataCon)
+type KEnv = Env (Annotated Kind)
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix
@@ -146,7 +147,7 @@ data PraxisState = PraxisState
   , _opContext  :: OpContext
   , _kEnv       :: KEnv                -- ^ Kind environment
   , _tEnv       :: TEnv                -- ^ Type environment
-  , _daEnv      :: DAEnv               -- ^ Data alternative environment
+  , _cEnv       :: CEnv                -- ^ Constructor environment
   , _vEnv       :: VEnv                -- ^ Value environment for interpreter
   -- TODO encapsulate within desugarer?
   , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
@@ -180,7 +181,7 @@ emptyState = PraxisState
   , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
   , _kEnv         = Env.empty
   , _tEnv         = LEnv.empty
-  , _daEnv        = Env.empty
+  , _cEnv         = Env.empty
   , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
@@ -240,6 +241,11 @@ try p = do
     Left e  -> lift (State.put s) >> return Nothing
     Right y -> lift (State.put t) >> return (Just y)
 
+runDebug :: PraxisState -> Praxis a -> IO (Either String a)
+runDebug s c = do
+  (x, _) <- runPraxis (flags . debug .= True >> c) s
+  return x
+
 runSilent :: PraxisState -> Praxis a -> IO (Either String a)
 runSilent s c = do
   (x, _) <- runPraxis (flags . silent .= True >> c) s
@@ -279,7 +285,7 @@ freshTyViewUni :: ViewDomain -> Praxis (Annotated Type)
 freshTyViewUni domain = do
   (o:os) <- use (fresh . freshViewUnis)
   fresh . freshViewUnis .= os
-  return (TyView (phantom (ViewUni domain o)) `as` phantom KindType)
+  return (TyView (ViewUni domain o `as` phantom (KindView domain)) `as` phantom (KindView domain))
 
 freshKindUni :: Praxis (Annotated Kind)
 freshKindUni = do
@@ -291,7 +297,7 @@ freshViewRef :: Praxis (Annotated View)
 freshViewRef = do
   (l:ls) <- use (fresh . freshViewRefs)
   fresh . freshViewRefs .= ls
-  return (phantom (ViewRef l))
+  return (ViewRef l `as` phantom (KindView Ref))
 
 freshTyVar :: Name -> Praxis Name
 freshTyVar var = do

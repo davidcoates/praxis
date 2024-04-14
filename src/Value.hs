@@ -14,7 +14,8 @@ import                          System.IO.Unsafe (unsafePerformIO)
 
 type Array = IOArray Int Value
 
-data Value = Con Name (Maybe Value)
+data Value = Data Name Value
+           | Enum Name
            | Fun (Value -> Praxis Value)
            | Int Int
            | Bool Bool
@@ -35,9 +36,8 @@ writeArray a i e = liftIOUnsafe (ArrayIO.writeArray a i e)
 
 showValue :: Value -> IO String
 showValue = \case
-  Con n v  -> (n ++) <$> case v of
-    Just x  -> (" " ++) <$> showValue x
-    Nothing -> return ""
+  Data n v -> ((n ++ " ") ++) <$> showValue v
+  Enum n   -> return n
   Fun f    -> return "<function>"
   Int i    -> return (show i)
   Bool b   -> return (show b)

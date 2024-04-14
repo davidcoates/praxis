@@ -194,42 +194,46 @@ tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Copy <$> reservedCon "Copy" *> annotated ty <|>
                _Class <$> annotated ty <|>
                unparseable (_RefFree <$> varid <*> reservedId "ref-free" *> annotated ty) <|>
-               _TEq <$> annotated ty <*> reservedOp "~" *> annotated ty <|>
-               unparseable (_TOpEq <$> annotated ty <*> reservedOp "o~" *> annotated ty) <|>
+               unparseable (_TEq <$> annotated ty <*> reservedOp "=" *> annotated ty) <|>
+               unparseable (_TOpEq <$> annotated ty <*> reservedOp "?=" *> annotated ty) <|>
                mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
-kindConstraint = _KEq <$> annotated kind <*> reservedOp "~" *> annotated kind <|>
-                mark "kind constraint"
+kindConstraint = unparseable (_KEq <$> annotated kind <*> reservedOp "=" *> annotated kind) <|>
+                 unparseable (_KSub <$> annotated kind <*> reservedOp "≤" *> annotated kind) <|>
+                 mark "kind constraint"
 
 tyProp :: Syntax f => f TyProp
 tyProp = _Exactly <$> tyConstraint <|>
          _Top <$> special '⊤' <|>
          _Bottom <$> special '⊥' <|>
-         _And <$> tyProp <*> special '∧' *> tyProp
+         _And <$> tyProp <*> reservedId "and" *> tyProp
 
 kindProp :: Syntax f => f KindProp
 kindProp = _Exactly <$> kindConstraint <|>
            _Top <$> special '⊤' <|>
            _Bottom <$> special '⊥' <|>
-           _And <$> kindProp <*> special '∧' *> kindProp
+           _And <$> kindProp <*> reservedId "and" *> kindProp
 
 program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) where -- TODO module
 
 decl :: Syntax f => f Decl
-decl = declSyn <|> declData <|> declOp <|> declTerm -- TODO imports
+decl = declSyn <|> declData <|> declEnum <|> declOp <|> declTerm -- TODO imports
 
 declSyn :: Syntax f => f Decl
 declSyn = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
 
 declData :: Syntax f => f Decl
-declData = _DeclData <$> reservedId "type" *> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where
-  alts = _Singleton <$> annotated dataAlt <|> reservedId "cases" *> block (annotated dataAlt)
-  _Singleton = Prism (\x -> [x]) (\case { [x] -> Just x; _ -> Nothing }) -- short definition for a single constructor
+declData = _DeclData <$> reservedId "datatype" *> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where
+  alts = _Cons <$> annotated dataAlt <*> many (contextualOp "|" *> annotated dataAlt)
+
+declEnum :: Syntax f => f Decl
+declEnum = _DeclEnum <$> reservedId "enum" *> conid <*> reservedOp "=" *> alts where
+  alts = _Cons <$> conid <*> many (contextualOp "|" *> conid)
 
 dataAlt :: Syntax f => f DataCon
-dataAlt = _DataCon <$> conid <*> optional (annotated ty1)
+dataAlt = _DataCon <$> conid <*> annotated ty1
 
 tyPat :: Syntax f => f TyPat
 tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
@@ -249,7 +253,7 @@ bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedOp "=" *> annotated exp <|> mark "binding"
 
 pat :: Syntax f => f Pat
-pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern" where
+pat = prefix' conid (_PatData, annotated pat0) _PatEnum <|> pat0 <|> mark "pattern" where
   pat0 = _PatHole <$> special '_' <|>
          _PatLit <$> litNoString <|> -- TODO allow string literals
          _PatVar <$> varid <|>
@@ -258,7 +262,7 @@ pat = _PatCon <$> conid <*> optional (annotated pat0) <|> pat0 <|> mark "pattern
 
 kind :: Syntax f => f Kind
 kind = kind0 `join` (_KindFun, reservedOp "->" *> annotated kind) <|> mark "kind" where
-  kind0 = _KindView <$> reservedCon "View" <|>
+  kind0 = _KindView <$> reservedCon "View" *> viewDomain <|>
           _KindType <$> reservedCon "Type" <|>
           unparseable (_KindUni <$> uni) <|>
           _KindConstraint <$> reservedCon "Constraint" <|>

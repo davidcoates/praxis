@@ -1,21 +1,23 @@
-{-# LANGUAGE QuasiQuotes   #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE TypeOperators     #-}
 
 module Translate
   ( runProgram
   , prelude
   ) where
 
-import           Common
+import           Common            hiding (Nil, intercalate)
 import           Introspect
 import           Praxis
 import           Stage
 import           Term
+
+import           Data.String       (IsString (..))
+import           Prelude           hiding (concat)
 import           Text.RawString.QQ
 
-
-data Token = LBrace | RBrace | Semi | Text String | Crumb Source | Newline
 
 freshTempVar :: Praxis Name
 freshTempVar = (++ "_") <$> freshVar "temp"
@@ -23,28 +25,54 @@ freshTempVar = (++ "_") <$> freshVar "temp"
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
 
-indent :: Int -> String
-indent n = replicate (2*n) ' '
+data Code = Nil | Join Code Code | LBrace | RBrace | Semi | Newline | Crumb Source | Text String
 
-layout :: [Token] -> String
-layout = layout' 0 "" where
+instance IsString Code where
+  fromString = Text
 
-  layout' :: Int -> String -> [Token] -> String
-  layout' depth prefix ts = case ts of
+instance Semigroup Code where
+  c1 <> c2 = Join c1 c2
 
-    LBrace : ts -> "{" ++ layout' (depth + 1) ("\n" ++ indent (depth + 1)) ts
+instance Monoid Code where
+  mempty = Nil
 
-    RBrace : ts -> "\n" ++ indent (depth - 1) ++ "}" ++ layout' (depth - 1) "" ts
+intercalate :: Code -> [Code] -> Code
+intercalate   _     [] = Nil
+intercalate   _    [c] = c
+intercalate sep (c:cs) = Join c (Join sep (intercalate sep cs))
 
-    Semi : ts -> ";" ++ layout' depth ("\n" ++ indent depth) ts
+concat :: [Code] -> Code
+concat []     = Nil
+concat (c:cs) = Join c (concat cs)
 
-    Text t : ts -> prefix ++ t ++ layout' depth "" ts
+layout :: Code -> String
+layout code = layout' 0 "" (unroll code) where
 
-    Crumb src : ts -> prefix ++ "/* " ++ show src ++ " */" ++ layout' depth ("\n" ++ indent depth) ts
+  layout' :: Int -> String -> [Code] -> String
+  layout' depth prefix cs = case cs of
 
-    Newline : ts -> "\n" ++ layout' depth (indent depth) ts
+    LBrace : cs -> "{" ++ layout' (depth + 1) ("\n" ++ indent (depth + 1)) cs
+
+    RBrace : cs -> "\n" ++ indent (depth - 1) ++ "}" ++ layout' (depth - 1) "" cs
+
+    Semi : cs -> ";" ++ layout' depth ("\n" ++ indent depth) cs
+
+    Text t : cs -> prefix ++ t ++ layout' depth "" cs
+
+    Crumb src : cs -> prefix ++ "/* " ++ show src ++ " */" ++ layout' depth ("\n" ++ indent depth) cs
+
+    Newline : cs -> "\n" ++ layout' depth (indent depth) cs
 
     [] -> ""
+
+  indent :: Int -> String
+  indent n = replicate (2*n) ' '
+
+  unroll :: Code -> [Code]
+  unroll code = case code of
+    Nil        -> []
+    Join c1 c2 -> unroll c1 ++ unroll c2
+    _          -> [code]
 
 
 runProgram :: Annotated Program -> Praxis String
@@ -55,7 +83,7 @@ runProgram program = save stage $ do
   return program
 
 
-translateProgram :: Annotated Program -> Praxis [Token]
+translateProgram :: Annotated Program -> Praxis Code
 translateProgram (_ :< Program decls) = foldMapA (translateDecl True) decls
 
 
@@ -68,38 +96,38 @@ canTranslateQTyVar qTyVar = case view value qTyVar of
 translatableQTyVars :: [Annotated QTyVar] -> [Annotated QTyVar]
 translatableQTyVars = filter canTranslateQTyVar
 
-translateQTyVar :: Annotated QTyVar -> Praxis [Token]
+translateQTyVar :: Annotated QTyVar -> Praxis Code
 translateQTyVar (_ :< q) = case q of
 
-  QTyVar n              -> return [ Text "typename ", Text n ]
+  QTyVar n              -> return $ "typename " <> Text n
 
-  QViewVar RefOrValue n -> return [ Text "praxis::View ", Text n ]
+  QViewVar RefOrValue n -> return $ "praxis::View " <> Text n
 
 
-translateView :: Annotated View -> Praxis [Token]
+translateView :: Annotated View -> Praxis Code
 translateView (_ :< view) = case view of
 
-  ViewValue            -> return [ Text "praxis::View::VALUE" ]
+  ViewValue            -> return "praxis::View::VALUE"
 
-  ViewRef _            -> return [ Text "praxis::View::REF" ]
+  ViewRef _            -> return "praxis::View::REF"
 
-  ViewVar Ref _        -> return [ Text "praxis::View::REF" ]
+  ViewVar Ref _        -> return "praxis::View::REF"
 
-  ViewVar RefOrValue n -> return [ Text n ]
+  ViewVar RefOrValue n -> return (Text n)
 
 
-translateType :: Annotated Type -> Praxis [Token]
+translateType :: Annotated Type -> Praxis Code
 translateType (_ :< t) = case t of
 
   TyApply t1 t2
     | (_ :< TyView view) <- t1 -> do
       view <- translateView view
       t2 <- translateType t2
-      return $ [ Text "praxis::apply<" ] ++ view ++ [ Text ", " ] ++ t2 ++ [ Text ">" ]
+      return $ "praxis::apply<" <> view <> ", " <> t2 <> ">"
 
   TyApply (_ :< TyCon n) t2 -> do
-    args <- intercalate [Text ", "] <$> mapM translateType (unpack t2)
-    return $ [ Text n, Text "<" ] ++ args ++ [ Text ">" ]
+    args <- (intercalate ", " <$>) (mapM translateType (unpack t2))
+    return $ Text n <> "<" <> args <> ">"
     where
       unpack :: Annotated Type -> [Annotated Type]
       unpack t@(_ :< TyPack t1 t2) = t1 : unpack t2
@@ -108,9 +136,9 @@ translateType (_ :< t) = case t of
   TyApply t1 t2 -> do
     t1 <- translateType t1
     t2 <- translateType t2
-    return $ t1 ++ [ Text "<" ] ++ t2 ++ [ Text ">" ]
+    return $ t1 <> "<" <> t2 <> ">"
 
-  TyCon n -> return [ Text (translateName n) ] where
+  TyCon n -> return $ Text (translateName n) where
     translateName n = case n of
       "Int"    -> "int"
       "Array"  -> "praxis::Array"
@@ -122,31 +150,31 @@ translateType (_ :< t) = case t of
   TyFun t1 t2 -> do
     t1 <- translateType t1
     t2 <- translateType t2
-    return $ [ Text "std::function<" ] ++ t2 ++ [ Text "(" ] ++ t1 ++ [ Text ")>" ]
+    return $ "std::function<" <> t2 <> "(" <> t1 <> ")>"
 
   TyPair t1 t2 -> do
     t1 <- translateType t1
     t2 <- translateType t2
-    return $ [ Text "praxis::Pair<" ] ++ t1 ++ [ Text ", " ] ++ t2 ++ [ Text ">" ]
+    return $ "praxis::Pair<" <> t1 <> ", " <> t2 <> ">"
 
-  TyUnit -> return [ Text "praxis::Unit" ]
+  TyUnit -> return "praxis::Unit"
 
-  TyVar n -> return [ Text n ]
+  TyVar n -> return (Text n)
 
   TyView v -> translateView v
 
 
-translateQType :: Annotated QType -> Praxis [Token]
+translateQType :: Annotated QType -> Praxis Code
 translateQType ((src, _) :< Forall vs _ t) = translateQType' (translatableQTyVars vs) where
   translateQType' vs
     | [] <- vs = translateType t
     | otherwise = do
       vs <- mapM translateQTyVar vs
       t <- translateType t
-      return $ [ Text "template<" ] ++ intercalate [ Text ", " ] vs ++ [ Text "> " ] ++ t
+      return $ "template<" <> intercalate ", " vs <> ">" <> t
 
 
-translateDeclData :: Name -> Maybe (Annotated TyPat) -> [Annotated DataCon] -> Praxis [Token]
+translateDeclData :: Name -> Maybe (Annotated TyPat) -> [Annotated DataCon] -> Praxis Code
 translateDeclData name tyPat alts = do
 
   let tyPats = case tyPat of { Just tyPat -> unpackTyPat tyPat; Nothing -> []; }
@@ -155,45 +183,45 @@ translateDeclData name tyPat alts = do
 
   let
     tyPatsDecl = case tyPats of
-      [] -> []
-      _  -> [ Text "template<" ] ++ intercalate [ Text ", " ] (map tyPatDecl tyPats) ++ [ Text ">", Newline ]
+      [] -> Nil
+      _  -> "template<" <> intercalate ", " (map tyPatDecl tyPats) <> ">" <> Newline
 
     tyPatsInst = case tyPats of
-      [] -> []
-      _  -> [ Text "<" ] ++ intercalate [ Text ", " ] (map tyPatInst tyPats) ++ [ Text ">" ]
+      [] -> Nil
+      _  -> "<" <> intercalate ", " (map tyPatInst tyPats) <> ">"
 
-    forwardDecl = tyPatsDecl ++ [ Text "struct ", Text name, Text "Impl", Semi ] ++ tyPatsDecl ++ [ Text "using ", Text name, Text " = praxis::Box<", Text name, Text "Impl" ] ++ tyPatsInst ++ [ Text ">", Semi ]
-    variantTy = [ Text "std::variant<" ] ++ intercalate [ Text ", " ] (map snd alts) ++ [ Text ">" ]
-    body = [ Text "using " ] ++ variantTy ++ [ Text "::variant", Semi ] ++ [ Text "template<size_t index>", Newline, Text "inline const auto& get() const { return std::get<index>(*this); }", Newline, Text "template<size_t index>", Newline, Text "inline auto& get() { return std::get<index>(*this); }" ]
-    defn = tyPatsDecl ++ [ Text "struct ", Text name, Text "Impl", Text " : " ] ++ variantTy ++ [ Text " ", LBrace ] ++ body ++ [ RBrace, Semi ]
+    forwardDecl = tyPatsDecl <> "struct " <> Text name <> "Impl" <> Semi <> tyPatsDecl <> "using " <> Text name <> " = praxis::Box<" <> Text name <> "Impl" <> tyPatsInst <> ">" <> Semi
+    variantTy = "std::variant<" <> intercalate ", " (map snd alts) <> ">"
+    body = "using " <> variantTy <> "::variant" <> Semi <> "template<size_t index>" <> Newline <> "inline const auto& get() const { return std::get<index>(*this); }" <> Newline <> "template<size_t index>" <> Newline <> "inline auto& get() { return std::get<index>(*this); }"
+    defn = tyPatsDecl <> "struct " <> Text name <> "Impl : " <> variantTy <> " " <> LBrace <> body <> RBrace <> Semi
 
-    indices = concat [ [ Text "static constexpr size_t ", Text name, Text " = ", Text (show i), Semi ] | (name, i) <- zip (map fst alts) [0..] ]
+    indices = concat [ "static constexpr size_t " <> Text name <> " = " <> Text (show i) <> Semi | (name, i) <- zip (map fst alts) [0..] ]
 
-    selfTy = [ Text name ] ++ tyPatsInst
-    selfImplTy = [ Text name, Text "Impl" ] ++ tyPatsInst
+    selfTy = Text name <> tyPatsInst
+    selfImplTy = Text name <> "Impl" <> tyPatsInst
 
-    mkConstructorBody :: Name -> [Token] -> [Token]
-    mkConstructorBody name ty = [ Text "std::function([](" ] ++ ty ++ [ Text "&& arg) -> "] ++ selfTy ++ [ Text " ", LBrace, Text "return praxis::mkBox<" ] ++ selfImplTy ++ [ Text ">(std::in_place_index<", Text name, Text ">, std::move(arg))", Semi, RBrace, Text ")" ]
+    mkConstructorBody :: Name -> Code -> Code
+    mkConstructorBody name ty = "std::function([](" <> ty <> "&& arg) -> " <> selfTy <> " " <> LBrace <> "return praxis::mkBox<" <> selfImplTy <> ">(std::in_place_index<" <> Text name <> ">, std::move(arg))" <> Semi <> RBrace <> ")"
 
-    mkConstructor :: Name -> [Token] -> [Token]
-    mkConstructor name ty = [ Text "auto mk", Text name, Text " = " ] ++ case tyPats of
+    mkConstructor :: Name -> Code -> Code
+    mkConstructor name ty = "auto mk" <> Text name <> " = " <> case tyPats of
       [] -> mkConstructorBody name ty
-      _  -> [ Text "[]<" ] ++ intercalate [ Text ", " ] (map tyPatDecl tyPats) ++ [ Text ">()", LBrace, Text "return " ] ++ mkConstructorBody name ty ++ [ Semi, RBrace, Semi ]
+      _  -> "[]<" <> intercalate ", " (map tyPatDecl tyPats) <> ">()" <> LBrace <> "return " <> mkConstructorBody name ty <> Semi <> RBrace <> Semi
 
     constructors = concat [ mkConstructor name ty | (name, ty) <- alts ]
 
-  return $ forwardDecl ++ defn ++ indices ++ constructors
+  return $ forwardDecl <> defn <> indices <> constructors
 
   where
-    tyPatDecl :: Annotated TyPat -> [Token]
+    tyPatDecl :: Annotated TyPat -> Code
     tyPatDecl tyPat = case view value tyPat of
-      TyPatVar name                -> [ Text "typename ", Text name ]
-      TyPatViewVar RefOrValue name -> [ Text "praxis::View ", Text name ]
+      TyPatVar name                -> "typename " <> Text name
+      TyPatViewVar RefOrValue name -> "praxis::View " <> Text name
 
-    tyPatInst :: Annotated TyPat -> [Token]
+    tyPatInst :: Annotated TyPat -> Code
     tyPatInst tyPat = case view value tyPat of
-      TyPatVar name                -> [ Text name ]
-      TyPatViewVar RefOrValue name -> [ Text name ]
+      TyPatVar name                -> Text name
+      TyPatViewVar RefOrValue name -> Text name
 
     -- unpack to a list of TyPatVar and TyPatViewVar, skipping Ref domain TyPatViewVar
     unpackTyPat :: Annotated TyPat -> [Annotated TyPat]
@@ -204,26 +232,25 @@ translateDeclData name tyPat alts = do
       TyPatViewVar Ref _        -> []
 
 
-translateDecl :: Bool -> Annotated Decl -> Praxis [Token]
+translateDecl :: Bool -> Annotated Decl -> Praxis Code
 translateDecl topLevel ((src, _) :< decl) = case decl of
 
   DeclRec decls -> do
     rec0 <- freshTempVar
     rec1 <- freshTempVar
-    let unpack :: Name -> [Token]
-        unpack rec = [ Text "auto [" ] ++ intersperse (Text ", ") [ Text name | (_ :< DeclVar name _ _) <- decls ] ++ [ Text "] = ", Text rec, Text "(", Text rec, Text ")", Semi ]
+    let unpack :: Name -> Code
+        unpack rec = "auto [" <> intercalate ", " [ Text name | (_ :< DeclVar name _ _) <- decls ] <> "] = " <> Text rec <> "(" <> Text rec <> ")" <> Semi
     typeHint <- recTypeHint decls
-    decls <- mapM (\(_ :< DeclVar _ sig exp) -> ([ Crumb src ] ++) <$> translateDeclVarBody sig (unpack rec1) False exp) decls
-    return $ [ Text "auto ", Text rec0, Text " = " ] ++ captureList topLevel ++ [ Text "(auto ", Text rec1, Text ")" ] ++ typeHint ++ [ LBrace, Text "return std::tuple", LBrace ] ++ intercalate [ Text ",", Newline ] decls ++ [ RBrace, Semi, RBrace, Semi ] ++ unpack rec0
+    decls <- mapM (\(_ :< DeclVar _ sig exp) -> (Crumb src <>) <$> translateDeclVarBody sig (unpack rec1) False exp) decls
+    return $ "auto " <> Text rec0 <> " = " <> captureList topLevel <> "(auto " <> Text rec1 <> ")" <> typeHint <> LBrace <> "return std::tuple" <> LBrace <> intercalate (Join "," Newline) decls <> RBrace <> Semi <> RBrace <> Semi <> unpack rec0
 
   DeclVar name sig exp -> do
-    body <- translateDeclVarBody sig [] topLevel exp
-    return $ [ Crumb src, Text "auto ", Text name, Text " = " ] ++ body ++ [ Semi ]
+    body <- translateDeclVarBody sig Nil topLevel exp
+    return $ Crumb src <> "auto " <> Text name <> " = " <> body <> Semi
 
   DeclData name tyPat alts -> translateDeclData name tyPat alts
 
-  DeclEnum name alts -> do
-    return $ [ Text "enum ", Text name, Text " ", LBrace ] ++ intersperse (Text ", ") [ Text alt | alt <- alts ] ++ [ RBrace, Semi ]
+  DeclEnum name alts -> return $ "enum " <> Text name <> " " <> LBrace <> intercalate ", " [ Text alt | alt <- alts ] <> RBrace <> Semi
 
   where
     templateVars :: Maybe (Annotated QType) -> [Annotated QTyVar]
@@ -234,109 +261,109 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     isTemplated :: Maybe (Annotated QType) -> Bool
     isTemplated = not . null . templateVars
 
-    translateDeclVarBody :: Maybe (Annotated QType) -> [Token] -> Bool -> Annotated Exp -> Praxis [Token]
+    translateDeclVarBody :: Maybe (Annotated QType) -> Code -> Bool -> Annotated Exp -> Praxis Code
     translateDeclVarBody sig recPrefix nonLocal exp = case templateVars sig of
       [] -> translateExp' recPrefix nonLocal exp
       vs -> do
         vs <- mapM translateQTyVar vs
         exp <- translateExp' recPrefix False exp
-        return $ captureList nonLocal ++ [ Text "<" ] ++ intercalate [ Text ", " ] vs ++ [ Text ">()", LBrace, Text "return " ] ++ exp ++ [ Semi, RBrace ]
+        return $ captureList nonLocal <> "<" <> intercalate ", " vs <> ">()" <> LBrace <> "return " <> exp <> Semi <> RBrace
 
     -- TODO auto deduction may not work if some decls are templated but some arent?
-    recTypeHint :: [Annotated Decl] -> Praxis [Token]
+    recTypeHint :: [Annotated Decl] -> Praxis Code
     recTypeHint decls
       | all (\(_ :< DeclVar _ sig _) -> not (isTemplated sig)) decls
         = do
           -- all decls are non-templated
           tys <- mapM (\(_ :< DeclVar _ _ exp) -> translateType (view ty exp)) decls
-          return $ [ Text " -> std::tuple<" ] ++ intercalate [ Text ", " ] tys ++ [ Text "> " ]
+          return $ " -> std::tuple<" <> intercalate ", " tys <> "> "
       | otherwise
-        = return []
+        = return Nil
 
 
-translateLit :: Lit -> Praxis [Token]
-translateLit lit = return [ Text (translateLit' lit) ] where
+translateLit :: Lit -> Praxis Code
+translateLit lit = return $ Text (translateLit' lit) where
   translateLit' lit = case lit of
     Bool bool     -> if bool then "true" else "false"
     Char char     -> show char
     Int int       -> show int
     String string -> show string
 
-captureList :: Bool -> [Token]
-captureList nonLocal = [ Text (if nonLocal then "[]" else "[&]") ]
+captureList :: Bool -> Code
+captureList nonLocal = if nonLocal then "[]" else "[&]"
 
-lambdaWrap :: Bool -> [Token] -> [Token]
-lambdaWrap nonLocal body = captureList nonLocal ++ [ Text "()", LBrace ] ++ body ++ [ RBrace, Text "()" ]
+lambdaWrap :: Bool -> Code -> Code
+lambdaWrap nonLocal body = captureList nonLocal <> "()" <> LBrace <> body <> RBrace <> "()"
 
-translateExp :: Bool -> Annotated Exp -> Praxis [Token]
-translateExp = translateExp' []
+translateExp :: Bool -> Annotated Exp -> Praxis Code
+translateExp = translateExp' Nil
 
-translateExp' :: [Token] -> Bool -> Annotated Exp -> Praxis [Token]
+translateExp' :: Code -> Bool -> Annotated Exp -> Praxis Code
 translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
 
   Apply exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
     exp2 <- translateExp nonLocal exp2
-    return $ exp1 ++ [ Text "(" ] ++ exp2 ++ [ Text ")" ]
+    return $ exp1 <> "(" <> exp2 <> ")"
 
   Case exp alts -> do
     tempVar <- freshTempVar
     exp <- translateExp False exp
     alts <- translateCase src tempVar alts
-    return $ lambdaWrap nonLocal ([ Text "auto ", Text tempVar, Text " = "] ++ exp ++ [ Semi ] ++ alts)
+    return $ lambdaWrap nonLocal ("auto " <> Text tempVar <> " = " <> exp <> Semi <> alts)
 
   Cases alts -> do
     tempVar <- freshTempVar
     let (_ :< TyFun tempVarTy _) = expTy
     tempVarTy <- translateType tempVarTy
     alts <- translateCase src tempVar alts
-    return $ [ Text "std::function(" ] ++ captureList nonLocal ++ [ Text "(" ] ++ tempVarTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ alts ++ [ RBrace, Text ")" ]
+    return $ "std::function(" <> captureList nonLocal <> "(" <> tempVarTy <> " " <> Text tempVar <> ")" <> LBrace <> recPrefix <> alts <> RBrace <> ")"
 
   Con name -> do
     case expTy of
-      (_ :< TyFun _ _) -> return [ Text "mk", Text name ]
-      _                -> return [ Text name ]
+      (_ :< TyFun _ _) -> return ("mk" <> Text name)
+      _                -> return (Text name)
 
   Defer exp1 exp2 -> do
     tempVar <- freshTempVar
     exp1 <- translateExp False exp1
     exp2 <- translateExp False exp2
-    return $ lambdaWrap nonLocal ([ Text "auto ", Text tempVar, Text " = " ] ++ exp1 ++ [ Semi ] ++ exp2 ++ [ Semi, Text "return ", Text tempVar, Semi])
+    return $ lambdaWrap nonLocal ("auto " <> Text tempVar <> " = " <> exp1 <> Semi <> exp2 <> Semi <> "return " <> Text tempVar <> Semi)
 
   If condExp thenExp elseExp -> do
     condExp <- translateExp nonLocal condExp
     thenExp <- translateExp nonLocal thenExp
     elseExp <- translateExp nonLocal elseExp
-    return $ [ Text "(" ] ++ condExp ++ [ Text ") ? (" ] ++ thenExp ++ [ Text ") : (" ] ++ elseExp ++ [ Text ")" ]
+    return $ "(" <> condExp <> ") ? (" <> thenExp <> ") : (" <> elseExp <> ")"
 
   Lambda pat exp -> do
     patTy <- translateType (view ty pat)
     tempVar <- freshTempVar
     body <- translateBind tempVar pat exp
-    return $ [ Text "std::function(" ] ++ captureList nonLocal ++ [ Text "(" ] ++ patTy ++ [ Text " ", Text tempVar, Text ")", LBrace ] ++ recPrefix ++ body ++ [ RBrace, Text ")" ]
+    return $ "std::function(" <> captureList nonLocal <> "(" <> patTy <> " " <> Text tempVar <> ")" <> LBrace <> recPrefix <> body <> RBrace <> ")"
 
   Let (_ :< Bind pat exp1) exp2 -> do
     tempVar <- freshTempVar
     exp1 <- translateExp False exp1
     bind <- translateBind tempVar pat exp2
-    return $ lambdaWrap nonLocal ([ Text "auto ", Text tempVar, Text " = " ] ++ exp1 ++ [ Semi ] ++ bind)
+    return $ lambdaWrap nonLocal ("auto " <> Text tempVar <> " = " <> exp1 <> Semi <> bind)
 
   Lit lit -> translateLit lit
 
   Read name exp -> do
     tempVar <- freshTempVar
     exp <- translateExp False exp
-    return $ lambdaWrap nonLocal ([ Text "const auto& ", Text tempVar, Text " = ", Text name, Semi, Text "auto ", Text name, Text " = praxis::ref(", Text tempVar, Text ")", Semi, Text "return " ] ++ exp ++ [ Semi ])
+    return $ lambdaWrap nonLocal ("const auto& " <> Text tempVar <> " = " <> Text name <> Semi <> "auto " <> Text name <> " = praxis::ref(" <> Text tempVar <> ")" <> Semi <> "return " <> exp <> Semi)
 
   Pair exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
     exp2 <- translateExp nonLocal exp2
-    return $ [ Text "praxis::mkPair(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
+    return $ "praxis::mkPair(" <> exp1 <> ", " <> exp2 <> ")"
 
   Seq exp1 exp2 -> do
     exp1 <- translateExp nonLocal exp1
     exp2 <- translateExp nonLocal exp2
-    return $ [ Text "(" ] ++ exp1 ++ [ Text ", " ] ++ exp2 ++ [ Text ")" ]
+    return $ "(" <> exp1 <> ", " <> exp2 <> ")"
 
   Sig exp _ -> translateExp nonLocal exp
 
@@ -346,69 +373,68 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     tyArgs <- mapM translateType tyArgs
     return $ case tyArgs of
       [] -> exp
-      _  -> exp ++ [ Text ".template operator()<" ] ++ intercalate [ Text ", " ] tyArgs ++ [ Text ">()" ]
+      _  -> exp <> ".template operator()<" <> intercalate ", " tyArgs <> ">()"
 
   Switch alts -> do
     alts <- translateSwitch src alts
     return $ lambdaWrap nonLocal alts
 
-  Unit -> return [ Text "praxis::Unit{}" ]
+  Unit -> return "praxis::Unit{}"
 
-  Var var -> do
-    return [ Text ("std::move(" ++ var ++ ")") ]
+  Var var -> return $ "std::move(" <> Text var <> ")"
 
   Where exp decls -> do
     decls <- foldMapA (translateDecl False) decls
     exp <- translateExp False exp
-    return $ lambdaWrap nonLocal (decls ++ [ Text "return " ] ++ exp ++ [ Semi ])
+    return $ lambdaWrap nonLocal (decls <> "return " <> exp <> Semi)
 
 
-translateSwitch :: Source -> [(Annotated Exp, Annotated Exp)] -> Praxis [Token]
-translateSwitch src [] = return $ [ Text ("throw praxis::SwitchFail(\"" ++ show src ++ "\")"), Semi ]
+translateSwitch :: Source -> [(Annotated Exp, Annotated Exp)] -> Praxis Code
+translateSwitch src [] = return $ "throw praxis::SwitchFail(\"" <> Text (show src) <> "\")" <> Semi
 translateSwitch src ((cond, exp):alts) = do
   cond <- translateExp False cond
   exp <- translateExp False exp
   alts <- translateSwitch src alts
-  return $ [ Text "if (" ] ++ cond ++ [ Text ") ", LBrace, Text "return " ] ++ exp ++ [ Semi, RBrace, Newline ] ++ alts
+  return $ "if (" <> cond <> ") " <> LBrace <> "return " <> exp <> Semi <> RBrace <> Newline <> alts
 
 
-translateCase :: Source -> Name -> [(Annotated Pat, Annotated Exp)] -> Praxis [Token]
-translateCase src _ [] = return $ [ Text ("throw praxis::CaseFail(\"" ++ show src ++ "\")"), Semi ]
+translateCase :: Source -> Name -> [(Annotated Pat, Annotated Exp)] -> Praxis Code
+translateCase src _ [] = return $ "throw praxis::CaseFail(\"" <> Text (show src) <> "\")" <> Semi
 translateCase src var ((pat, exp):alts) =  do
   exp <- translateExp False exp
-  onMatch <- translateTryMatch var pat ([ Text "return " ] ++ exp ++ [ Semi ])
+  onMatch <- translateTryMatch var pat ("return " <> exp <> Semi)
   onNoMatch <- translateCase src var alts
-  return $ onMatch ++ onNoMatch
+  return $ onMatch <> onNoMatch
 
 
-translateBind :: Name -> Annotated Pat -> Annotated Exp -> Praxis [Token]
+translateBind :: Name -> Annotated Pat -> Annotated Exp -> Praxis Code
 translateBind var pat exp = do
   let src = view source pat
   exp <- translateExp False exp
-  pat <- translateTryMatch var pat ([ Text "return " ] ++ exp ++ [ Semi ])
-  return $ pat ++ [ Text ("throw praxis::BindFail(\"" ++ show src ++ "\")"), Semi ]
+  pat <- translateTryMatch var pat ("return " <> exp <> Semi)
+  return $ pat <> "throw praxis::BindFail(\"" <> Text (show src) <> "\")" <> Semi
 
 
-translateTryMatch :: Name -> Annotated Pat -> [Token] -> Praxis [Token]
+translateTryMatch :: Name -> Annotated Pat -> Code -> Praxis Code
 translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
 
   PatAt var' pat -> do
     pat <- translateTryMatch var' pat onMatch
-    return $ [ Text "auto ", Text var', Text " = ", Text ("std::move(" ++ var ++ ")"), Semi ] ++ pat
+    return $ "auto " <> Text var' <> " = std::move(" <> Text var <> ")" <> Semi <> pat
 
   PatData name pat -> do
     tempVar <- freshTempVar
     onMatch <- translateTryMatch tempVar pat onMatch
-    return $ [ Text "if (", Text (var ++ ".index()"), Text " == ", Text name, Text ") ", LBrace, Text "auto ", Text tempVar, Text " = ", Text var, Text ".template get<", Text name, Text ">()", Semi ] ++ onMatch ++ [ RBrace, Newline ]
+    return $ "if (" <> Text var <> ".index() == " <> Text name <> ") " <> LBrace <> "auto " <> Text tempVar <>  " = " <> Text var <> ".template get<" <> Text name <> ">()" <> Semi <> onMatch <> RBrace <> Newline
 
   PatEnum name -> do
-    return $ [ Text "if (", Text var, Text " == ", Text name, Text ") ", LBrace ] ++ onMatch ++ [ RBrace, Newline ]
+    return $ "if (" <> Text var <> " == " <> Text name <> ") " <> LBrace <> onMatch <> RBrace <> Newline
 
   PatHole -> return onMatch
 
   PatLit lit -> do
     lit <- translateLit lit
-    return $ [ Text "if (", Text var, Text " == " ] ++ lit ++ [ Text ") ", LBrace ] ++ onMatch ++ [ RBrace, Newline ]
+    return $ "if (" <> Text var <> " == " <> lit <> ") " <> LBrace <> onMatch <> RBrace <> Newline
 
   PatPair pat1 pat2 -> do
     var1 <- freshTempVar
@@ -416,13 +442,13 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
     pat2 <- translateTryMatch var2 pat2 onMatch
     onMatch <- translateTryMatch var1 pat1 pat2
     return $
-      [ Text "auto ", Text var1, Text " = ", Text (var ++ ".first()"), Semi ] ++
-      [ Text "auto ", Text var2, Text " = ", Text (var ++ ".second()"), Semi ] ++
+      "auto " <> Text var1 <> " = " <> Text var <> ".first()" <> Semi <>
+      "auto " <> Text var2 <> " = " <> Text var <> ".second()" <> Semi <>
       onMatch
 
   PatUnit -> return onMatch
 
-  PatVar var' -> return $ [ Text "auto ", Text var', Text " = ", Text ("std::move(" ++ var ++ ")"), Semi ] ++ onMatch
+  PatVar var' -> return $ "auto " <> Text var' <> " = std::move(" <> Text var <> ")" <> Semi <> onMatch
 
 
 -- FIXME a lot of this should be moved to Inbuilts

@@ -109,6 +109,7 @@ definePrisms ''Prec
 
 definePrisms ''Bind
 definePrisms ''DataCon
+definePrisms ''DataMode
 definePrisms ''Decl
 definePrisms ''Exp
 definePrisms ''Pat
@@ -225,8 +226,9 @@ declSyn :: Syntax f => f Decl
 declSyn = _DeclSyn <$> reservedId "using" *> conid <*> reservedOp "=" *> annotated ty
 
 declData :: Syntax f => f Decl
-declData = _DeclData <$> reservedId "datatype" *> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where
+declData = _DeclData <$> reservedId "datatype" *> dataMode <*> conid <*> optional (annotated tyPat) <*> reservedOp "=" *> alts where
   alts = _Cons <$> annotated dataAlt <*> many (contextualOp "|" *> annotated dataAlt)
+  dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataRec <$> reservedId "rec") <|> (_DataUnboxed <$> (reservedId "unboxed" <|> pure ()))
 
 declEnum :: Syntax f => f Decl
 declEnum = _DeclEnum <$> reservedId "enum" *> conid <*> reservedOp "=" *> alts where

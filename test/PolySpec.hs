@@ -36,11 +36,11 @@ swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0]
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto swap_0 = []<typename a_0, typename b_0>(){
-  return std::function([&](std::pair<a_0, b_0> temp_0_){
-    auto temp_1_ = praxis::first(temp_0_);
-    auto temp_2_ = praxis::second(temp_0_);
-    auto a_0 = std::move(temp_1_);
-    auto b_0 = std::move(temp_2_);
+  return std::function([&](std::pair<a_0, b_0> _temp_0){
+    auto _temp_1 = praxis::first(_temp_0);
+    auto _temp_2 = praxis::second(_temp_0);
+    auto a_0 = std::move(_temp_1);
+    auto b_0 = std::move(_temp_2);
     return std::make_pair(std::move(b_0), std::move(a_0));
     throw praxis::BindFail("3:6");
   });

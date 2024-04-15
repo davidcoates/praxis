@@ -14,7 +14,6 @@ import qualified Parse      (parse)
 import           Praxis
 import           Print
 import           Term
-import qualified Translate  (prelude)
 
 
 instance (Term a, x ~ Annotation a) => Show (Tag (Source, Maybe x) a) where

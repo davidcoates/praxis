@@ -29,11 +29,11 @@ view_0 : forall ? v_0 a_0 b_0 . ? v_0 ( a_0 , b_0 ) -> ( ? v_0 b_0 , ? v_0 a_0 )
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto view_0 = []<praxis::View v_0, typename a_0, typename b_0>(){
-  return std::function([&](praxis::apply<v_0, std::pair<a_0, b_0>> temp_0_){
-    auto temp_1_ = praxis::first(temp_0_);
-    auto temp_2_ = praxis::second(temp_0_);
-    auto x_0 = std::move(temp_1_);
-    auto y_0 = std::move(temp_2_);
+  return std::function([&](praxis::apply<v_0, std::pair<a_0, b_0>> _temp_0){
+    auto _temp_1 = praxis::first(_temp_0);
+    auto _temp_2 = praxis::second(_temp_0);
+    auto x_0 = std::move(_temp_1);
+    auto y_0 = std::move(_temp_2);
     return std::make_pair(std::move(y_0), std::move(x_0));
     throw praxis::BindFail("3:6");
   });
@@ -49,20 +49,20 @@ auto view_0 = []<praxis::View v_0, typename a_0, typename b_0>(){
     let program = trim [r|
 datatype Box [&v, a] = Box &v a
 
-datatype List a = Nil () | Cons (a, List a)
+datatype rec List a = Nil () | Cons (a, List a)
 
 box = Box "x"
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
-datatype Box [ & v_0 , a_0 ] = Box & v_0 a_0
-datatype List a_1 = Nil ( ) | Cons ( a_1 , List a_1 )
+datatype unboxed Box [ & v_0 , a_0 ] = Box & v_0 a_0
+datatype rec List a_1 = Nil ( ) | Cons ( a_1 , List a_1 )
 box_0 = Box "x"
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-datatype Box [ & v_0 , a_0 ] = [forall & v_0 a_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
-datatype List a_1 = [forall a_1 . ( ) -> List a_1] Nil ( ) | [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
+datatype unboxed Box [ & v_0 , a_0 ] = [forall & v_0 a_0 . & v_0 a_0 -> Box [ & v_0 , a_0 ]] Box & v_0 a_0
+datatype rec List a_1 = [forall a_1 . ( ) -> List a_1] Nil ( ) | [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
 box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
 |]
 
@@ -90,7 +90,7 @@ do
   describe "read safety" $ do
 
     let program = trim [r|
-datatype List a = Nil () | Cons (a, List a)
+datatype rec List a = Nil () | Cons (a, List a)
 
 x = Cons (1, Cons (2, Cons (3, Nil ())))
 
@@ -99,7 +99,7 @@ y = read x in (1, x)
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
-datatype List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
+datatype rec List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
 x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
 y_0 = read x_0 in ( 1 , x_0 )
 |]

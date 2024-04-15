@@ -175,14 +175,14 @@ instance Term Decl where
   witness = IDecl
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclData n t as -> DeclData n <$> traverse f t <*> traverse f as
-    DeclDef n ps e  -> DeclDef n <$> traverse f ps <*> f e
-    DeclEnum n as   -> pure (DeclEnum n as)
-    DeclOp o d rs   -> DeclOp <$> f o <*> pure d <*> f rs
-    DeclRec ds      -> DeclRec <$> traverse f ds
-    DeclSig n t     -> DeclSig n <$> f t
-    DeclSyn n t     -> DeclSyn n <$> f t
-    DeclVar n t e   -> DeclVar n <$> traverse f t <*> f e
+    DeclData m n t as -> DeclData m n <$> traverse f t <*> traverse f as
+    DeclDef n ps e    -> DeclDef n <$> traverse f ps <*> f e
+    DeclEnum n as     -> pure (DeclEnum n as)
+    DeclOp o d rs     -> DeclOp <$> f o <*> pure d <*> f rs
+    DeclRec ds        -> DeclRec <$> traverse f ds
+    DeclSig n t       -> DeclSig n <$> f t
+    DeclSyn n t       -> DeclSyn n <$> f t
+    DeclVar n t e     -> DeclVar n <$> traverse f t <*> f e
 
 
 pair :: (Term a, Term b) => Applicative f => Termformer f -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)

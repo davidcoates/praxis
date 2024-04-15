@@ -41,20 +41,20 @@ color_to_char_0 = \ [Color] color_0 -> [Char] case [Color] color_0 of
 
   it "translates" $ translate program `shouldReturn` trim [r|
 enum Color {
-  Red, Green, Blue
+  _conRed, _conGreen, _conBlue
 };
 /* 4:1 */
-auto color_to_char_0 = std::function([](Color temp_0_){
-  auto color_0 = std::move(temp_0_);
+auto color_to_char_0 = std::function([](Color _temp_0){
+  auto color_0 = std::move(_temp_0);
   return [&](){
-    auto temp_1_ = std::move(color_0);
-    if (temp_1_ == Red) {
+    auto _temp_1 = std::move(color_0);
+    if (_temp_1 == _conRed) {
       return 'R';
     }
-    if (temp_1_ == Green) {
+    if (_temp_1 == _conGreen) {
       return 'G';
     }
-    if (temp_1_ == Blue) {
+    if (_temp_1 == _conBlue) {
       return 'B';
     }
     throw praxis::CaseFail("4:23");

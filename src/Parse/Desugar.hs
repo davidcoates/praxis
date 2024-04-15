@@ -172,11 +172,11 @@ desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
 desugarDecls []            = pure []
 desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
-  DeclData name tyPat alts -> do
+  DeclData mode name tyPat alts -> do
     tyPat <- traverse desugar tyPat
     alts <- traverse desugar alts
     decls <- desugarDecls decls
-    return (a :< DeclData name tyPat alts : decls)
+    return (a :< DeclData mode name tyPat alts : decls)
 
   DeclDef name args exp -> do
     args <- mapM desugar args

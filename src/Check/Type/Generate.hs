@@ -210,7 +210,7 @@ generateDecl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated D
 generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   -- TODO Copy constraints needed!
-  DeclData name arg alts -> do
+  DeclData mode name arg alts -> do
 
     -- TODO could be kind annotated to avoid this lookup
     Just k <- kEnv `uses` Env.lookup name
@@ -235,7 +235,7 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
         return ((src, Just qTy) :< DataCon name argTy)
 
     alts <- traverse generateDataCon alts
-    return $ DeclData name arg alts
+    return $ DeclData mode name arg alts
 
   DeclEnum name alts -> do
     Just k <- kEnv `uses` Env.lookup name

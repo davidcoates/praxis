@@ -40,21 +40,21 @@ rec
       interpret program "fac 15" `shouldReturn` "1307674368000"
 
     it "translates" $ translate program `shouldReturn` trim [r|
-auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<int(int)>> {
+auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<int(int)>> {
   return std::tuple{
     /* 2:1 */
-    std::function([&](int temp_2_){
-      auto [fac_0] = temp_1_(temp_1_);
-      if (temp_2_ == 0) {
+    std::function([&](int _temp_2){
+      auto [fac_0] = _temp_1(_temp_1);
+      if (_temp_2 == 0) {
         return 1;
       }
-      auto n_0 = std::move(temp_2_);
+      auto n_0 = std::move(_temp_2);
       return std::move(multiply_int)(std::make_pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(std::make_pair(std::move(n_0), 1)))));
       throw praxis::CaseFail("3:9");
     })
   };
 };
-auto [fac_0] = temp_0_(temp_0_);
+auto [fac_0] = _temp_0(_temp_0);
 |]
 
     it "compiles" $ compile program `shouldReturn` True
@@ -100,31 +100,31 @@ rec
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
-auto temp_0_ = [](auto temp_1_) -> std::tuple<std::function<bool(int)>, std::function<bool(int)>> {
+auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<bool(int)>, std::function<bool(int)>> {
   return std::tuple{
     /* 2:1 */
-    std::function([&](int temp_2_){
-      auto [is_even_0, is_odd_0] = temp_1_(temp_1_);
-      if (temp_2_ == 0) {
+    std::function([&](int _temp_2){
+      auto [is_even_0, is_odd_0] = _temp_1(_temp_1);
+      if (_temp_2 == 0) {
         return true;
       }
-      auto n_0 = std::move(temp_2_);
+      auto n_0 = std::move(_temp_2);
       return std::move(is_odd_0)(std::move(subtract_int)(std::make_pair(std::move(n_0), 1)));
       throw praxis::CaseFail("3:13");
     }),
     /* 2:1 */
-    std::function([&](int temp_3_){
-      auto [is_even_0, is_odd_0] = temp_1_(temp_1_);
-      if (temp_3_ == 0) {
+    std::function([&](int _temp_3){
+      auto [is_even_0, is_odd_0] = _temp_1(_temp_1);
+      if (_temp_3 == 0) {
         return false;
       }
-      auto n_1 = std::move(temp_3_);
+      auto n_1 = std::move(_temp_3);
       return std::move(is_even_0)(std::move(subtract_int)(std::make_pair(std::move(n_1), 1)));
       throw praxis::CaseFail("7:12");
     })
   };
 };
-auto [is_even_0, is_odd_0] = temp_0_(temp_0_);
+auto [is_even_0, is_odd_0] = _temp_0(_temp_0);
 |]
 
     it "compiles" $ compile program `shouldReturn` True

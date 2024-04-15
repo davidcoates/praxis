@@ -33,21 +33,19 @@ interpretProgram program = do
   return program
 
 translateProgram :: String -> Praxis String
-translateProgram program = do
-  program <- parse program >>= check :: Praxis (Annotated Program)
-  translation <- Translate.runProgram program
-  return translation
+translateProgram = translateProgram' Translate.NoPrelude
 
-coerceMain :: Praxis String
-coerceMain = do
-  requireMain
-  return $ "\nint main(){ main_0(std::monostate{}); }"
+translateProgram' :: Translate.Mode -> String -> Praxis String
+translateProgram' mode program = do
+  program <- parse program >>= check :: Praxis (Annotated Program)
+  translation <- Translate.runProgram mode program
+  return translation
 
 compileProgram :: String -> Maybe FilePath -> Praxis ()
 compileProgram program outFile = do
-  program <- translateProgram program
-  postlude <- case outFile of { Just _ -> coerceMain; Nothing -> return ""; } -- If we are linking, then main needs to be defined.
-  withSystemTempDirectory "praxis" (compile (Translate.prelude ++ program ++ postlude))
+  let mode = case outFile of { Just _ -> Translate.PreludeWithMain; Nothing -> Translate.Prelude }
+  program <- translateProgram' mode program
+  withSystemTempDirectory "praxis" (compile program)
   where
     compile :: String -> FilePath -> Praxis ()
     compile program dir = do
@@ -64,9 +62,8 @@ compileProgram program outFile = do
 
 compileAndRunProgram :: String -> Praxis String
 compileAndRunProgram program = do
-  program <- translateProgram program
-  postlude <- coerceMain
-  withSystemTempDirectory "praxis" (compileAndRun (Translate.prelude ++ program ++ postlude))
+  program <- translateProgram' Translate.PreludeWithMain program
+  withSystemTempDirectory "praxis" (compileAndRun program)
   where
     compileAndRun :: String -> FilePath -> Praxis String
     compileAndRun program dir = do

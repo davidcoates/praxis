@@ -14,6 +14,7 @@ module Term
   -- | T0
   , Bind(..)
   , DataCon(..)
+  , DataMode(..)
   , Decl(..)
   , Exp(..)
   , expIsRecSafe
@@ -82,7 +83,10 @@ data Bind = Bind (Annotated Pat) (Annotated Exp)
 data DataCon = DataCon Name (Annotated Type)
   deriving (Eq, Ord)
 
-data Decl = DeclData Name (Maybe (Annotated TyPat)) [Annotated DataCon]
+data DataMode = DataUnboxed | DataBoxed | DataRec
+  deriving (Eq, Ord)
+
+data Decl = DeclData DataMode Name (Maybe (Annotated TyPat)) [Annotated DataCon]
           | DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
           | DeclEnum Name [Name]
           | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name

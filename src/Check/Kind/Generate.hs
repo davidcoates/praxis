@@ -166,18 +166,18 @@ generateDataCon (a@(src, _) :< DataCon name arg) = do
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
 generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  -- TODO check no duplicated patterns
-  DeclData name arg alts -> do
+  DeclData mode name arg alts -> do
     k <- freshKindUni
-    introKind src name k
+    when (mode == DataRec) $ introKind src name k
     (arg, alts) <- save kEnv $ do
         arg <- traverse generate arg
         alts <- traverse generate alts
         return (arg, alts)
+    unless (mode == DataRec) $ introKind src name k
     case arg of
       Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (DataType name) src
       Just arg -> require $ newConstraint (k `KEq` phantom (KindFun (view kind arg) (phantom KindType))) (DataType name) src
-    return $ DeclData name arg alts
+    return $ DeclData mode name arg alts
 
   DeclEnum name alts -> do
     introKind src name (phantom KindType)

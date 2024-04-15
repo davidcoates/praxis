@@ -18,11 +18,11 @@ datatype Either [a, b] = Left a | Right b
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
-datatype Either [ a_0 , b_0 ] = Left a_0 | Right b_0
+datatype unboxed Either [ a_0 , b_0 ] = Left a_0 | Right b_0
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-datatype Either [ a_0 , b_0 ] = [forall a_0 b_0 . a_0 -> Either [ a_0 , b_0 ]] Left a_0 | [forall a_0 b_0 . b_0 -> Either [ a_0 , b_0 ]] Right b_0
+datatype unboxed Either [ a_0 , b_0 ] = [forall a_0 b_0 . a_0 -> Either [ a_0 , b_0 ]] Left a_0 | [forall a_0 b_0 . b_0 -> Either [ a_0 , b_0 ]] Right b_0
 |]
 
     it "evaluates" $ do
@@ -45,13 +45,13 @@ id_fun () = Fun (\x -> x)
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
-datatype Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
+datatype unboxed Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
 unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ Fun f_0 -> \ x_0 -> f_0 x_0
 id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ ( ) -> Fun ( \ x_1 -> x_1 )
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-datatype Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
+datatype unboxed Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
 unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
 id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
@@ -60,10 +60,83 @@ id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 
 
 
 
-  describe "datatype List (with map & sum)" $ do
+  describe "datatype Unboxed (unboxed)" $ do
+
+    let program = [r|
+datatype unboxed Unboxed a = Unboxed a
+|]
+
+    it "type checks" $ check program `shouldReturn` trim [r|
+datatype unboxed Unboxed a_0 = [forall a_0 . a_0 -> Unboxed a_0] Unboxed a_0
+|]
+
+    it "translates" $ translate program `shouldReturn` trim [r|
+template<typename a_0>
+struct Unboxed : std::variant<a_0> {
+  using std::variant<a_0>::variant;
+  template<size_t index>
+  inline const auto& get() const { return std::get<index>(*this); }
+  template<size_t index>
+  inline auto& get() { return std::get<index>(*this); }
+};
+static constexpr size_t _idxUnboxed = 0;
+auto _conUnboxed = []<typename a_0>(){
+  return std::function([](a_0&& arg) -> Unboxed<a_0> {
+    return Unboxed<a_0>(std::in_place_index<_idxUnboxed>, std::move(arg));
+  });
+};
+|]
+
+
+  describe "datatype Boxed (boxed)" $ do
+
+    let program = [r|
+datatype boxed Boxed a = Boxed a
+|]
+
+    it "type checks" $ check program `shouldReturn` trim [r|
+datatype boxed Boxed a_0 = [forall a_0 . a_0 -> Boxed a_0] Boxed a_0
+|]
+
+    it "translates" $ translate program `shouldReturn` trim [r|
+template<typename a_0>
+struct _implBoxed;
+template<typename a_0>
+using Boxed = praxis::Boxed<_implBoxed<a_0>>;
+template<typename a_0>
+struct _implBoxed : std::variant<a_0> {
+  using std::variant<a_0>::variant;
+  template<size_t index>
+  inline const auto& get() const { return std::get<index>(*this); }
+  template<size_t index>
+  inline auto& get() { return std::get<index>(*this); }
+};
+static constexpr size_t _idxBoxed = 0;
+auto _conBoxed = []<typename a_0>(){
+  return std::function([](a_0&& arg) -> Boxed<a_0> {
+    return praxis::mkBoxed<_implBoxed<a_0>>(std::in_place_index<_idxBoxed>, std::move(arg));
+  });
+};
+|]
+
+
+
+  describe "datatype List (non-rec fails)" $ do
 
     let program = [r|
 datatype List a = Nil () | Cons (a, List a)
+|]
+
+    it "type checks" $ check program `shouldReturn` trim [r|
+2:37 error: 'List' is not in scope
+|]
+
+
+
+  describe "datatype List (rec, with map & sum)" $ do
+
+    let program = [r|
+datatype rec List a = Nil () | Cons (a, List a)
 
 rec
   map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
@@ -79,7 +152,7 @@ rec
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
-datatype List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
+datatype rec List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
 rec
   map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ f_0 -> cases
     Nil ( ) -> Nil ( )
@@ -91,7 +164,7 @@ rec
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-datatype List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
+datatype rec List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
   map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 List a_1 -> List b_0] cases
     [? v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
@@ -120,48 +193,48 @@ do
 
     it "translates" $ translate program `shouldReturn` trim [r|
 template<typename a_0>
-struct ListImpl;
+struct _implList;
 template<typename a_0>
-using List = praxis::Box<ListImpl<a_0>>;
+using List = praxis::Boxed<_implList<a_0>>;
 template<typename a_0>
-struct ListImpl : std::variant<std::monostate, std::pair<a_0, List<a_0>>> {
+struct _implList : std::variant<std::monostate, std::pair<a_0, List<a_0>>> {
   using std::variant<std::monostate, std::pair<a_0, List<a_0>>>::variant;
   template<size_t index>
   inline const auto& get() const { return std::get<index>(*this); }
   template<size_t index>
   inline auto& get() { return std::get<index>(*this); }
 };
-static constexpr size_t Nil = 0;
-static constexpr size_t Cons = 1;
-auto mkNil = []<typename a_0>(){
+static constexpr size_t _idxNil = 0;
+static constexpr size_t _idxCons = 1;
+auto _conNil = []<typename a_0>(){
   return std::function([](std::monostate&& arg) -> List<a_0> {
-    return praxis::mkBox<ListImpl<a_0>>(std::in_place_index<Nil>, std::move(arg));
+    return praxis::mkBoxed<_implList<a_0>>(std::in_place_index<_idxNil>, std::move(arg));
   });
 };
-auto mkCons = []<typename a_0>(){
+auto _conCons = []<typename a_0>(){
   return std::function([](std::pair<a_0, List<a_0>>&& arg) -> List<a_0> {
-    return praxis::mkBox<ListImpl<a_0>>(std::in_place_index<Cons>, std::move(arg));
+    return praxis::mkBoxed<_implList<a_0>>(std::in_place_index<_idxCons>, std::move(arg));
   });
 };
-auto temp_0_ = [](auto temp_1_){
+auto _temp_0 = [](auto _temp_1){
   return std::tuple{
     /* 4:1 */
     [&]<praxis::View v_0, typename a_1, typename b_0>(){
-      return std::function([&](std::function<b_0(praxis::apply<v_0, a_1>)> temp_2_){
-        auto [map_0] = temp_1_(temp_1_);
-        auto f_0 = std::move(temp_2_);
-        return std::function([&](praxis::apply<v_0, List<a_1>> temp_3_){
-          if (temp_3_.index() == Nil) {
-            auto temp_4_ = temp_3_.template get<Nil>();
-            return mkNil.template operator()<b_0>()(std::monostate{});
+      return std::function([&](std::function<b_0(praxis::apply<v_0, a_1>)> _temp_2){
+        auto [map_0] = _temp_1(_temp_1);
+        auto f_0 = std::move(_temp_2);
+        return std::function([&](praxis::apply<v_0, List<a_1>> _temp_3){
+          if (_temp_3.index() == _idxNil) {
+            auto _temp_4 = _temp_3.template get<_idxNil>();
+            return _conNil.template operator()<b_0>()(std::monostate{});
           }
-          if (temp_3_.index() == Cons) {
-            auto temp_5_ = temp_3_.template get<Cons>();
-            auto temp_6_ = praxis::first(temp_5_);
-            auto temp_7_ = praxis::second(temp_5_);
-            auto x_0 = std::move(temp_6_);
-            auto xs_0 = std::move(temp_7_);
-            return mkCons.template operator()<b_0>()(std::make_pair(std::move(f_0)(std::move(x_0)), std::move(map_0).template operator()<v_0, a_1, b_0>()(std::move(f_0))(std::move(xs_0))));
+          if (_temp_3.index() == _idxCons) {
+            auto _temp_5 = _temp_3.template get<_idxCons>();
+            auto _temp_6 = praxis::first(_temp_5);
+            auto _temp_7 = praxis::second(_temp_5);
+            auto x_0 = std::move(_temp_6);
+            auto xs_0 = std::move(_temp_7);
+            return _conCons.template operator()<b_0>()(std::make_pair(std::move(f_0)(std::move(x_0)), std::move(map_0).template operator()<v_0, a_1, b_0>()(std::move(f_0))(std::move(xs_0))));
           }
           throw praxis::CaseFail("6:11");
         });
@@ -170,29 +243,29 @@ auto temp_0_ = [](auto temp_1_){
     }
   };
 };
-auto [map_0] = temp_0_(temp_0_);
-auto temp_8_ = [](auto temp_9_) -> std::tuple<std::function<int(praxis::apply<praxis::View::REF, List<int>>)>> {
+auto [map_0] = _temp_0(_temp_0);
+auto _temp_8 = [](auto _temp_9) -> std::tuple<std::function<int(praxis::apply<praxis::View::REF, List<int>>)>> {
   return std::tuple{
     /* 10:1 */
-    std::function([&](praxis::apply<praxis::View::REF, List<int>> temp_10_){
-      auto [sum_0] = temp_9_(temp_9_);
-      if (temp_10_.index() == Nil) {
-        auto temp_11_ = temp_10_.template get<Nil>();
+    std::function([&](praxis::apply<praxis::View::REF, List<int>> _temp_10){
+      auto [sum_0] = _temp_9(_temp_9);
+      if (_temp_10.index() == _idxNil) {
+        auto _temp_11 = _temp_10.template get<_idxNil>();
         return 0;
       }
-      if (temp_10_.index() == Cons) {
-        auto temp_12_ = temp_10_.template get<Cons>();
-        auto temp_13_ = praxis::first(temp_12_);
-        auto temp_14_ = praxis::second(temp_12_);
-        auto x_1 = std::move(temp_13_);
-        auto xs_1 = std::move(temp_14_);
+      if (_temp_10.index() == _idxCons) {
+        auto _temp_12 = _temp_10.template get<_idxCons>();
+        auto _temp_13 = praxis::first(_temp_12);
+        auto _temp_14 = praxis::second(_temp_12);
+        auto x_1 = std::move(_temp_13);
+        auto xs_1 = std::move(_temp_14);
         return std::move(add_int)(std::make_pair(std::move(x_1), std::move(sum_0)(std::move(xs_1))));
       }
       throw praxis::CaseFail("12:9");
     })
   };
 };
-auto [sum_0] = temp_8_(temp_8_);
+auto [sum_0] = _temp_8(_temp_8);
 |]
 
     it "compiles" $ compile program `shouldReturn` True

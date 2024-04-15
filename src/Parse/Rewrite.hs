@@ -212,7 +212,7 @@ rewriteDecl ((src, a) :< decl) = ((src, a) :<) <$> case decl of
     rewriteMap . varMap %= (Map.insert name name')
     return (DeclVar name' sig exp)
 
-  DeclData name tyPat alts -> case tyPat of
+  DeclData _ _ tyPat _ -> case tyPat of
     Nothing    -> recurseTerm rewrite decl
     Just tyPat -> saveTyVarMap (addRewriteFromTyPat tyPat >> recurseTerm rewrite decl)
 

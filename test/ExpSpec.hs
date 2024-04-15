@@ -32,11 +32,11 @@ foo_0 = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto foo_0 = [](){
-  auto temp_0_ = 1;
-  auto x_0 = std::move(temp_0_);
+  auto _temp_0 = 1;
+  auto x_0 = std::move(_temp_0);
   return (std::monostate{}, [&](){
-    auto temp_1_ = 2;
-    auto y_0 = std::move(temp_1_);
+    auto _temp_1 = 2;
+    auto y_0 = std::move(_temp_1);
     return std::move(add_int)(std::make_pair(std::move(x_0), std::move(y_0)));
     throw praxis::BindFail("5:7");
   }());
@@ -89,11 +89,11 @@ min_0 = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int (
 
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-auto min_0 = std::function([](std::pair<int, int> temp_0_){
-  auto temp_1_ = praxis::first(temp_0_);
-  auto temp_2_ = praxis::second(temp_0_);
-  auto x_0 = std::move(temp_1_);
-  auto y_0 = std::move(temp_2_);
+auto min_0 = std::function([](std::pair<int, int> _temp_0){
+  auto _temp_1 = praxis::first(_temp_0);
+  auto _temp_2 = praxis::second(_temp_0);
+  auto x_0 = std::move(_temp_1);
+  auto y_0 = std::move(_temp_2);
   return (std::move(lt_int)(std::make_pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
   throw praxis::BindFail("1:5");
 });
@@ -145,8 +145,8 @@ error: found contradiction [1:1] Int = Int -> Int and Int = Int
 
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
-auto sign_0 = std::function([](int temp_0_){
-  auto n_0 = std::move(temp_0_);
+auto sign_0 = std::function([](int _temp_0){
+  auto n_0 = std::move(_temp_0);
   return [&](){
     if (std::move(lt_int)(std::make_pair(std::move(n_0), 0))) {
       return std::move(negate_int)(1);

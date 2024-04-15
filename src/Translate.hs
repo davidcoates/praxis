@@ -5,7 +5,7 @@
 
 module Translate
   ( runProgram
-  , prelude
+  , Mode(..)
   ) where
 
 import           Common            hiding (Nil, intercalate)
@@ -20,7 +20,7 @@ import           Text.RawString.QQ
 
 
 freshTempVar :: Praxis Name
-freshTempVar = (++ "_") <$> freshVar "temp"
+freshTempVar = freshVar "_temp"
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
@@ -75,17 +75,22 @@ layout code = layout' 0 "" (unroll code) where
     _          -> [code]
 
 
-runProgram :: Annotated Program -> Praxis String
-runProgram program = save stage $ do
+data Mode = NoPrelude | Prelude | PreludeWithMain
+
+runProgram :: Mode -> Annotated Program -> Praxis String
+runProgram mode program = save stage $ do
   stage .= Translate
   program <- layout <$> translateProgram program
   display program `ifFlag` debug
-  return program
+  let wrappedProgram = prelude ++ "namespace praxis::user {\n" ++ program ++ "\n}"
+  case mode of
+    NoPrelude       -> return program
+    Prelude         -> return wrappedProgram
+    PreludeWithMain -> requireMain >> return (wrappedProgram ++ "\nint main(){ praxis::user::main_0(std::monostate{}); }")
 
 
 translateProgram :: Annotated Program -> Praxis Code
 translateProgram (_ :< Program decls) = foldMapA (translateDecl True) decls
-
 
 -- QViewVar's with a ref domain (e.g. &r) are not needed past the type checking stage. They are dropped from the translated code.
 canTranslateQTyVar :: Annotated QTyVar -> Bool
@@ -174,8 +179,8 @@ translateQType ((src, _) :< Forall vs _ t) = translateQType' (translatableQTyVar
       return $ "template<" <> intercalate ", " vs <> ">" <> t
 
 
-translateDeclData :: Name -> Maybe (Annotated TyPat) -> [Annotated DataCon] -> Praxis Code
-translateDeclData name tyPat alts = do
+translateDeclData :: DataMode -> Name -> Maybe (Annotated TyPat) -> [Annotated DataCon] -> Praxis Code
+translateDeclData mode name tyPat alts = do
 
   let tyPats = case tyPat of { Just tyPat -> unpackTyPat tyPat; Nothing -> []; }
 
@@ -186,31 +191,40 @@ translateDeclData name tyPat alts = do
       [] -> Nil
       _  -> "template<" <> intercalate ", " (map tyPatDecl tyPats) <> ">" <> Newline
 
-    tyPatsInst = case tyPats of
-      [] -> Nil
-      _  -> "<" <> intercalate ", " (map tyPatInst tyPats) <> ">"
+    fullTy = case tyPats of
+      [] -> Text name
+      _  -> Text name <> "<" <> intercalate ", " (map tyPatInst tyPats) <> ">"
 
-    forwardDecl = tyPatsDecl <> "struct " <> Text name <> "Impl" <> Semi <> tyPatsDecl <> "using " <> Text name <> " = praxis::Box<" <> Text name <> "Impl" <> tyPatsInst <> ">" <> Semi
     variantTy = "std::variant<" <> intercalate ", " (map snd alts) <> ">"
+
     body = "using " <> variantTy <> "::variant" <> Semi <> "template<size_t index>" <> Newline <> "inline const auto& get() const { return std::get<index>(*this); }" <> Newline <> "template<size_t index>" <> Newline <> "inline auto& get() { return std::get<index>(*this); }"
-    defn = tyPatsDecl <> "struct " <> Text name <> "Impl : " <> variantTy <> " " <> LBrace <> body <> RBrace <> Semi
 
-    indices = concat [ "static constexpr size_t " <> Text name <> " = " <> Text (show i) <> Semi | (name, i) <- zip (map fst alts) [0..] ]
+    defn = case mode of
+      DataUnboxed
+        -> tyPatsDecl <> "struct "      <> Text name <> " : " <> variantTy <> " " <> LBrace <> body <> RBrace <> Semi
+      _
+        -> tyPatsDecl <> "struct _impl" <> Text name <> Semi <> tyPatsDecl <> "using " <> Text name <> " = praxis::Boxed<_impl" <> fullTy <> ">" <> Semi <> -- forward declaration
+           tyPatsDecl <> "struct _impl" <> Text name <> " : " <> variantTy <> " " <> LBrace <> body <> RBrace <> Semi
 
-    selfTy = Text name <> tyPatsInst
-    selfImplTy = Text name <> "Impl" <> tyPatsInst
 
-    mkConstructorBody :: Name -> Code -> Code
-    mkConstructorBody name ty = "std::function([](" <> ty <> "&& arg) -> " <> selfTy <> " " <> LBrace <> "return praxis::mkBox<" <> selfImplTy <> ">(std::in_place_index<" <> Text name <> ">, std::move(arg))" <> Semi <> RBrace <> ")"
+    altIndices = concat [ "static constexpr size_t _idx" <> Text name <> " = " <> Text (show i) <> Semi | (name, i) <- zip (map fst alts) [0..] ]
 
-    mkConstructor :: Name -> Code -> Code
-    mkConstructor name ty = "auto mk" <> Text name <> " = " <> case tyPats of
-      [] -> mkConstructorBody name ty
-      _  -> "[]<" <> intercalate ", " (map tyPatDecl tyPats) <> ">()" <> LBrace <> "return " <> mkConstructorBody name ty <> Semi <> RBrace <> Semi
+    altConstructors = concat [ altConstructor name ty | (name, ty) <- alts ] where
 
-    constructors = concat [ mkConstructor name ty | (name, ty) <- alts ]
+      constructor = case mode of
+        DataUnboxed -> fullTy
+        _           -> "praxis::mkBoxed<_impl"  <> fullTy <> ">"
 
-  return $ forwardDecl <> defn <> indices <> constructors
+      altConstructorBody :: Name -> Code -> Code
+      altConstructorBody altName ty = "std::function([](" <> ty <> "&& arg) -> " <> fullTy <> " " <> LBrace <> "return " <> constructor <> "(std::in_place_index<_idx" <> Text altName <> ">, std::move(arg))" <> Semi <> RBrace <> ")" where
+
+      altConstructor :: Name -> Code -> Code
+      altConstructor altName ty = "auto _con" <> Text altName <> " = " <> case tyPats of
+        [] -> altConstructorBody altName ty
+        _  -> "[]<" <> intercalate ", " (map tyPatDecl tyPats) <> ">()" <> LBrace <> "return " <> altConstructorBody altName ty <> Semi <> RBrace <> Semi
+
+
+  return $ defn <> altIndices <> altConstructors
 
   where
     tyPatDecl :: Annotated TyPat -> Code
@@ -248,9 +262,9 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     body <- translateDeclVarBody sig Nil topLevel exp
     return $ Crumb src <> "auto " <> Text name <> " = " <> body <> Semi
 
-  DeclData name tyPat alts -> translateDeclData name tyPat alts
+  DeclData mode name tyPat alts -> translateDeclData mode name tyPat alts
 
-  DeclEnum name alts -> return $ "enum " <> Text name <> " " <> LBrace <> intercalate ", " [ Text alt | alt <- alts ] <> RBrace <> Semi
+  DeclEnum name alts -> return $ "enum " <> Text name <> " " <> LBrace <> intercalate ", " [ "_con" <> Text alt | alt <- alts ] <> RBrace <> Semi
 
   where
     templateVars :: Maybe (Annotated QType) -> [Annotated QTyVar]
@@ -319,10 +333,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     alts <- translateCase src tempVar alts
     return $ "std::function(" <> captureList nonLocal <> "(" <> tempVarTy <> " " <> Text tempVar <> ")" <> LBrace <> recPrefix <> alts <> RBrace <> ")"
 
-  Con name -> do
-    case expTy of
-      (_ :< TyFun _ _) -> return ("mk" <> Text name)
-      _                -> return (Text name)
+  Con name -> return ("_con" <> Text name)
 
   Defer exp1 exp2 -> do
     tempVar <- freshTempVar
@@ -425,10 +436,10 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
   PatData name pat -> do
     tempVar <- freshTempVar
     onMatch <- translateTryMatch tempVar pat onMatch
-    return $ "if (" <> Text var <> ".index() == " <> Text name <> ") " <> LBrace <> "auto " <> Text tempVar <>  " = " <> Text var <> ".template get<" <> Text name <> ">()" <> Semi <> onMatch <> RBrace <> Newline
+    return $ "if (" <> Text var <> ".index() == _idx" <> Text name <> ") " <> LBrace <> "auto " <> Text tempVar <>  " = " <> Text var <> ".template get<_idx" <> Text name <> ">()" <> Semi <> onMatch <> RBrace <> Newline
 
   PatEnum name -> do
-    return $ "if (" <> Text var <> " == " <> Text name <> ") " <> LBrace <> onMatch <> RBrace <> Newline
+    return $ "if (" <> Text var <> " == _con" <> Text name <> ") " <> LBrace <> onMatch <> RBrace <> Newline
 
   PatHole -> return onMatch
 
@@ -560,16 +571,10 @@ struct Boxed : public std::unique_ptr<T>
   }
 };
 
-template<typename T>
-using Box = typename std::conditional<can_copy<T>, T, Boxed<T>>::type;
-
 template<typename T, typename... Args>
-auto mkBox(Args&&... args) -> Box<T>
+auto mkBoxed(Args&&... args) -> Boxed<T>
 {
-  if constexpr (can_copy<T>)
-    return T(std::forward<Args>(args)...);
-	else
-		return Boxed<T>(std::make_unique<T>(std::forward<Args>(args)...));
+  return Boxed<T>(std::make_unique<T>(std::forward<Args>(args)...));
 }
 
 template<typename T>
@@ -690,6 +695,7 @@ struct Copy<std::monostate>
 std::ostream& operator<<(std::ostream& ostream, const std::monostate&)
 {
   ostream << "()";
+  return ostream;
 }
 
 template<typename T1, typename T2>
@@ -702,6 +708,7 @@ template<typename T1, typename T2>
 std::ostream& operator<<(std::ostream& ostream, const std::pair<T1, T2>& pair)
 {
   ostream << "(" << pair.first << ", " << pair.second << ")";
+  return ostream;
 }
 
 struct Exception : public std::runtime_error
@@ -725,6 +732,8 @@ struct SwitchFail : public Exception
 };
 
 } // namespace praxis
+
+namespace praxis::user {
 
 #define BINARY_OP(name, ret_type, lhs_type, rhs_type, op) ret_type name(std::pair<lhs_type, rhs_type> args) { return args.first op args.second; }
 #define UNARY_OP(name, ret_type, arg_type, op) ret_type name(arg_type arg) { return op arg; }
@@ -787,6 +796,8 @@ auto print = []<typename T>() -> std::function<std::monostate(praxis::apply<prax
     return std::monostate{};
   };
 };
+
+} // namespace praxis::user
 
 /* prelude end */
 |]

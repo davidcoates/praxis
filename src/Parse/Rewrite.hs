@@ -34,14 +34,14 @@ rewriteTopLevel term = case typeof (view value term) of
 
 rewrite :: Term a => Annotated a -> Praxis (Annotated a)
 rewrite term = ($ term) $ case typeof (view value term) of
-  IType    -> rewriteType
-  IView    -> rewriteView
-  ITyPat   -> rewriteTyPat
-  IQTyVar  -> rewriteQTyVar
-  IExp     -> rewriteExp
-  IDecl    -> rewriteDecl
-  IPat     -> rewritePat
-  _        -> value (recurseTerm rewrite)
+  IType   -> rewriteType
+  IView   -> rewriteView
+  ITyPat  -> rewriteTyPat
+  IQTyVar -> rewriteQTyVar
+  IExp    -> rewriteExp
+  IDecl   -> rewriteDecl
+  IPat    -> rewritePat
+  _       -> value (recurseTerm rewrite)
 
 saveVarMap :: Praxis a -> Praxis a
 saveVarMap c = do

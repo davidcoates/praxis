@@ -197,12 +197,5 @@ auto [sum_0] = temp_8_(temp_8_);
 
     it "compiles" $ compile program `shouldReturn` True
 
--- FIXME
-{-
-    it "runs" $ compileAndRun program [r|
-do
-  let xs = Cons (1, Cons (2, Cons (3, Nil ())))
-  sum &xs
-|] `shouldReturn` "6"
--}
+    it "runs" $ compileAndRun program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in sum &xs" `shouldReturn` "6"
 

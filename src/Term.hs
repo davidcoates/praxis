@@ -52,7 +52,6 @@ module Term
   , covalue
 
   , Derivation(..)
-  , DataConInfo(..)
   ) where
 
 import           Common
@@ -261,8 +260,3 @@ data Derivation a = Root String
 instance Pretty (Annotated a) => Pretty (Derivation a) where
   pretty (Root r)       = "(" <> pretty r <> ")"
   pretty (Antecedent a) = pretty a
-
-data DataConInfo = DataConInfo { fullType :: Annotated QType, argType :: Annotated Type, retType :: Annotated Type }
-
-instance (Pretty (Annotated Type), Pretty (Annotated QType)) => Pretty DataConInfo where
-  pretty (DataConInfo { fullType }) = pretty fullType

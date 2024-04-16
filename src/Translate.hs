@@ -110,7 +110,7 @@ translateQTyVar (_ :< q) = case q of
 
 
 translateView :: Annotated View -> Praxis Code
-translateView (_ :< view) = case view of
+translateView (_ :< v) = case v of
 
   ViewValue            -> return "praxis::View::VALUE"
 

@@ -13,23 +13,29 @@ module Check.Type.Generate
 
 import           Check.Error
 import           Check.Type.Reason
-import           Check.Type.Require
-import           Check.Type.System
 import           Common
-import           Env.Env            (Env (..))
-import qualified Env.Env            as Env
-import qualified Env.LEnv           as LEnv
+import           Env.Env           (Env (..))
+import qualified Env.Env           as Env
+import qualified Env.LEnv          as LEnv
 import           Introspect
 import           Praxis
 import           Print
 import           Stage
 import           Term
 
-import           Control.Monad      (replicateM)
-import           Data.Foldable      (foldMap, foldlM)
-import           Data.List          (nub, partition, sort)
-import           Data.Maybe         (isJust, mapMaybe)
-import           Prelude            hiding (log)
+import           Control.Monad     (replicateM)
+import           Data.Foldable     (foldMap, foldlM)
+import           Data.List         (nub, partition, sort)
+import           Data.Maybe        (isJust, mapMaybe)
+import qualified Data.Set          as Set
+import           Prelude           hiding (log)
+
+
+require :: Tag (Source, Reason) TyConstraint -> Praxis ()
+require ((src, reason) :< con) = tySystem . requirements %= (((src, Just reason) :< Requirement con):)
+
+requires :: [Tag (Source, Reason) TyConstraint] -> Praxis ()
+requires = mapM_ require
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
 ty = annotation . just
@@ -54,7 +60,7 @@ specialise src name vars cs = do
         TyView (_ :< ViewVar _ n) -> n `lookup` specialisedVars
         _                         -> Nothing
   let specialisation = zip  vars (map snd specialisedVars)
-  requires [ newConstraint (view value (tyRewrite c)) (Specialisation name) src | c <- cs ]
+  requires [ (src, Specialisation name) :< view value (tyRewrite c) | c <- cs ]
   return (tyRewrite, specialisation)
 
 specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Specialisation)
@@ -67,7 +73,7 @@ specialiseQType s n (_ :< Forall vs cs t) = do
   -- instead of at every call site.
   --
   -- Ideally this check would happen at the definition of the polymorphic term, but that's not so easy.
-  when (not (null vs)) $ require $ newConstraint (Copy t') (Specialisation n) s
+  when (not (null vs)) $ require $ (s, Specialisation n) :< Copy t'
   return (t', specialisation)
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
@@ -106,61 +112,61 @@ scope src x = do
 -- | Marks a variable as read, returning the view-type of the variable and the view ref-name.
 -- A Copy constraint will be generated if the variable has already been used or has been captured.
 readVar :: Source -> Name -> Praxis (Name, Annotated Type, Specialisation)
-readVar s n = do
+readVar src name = do
   l <- use tEnv
   r@(_ :< ViewRef refName) <- freshViewRef
-  case Env.lookup n l of
+  case Env.lookup name l of
     Just entry -> do
-      (t, specialisation) <- specialiseQType s n (view LEnv.value entry)
-      tEnv %= LEnv.setRead n
-      requires [ newConstraint (Copy t) (UnsafeRead n) s | view LEnv.used entry ]
-      requires [ newConstraint (Copy t) (Captured n) s   | view LEnv.captured entry  ]
+      (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
+      tEnv %= LEnv.setRead name
+      requires [ (src, UnsafeRead name) :< Copy t | view LEnv.used entry ]
+      requires [ (src,   Captured name) :< Copy t | view LEnv.captured entry ]
       return $ (refName, phantom (TyApply (phantom (TyView r)) t), specialisation)
-    Nothing -> throwAt s (NotInScope n)
+    Nothing -> throwAt src (NotInScope name)
 
 -- | Marks a variable as used, returning the type of the variable.
 -- A Copy constraint will be generated if the variable has already been used or has been captured.
 useVar :: Source -> Name -> Praxis (Annotated Type, Specialisation)
-useVar s n = do
+useVar src name = do
   l <- use tEnv
-  case Env.lookup n l of
+  case Env.lookup name l of
     Just entry -> do
-      (t, specialisation) <- specialiseQType s n (view LEnv.value entry)
-      tEnv %= LEnv.setUsed n
-      requires [ newConstraint (Copy t) (MultiUse n) s | view LEnv.used entry ]
-      requires [ newConstraint (Copy t) (Captured n) s | view LEnv.captured entry ]
+      (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
+      tEnv %= LEnv.setUsed name
+      requires [ (src, MultiUse name) :< Copy t | view LEnv.used entry ]
+      requires [ (src, Captured name) :< Copy t | view LEnv.captured entry ]
       return (t, specialisation)
-    Nothing -> throwAt s (NotInScope n)
+    Nothing -> throwAt src (NotInScope name)
 
 introTy :: Source -> Name -> Annotated QType -> Praxis ()
-introTy s n t = do
+introTy src name qTy = do
   l <- use tEnv
-  case Env.lookup n l of
-    Just _ -> throwAt s $ "variable " <> quote (pretty n) <> " redeclared"
-    _      -> tEnv %= LEnv.intro n t
+  case Env.lookup name l of
+    Just _ -> throwAt src $ "variable " <> quote (pretty name) <> " redeclared"
+    _      -> tEnv %= LEnv.intro name qTy
 
 introConTy :: Source -> Name -> Annotated QType -> Praxis ()
-introConTy s n t = do
+introConTy src name qTy = do
   l <- use cEnv
-  case Env.lookup n l of
-    Just _ -> throwAt s $ "constructor " <> quote (pretty n) <> " redeclared"
-    _      -> cEnv %= Env.intro n t
+  case Env.lookup name l of
+    Just _ -> throwAt src $ "constructor " <> quote (pretty name) <> " redeclared"
+    _      -> cEnv %= Env.intro name qTy
 
 getConTy :: Source -> Name -> Praxis (Annotated QType)
-getConTy s n = do
+getConTy src name = do
   l <- use cEnv
-  case Env.lookup n l of
+  case Env.lookup name l of
     Just t  -> return t
-    Nothing -> throwAt s (NotInScope n)
+    Nothing -> throwAt src (NotInScope name)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = save stage $ do
   stage .= TypeCheck Generate
   term <- generate term
   display term `ifFlag` debug
-  cs <- use (our . constraints)
+  requirements' <- use (tySystem . requirements)
   (`ifFlag` debug) $ do
-    display (separate "\n\n" (nub . sort $ cs))
+    display (separate "\n\n" (nub . sort $ requirements'))
     use tEnv >>= display
     use cEnv >>= display
   return term
@@ -187,9 +193,6 @@ parallel src (x:xs) = do
 -- TODO move this somewhere
 fun :: Annotated Type -> Annotated Type -> Annotated Type
 fun a b = TyFun a b `as` phantom KindType
-
-equal :: Annotated Type -> Annotated Type -> Reason -> Source -> Praxis ()
-equal t1 t2 r s = require $ newConstraint (t1 `TEq` t2) r s
 
 -- TODO use introspection?
 patToTy :: Annotated TyPat -> Annotated Type
@@ -270,17 +273,17 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
       Nothing -> do
         exp <- generateExp exp
         case forwardT of
-          Just (_ :< Forall [] [] t) -> equal t (view ty exp) (FunCongruence name) src
+          Just (_ :< Forall [] [] t) -> require $ (src, FunCongruence name) :< (t `TEq` view ty exp)
           Nothing                    -> introTy src name (mono (view ty exp))
         return $ DeclVar name Nothing exp
 
       Just sig@(_ :< Forall boundVars constraints t) -> do
-        our . axioms %= (++ [ axiom (view value c) | c <- constraints ]) -- Constraints in the signature are added as axioms
+        tySystem . assumptions %= (Set.union (Set.fromList [ view value constraint | constraint <- constraints ])) -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardT of
           Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)
           Nothing -> introTy src name sig
-        equal t (view ty exp) (FunSignature name) src
+        require $ (src, FunSignature name) :< (t `TEq` view ty exp)
         return $ DeclVar name (Just sig) exp
 
 
@@ -293,7 +296,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     x <- generateExp x
     let fTy = view ty f
     let xTy = view ty x
-    require $ newConstraint (fTy `TEq` fun xTy rTy) FunApplication src
+    require $ (src, FunApplication) :< (fTy `TEq` fun xTy rTy)
     return (rTy :< Apply f x)
 
   Case exp alts -> do
@@ -303,7 +306,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     alts <- parallel src (map (generateAlt op) alts)
     ty1 <- equals (map fst alts) CaseCongruence
     ty2 <- equals (map snd alts) CaseCongruence
-    equal expTy ty1 CaseCongruence src -- TODO probably should pick a better name for this
+    require $ (src, CaseCongruence) :< (expTy `TEq` ty1) -- TODO probably should pick a better name for this
     return (ty2 :< Case exp alts)
 
   Cases alts -> closure src $ do
@@ -326,8 +329,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
   If condExp thenExp elseExp -> do
     condExp <- generateExp condExp
     (thenExp, elseExp) <- join src (generateExp thenExp) (generateExp elseExp)
-    require $ newConstraint (view ty condExp `TEq` TyCon "Bool" `as` phantom KindType) IfCondition src
-    require $ newConstraint (view ty thenExp `TEq` view ty elseExp) IfCongruence src
+    require $ (src,  IfCondition) :< (view ty condExp `TEq` TyCon "Bool" `as` phantom KindType)
+    require $ (src, IfCongruence) :< (view ty thenExp `TEq` view ty elseExp)
     return (view ty thenExp :< If condExp thenExp elseExp)
 
   Lambda pat exp -> closure src $ do
@@ -354,7 +357,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     tEnv %= LEnv.intro var (mono refType)
     exp <- generateExp exp
     let t = view ty exp
-    require $ newConstraint (RefFree refName t) SafeRead src
+    require $ (src, SafeRead) :< RefFree refName t
     -- Reading a polymorphic term is unnecessary (since it's Copyable).
     -- We prohibit since we can't correctly wrap with Specialise (it only makes sense to wrap var, not Read var exp).
     -- TODO should we prohibit all Copy-ables here? It would require a NoCopy / Not constraint.
@@ -374,15 +377,15 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
   Sig exp t -> do
     exp <- generateExp exp
-    equal t (view ty exp) UserSignature src
+    require $ (src, UserSignature) :< (t `TEq` view ty exp)
     return (t :< Sig exp t)
 
   Switch alts -> do
-    constraints <- sequence (map (generateExp . fst) alts)
-    requires [ newConstraint (view ty c `TEq` TyCon "Bool" `as` phantom KindType) SwitchCondition (view source c) | c <- constraints]
+    conditions <- sequence (map (generateExp . fst) alts)
+    requires [ (view source condition, SwitchCondition) :< (view ty condition `TEq` TyCon "Bool" `as` phantom KindType)  | condition <- conditions ]
     exps <- parallel src (map (generateExp . snd) alts)
     t <- equals exps SwitchCongruence
-    return (t :< Switch (zip constraints exps))
+    return (t :< Switch (zip conditions exps))
 
   Unit -> do
     let t = TyUnit `as` phantom KindType
@@ -399,18 +402,17 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
 
 equals :: (Term a, Annotation a ~ Annotated Type) => [Annotated a] -> Reason -> Praxis (Annotated Type)
-equals es = equals' (map (\e -> (view source e, view ty e)) es) where
+equals exps = equals' $ map (\((src, Just t) :< _) -> (src, t)) exps where
   equals' :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
-  equals' ((_, t):ts) r = sequence [equal t t' r s | (s, t') <- ts] >> return t
-
+  equals' ((_, t):ts) reason = requires [ (src, reason) :< (t `TEq` t') | (src, t') <- ts ] >> return t
 
 generateBind :: Annotated Bind -> Praxis (Annotated Bind)
-generateBind (a :< Bind pat exp) = do
-    exp <- generateExp exp
-    op <- freshTyViewUni RefOrValue
-    pat <- generatePat op pat
-    equal (view ty pat) (view ty exp) (BindCongruence) (view source pat <> view source exp)
-    return (a :< Bind pat exp)
+generateBind (a@(src, _) :< Bind pat exp) = do
+  exp <- generateExp exp
+  op <- freshTyViewUni RefOrValue
+  pat <- generatePat op pat
+  require $ (src, BindCongruence) :< (view ty pat `TEq` view ty exp)
+  return (a :< Bind pat exp)
 
 generateAlt :: Annotated Type -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
 generateAlt op (pat, exp) = scope (view source pat) $ do
@@ -430,7 +432,7 @@ generatePat op pat = snd <$> generatePat' pat where
     PatAt name pat -> do
       (t, pat) <- generatePat' pat
       introTy src name (mono t)
-      require $ newConstraint (Copy t) (MultiAlias name) src
+      require $ (src, MultiAlias name) :< Copy t
       return (t, wrap t :< PatAt name pat)
 
     PatData name pat -> do
@@ -441,7 +443,7 @@ generatePat op pat = snd <$> generatePat' pat where
           (tyRewrite, _) <- specialise src name vs cs
           let (argTy', retTy') = (tyRewrite argTy, tyRewrite retTy)
           (patArgType, pat) <- generatePat' pat
-          require $ newConstraint (patArgType `TEq` argTy') (ConPattern name) src
+          require $ (src, ConPattern name) :< (patArgType `TEq` argTy')
           return (retTy', wrap retTy' :< PatData name pat)
         _ -> throwAt src $ "missing argument in constructor pattern " <> quote (pretty name)
 

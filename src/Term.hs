@@ -29,18 +29,18 @@ module Term
   , View(..)
   , TyPat(..)
   , Type(..)
+  , TyConstraint(..)
   , QTyVar(..)
   , QType(..)
 
   -- | T2
   , Kind(..)
+  , KindConstraint(..)
 
   -- | Solver
-  , KindConstraint(..)
-  , TyConstraint(..)
-  , Prop(..)
-  , TyProp
-  , KindProp
+  , Requirement(..)
+  , TyRequirement(..)
+  , KindRequirement(..)
 
   , Specialisation
 
@@ -51,13 +51,13 @@ module Term
   , phantom
   , as
   , covalue
-
-  , Derivation(..)
   ) where
 
+import qualified Check.Kind.Reason as Kind
+import qualified Check.Type.Reason as Type
 import           Common
 
-import           Data.Set (Set)
+import           Data.Set          (Set)
 
 -- * OPERATORS *
 
@@ -218,15 +218,14 @@ data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
                     | KSub (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
-data Prop a = Top
-            | Bottom
-            | Exactly a
-            | And (Prop a) (Prop a)
+infixl 8 `KEq`
+infixl 8 `KSub`
+
+newtype Requirement a = Requirement a
   deriving (Eq, Ord)
 
-type TyProp = Prop TyConstraint
-
-type KindProp = Prop KindConstraint
+type TyRequirement = Requirement TyConstraint
+type KindRequirement = Requirement KindConstraint
 
 type family Annotation a where
   Annotation Exp      = Annotated Type
@@ -236,9 +235,9 @@ type family Annotation a where
   Annotation QTyVar   = Annotated Kind
   Annotation View     = Annotated Kind
   Annotation DataCon  = Annotated QType
-  Annotation TyProp   = Derivation TyProp
-  Annotation KindProp = Derivation KindProp
-  Annotation a        = Void
+  Annotation TyRequirement   = Type.Reason
+  Annotation KindRequirement = Kind.Reason
+  Annotation a               = Void
 
 type Annotated a = Tag (Source, Maybe (Annotation a)) a
 
@@ -256,11 +255,3 @@ as x a = (Phantom, Just a) :< x
 
 covalue :: Functor f => (Annotated a -> f (Annotated a)) -> a -> f a
 covalue f x = view value <$> f (phantom x)
-
--- TODO should this be somewhere else?
-data Derivation a = Root String
-                  | Antecedent (Annotated a)
-
-instance Pretty (Annotated a) => Pretty (Derivation a) where
-  pretty (Root r)       = "(" <> pretty r <> ")"
-  pretty (Antecedent a) = pretty a

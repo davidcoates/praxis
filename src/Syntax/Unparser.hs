@@ -42,4 +42,3 @@ instance Unparser f => Syntax (T f) where
 
 unparse :: forall a f. (Term a, Unparser f) => f (Annotated a)
 unparse = unT (Syntax.annotated (syntax (witness :: I a)))
-

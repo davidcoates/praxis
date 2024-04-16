@@ -36,13 +36,7 @@ instance Unparser Printer where
   token = Printer $ \x -> Just [x]
   mark s = Printer (error s)
   annotated f = Printer g where
-    g x = Just $ case typeof (view value x) of
-      ITyProp   -> prop
-      IKindProp -> prop
-      _         -> Print (Printable $ \o -> let l = runPrintable (label x) o in if null l then Nil else "[" <> l <> "]") : body
-      where
-        body = force f (view value x)
-        prop = [Print ("[" <> pretty (show (view source x)) <> "]")] ++ [Print (Printable (layout body) <> "\n|-> " <> label x)]
+    g x = Just $ Print (Printable $ \o -> let l = runPrintable (label x) o in if null l then Nil else "[" <> l <> "]") : force f (view value x)
 
 
 indent :: Int -> String
@@ -104,12 +98,12 @@ hideLabel x = case typeof x of
 label :: Term a => Annotated a -> Printable String
 label ((s, a) :< x) = case a of
   Just a | not (hideLabel x) -> case typeof x of
-    IExp      -> prettyIf Types a
-    IPat      -> prettyIf Types a
-    IDataCon  -> prettyIf Types a
-    ITyPat    -> prettyIf Kinds a
-    IType     -> prettyIf Kinds a
-    ITyProp   -> pretty a
-    IKindProp -> pretty a
-    _         -> blank
+    IExp             -> prettyIf Types a
+    IPat             -> prettyIf Types a
+    IDataCon         -> prettyIf Types a
+    ITyPat           -> prettyIf Kinds a
+    IType            -> prettyIf Kinds a
+    ITyRequirement   -> pretty a
+    IKindRequirement -> pretty a
+    _                -> blank
   _ -> blank

@@ -14,6 +14,7 @@ module Introspect
   , typeof
   , embedSub
   , embedMonoid
+  , Substitution
   , sub
   , extract
   , deepExtract
@@ -54,18 +55,18 @@ data I a where
   IStmt    :: I Stmt
   ITok     :: I Tok
   -- | T1
-  IView   :: I View
-  ITyPat  :: I TyPat
-  IType   :: I Type
-  IQType  :: I QType
-  IQTyVar :: I QTyVar
-  -- | T2
-  IKind :: I Kind
-  -- | Solver
+  IView         :: I View
+  ITyPat        :: I TyPat
+  IType         :: I Type
   ITyConstraint :: I TyConstraint
+  IQType        :: I QType
+  IQTyVar       :: I QTyVar
+  -- | T2
+  IKind           :: I Kind
   IKindConstraint :: I KindConstraint
-  ITyProp :: I TyProp
-  IKindProp :: I KindProp
+  -- | Solver
+  ITyRequirement   :: I TyRequirement
+  IKindRequirement :: I KindRequirement
 
 
 typeof :: forall a. Term a => a -> I a
@@ -74,35 +75,37 @@ typeof _ = witness :: I a
 switch :: forall a b c. (Term a, Term b) => I a -> I b -> ((a ~ b) => c) -> c -> c
 switch a b eq neq = case (a, b) of
   -- | Operators
-  (IAssoc, IAssoc)                   -> eq
-  (IOp, IOp)                         -> eq
-  (IOpRules, IOpRules)               -> eq
-  (IPrec, IPrec)                     -> eq
+  (IAssoc, IAssoc)                     -> eq
+  (IOp, IOp)                           -> eq
+  (IOpRules, IOpRules)                 -> eq
+  (IPrec, IPrec)                       -> eq
   -- | T0
-  (IBind, IBind)                     -> eq
-  (IDataCon, IDataCon)               -> eq
-  (IDecl, IDecl)                     -> eq
-  (IExp, IExp)                       -> eq
-  (IPat, IPat)                       -> eq
-  (IProgram, IProgram)               -> eq
-  (IStmt, IStmt)                     -> eq
-  (ITok, ITok)                       -> eq
+  (IBind, IBind)                       -> eq
+  (IDataCon, IDataCon)                 -> eq
+  (IDecl, IDecl)                       -> eq
+  (IExp, IExp)                         -> eq
+  (IPat, IPat)                         -> eq
+  (IProgram, IProgram)                 -> eq
+  (IStmt, IStmt)                       -> eq
+  (ITok, ITok)                         -> eq
   -- | T1
-  (IView, IView)                     -> eq
-  (ITyPat, ITyPat)                   -> eq
-  (IType, IType)                     -> eq
-  (IQType, IQType)                   -> eq
-  (IQTyVar, IQTyVar)                 -> eq
+  (IView, IView)                       -> eq
+  (ITyPat, ITyPat)                     -> eq
+  (IType, IType)                       -> eq
+  (ITyConstraint, ITyConstraint)       -> eq
+  (IQType, IQType)                     -> eq
+  (IQTyVar, IQTyVar)                   -> eq
   -- | T2
-  (IKind, IKind)                     -> eq
+  (IKind, IKind)                       -> eq
+  (IKindConstraint, IKindConstraint)   -> eq
   -- | Solver
-  (ITyConstraint, ITyConstraint)     -> eq
-  (IKindConstraint, IKindConstraint) -> eq
-  (ITyProp, ITyProp)                 -> eq
-  (IKindProp, IKindProp)             -> eq
+  (ITyRequirement, ITyRequirement)     -> eq
+  (IKindRequirement, IKindRequirement) -> eq
   -- |
-  _                                  -> neq
+  _                                    -> neq
 
+
+type Substitution = forall a. Term a => Annotated a -> Annotated a
 
 sub :: forall a. Term a => (forall b. Term b => Annotated b -> Maybe (Annotated b)) -> Annotated a -> Annotated a
 sub f x = case f x of
@@ -279,6 +282,16 @@ instance Term Type where
     TyUnit      -> pure TyUnit
     TyVar n     -> pure (TyVar n)
 
+instance Term TyConstraint where
+  witness = ITyConstraint
+  recurseAnnotation = trivial
+  recurseTerm f = \case
+    Class t      -> Class <$> f t
+    RefFree n t  -> RefFree n <$> f t
+    Copy t       -> Copy <$> f t
+    TEq a b      -> TEq <$> f a <*> f b
+    TOpEq a b    -> TOpEq <$> f a <*> f b
+
 instance Term QType where
   witness = IQType
   recurseAnnotation = trivial
@@ -303,18 +316,6 @@ instance Term Kind where
     KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType
 
--- | Solver
-
-instance Term TyConstraint where
-  witness = ITyConstraint
-  recurseAnnotation = trivial
-  recurseTerm f = \case
-    Class t      -> Class <$> f t
-    RefFree n t  -> RefFree n <$> f t
-    Copy t       -> Copy <$> f t
-    TEq a b      -> TEq <$> f a <*> f b
-    TOpEq a b    -> TOpEq <$> f a <*> f b
-
 instance Term KindConstraint where
   witness = IKindConstraint
   recurseAnnotation = trivial
@@ -322,24 +323,16 @@ instance Term KindConstraint where
     KEq a b  -> KEq <$> f a <*> f b
     KSub a b -> KSub <$> f a <*> f b
 
-instance Term TyProp where
-  witness = ITyProp
-  recurseAnnotation _ f = \case
-    Root r       -> pure (Root r)
-    Antecedent c -> Antecedent <$> f c
-  recurseTerm f = \case
-    Top       -> pure Top
-    Bottom    -> pure Bottom
-    Exactly c -> Exactly <$> covalue f c
-    And p1 p2 -> And <$> covalue f p1 <*> covalue f p2
+-- | Solver
 
-instance Term KindProp where
-  witness = IKindProp
-  recurseAnnotation _ f = \case
-    Root r       -> pure (Root r)
-    Antecedent c -> Antecedent <$> f c
+instance Term TyRequirement where
+  witness = ITyRequirement
+  recurseAnnotation _ _ = pure
   recurseTerm f = \case
-    Top       -> pure Top
-    Bottom    -> pure Bottom
-    Exactly c -> Exactly <$> covalue f c
-    And p1 p2 -> And <$> covalue f p1 <*> covalue f p2
+    Requirement c -> Requirement <$> recurseTerm f c
+
+instance Term KindRequirement where
+  witness = IKindRequirement
+  recurseAnnotation _ _ = pure
+  recurseTerm f = \case
+    Requirement c -> Requirement <$> recurseTerm f c

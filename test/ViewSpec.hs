@@ -70,10 +70,9 @@ box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
     it "evaluates" $ do
 
       interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
-error: found contradiction [1:50] & ^v3 List Int ?= List Int
-|-> [1:50] List Int = List Int and & ^v3 List Int ?= List Int
-|-> [1:50] & ^v3 List Int = List Int and Box [ & ^v3 , List Int ] = Box [ & ^v3 , List Int ]
-|-> [1:50] & ^v3 List Int -> Box [ & ^v3 , List Int ] = List Int -> Box [ & ^v3 , List Int ]
+error: found contradiction [1:10] & ^v3 List Int ?= List Int
+|-> List Int = & ^v3 List Int
+|-> ( Int , List Int ) -> List Int = ( Int , List Int ) -> & ^v3 List Int
 |-> (function application)
 |]
 

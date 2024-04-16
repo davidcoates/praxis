@@ -8,10 +8,12 @@ module Praxis
   , PraxisState
   , emptyState
 
+  -- | State types
   , KEnv(..)
   , TEnv(..)
   , CEnv(..)
   , VEnv(..)
+  , System(..)
 
   -- | Operators
   , Fixity(..)
@@ -41,6 +43,10 @@ module Praxis
   -- | Flag lenses
   , debug
 
+  -- | System lenses
+  , requirements
+  , assumptions
+
   -- | Praxis lenses
   , flags
   , fresh
@@ -52,7 +58,8 @@ module Praxis
   , vEnv
   , rewriteMap
   , tySynonyms
-  , system
+  , tySystem
+  , kindSystem
 
   -- | RewriteMap lenses
   , tyVarMap
@@ -73,7 +80,6 @@ module Praxis
   )
   where
 
-import qualified Check.System                 as Check (System)
 import           Common
 import           Print
 import           Stage
@@ -89,6 +95,7 @@ import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
+import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
 import           Env.Env                      (Env)
 import qualified Env.Env                      as Env
@@ -140,6 +147,19 @@ data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name N
 
 makeLenses ''RewriteMap
 
+data System c = System
+  { _requirements :: [Annotated (Requirement c)] -- TODO colored string?
+  , _assumptions  :: Set c
+  }
+
+emptySystem :: System c
+emptySystem = System
+  { _requirements = []
+  , _assumptions  = Set.empty
+  }
+
+makeLenses ''System
+
 data PraxisState = PraxisState
   { _flags      :: Flags               -- ^ Flags
   , _fresh      :: Fresh
@@ -152,8 +172,8 @@ data PraxisState = PraxisState
   -- TODO encapsulate within desugarer?
   , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
   , _rewriteMap :: RewriteMap
-  -- TODO rename?
-  , _system     :: Check.System        -- ^ Type/Kind check state
+  , _tySystem   :: System TyConstraint
+  , _kindSystem :: System KindConstraint
   }
 
 instance Show PraxisState where
@@ -185,7 +205,8 @@ emptyState = PraxisState
   , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
-  , _system       = error ("unset system") -- FIXME Checkers are responsible for initialisating system
+  , _tySystem     = emptySystem
+  , _kindSystem   = emptySystem
   }
 
 makeLenses ''Flags

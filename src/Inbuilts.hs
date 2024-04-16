@@ -8,18 +8,18 @@ module Inbuilts
   ) where
 
 import           Common
-import           Control.Lens              (set, view)
 import qualified Env.Env                   as Env
 import qualified Env.LEnv                  as LEnv
 import           Introspect
 import           Parse                     (parse)
 import           Praxis
 import           Term                      hiding (Lit (..), Pair, Unit)
-import           Text.RawString.QQ
 import           Value
 
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import qualified Control.Monad.Trans.State as State (get)
+import qualified Data.Set                  as Set
+import           Text.RawString.QQ
 
 -- Include inbuilt kinds
 initialState0 :: PraxisState
@@ -33,7 +33,7 @@ initialState1 = set vEnv initialVEnv $ set tEnv initialTEnv $ initialState0
 initialState :: PraxisState
 initialState = fixup (runInternal initialState1 ((parse prelude :: Praxis (Annotated Program)) >> lift State.get)) where
   -- TODO a nicer way to do this. Undo all the things except the fields we care about.
-  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set system (view system emptyState)
+  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindSystem (view kindSystem emptyState) . set tySystem initialTySystem
 
 mono :: String -> Annotated Type
 mono s = runInternal initialState0 (parse s :: Praxis (Annotated Type))
@@ -109,6 +109,11 @@ initialTEnv = LEnv.fromList (map (\(n, t, _) -> (n, t)) inbuilts)
 
 initialKEnv :: KEnv
 initialKEnv = Env.fromList inbuiltKinds
+
+initialTySystem :: System TyConstraint
+initialTySystem = System { _requirements = [], _assumptions = Set.fromList [ copy "Int", copy "Bool", copy "Char" ] } where
+  copy :: Name -> TyConstraint
+  copy n = Copy (TyCon n `as` phantom KindConstraint)
 
 -- TODO interfaces
 prelude = [r|

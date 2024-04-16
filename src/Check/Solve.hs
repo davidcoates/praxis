@@ -1,23 +1,19 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE Rank2Types        #-}
-{-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE TypeOperators     #-}
+{-# LANGUAGE DeriveFoldable      #-}
+{-# LANGUAGE DeriveTraversable   #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE Rank2Types          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeOperators       #-}
+
 
 module Check.Solve
-  ( tautology
-  , solved
-  , contradiction
-  , intro
-  , defer
-  , resolved
-
-  , Resolution(..)
-  , Solver(..)
-  , (<|>)
+  ( Rewrite
+  , Reduction(..)
+  , Reducer(..)
   , solve
-  , solveProp
   ) where
 
 import           Common
@@ -26,89 +22,146 @@ import           Praxis
 import           Print
 import           Term
 
-import           Check.Require
+import qualified Data.Set   as Set
 
-type Resolution a = Praxis (Maybe (Prop a))
 
-tautology :: Resolution a
-tautology = return (Just Top)
+type Rewrite = forall a. Term a => Annotated a -> Praxis (Annotated a)
 
-solved :: Resolution a
-solved = tautology
+data Reduction c = Contradiction | Skip | Solved Rewrite | Subgoals [c] | Tautology
 
-contradiction :: Resolution a
-contradiction = return (Just Bottom)
+type Reducer c = c -> Praxis (Reduction c)
 
-intro :: [a] -> Resolution a
-intro = return . Just . all' . map Exactly where
-  all' [p]    = p
-  all' (p:ps) = p `And` all' ps
+data Tree c = Branch c [Tree c]
+  deriving (Functor, Foldable, Traversable)
 
-defer :: Resolution a
-defer = return Nothing
+data GoalT x c = Goal Source x (Tree c)
+  deriving (Functor, Foldable, Traversable)
 
-resolved :: Bool -> Resolution a
-resolved b = if b then solved else contradiction
+-- Note: Goal definition is split like this for "deriving" to work.
+type Goal c = GoalT (Annotation (Requirement c)) c
 
-type Solver a b = a -> Resolution b
 
-(<|>) :: Solver a a -> Solver a a -> Solver a a
-s1 <|> s2 = \a -> do
-  r1 <- s1 a
+
+solve :: forall c a. (Ord c, Term a, Term c, Term (Requirement c), Pretty (Annotation (Requirement c))) => Lens' PraxisState (System c) -> Reducer c -> Annotated a -> Praxis (Annotated a)
+solve system reduce term = do
+  requirements' <- use (system . requirements)
+  let goals = [ Goal src reason (Branch constraint []) | ((src, Just reason) :< Requirement constraint) <- requirements' ]
+  (term, [], _) <- solve' (term, goals)
+  return term
+  where
+    solve' :: (Annotated a, [Goal c]) -> Praxis (Annotated a, [Goal c], Bool)
+    solve' (term, []) = return (term, [], undefined)
+    solve' (term, goals) = do
+      (goals, reduction) <- reduceGoals system reduce (goals)
+      case reduction of
+        TreeProgress
+          -> solve' (term, goals)
+        TreeRewrite rewrite
+          -> do
+            term <- rewrite term
+            goals <- traverse (traverse (recurseTerm rewrite)) goals
+            -- (system . requirements) %%= traverse (recurse rewrite)
+            (system . assumptions) %%= (\as -> Set.fromList <$> (traverse (recurseTerm rewrite) (Set.toList as)))
+            solve' (term, goals)
+        TreeSkip
+          -> do
+            throw $ "failed to solve constraints: " <> separate "\n\n" [ ((src, Just reason) :< Requirement constraint) | Goal src reason (Branch constraint _) <- goals ]
+
+
+data TreeReduction c = TreeContradiction [c] | TreeProgress | TreeRewrite Rewrite | TreeSkip
+
+noskip :: TreeReduction c -> TreeReduction c
+noskip TreeSkip = TreeProgress
+noskip r        = r
+
+reduceGoals :: forall c. (Term c, Ord c, Pretty (Annotation (Requirement c))) => Lens' PraxisState (System c) -> Reducer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
+reduceGoals system reduce [] = return ([], TreeSkip)
+reduceGoals system reduce ((Goal src reason tree):goals) = do
+  (tree, r1) <- reduceTree system reduce tree
+  let
+    goal = case tree of
+      Just tree -> [Goal src reason tree]
+      Nothing   -> []
   case r1 of
-    Just _  -> return r1
-    Nothing -> s2 a
+    TreeProgress -> do
+      (goals, r2) <- reduceGoals system reduce goals
+      return (goal ++ goals, noskip r2)
+    TreeSkip ->  do
+      (goals, r2) <- reduceGoals system reduce goals
+      return (goal ++ goals, r2)
+    TreeContradiction trace -> throw ("found contradiction " <> printTrace trace)
+    _  -> return (goal ++ goals, r1)
+  where
+    printTrace :: [c] -> Printable String
+    printTrace trace = printTrace' (map ((src, Nothing) :<) (reverse trace)) where
+      printTrace' cs = "[" <> pretty (show src) <> "] " <> (separate "\n|-> " cs) <> "\n|-> (" <> pretty reason <> ")"
 
-solve :: (Annotation (Prop a) ~ Derivation (Prop a), Term a, Term (Prop a)) => Lens' PraxisState [Annotated (Prop a)] -> Solver a a -> Praxis ()
-solve constraints solveConstraint = use constraints >>= (\cs -> solve' cs [] False) where
-  solve' []     [] _ = return ()
-  solve' []     rs w = do
-    when (not w) (display (separate "\n\n" rs <> "\n") >> throw ("failed to solve constraints" :: String))
-    solve' rs [] False
-  solve' (p:ps) rs w = do
-    constraints .= (ps ++ rs)
-    r <- solveProp constraints solveConstraint (view value p)
-    cs' <- use constraints
-    let ps' = take (length ps) cs'
-        rs' = drop (length ps) cs'
-    case r of
-      Just Top    -> solve' ps' rs' (w || True)
-      Just Bottom -> throw $ "found contradiction " <> pretty p
-      Just p'     -> solve' ps' ((p `impliesProp` p') : rs') (w || True)
-      Nothing     -> solve' ps' (p:rs') w
 
-push :: Lens' PraxisState [Annotated (Prop a)] -> Prop a -> Praxis ()
-push constraints p = constraints %= (phantom p:)
+reduceTree :: forall c. Ord c => Lens' PraxisState (System c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
+reduceTree system reduce tree@(Branch constraint _) = do
 
-pop :: Lens' PraxisState [Annotated (Prop a)] -> Praxis (Prop a)
-pop constraints = do
-  (p:ps) <- use constraints
-  constraints .= ps
-  return (view value p)
+   assumptions' <- use (system . assumptions)
+   (tree, r) <- reduceTree' tree
+   case tree of
+     Nothing -> system . assumptions %= (Set.insert constraint)
+     _       -> pure ()
+   return (tree, r)
 
-solveProp :: Lens' PraxisState [Annotated (Prop a)] -> Solver a a -> Solver (Prop a) a
-solveProp constraints solveConstraint = \case
+  where
+    reduceTree' :: Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
 
-  Exactly c -> solveConstraint c
+    reduceTree' tree@(Branch constraint []) = do
+      r1 <- withAssumptions reduce constraint
+      case r1 of
+        Contradiction     -> return (Just tree, TreeContradiction [constraint])
+        Skip              -> return (Just tree, TreeSkip)
+        Solved rewrite    -> return (Nothing, TreeRewrite rewrite)
+        Subgoals subgoals -> do
+          (tree, r2) <- reduceTree'' (Branch constraint (map (\c -> Branch c []) subgoals))
+          return (tree, noskip r2)
+        Tautology         -> return (Nothing, TreeProgress)
 
-  p1 `And` p2 -> do
+    reduceTree' (Branch constraint [subtree]) = do
+      (subtree, r1) <- reduceTree'' subtree
+      let
+        tree = case subtree of
+          Nothing      -> Nothing
+          Just subtree -> Just (Branch constraint [subtree])
+      case r1 of
+        TreeContradiction trace -> return (tree, TreeContradiction (constraint:trace))
+        _                       -> return (tree, r1)
 
-    -- push the subtree not being worked on to allow substitutions to be applied to them
-    push constraints p2
-    r1 <- solveProp constraints solveConstraint p1
-    p2 <- pop constraints
+    reduceTree' (Branch constraint (subtree:subtrees)) = do
+      let tree = Branch constraint subtrees
+      (subtree, r1) <- reduceTree'' subtree
+      case r1 of
+        TreeContradiction trace
+          -> return (combine subtree (Just tree), TreeContradiction (constraint:trace))
+        TreeProgress -> do
+          (tree, r2) <- reduceTree'' tree
+          return (combine subtree tree, noskip r2)
+        TreeRewrite rewrite
+          -> return (combine subtree (Just tree), TreeRewrite rewrite)
+        TreeSkip -> do
+          (tree, r2) <- reduceTree'' tree
+          return (combine subtree tree, r2)
 
-    let normalise r p = case r of { Nothing -> p; Just r -> r }
+    reduceTree'' = reduceTree system reduce
 
-    push constraints (r1 `normalise` p1)
-    r2 <- solveProp constraints solveConstraint p2
-    p1 <- pop constraints
+    combine :: Maybe (Tree c) -> Maybe (Tree c) -> Maybe (Tree c)
+    combine subtree tree = case (subtree, tree) of
+      (Nothing, Just tree)
+        -> Just tree
+      (Just subtree, Nothing)
+        -> Just (Branch constraint [subtree])
+      (Just subtree, Just (Branch _ subtrees))
+        -> Just (Branch constraint (subtree:subtrees))
+      (Nothing, Nothing)
+        -> Nothing
 
-    return $ case (r1, r2) of
-      (Nothing, Nothing) -> Nothing
-      _                  -> Just $ case (p1, r2 `normalise` p2) of
-        (Bottom, _) -> Bottom
-        (_, Bottom) -> Bottom
-        (x,    Top) -> x
-        (Top,    y) -> y
-        (x,      y) -> x `And` y
+    withAssumptions :: Reducer c -> Reducer c
+    withAssumptions reduce constraint = do
+      assumptions' <- use (system . assumptions)
+      if constraint `Set.member` assumptions'
+        then return Tautology
+        else reduce constraint

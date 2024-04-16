@@ -11,18 +11,20 @@ module Check.Kind.Generate
 
 import           Check.Error
 import           Check.Kind.Reason
-import           Check.Kind.Require
-import           Check.Kind.System
 import           Common
-import qualified Env.Env            as Env
+import qualified Env.Env           as Env
 import           Introspect
 import           Praxis
 import           Print
 import           Stage
 import           Term
 
-import           Data.List          (nub, sort)
-import qualified Data.Set           as Set
+import           Data.List         (nub, sort)
+import qualified Data.Set          as Set
+
+
+require :: Tag (Source, Reason) KindConstraint -> Praxis ()
+require ((src, reason) :< con) = kindSystem . requirements %= (((src, Just reason) :< Requirement con):)
 
 kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
 kind = annotation . just
@@ -32,8 +34,8 @@ run term = save stage $ do
   stage .= KindCheck Generate
   term <- generate term
   display term `ifFlag` debug
-  cs <- use (our . constraints)
-  display (separate "\n\n" (nub . sort $ cs)) `ifFlag` debug
+  requirements' <- use (tySystem . requirements)
+  display (separate "\n\n" (nub . sort $ requirements')) `ifFlag` debug
   return term
 
 -- TODO since we ignore annotation of input, could adjust this...
@@ -70,12 +72,12 @@ generateQTyVar (a@(src, _) :< qTyVar) = case qTyVar of
 
 
 generateView :: Annotated View -> Praxis (Annotated View)
-generateView ((src, _) :< view) = case view of
+generateView ((src, _) :< v) = case v of
 
   ViewVar _ var -> do
     entry <- kEnv `uses` Env.lookup var
     case entry of
-      Just k  -> return ((src, Just k) :< view)
+      Just k  -> return ((src, Just k) :< v)
       Nothing -> throwAt src (NotInScope var)
 
 
@@ -88,13 +90,13 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
       x <- generateTy x
       case view kind f of
         (_ :< KindView _) -> do
-          require $ newConstraint (view kind x `KEq` phantom KindType) ViewApplication src
+          require $ (src, ViewApplication) :< (view kind x `KEq` phantom KindType)
           return (phantom KindType :< TyApply f x)
         _ -> do
           k1 <- freshKindUni
           k2 <- freshKindUni
-          require $ newConstraint (view kind f `KEq` phantom (KindFun k1 k2)) TyFunApplication src
-          require $ newConstraint (view kind x `KSub` k1) TyFunApplication src
+          require $ (src, TyFunApplication) :< (view kind f `KEq` phantom (KindFun k1 k2))
+          require $ (src, TyFunApplication) :< (view kind x `KSub` k1)
           return (k2 :< TyApply f x)
 
     TyCon con -> do
@@ -106,8 +108,8 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
     TyFun ty1 ty2 -> do
       ty1 <- generateTy ty1
       ty2 <- generateTy ty2
-      require $ newConstraint (view kind ty1 `KEq` phantom KindType) FunType src
-      require $ newConstraint (view kind ty2 `KEq` phantom KindType) FunType src
+      require $ (src, FunType) :< (view kind ty1 `KEq` phantom KindType)
+      require $ (src, FunType) :< (view kind ty2 `KEq` phantom KindType)
       return (phantom KindType :< TyFun ty1 ty2)
 
     TyView v -> do
@@ -117,8 +119,8 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
     TyPair ty1 ty2 -> do
       ty1 <- generateTy ty1
       ty2 <- generateTy ty2
-      require $ newConstraint (view kind ty1 `KEq` phantom KindType) PairType src
-      require $ newConstraint (view kind ty2 `KEq` phantom KindType) PairType src
+      require $ (src, PairType) :< (view kind ty1 `KEq` phantom KindType)
+      require $ (src, PairType) :< (view kind ty2 `KEq` phantom KindType)
       return (phantom KindType :< TyPair ty1 ty2)
 
     TyPack ty1 ty2 -> do
@@ -160,7 +162,7 @@ fun a b = phantom (KindFun a b)
 generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon (a@(src, _) :< DataCon name arg) = do
   arg <- generate arg
-  require $ newConstraint (view kind arg `KEq` phantom KindType) (DataConType name) src -- TODO should just match kind of data type?
+  require $ (src, DataConType name) :< (view kind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
   return (a :< DataCon name arg)
 
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
@@ -175,8 +177,8 @@ generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
         return (arg, alts)
     unless (mode == DataRec) $ introKind src name k
     case arg of
-      Nothing  -> require $ newConstraint (k `KEq` phantom KindType) (DataType name) src
-      Just arg -> require $ newConstraint (k `KEq` phantom (KindFun (view kind arg) (phantom KindType))) (DataType name) src
+      Nothing  -> require $ (src, DataType name) :< (k `KEq` phantom KindType)
+      Just arg -> require $ (src, DataType name) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
     return $ DeclData mode name arg alts
 
   DeclEnum name alts -> do

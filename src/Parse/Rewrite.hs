@@ -118,11 +118,11 @@ rewriteType (a :< ty) = (a :<) <$> case ty of
 
 
 rewriteView  :: Annotated View -> Praxis (Annotated View)
-rewriteView (a :< view) = (a :<) <$> case view of
+rewriteView (a :< v) = (a :<) <$> case v of
 
   ViewVar d n -> ViewVar d <$> rewriteTyVar n
 
-  _           -> recurseTerm rewrite view
+  _           -> recurseTerm rewrite v
 
 
 rewriteTyPat :: Annotated TyPat -> Praxis (Annotated TyPat)

@@ -128,7 +128,8 @@ definePrisms ''Kind
 
 definePrisms ''KindConstraint
 definePrisms ''TyConstraint
-definePrisms ''Prop
+
+definePrisms ''Requirement
 
 -- | The syntax for a given term type.
 syntax :: (Term a, Syntax f) => I a -> f a
@@ -150,15 +151,15 @@ syntax = \case
   IView           -> view'
   ITyPat          -> tyPat
   IType           -> ty
+  ITyConstraint   -> tyConstraint
   IQType          -> qTy
   IQTyVar         -> qTyVar
   -- | T2
   IKind           -> kind
-  -- | Solver
-  ITyConstraint   -> tyConstraint
   IKindConstraint -> kindConstraint
-  ITyProp         -> unparseable tyProp
-  IKindProp       -> unparseable kindProp
+  -- | Solver
+  ITyRequirement   -> tyRequirement
+  IKindRequirement -> kindRequirement
 
 
 tuple :: (Syntax f, Term a) => Prism a () -> Prism a (Annotated a, Annotated a) -> f a -> f a
@@ -203,18 +204,6 @@ kindConstraint :: Syntax f => f KindConstraint
 kindConstraint = unparseable (_KEq <$> annotated kind <*> reservedOp "=" *> annotated kind) <|>
                  unparseable (_KSub <$> annotated kind <*> reservedOp "≤" *> annotated kind) <|>
                  mark "kind constraint"
-
-tyProp :: Syntax f => f TyProp
-tyProp = _Exactly <$> tyConstraint <|>
-         _Top <$> special '⊤' <|>
-         _Bottom <$> special '⊥' <|>
-         _And <$> tyProp <*> reservedId "and" *> tyProp
-
-kindProp :: Syntax f => f KindProp
-kindProp = _Exactly <$> kindConstraint <|>
-           _Top <$> special '⊤' <|>
-           _Bottom <$> special '⊥' <|>
-           _And <$> kindProp <*> reservedId "and" *> kindProp
 
 program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) where -- TODO module
@@ -371,3 +360,9 @@ prec = _Prec <$> ordering <*> op where
   ordering = _GT <$> contextualId "above" <|>
              _LT <$> contextualId "below" <|>
              _EQ <$> contextualId "equal"
+
+tyRequirement :: Syntax f => f TyRequirement
+tyRequirement = _Requirement <$> tyConstraint
+
+kindRequirement :: Syntax f => f KindRequirement
+kindRequirement = _Requirement <$> kindConstraint

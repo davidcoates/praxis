@@ -1,8 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Check.Type.Reason
   ( Reason(..)
   ) where
 
 import           Common
+
 
 data Reason = BindCongruence
             | Captured Name
@@ -23,24 +26,23 @@ data Reason = BindCongruence
             | UnsafeRead Name
             | UserSignature
 
--- TODO Pretty
-instance Show Reason where
-  show = \case
+instance Pretty Reason where
+  pretty = \case
     BindCongruence   -> "binding must have same type on both sides"
-    Captured n       -> "variable '" ++ n ++ "' captured"
-    CaseCongruence   -> "alternatives of 'case' expression must have the same type"
-    ConPattern n     -> "constructor pattern '" ++ n ++ "'"
+    Captured n       -> "variable " <> quote (pretty n) <> " captured"
+    CaseCongruence   -> "alternatives of case expression must have the same type"
+    ConPattern n     -> "constructor pattern " <> quote (pretty n)
     FunApplication   -> "function application"
-    FunCongruence n  -> "function '" ++ n ++ "'"
-    FunSignature n   -> "function signature for '" ++ n ++ "'"
-    IfCondition      -> "type of 'if' condition must be Bool"
-    IfCongruence     -> "branches of 'if' expression must have the same type"
-    Instance n       -> "monomorphic usage of '" ++ n ++ "'"
-    MultiAlias n     -> "variable '" ++ n ++ "' is not a unique alias"
-    MultiUse n       -> "variable '" ++ n ++ "' used more than once"
+    FunCongruence n  -> "function " <> quote (pretty n)
+    FunSignature n   -> "function signature for " <> quote (pretty n)
+    IfCondition      -> "type of if condition must be Bool"
+    IfCongruence     -> "branches of if expression must have the same type"
+    Instance n       -> "monomorphic usage of " <> quote (pretty n)
+    MultiAlias n     -> "variable " <> quote (pretty n) <> " is not a unique alias"
+    MultiUse n       -> "variable " <> quote (pretty n) <> " used more than once"
     SafeRead         -> "safe read"
-    Specialisation n -> "specialisation of '" ++ n ++ "'"
-    SwitchCondition  -> "type of 'switch' condition must be Bool"
-    SwitchCongruence -> "branches of 'switch' expression must have the same type"
-    UnsafeRead n     -> "variable '" ++ n ++ "' read after being used"
+    Specialisation n -> "specialisation of " <> quote (pretty n)
+    SwitchCondition  -> "type of switch condition must be Bool"
+    SwitchCongruence -> "branches of switch expression must have the same type"
+    UnsafeRead n     -> "variable " <> quote (pretty n) <> " read after being used"
     UserSignature    -> "user-supplied signature"

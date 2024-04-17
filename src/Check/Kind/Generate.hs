@@ -34,7 +34,7 @@ run term = save stage $ do
   stage .= KindCheck Generate
   term <- generate term
   display term `ifFlag` debug
-  requirements' <- use (tySystem . requirements)
+  requirements' <- use (kindSystem . requirements)
   display (separate "\n\n" (nub . sort $ requirements')) `ifFlag` debug
   return term
 

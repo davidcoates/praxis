@@ -36,9 +36,10 @@ datatype Bar [?v, a] = Bar (Foo [?v, a])
   |]
 
       it "does not kind check" $ check program `shouldReturn` trim [r|
-error: found contradiction [3:28] View ? ≤ View &
-|-> ( View ? , ^k3 ) ≤ ( View & , ^k1 )
-|-> (type function application)
+kind check error at 3:28: unable to satisfy constraint
+  | View ? ≤ View & derived from
+  | ( View ? , ^k3 ) ≤ ( View & , ^k1 )
+  | hint: type function application
 |]
 
 

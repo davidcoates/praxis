@@ -70,10 +70,10 @@ box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
     it "evaluates" $ do
 
       interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
-error: found contradiction [1:10] & ^v3 List Int ?= List Int
-|-> List Int = & ^v3 List Int
-|-> ( Int , List Int ) -> List Int = ( Int , List Int ) -> & ^v3 List Int
-|-> (function application)
+type check error at 1:10: unable to satisfy constraint
+  | & ^v3 List Int ?= List Int derived from
+  | ( Int , List Int ) -> List Int = ( Int , List Int ) -> & ^v3 List Int
+  | hint: function application
 |]
 
       interpret program [r|
@@ -103,4 +103,8 @@ x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
 y_0 = read x_0 in ( 1 , x_0 )
 |]
 
-    it "does not type check" $ check program `shouldReturn` "error: found contradiction [5:5] 'l0 ref-free ( Int , & 'l0 ^t0 )\n|-> (safe read)"
+    it "does not type check" $ check program `shouldReturn` trim [r|
+type check error at 5:5: unable to satisfy constraint
+  | 'l0 ref-free ( Int , & 'l0 ^t0 )
+  | hint: safe read
+|]

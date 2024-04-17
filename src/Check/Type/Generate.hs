@@ -160,8 +160,7 @@ getConTy src name = do
     Nothing -> throwAt src (NotInScope name)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = save stage $ do
-  stage .= TypeCheck Generate
+run term = do
   term <- generate term
   display term `ifFlag` debug
   requirements' <- use (tySystem . requirements)

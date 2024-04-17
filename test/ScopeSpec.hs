@@ -21,7 +21,7 @@ fst (a, a) = a
 |]
 
     it "does not parse" $ parse program `shouldReturn` trim [r|
-2:5 error: variables are not distinct
+parse error at 2:5: variables are not distinct
 |]
 
 
@@ -31,7 +31,7 @@ fst (a, a) = a
 datatype Foo [a, a] = Foo a
 |]
 
-    it "does not parse" $ parse program `shouldReturn` "1:14 error: type variables are not distinct"
+    it "does not parse" $ parse program `shouldReturn` "parse error at 1:14: type variables are not distinct"
 
 
 
@@ -42,7 +42,7 @@ datatype Foo = Foo ()
 enum Foo = Bar | Baz
 |]
 
-    it "does not check" $ check program `shouldReturn` "2:1 error: type 'Foo' redeclared"
+    it "does not check" $ check program `shouldReturn` "kind check error at 2:1: type 'Foo' redeclared"
 
 
 
@@ -53,7 +53,7 @@ datatype FooData = Foo ()
 enum FooEnum = Foo | Bar
 |]
 
-    it "does not check" $ check program `shouldReturn` "2:1 error: constructor 'Foo' redeclared"
+    it "does not check" $ check program `shouldReturn` "type check error at 2:1: constructor 'Foo' redeclared"
 
 
 
@@ -64,7 +64,7 @@ x = 1
 x = 2
 |]
 
-    it "does not check" $ check program `shouldReturn` "1:1 error: multiple definitions for 'x'"
+    it "does not check" $ check program `shouldReturn` "parse error at 1:1: multiple definitions for 'x'"
 
 
 
@@ -75,7 +75,7 @@ x = y where y = 1
 z = y
 |]
 
-    it "does not check" $ check program `shouldReturn` "2:5 error: 'y' is not in scope"
+    it "does not check" $ check program `shouldReturn` "type check error at 2:5: 'y' is not in scope"
 
 
   describe "out of scope non-recursive function" $ do
@@ -84,7 +84,7 @@ z = y
 x () = x ()
 |]
 
-    it "does not check" $ check program `shouldReturn` "1:8 error: 'x' is not in scope"
+    it "does not check" $ check program `shouldReturn` "type check error at 1:8: 'x' is not in scope"
 
 
 

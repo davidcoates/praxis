@@ -12,7 +12,7 @@ import           Term
 
 check :: Term a => Annotated a -> Praxis (Annotated a)
 check term = save stage $ do
-  stage .= KindCheck Warmup
+  stage .= KindCheck
   term <- Generate.run term
   term <- Solve.run term
   display term `ifFlag` debug

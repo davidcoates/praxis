@@ -14,7 +14,6 @@ import           Introspect
 import qualified Parse.Mixfix        as Mixfix
 import           Praxis
 import           Print
-import           Stage
 import           Term
 
 import           Control.Applicative (liftA3)
@@ -35,8 +34,7 @@ import qualified Data.Set            as Set
 import           Prelude             hiding (exp)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = save stage $ do
-  stage .= Desugar
+run term = do
   term <- desugar term
   display term `ifFlag` debug
   return term

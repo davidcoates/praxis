@@ -30,8 +30,7 @@ kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind ->
 kind = annotation . just
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = save stage $ do
-  stage .= KindCheck Generate
+run term = do
   term <- generate term
   display term `ifFlag` debug
   requirements' <- use (kindSystem . requirements)

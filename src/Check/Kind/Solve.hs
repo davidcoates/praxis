@@ -23,8 +23,7 @@ import qualified Data.Set    as Set
 
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = save stage $ do
-  stage .= KindCheck Solve
+run term = do
   term <- solve kindSystem reduce term
   tryDefault term
 

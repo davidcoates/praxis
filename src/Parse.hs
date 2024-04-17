@@ -16,11 +16,13 @@ import qualified Parse.Parse    as Parse
 import qualified Parse.Rewrite  as Rewrite
 import qualified Parse.Tokenise as Tokenise
 import           Praxis
+import           Stage
 import           Term
 
 -- | A wrapper which runs tokenise, layout, parse & desugar
 parse :: forall a. Term a => String -> Praxis (Annotated a)
-parse text = do
+parse text = save stage $ do
+  stage .= Parse
   let topLevel = case witness :: I a of { IProgram -> True; _ -> False }
   tokens <- Tokenise.run topLevel text
   term <- Parse.run tokens

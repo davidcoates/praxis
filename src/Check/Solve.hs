@@ -63,9 +63,8 @@ solve system reduce term = do
             -- (system . requirements) %%= traverse (recurse rewrite)
             (system . assumptions) %%= (\as -> Set.fromList <$> (traverse (recurseTerm rewrite) (Set.toList as)))
             solve' (term, goals)
-        TreeSkip
-          -> do
-            throw $ "failed to solve constraints: " <> separate "\n\n" [ ((src, Just reason) :< Requirement constraint) | Goal src reason (Branch constraint _) <- goals ]
+        TreeSkip -- Shouldn't happen...
+          -> throw $ "!!! failed to solve constraints !!! " <> separate "\n\n" [ ((src, Just reason) :< Requirement constraint) | Goal src reason (Branch constraint _) <- goals ]
 
 
 data TreeReduction c = TreeContradiction [c] | TreeProgress | TreeRewrite Rewrite | TreeSkip
@@ -89,12 +88,13 @@ reduceGoals system reduce ((Goal src reason tree):goals) = do
     TreeSkip ->  do
       (goals, r2) <- reduceGoals system reduce goals
       return (goal ++ goals, r2)
-    TreeContradiction trace -> throw ("found contradiction " <> printTrace trace)
+    TreeContradiction trace -> throwAt src (printTrace trace)
     _  -> return (goal ++ goals, r1)
   where
     printTrace :: [c] -> Printable String
-    printTrace trace = printTrace' (map ((src, Nothing) :<) (reverse trace)) where
-      printTrace' cs = "[" <> pretty (show src) <> "] " <> (separate "\n|-> " cs) <> "\n|-> (" <> pretty reason <> ")"
+    printTrace trace = "unable to satisfy constraint" <> "\n  | " <> pretty (last (c:cs)) <> derived <> "\n  | " <> pretty (Style Bold ("hint: " :: Colored String)) <> pretty reason where
+      (c:cs) = map ((src, Nothing) :<) trace
+      derived = if null cs then blank else pretty (Style Italic (" derived from" :: Colored String)) <> "\n  | " <> pretty c
 
 
 reduceTree :: forall c. Ord c => Lens' PraxisState (System c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)

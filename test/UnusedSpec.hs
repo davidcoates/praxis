@@ -22,7 +22,7 @@ fst (x, y) = x
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
 |]
 
-    it "does not type check" $ check program `shouldReturn` "2:5 error: 'y_0' is not used"
+    it "does not type check" $ check program `shouldReturn` "type check error at 2:5: 'y_0' is not used"
 
 
 
@@ -54,7 +54,7 @@ fst (x, y) = read y in x
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x_0
 |]
 
-    it "does not type checks" $ check program `shouldReturn` "2:14 error: 'y_0' is not used"
+    it "does not type checks" $ check program `shouldReturn` "type check error at 2:14: 'y_0' is not used"
 
 
 

@@ -26,8 +26,7 @@ import           Data.Traversable    (forM)
 
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = save stage $ do
-  stage .= TypeCheck Solve
+run term = do
   term <- solve tySystem reduce term
   tryDefault term
 

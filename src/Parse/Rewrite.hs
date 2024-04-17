@@ -9,7 +9,6 @@ import           Introspect
 import qualified Parse.Mixfix    as Mixfix
 import           Praxis
 import           Print
-import           Stage
 import           Term
 
 import           Data.List       (intersect, intersperse, nub, partition, (\\))
@@ -18,8 +17,7 @@ import qualified Data.Map.Strict as Map
 
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = save stage $ do
-  stage .= Rewrite
+run term = do
   term <- rewriteTopLevel term
   display term `ifFlag` debug
   return term

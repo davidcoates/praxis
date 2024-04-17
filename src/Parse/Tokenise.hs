@@ -7,7 +7,6 @@ import           Parse.Tokenise.Tokeniser hiding (run)
 import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Parse.Tokenise.Unlayout
 import           Praxis                   hiding (throw)
-import qualified Stage
 import           Term                     (Lit (..), ViewDomain (..))
 import           Token
 
@@ -18,11 +17,9 @@ import           Data.Maybe               (fromJust)
 import           Prelude                  hiding (until)
 
 run :: Bool -> String -> Praxis [Sourced Token]
-run topLevel text = save stage $ do
-  stage .= Stage.Tokenise
+run topLevel text = do
   tokens <- Tokeniser.run token text
   display (separate " " (map (view value) tokens)) `ifFlag` debug
-  stage .= Stage.Layout
   let tokens' = unlayout topLevel tokens
   display (separate " " (map (view value) tokens')) `ifFlag` debug
   return tokens'

@@ -67,7 +67,7 @@ spec = do
     forM_ types $ \t -> do
       it (show t ++ " is not valid") $ do
         t' <- parseAs IQType t
-        t' `shouldBe` "1:1 error: type variables are not distinct"
+        t' `shouldBe` "parse error at 1:1: type variables are not distinct"
 
 
   describe "do not ending in expression" $ do
@@ -78,7 +78,7 @@ foo = do
   let y = 1
 |]
 
-    it "does not parse" $ check program `shouldReturn` "3:3 error: do block must end in an expression"
+    it "does not parse" $ check program `shouldReturn` "parse error at 3:3: do block must end in an expression"
 
 
 

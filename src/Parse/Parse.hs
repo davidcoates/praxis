@@ -7,14 +7,12 @@ import           Introspect
 import qualified Parse.Parse.Parser as Parser (run)
 import           Praxis
 import           Print
-import           Stage
 import           Syntax
 import           Term
 import           Token
 
 run :: Term a => [Sourced Token] -> Praxis (Annotated a)
-run tokens = save stage $ do
-  stage .= Parse
+run tokens = do
   term <- Parser.run parse tokens
   display term `ifFlag` debug
   return term

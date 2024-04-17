@@ -128,7 +128,7 @@ datatype List a = Nil () | Cons (a, List a)
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-2:37 error: 'List' is not in scope
+kind check error at 2:37: 'List' is not in scope
 |]
 
 

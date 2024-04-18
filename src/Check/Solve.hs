@@ -117,12 +117,12 @@ reduceTree system reduce tree@(Branch constraint _) = do
         Skip              -> return (Just tree, TreeSkip)
         Solved rewrite    -> return (Nothing, TreeRewrite rewrite)
         Subgoals subgoals -> do
-          (tree, r2) <- reduceTree'' (Branch constraint (map (\c -> Branch c []) subgoals))
+          (tree, r2) <- reduceTree system reduce (Branch constraint (map (\c -> Branch c []) subgoals))
           return (tree, noskip r2)
         Tautology         -> return (Nothing, TreeProgress)
 
     reduceTree' (Branch constraint [subtree]) = do
-      (subtree, r1) <- reduceTree'' subtree
+      (subtree, r1) <- reduceTree system reduce subtree
       let
         tree = case subtree of
           Nothing      -> Nothing
@@ -133,20 +133,18 @@ reduceTree system reduce tree@(Branch constraint _) = do
 
     reduceTree' (Branch constraint (subtree:subtrees)) = do
       let tree = Branch constraint subtrees
-      (subtree, r1) <- reduceTree'' subtree
+      (subtree, r1) <- reduceTree system reduce subtree
       case r1 of
         TreeContradiction trace
           -> return (combine subtree (Just tree), TreeContradiction (constraint:trace))
         TreeProgress -> do
-          (tree, r2) <- reduceTree'' tree
+          (tree, r2) <- reduceTree' tree
           return (combine subtree tree, noskip r2)
         TreeRewrite rewrite
           -> return (combine subtree (Just tree), TreeRewrite rewrite)
         TreeSkip -> do
-          (tree, r2) <- reduceTree'' tree
+          (tree, r2) <- reduceTree' tree
           return (combine subtree tree, r2)
-
-    reduceTree'' = reduceTree system reduce
 
     combine :: Maybe (Tree c) -> Maybe (Tree c) -> Maybe (Tree c)
     combine subtree tree = case (subtree, tree) of

@@ -3,8 +3,8 @@ module Token
   ) where
 
 import           Common
-import           Term   (Lit (..), ViewDomain (..))
 import qualified Data.Monoid.Colorful as Color
+import           Term                 (Lit (..), ViewDomain (..))
 
 data Token = QVarId (Qualified Name)
            | QConId (Qualified Name)

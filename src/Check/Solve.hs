@@ -97,15 +97,18 @@ reduceGoals system reduce ((Goal src reason tree):goals) = do
       derived = if null cs then blank else pretty (Style Italic (" derived from" :: Colored String)) <> "\n  | " <> pretty c
 
 
-reduceTree :: forall c. Ord c => Lens' PraxisState (System c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
+reduceTree :: forall c. (Ord c, Term c) => Lens' PraxisState (System c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
 reduceTree system reduce tree@(Branch constraint _) = do
 
    assumptions' <- use (system . assumptions)
    (tree, r) <- reduceTree' tree
-   case tree of
-     Nothing -> system . assumptions %= (Set.insert constraint)
-     _       -> pure ()
-   return (tree, r)
+   if constraint `Set.member` assumptions'
+     then return (Nothing, TreeProgress)
+     else do
+       case tree of
+         Nothing -> system . assumptions %= (Set.insert constraint)
+         _       -> pure ()
+       return (tree, r)
 
   where
     reduceTree' :: Tree c -> Praxis (Maybe (Tree c), TreeReduction c)

@@ -22,7 +22,8 @@ import           Praxis
 import           Print
 import           Term
 
-import qualified Data.Set   as Set
+import           Control.Monad (foldM)
+import qualified Data.Set      as Set
 
 
 type Rewrite = forall a. Term a => Annotated a -> Praxis (Annotated a)
@@ -113,8 +114,9 @@ reduceTree system reduce tree@(Branch constraint _) = do
   where
     reduceTree' :: Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
 
+    -- leaf case (the constraint has not yet been reduced)
     reduceTree' tree@(Branch constraint []) = do
-      r1 <- withAssumptions reduce constraint
+      r1 <- reduce constraint
       case r1 of
         Contradiction     -> return (Just tree, TreeContradiction [constraint])
         Skip              -> return (Just tree, TreeSkip)
@@ -124,45 +126,32 @@ reduceTree system reduce tree@(Branch constraint _) = do
           return (tree, noskip r2)
         Tautology         -> return (Nothing, TreeProgress)
 
-    reduceTree' (Branch constraint [subtree]) = do
-      (subtree, r1) <- reduceTree system reduce subtree
+    -- recursive case
+    reduceTree' (Branch constraint subtrees) = do
+      (subtrees, r1) <- foldM combine ([], TreeSkip) subtrees
       let
-        tree = case subtree of
-          Nothing      -> Nothing
-          Just subtree -> Just (Branch constraint [subtree])
-      case r1 of
-        TreeContradiction trace -> return (tree, TreeContradiction (constraint:trace))
-        _                       -> return (tree, r1)
+        r2 = case r1 of
+          TreeContradiction trace -> TreeContradiction (constraint:trace)
+          _                       -> r1
+      let
+        tree = case subtrees of
+          [] -> Nothing
+          _  -> Just (Branch constraint subtrees)
+      return (tree, r2)
 
-    reduceTree' (Branch constraint (subtree:subtrees)) = do
-      let tree = Branch constraint subtrees
-      (subtree, r1) <- reduceTree system reduce subtree
-      case r1 of
-        TreeContradiction trace
-          -> return (combine subtree (Just tree), TreeContradiction (constraint:trace))
-        TreeProgress -> do
-          (tree, r2) <- reduceTree' tree
-          return (combine subtree tree, noskip r2)
-        TreeRewrite rewrite
-          -> return (combine subtree (Just tree), TreeRewrite rewrite)
-        TreeSkip -> do
-          (tree, r2) <- reduceTree' tree
-          return (combine subtree tree, r2)
-
-    combine :: Maybe (Tree c) -> Maybe (Tree c) -> Maybe (Tree c)
-    combine subtree tree = case (subtree, tree) of
-      (Nothing, Just tree)
-        -> Just tree
-      (Just subtree, Nothing)
-        -> Just (Branch constraint [subtree])
-      (Just subtree, Just (Branch _ subtrees))
-        -> Just (Branch constraint (subtree:subtrees))
-      (Nothing, Nothing)
-        -> Nothing
-
-    withAssumptions :: Reducer c -> Reducer c
-    withAssumptions reduce constraint = do
-      assumptions' <- use (system . assumptions)
-      if constraint `Set.member` assumptions'
-        then return Tautology
-        else reduce constraint
+    combine :: ([Tree c], TreeReduction c) -> Tree c -> Praxis ([Tree c], TreeReduction c)
+    combine (subtrees, r1) subtree = do
+      let abort = case r1 of { TreeContradiction _ -> True; TreeRewrite _ -> True; _ -> False }
+      if abort
+        then return (subtree : subtrees, r1)
+        else do
+          (subtree, r2) <- reduceTree system reduce subtree
+          let
+            r3 = case r1 of
+              TreeSkip     -> r2
+              TreeProgress -> noskip r2
+          let
+            subtrees' = case subtree of
+              Nothing      -> subtrees
+              Just subtree -> subtree : subtrees
+          return (subtrees', r3)

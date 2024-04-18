@@ -217,20 +217,27 @@ abort :: Pretty a => a -> Praxis b
 abort x = displayBare x >> ExceptT (return (Left err)) where
   err = fold (runPrintable (pretty x) Plain)
 
+withContext :: Printable String -> Maybe Source -> Praxis (Printable String)
+withContext message src = do
+  stage' <- use stage
+  let
+    stageStr = case stage' of
+      Unknown -> blank
+      _       -> pretty (Value (show stage')) <> " "
+    srcStr = case src of
+      Nothing  -> blank
+      Just src -> " at " <> pretty (Style Bold (Value (show src)))
+  return $ stageStr <> message <> srcStr
+
 warnAt :: Pretty a => Source -> a -> Praxis ()
-warnAt s x = displayBare (pretty (Style Bold (Value (show s)) <> " " <> Style Bold (Fg DullYellow ("warning: " :: Colored String))) <> pretty x) `ifFlag` debug
+warnAt src x = (`ifFlag` debug) $ do
+  message <- pretty (Style Bold (Fg DullYellow ("warning" :: Colored String))) `withContext` (Just src)
+  displayBare (message <> ": " <> pretty x)
 
 throw' :: Pretty a => Maybe Source -> a -> Praxis b
 throw' src x = do
-  stage' <- use stage
-  let
-    stageString = case stage' of
-      Unknown -> blank
-      _       -> pretty (Value (show stage')) <> " "
-    srcString = case src of
-      Nothing  -> blank
-      Just src -> " at " <> pretty (Style Bold (Value (show src)))
-  abort $ stageString <> pretty (Style Bold (Fg DullRed ("error" :: Colored String))) <> srcString <> ": " <> pretty x
+  message <- pretty (Style Bold (Fg DullRed ("error" :: Colored String))) `withContext` src
+  abort $ message <> ": " <> pretty x
 
 throw :: Pretty a => a -> Praxis b
 throw x = throw' Nothing x

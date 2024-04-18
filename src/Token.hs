@@ -32,13 +32,13 @@ unstyle x = case x of
 highlight = RGB 216 213 199
 
 instance Pretty Token where
-  pretty (Annotation (Printable p)) = Printable (\opt -> let s = p opt in if null s then Nil else Fg Black (Bg highlight (Value "[ " <> unstyle s <> Value " ]")))
+  pretty (Annotation (Printable p)) = Printable (\opt -> let s = p opt in if null s then Nil else Fg Black (Bg highlight (Value "[" <> unstyle s <> Value "]")))
   pretty x = pretty $ case x of
     QVarId q      -> Value $ show q
     QConId q      -> Value $ show q
     QVarSym q     -> Value $ show q
     QConSym q     -> Value $ show q
-    ReservedCon s -> Style Bold $ Value s
+    ReservedCon s -> Value s
     ReservedOp s  -> Fg Green $ Value s
     ReservedId s  -> Style Bold $ Value s
     Layout c      -> Fg DullRed $ Value [c]

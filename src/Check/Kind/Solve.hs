@@ -67,16 +67,13 @@ reduce = \case
 
 
 -- Rewrite helpers
-solved :: Substitution -> Praxis (Reduction KindConstraint)
-solved rewrite = do
-  let
-    rewrite' :: Rewrite
-    rewrite' = pure . rewrite
-  kEnv %%= traverse rewrite'
-  return (Solved rewrite')
+solved :: Resolver -> Praxis (Reduction KindConstraint)
+solved resolve = do
+  kEnv %%= traverse (pure . sub resolve)
+  return (Solved (resolve, pure))
 
-is :: Name -> Kind -> Substitution
-is n k = sub (embedSub f) where
+is :: Name -> Kind -> Resolver
+is n k = embedSub f where
   f (a :< x) = case x of
     KindUni n' -> if n == n' then Just (a :< k) else Nothing
     _          -> Nothing

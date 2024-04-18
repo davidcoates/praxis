@@ -137,10 +137,10 @@ sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
       interpret program "sign 10"   `shouldReturn` "1"
       interpret program "sign (-5)" `shouldReturn` "-1"
       interpret program "sign -5"   `shouldReturn` trim [r|
-type check error at 1:1: unable to satisfy constraint
+type check error: unable to satisfy constraint
   | Int = Int -> Int derived from
   | ( Int , Int ) -> Int = ( Int -> Int , Int ) -> ^t6
-  | hint: function application
+  | hint: function application at 1:1
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
     it "translates" $ translate program `shouldReturn` trim [r|

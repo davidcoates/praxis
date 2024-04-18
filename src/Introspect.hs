@@ -14,7 +14,6 @@ module Introspect
   , typeof
   , embedSub
   , embedMonoid
-  , Substitution
   , sub
   , extract
   , deepExtract
@@ -104,8 +103,6 @@ switch a b eq neq = case (a, b) of
   -- |
   _                                    -> neq
 
-
-type Substitution = forall a. Term a => Annotated a -> Annotated a
 
 sub :: forall a. Term a => (forall b. Term b => Annotated b -> Maybe (Annotated b)) -> Annotated a -> Annotated a
 sub f x = case f x of

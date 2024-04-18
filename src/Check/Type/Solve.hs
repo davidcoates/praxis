@@ -71,7 +71,7 @@ reduce = \case
           ([], []) -> return Tautology
           ([], vs) -> do
             if all (\v -> case view value v of { ViewUni RefOrValue _ -> True; _ -> False }) vs
-              then solved (chain (map (\(_ :< ViewUni _ n) -> n `isView` ViewValue) vs))
+              then solved (areViews (map (\(_ :< ViewUni _ n) -> (n, ViewValue)) vs))
               else return Contradiction
           -- TODO do we need occurs checks here?
           ([_ :< v@(ViewUni _ _)], [_ :< ViewUni _ n])        -> solved (n `isView` v) -- Note: Ref < RefOrValue (i.e. restrain the more general one)
@@ -120,26 +120,25 @@ reduce = \case
 
 
 -- Rewrite helpers
-solved :: Substitution -> Praxis (Reduction TyConstraint)
-solved rewrite = do
-  let
-    rewrite' :: Rewrite
-    rewrite' = normalise . rewrite
-  tEnv %%= traverse (LEnv.value rewrite')
-  return (Solved rewrite')
+solved :: Resolver -> Praxis (Reduction TyConstraint)
+solved resolve = do
+  tEnv %%= traverse (LEnv.value (normalise . sub resolve))
+  return (Solved (resolve, normalise))
 
-chain :: [Substitution] -> Substitution
-chain [r]    x = r x
-chain (r:rs) x = chain rs (r x)
-
-isView :: Name -> View -> Substitution
-isView n v = sub (embedSub f) where
+isView :: Name -> View -> Resolver
+isView n v = embedSub f where
   f (a :< x) = case x of
     ViewUni _ n' -> if n == n' then Just (a :< v) else Nothing
     _            -> Nothing
 
-is :: Name -> Type -> Substitution
-is n t = sub (embedSub f) where
+areViews :: [(Name, View)] -> Resolver
+areViews vs = embedSub f where
+  f (a :< x) = case x of
+    ViewUni _ n -> case n `lookup` vs of { Just v -> Just (a :< v); Nothing -> Nothing }
+    _           -> Nothing
+
+is :: Name -> Type -> Resolver
+is n t = embedSub f where
   f (a :< x) = case x of
     TyUni n' -> if n == n' then Just (a :< t) else Nothing
     _        -> Nothing
@@ -171,7 +170,7 @@ simplifyOuterViews = simplifyOuterViews' [] where
 
 
 -- Term normaliser (after a substitution is applied)
-normalise :: forall a. Term a => Annotated a -> Praxis (Annotated a)
+normalise :: Normaliser
 normalise (a :< x) = case typeof x of
 
   IType -> case x of
@@ -237,7 +236,7 @@ tryDefault term@((src, _) :< _) = do
     defaultView name = do
       warnAt src $ "underdetermined view: " <> quote (pretty name) <> ", defaulting to &"
       v <- freshViewRef
-      return (name, v)
+      return (name, view value v)
 
     freeViews = deepViewUnis term
 
@@ -246,8 +245,8 @@ tryDefault term@((src, _) :< _) = do
   case defaultViews of
     [] -> return term
     _  -> do
-      Solved rewrite <- solved (chain (map (\(n, v) -> n `isView` view value v) defaultViews))
-      rewrite term
+      Solved (resolve, normalise) <- solved (areViews defaultViews)
+      (normalise . sub resolve) term
 
   where
     deepTyUnis :: forall a. Term a => Annotated a -> Set Name

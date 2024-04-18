@@ -14,6 +14,7 @@ data Reason = TyFunApplication
             | FunType
             | OpType
             | PairType
+  deriving (Eq, Ord)
 
 instance Pretty Reason where
   pretty = \case

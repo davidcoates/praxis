@@ -36,10 +36,10 @@ datatype Bar [?v, a] = Bar (Foo [?v, a])
   |]
 
       it "does not kind check" $ check program `shouldReturn` trim [r|
-kind check error at 3:28: unable to satisfy constraint
+kind check error: unable to satisfy constraint
   | View ? ≤ View & derived from
   | ( View ? , ^k3 ) ≤ ( View & , ^k1 )
-  | hint: type function application
+  | hint: type constructor 'Foo' must have kind Type at 1:1, data constructor 'Bar' must return kind Type at 3:24, type function application at 3:28
 |]
 
 

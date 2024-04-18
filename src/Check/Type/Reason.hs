@@ -25,6 +25,7 @@ data Reason = BindCongruence
             | SwitchCongruence
             | UnsafeRead Name
             | UserSignature
+  deriving (Eq, Ord)
 
 instance Pretty Reason where
   pretty = \case

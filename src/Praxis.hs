@@ -213,9 +213,17 @@ makeLenses ''Flags
 makeLenses ''Fresh
 makeLenses ''PraxisState
 
+format :: Pretty a => a -> Praxis (Colored String)
+format x = do
+  stage' <- use stage
+  let opt = case stage' of { KindCheck -> Kinds; TypeCheck -> Types; _ -> Plain }
+  return (runPrintable (pretty x) opt)
+
 abort :: Pretty a => a -> Praxis b
-abort x = displayBare x >> ExceptT (return (Left err)) where
-  err = fold (runPrintable (pretty x) Plain)
+abort x = do
+  displayBare x
+  err <- fold <$> format x
+  ExceptT (return (Left err))
 
 withContext :: Printable String -> Maybe Source -> Praxis (Printable String)
 withContext message src = do
@@ -255,9 +263,8 @@ display x = unlessSilent $ do
 displayBare :: Pretty a => a -> Praxis ()
 displayBare x = unlessSilent $ do
   t <- liftIO $ getTerm
-  s <- use stage
-  let o = case s of { KindCheck -> Kinds; TypeCheck -> Types; _ -> Plain }
-  liftIO $ printColoredS t $ runPrintable (pretty x) o <> "\n"
+  x <- format x
+  liftIO $ printColoredS t $ x <> "\n"
 
 clearTerm :: Praxis ()
 clearTerm = unlessSilent $ liftIO $ do

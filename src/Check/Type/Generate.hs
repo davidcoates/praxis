@@ -12,7 +12,6 @@ module Check.Type.Generate
   ) where
 
 import           Check.Error
-import           Check.Type.Reason
 import           Common
 import           Env.Env           (Env (..))
 import qualified Env.Env           as Env
@@ -31,10 +30,10 @@ import qualified Data.Set          as Set
 import           Prelude           hiding (log)
 
 
-require :: Tag (Source, Reason) TyConstraint -> Praxis ()
+require :: Tag (Source, TyReason) TyConstraint -> Praxis ()
 require ((src, reason) :< con) = tySystem . requirements %= (((src, Just reason) :< Requirement con):)
 
-requires :: [Tag (Source, Reason) TyConstraint] -> Praxis ()
+requires :: [Tag (Source, TyReason) TyConstraint] -> Praxis ()
 requires = mapM_ require
 
 ty :: (Term a, Functor f, Annotation a ~ Annotated Type) => (Annotated Type -> f (Annotated Type)) -> Annotated a -> f (Annotated a)
@@ -59,7 +58,7 @@ specialise src name vars cs = do
         TyVar n                   -> n `lookup` specialisedVars
         TyView (_ :< ViewVar _ n) -> n `lookup` specialisedVars
         _                         -> Nothing
-  let specialisation = zip  vars (map snd specialisedVars)
+  let specialisation = zip vars (map snd specialisedVars)
   requires [ (src, Specialisation name) :< view value (tyRewrite c) | c <- cs ]
   return (tyRewrite, specialisation)
 
@@ -295,7 +294,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     x <- generateExp x
     let fTy = view ty f
     let xTy = view ty x
-    require $ (src, FunApplication) :< (fTy `TEq` fun xTy rTy)
+    require $ (src, TyReasonApply f x) :< (fTy `TEq` fun xTy rTy)
     return (rTy :< Apply f x)
 
   Case exp alts -> do
@@ -356,7 +355,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     tEnv %= LEnv.intro var (mono refType)
     exp <- generateExp exp
     let t = view ty exp
-    require $ (src, SafeRead) :< RefFree refName t
+    require $ (src, TyReasonRead var) :< RefFree refName t
     -- Reading a polymorphic term is unnecessary (since it's Copyable).
     -- We prohibit since we can't correctly wrap with Specialise (it only makes sense to wrap var, not Read var exp).
     -- TODO should we prohibit all Copy-ables here? It would require a NoCopy / Not constraint.
@@ -400,9 +399,9 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     return (view ty exp :< Where exp decls)
 
 
-equals :: (Term a, Annotation a ~ Annotated Type) => [Annotated a] -> Reason -> Praxis (Annotated Type)
+equals :: (Term a, Annotation a ~ Annotated Type) => [Annotated a] -> TyReason -> Praxis (Annotated Type)
 equals exps = equals' $ map (\((src, Just t) :< _) -> (src, t)) exps where
-  equals' :: [(Source, Annotated Type)] -> Reason -> Praxis (Annotated Type)
+  equals' :: [(Source, Annotated Type)] -> TyReason -> Praxis (Annotated Type)
   equals' ((_, t):ts) reason = requires [ (src, reason) :< (t `TEq` t') | (src, t') <- ts ] >> return t
 
 generateBind :: Annotated Bind -> Praxis (Annotated Bind)
@@ -410,7 +409,7 @@ generateBind (a@(src, _) :< Bind pat exp) = do
   exp <- generateExp exp
   op <- freshTyViewUni RefOrValue
   pat <- generatePat op pat
-  require $ (src, BindCongruence) :< (view ty pat `TEq` view ty exp)
+  require $ (src, TyReasonBind pat exp) :< (view ty pat `TEq` view ty exp)
   return (a :< Bind pat exp)
 
 generateAlt :: Annotated Type -> (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)

@@ -10,7 +10,6 @@ module Check.Kind.Generate
   ) where
 
 import           Check.Error
-import           Check.Kind.Reason
 import           Common
 import qualified Env.Env           as Env
 import           Introspect
@@ -23,7 +22,7 @@ import           Data.List         (nub, sort)
 import qualified Data.Set          as Set
 
 
-require :: Tag (Source, Reason) KindConstraint -> Praxis ()
+require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
 require ((src, reason) :< con) = kindSystem . requirements %= (((src, Just reason) :< Requirement con):)
 
 kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
@@ -89,13 +88,13 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
       x <- generateTy x
       case view kind f of
         (_ :< KindView _) -> do
-          require $ (src, ViewApplication) :< (view kind x `KEq` phantom KindType)
+          require $ (src, KindReasonTyApply f x) :< (view kind x `KEq` phantom KindType)
           return (phantom KindType :< TyApply f x)
         _ -> do
           k1 <- freshKindUni
           k2 <- freshKindUni
-          require $ (src, TyFunApplication) :< (view kind f `KEq` phantom (KindFun k1 k2))
-          require $ (src, TyFunApplication) :< (view kind x `KSub` k1)
+          require $ (src, KindReasonTyApply f x) :< (view kind f `KEq` phantom (KindFun k1 k2))
+          require $ (src, KindReasonTyApply f x) :< (view kind x `KSub` k1)
           return (k2 :< TyApply f x)
 
     TyCon con -> do
@@ -107,8 +106,8 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
     TyFun ty1 ty2 -> do
       ty1 <- generateTy ty1
       ty2 <- generateTy ty2
-      require $ (src, FunType) :< (view kind ty1 `KEq` phantom KindType)
-      require $ (src, FunType) :< (view kind ty2 `KEq` phantom KindType)
+      require $ (src, KindReasonType ty1) :< (view kind ty1 `KEq` phantom KindType)
+      require $ (src, KindReasonType ty2) :< (view kind ty2 `KEq` phantom KindType)
       return (phantom KindType :< TyFun ty1 ty2)
 
     TyView v -> do
@@ -118,8 +117,8 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
     TyPair ty1 ty2 -> do
       ty1 <- generateTy ty1
       ty2 <- generateTy ty2
-      require $ (src, PairType) :< (view kind ty1 `KEq` phantom KindType)
-      require $ (src, PairType) :< (view kind ty2 `KEq` phantom KindType)
+      require $ (src, KindReasonType ty1) :< (view kind ty1 `KEq` phantom KindType)
+      require $ (src, KindReasonType ty2) :< (view kind ty2 `KEq` phantom KindType)
       return (phantom KindType :< TyPair ty1 ty2)
 
     TyPack ty1 ty2 -> do
@@ -161,8 +160,9 @@ fun a b = phantom (KindFun a b)
 generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon (a@(src, _) :< DataCon name arg) = do
   arg <- generate arg
-  require $ (src, DataConType name) :< (view kind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
-  return (a :< DataCon name arg)
+  let dataCon = (a :< DataCon name arg)
+  require $ (src, KindReasonType arg) :< (view kind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
+  return dataCon
 
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
 generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
@@ -176,8 +176,8 @@ generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
         return (arg, alts)
     unless (mode == DataRec) $ introKind src name k
     case arg of
-      Nothing  -> require $ (src, DataType name) :< (k `KEq` phantom KindType)
-      Just arg -> require $ (src, DataType name) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
+      Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
+      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
     return $ DeclData mode name arg alts
 
   DeclEnum name alts -> do

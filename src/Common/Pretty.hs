@@ -20,9 +20,7 @@ data Option = Plain | Types | Kinds deriving Eq
 newtype Printable a = Printable { runPrintable :: Option -> Colored a }
 
 instance Eq a => Eq (Printable a) where
-  -- Printable p == Printable q = p Plain == q Plain && p Types == p Types && p Kinds == p Kinds
-  (==) = undefined
--- TODO only needed for Token Eq, not actually used...
+  (==) = undefined -- TODO only needed for Token Eq, not actually used...
 
 instance IsString (Printable String) where
   fromString = pure

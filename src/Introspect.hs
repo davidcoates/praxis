@@ -324,12 +324,21 @@ instance Term KindConstraint where
 
 instance Term TyRequirement where
   witness = ITyRequirement
-  recurseAnnotation _ _ = pure
+  recurseAnnotation _ f x = case x of
+    TyReasonApply a b -> TyReasonApply <$> f a <*> f b
+    TyReasonRead n    -> pure (TyReasonRead n)
+    TyReasonBind p e  -> TyReasonBind <$> f p <*> f e
+    -- TODO
+    _ -> pure x
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c
 
 instance Term KindRequirement where
   witness = IKindRequirement
-  recurseAnnotation _ _ = pure
+  recurseAnnotation _ f x = case x of
+    KindReasonTyApply a b -> KindReasonTyApply <$> f a <*> f b
+    KindReasonDataCon c   -> KindReasonDataCon <$> f c
+    KindReasonData n a    -> KindReasonData n <$> traverse f a
+    KindReasonType t      -> KindReasonType <$> f t
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c

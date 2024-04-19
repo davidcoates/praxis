@@ -137,10 +137,9 @@ sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
       interpret program "sign 10"   `shouldReturn` "1"
       interpret program "sign (-5)" `shouldReturn` "-1"
       interpret program "sign -5"   `shouldReturn` trim [r|
-type check error: unable to satisfy constraint
-  | Int = Int -> Int derived from
-  | ( Int , Int ) -> Int = ( Int -> Int , Int ) -> ^t6
-  | hint: function application at 1:1
+type check error: unable to satisfy: Int = Int -> Int
+  | derived from: ( Int , Int ) -> Int = ( Int -> Int , Int ) -> ^t6
+  | primary cause: application [( Int , Int ) -> Int] subtract_int ($) ( [Int -> Int] sign_0 , [Int] 5 ) at 1:1
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
     it "translates" $ translate program `shouldReturn` trim [r|

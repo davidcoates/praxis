@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE TupleSections       #-}
 
 
 module Check.Solve
@@ -27,7 +28,6 @@ import           Term
 import           Control.Monad (foldM)
 import           Data.Maybe    (isJust)
 import           Data.Monoid   (Any (..))
-import           Data.Set      as Set (Set)
 import qualified Data.Set      as Set
 
 
@@ -49,7 +49,7 @@ data GoalT x c = Goal x (Tree c)
 
 type Crumb c = (Source, Annotation (Requirement c))
 
-type Crumbs c = Set (Crumb c)
+type Crumbs c = [Crumb c]
 
 -- Note: Goal definition is split like this for "deriving" to work.
 type Goal c = GoalT (Crumbs c) c
@@ -66,7 +66,7 @@ solve :: forall c a.
 
 solve system reduce term = do
   requirements' <- use (system . requirements)
-  let goals = [ Goal (Set.singleton (src, reason)) (Branch constraint []) | ((src, Just reason) :< Requirement constraint) <- requirements' ]
+  let goals = [ Goal [(src, reason)] (Branch constraint []) | ((src, Just reason) :< Requirement constraint) <- requirements' ]
   (term, [], _) <- solve' (term, goals)
   return term
   where
@@ -79,24 +79,32 @@ solve system reduce term = do
         TreeProgress
           -> solve' (term, goals)
 
-        TreeSolved (resolve, normalise) crumbs
+        TreeSolved (resolve, normalise) crumbs2
           -> do
             let
               rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
               rewrite = normalise . sub resolve
 
+              rewriteCrumbs :: Crumbs c -> Praxis (Crumbs c)
+              rewriteCrumbs = mapM (\(src, reason) -> (src,) <$> (recurseAnnotation (witness :: I (Requirement c)) rewrite reason))
+
+            crumbs2 <- rewriteCrumbs crumbs2
+
+            let
               affectedByRewrite :: forall a. Term a => Annotated a -> Bool
               affectedByRewrite term = getAny (extract f term) where
                 f :: forall a. Term a => a -> Any
                 f x = Any (isJust (resolve (phantom x)))
 
               rewriteGoal :: Goal c -> Praxis (Goal c)
-              rewriteGoal goal@(Goal crumbs' tree@(Branch constraint _)) = do
+              rewriteGoal (Goal crumbs1 tree@(Branch constraint _)) = do
+                crumbs1 <- rewriteCrumbs crumbs1
                 if affectedByRewrite (phantom constraint)
                   then do
                     tree <- traverse (recurseTerm rewrite) tree
-                    return $ Goal (crumbs' `Set.union` crumbs) tree
-                  else return goal
+                    let crumbs = crumbs1 ++ [ crumb | crumb <- crumbs2, not (crumb `elem` crumbs1) ]
+                    return $ Goal crumbs tree
+                  else return (Goal crumbs1 tree)
 
             term <- rewrite term
             goals <- traverse rewriteGoal goals
@@ -134,11 +142,13 @@ reduceGoals system reduce ((Goal crumbs tree):goals) = do
       return (goal ++ goals, r2)
   where
     printTrace :: [c] -> Printable String
-    printTrace trace = "unable to satisfy constraint" <> "\n  | " <> pretty (last (c:cs)) <> derived <> "\n  | " <> pretty (Style Bold ("hint: " :: Colored String)) <> printCrumbs crumbs where
+    printTrace trace = "unable to satisfy: "  <> pretty (last (c:cs)) <> derived <> printCrumbs crumbs where
       (c:cs) = map phantom trace
-      derived = if null cs then blank else pretty (Style Italic (" derived from" :: Colored String)) <> "\n  | " <> pretty c
+      derived = if null cs then blank else "\n  | derived from: " <> pretty c
     printCrumbs :: Crumbs c -> Printable String
-    printCrumbs crumbs = separate ", " (map printCrumb (Set.toList crumbs))
+    printCrumbs (crumb:crumbs) = primary <> printCrumb crumb <> (if null crumbs then blank else secondary <> separate "\n  | - " (map printCrumb crumbs)) where
+      primary = "\n  | " <> pretty (Style Bold ("primary cause: " :: Colored String))
+      secondary = "\n  | " <> (if length crumbs > 1 then "secondary causes:\n  | - " else "secondary cause: ")
     printCrumb :: Crumb c -> Printable String
     printCrumb (src, reason) = pretty reason <> " at " <> pretty (show src)
 

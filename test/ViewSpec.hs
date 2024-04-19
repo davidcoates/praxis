@@ -70,10 +70,12 @@ box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
     it "evaluates" $ do
 
       interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
-type check error: unable to satisfy constraint
-  | & ^v3 List Int ?= List Int derived from
-  | ( Int , List Int ) -> List Int = ( Int , List Int ) -> & ^v3 List Int
-  | hint: binding must have same type on both sides at 1:5, function application at 1:10, function application at 1:50
+type check error: unable to satisfy: & ^v3 List Int ?= List Int
+  | derived from: ( Int , List Int ) -> List Int = ( Int , List Int ) -> & ^v3 List Int
+  | primary cause: application [( Int , List Int ) -> List Int] Cons ($) ( [Int] 1 , [( ^t5 , List ^t5 ) -> List ^t5] Cons ( [Int] 2 , [( ^t7 , List ^t7 ) -> List ^t7] Cons ( [Int] 3 , [( ) -> List ^t9] Nil [( )] ( ) ) ) ) at 1:10
+  | secondary causes:
+  | - binding [& ^v3 List Int] xs_0 (<-) [( Int , List Int ) -> List Int] Cons ( [Int] 1 , [( ^t5 , List ^t5 ) -> List ^t5] Cons ( [Int] 2 , [( ^t7 , List ^t7 ) -> List ^t7] Cons ( [Int] 3 , [( ) -> List ^t9] Nil [( )] ( ) ) ) ) at 1:5
+  | - application [& ^v3 List Int -> Box [ & ^v3 , List Int ]] Box ($) [& ^v3 List Int] xs_0 at 1:50
 |]
 
       interpret program [r|
@@ -104,7 +106,6 @@ y_0 = read x_0 in ( 1 , x_0 )
 |]
 
     it "does not type check" $ check program `shouldReturn` trim [r|
-type check error: unable to satisfy constraint
-  | 'l0 ref-free ( Int , & 'l0 ^t0 )
-  | hint: safe read at 5:5
+type check error: unable to satisfy: 'l0 ref-free ( Int , & 'l0 ^t0 )
+  | primary cause: read of x_0 at 5:5
 |]

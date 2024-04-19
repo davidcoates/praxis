@@ -41,6 +41,8 @@ module Term
   , Requirement(..)
   , TyRequirement(..)
   , KindRequirement(..)
+  , TyReason(..)
+  , KindReason(..)
 
   , Specialisation
 
@@ -53,8 +55,6 @@ module Term
   , covalue
   ) where
 
-import qualified Check.Kind.Reason as Kind
-import qualified Check.Type.Reason as Type
 import           Common
 
 import           Data.Set          (Set)
@@ -235,8 +235,8 @@ type family Annotation a where
   Annotation QTyVar   = Annotated Kind
   Annotation View     = Annotated Kind
   Annotation DataCon  = Annotated QType
-  Annotation TyRequirement   = Type.Reason
-  Annotation KindRequirement = Kind.Reason
+  Annotation TyRequirement   = TyReason
+  Annotation KindRequirement = KindReason
   Annotation a               = Void
 
 type Annotated a = Tag (Source, Maybe (Annotation a)) a
@@ -255,3 +255,30 @@ as x a = (Phantom, Just a) :< x
 
 covalue :: Functor f => (Annotated a -> f (Annotated a)) -> a -> f a
 covalue f x = view value <$> f (phantom x)
+
+data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
+              | TyReasonBind (Annotated Pat) (Annotated Exp)
+              | TyReasonRead Name
+              | Captured Name
+              | CaseCongruence
+              | ConPattern Name
+              | FunCongruence Name
+              | FunSignature Name
+              | IfCondition
+              | IfCongruence
+              | Instance Name
+              | MultiAlias Name
+              | MultiUse Name
+              | Specialisation Name
+              | SwitchCondition
+              | SwitchCongruence
+              | UnsafeRead Name
+              | UserSignature
+  deriving (Eq, Ord)
+
+data KindReason = KindReasonTyApply (Annotated Type) (Annotated Type)
+                | KindReasonDataCon (Annotated DataCon)
+                | KindReasonData Name (Maybe (Annotated TyPat))
+                | KindReasonType (Annotated Type)
+  deriving (Eq, Ord)
+

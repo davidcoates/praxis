@@ -106,3 +106,32 @@ label ((s, a) :< x) = case a of
     IKindRequirement -> pretty a
     _                -> blank
   _ -> blank
+
+instance Pretty TyReason where
+  pretty = \case
+    TyReasonApply f x -> "application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
+    TyReasonRead n    -> "read of " <> pretty n
+    TyReasonBind p e  -> "binding " <> pretty p <> pretty (Fg Red (" (<-) " :: Colored String)) <> pretty e
+    -- TODO
+    Captured n       -> "variable " <> quote (pretty n) <> " captured"
+    CaseCongruence   -> "alternatives of case expression must have the same type"
+    ConPattern n     -> "constructor pattern " <> quote (pretty n)
+    FunCongruence n  -> "function " <> quote (pretty n)
+    FunSignature n   -> "function signature for " <> quote (pretty n)
+    IfCondition      -> "type of if condition must be Bool"
+    IfCongruence     -> "branches of if expression must have the same type"
+    Instance n       -> "monomorphic usage of " <> quote (pretty n)
+    MultiAlias n     -> "variable " <> quote (pretty n) <> " is not a unique alias"
+    MultiUse n       -> "variable " <> quote (pretty n) <> " used more than once"
+    Specialisation n -> "specialisation of " <> quote (pretty n)
+    SwitchCondition  -> "type of switch condition must be Bool"
+    SwitchCongruence -> "branches of switch expression must have the same type"
+    UnsafeRead n     -> "variable " <> quote (pretty n) <> " read after being used"
+    UserSignature    -> "user-supplied signature"
+
+instance Pretty KindReason where
+  pretty = \case
+    KindReasonTyApply f x -> "type application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
+    KindReasonDataCon c   -> "data constructor " <> pretty c
+    KindReasonData n a    -> "data type " <> pretty n <> (case a of { Just a -> " " <> pretty a; _ -> blank })
+    KindReasonType t      -> "type " <> pretty t

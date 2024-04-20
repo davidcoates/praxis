@@ -11,15 +11,15 @@ module Check.Kind.Generate
 
 import           Check.Error
 import           Common
-import qualified Env.Env           as Env
+import qualified Env.Env     as Env
 import           Introspect
 import           Praxis
 import           Print
 import           Stage
 import           Term
 
-import           Data.List         (nub, sort)
-import qualified Data.Set          as Set
+import           Data.List   (nub, sort)
+import qualified Data.Set    as Set
 
 
 require :: Tag (Source, KindReason) KindConstraint -> Praxis ()

@@ -27,14 +27,14 @@ import qualified Data.Set           as Set (fromList, toList)
 import           GHC.Exts           (Constraint)
 
 
-type Termformer f = forall a. Term a => Annotated a -> f (Annotated a)
+type TermAction f = forall a. Term a => Annotated a -> f (Annotated a)
 
 class Term a where
   witness :: I a
-  recurseTerm :: Applicative f => Termformer f -> a -> f a
-  recurseAnnotation :: (Term a, Applicative f) => I a -> Termformer f -> Annotation a -> f (Annotation a)
+  recurseTerm :: Applicative f => TermAction f -> a -> f a
+  recurseAnnotation :: (Term a, Applicative f) => I a -> TermAction f -> Annotation a -> f (Annotation a)
 
-recurse :: forall a f. (Term a, Applicative f) => Termformer f -> Annotated a -> f (Annotated a)
+recurse :: forall a f. (Term a, Applicative f) => TermAction f -> Annotated a -> f (Annotated a)
 recurse f ((src, a) :< x) = (\a x -> (src, a) :< x) <$> traverse (recurseAnnotation (witness :: I a) f) a <*> recurseTerm f x
 
 -- TODO Lit? Fixity?
@@ -130,7 +130,7 @@ embedMonoid f x = getConst $ transferA (Const . f) x where
 
 -- TODO use template haskell to generate recurseTerm
 
-trivial :: (Annotation a ~ Void, Term a, Applicative f) => I a -> Termformer f -> Annotation a -> f (Annotation a)
+trivial :: (Annotation a ~ Void, Term a, Applicative f) => I a -> TermAction f -> Annotation a -> f (Annotation a)
 trivial _ _ = absurd
 
 -- | Operators
@@ -185,10 +185,10 @@ instance Term Decl where
     DeclVar n t e     -> DeclVar n <$> traverse f t <*> f e
 
 
-pair :: (Term a, Term b) => Applicative f => Termformer f -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)
+pair :: (Term a, Term b) => Applicative f => TermAction f -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)
 pair f (a, b) = (,) <$> f a <*> f b
 
-pairs :: (Term a, Term b) => Applicative f => Termformer f -> [(Annotated a, Annotated b)] -> f [(Annotated a, Annotated b)]
+pairs :: (Term a, Term b) => Applicative f => TermAction f -> [(Annotated a, Annotated b)] -> f [(Annotated a, Annotated b)]
 pairs f = traverse (pair f)
 
 instance Term Exp where
@@ -329,7 +329,7 @@ instance Term TyRequirement where
     TyReasonRead n    -> pure (TyReasonRead n)
     TyReasonBind p e  -> TyReasonBind <$> f p <*> f e
     -- TODO
-    _ -> pure x
+    _                 -> pure x
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c
 

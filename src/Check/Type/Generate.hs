@@ -13,21 +13,21 @@ module Check.Type.Generate
 
 import           Check.Error
 import           Common
-import           Env.Env           (Env (..))
-import qualified Env.Env           as Env
-import qualified Env.LEnv          as LEnv
+import           Env.Env       (Env (..))
+import qualified Env.Env       as Env
+import qualified Env.LEnv      as LEnv
 import           Introspect
 import           Praxis
 import           Print
 import           Stage
 import           Term
 
-import           Control.Monad     (replicateM)
-import           Data.Foldable     (foldMap, foldlM)
-import           Data.List         (nub, partition, sort)
-import           Data.Maybe        (isJust, mapMaybe)
-import qualified Data.Set          as Set
-import           Prelude           hiding (log)
+import           Control.Monad (replicateM)
+import           Data.Foldable (foldMap, foldlM)
+import           Data.List     (nub, partition, sort)
+import           Data.Maybe    (isJust, mapMaybe)
+import qualified Data.Set      as Set
+import           Prelude       hiding (log)
 
 
 require :: Tag (Source, TyReason) TyConstraint -> Praxis ()

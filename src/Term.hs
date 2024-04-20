@@ -57,7 +57,7 @@ module Term
 
 import           Common
 
-import           Data.Set          (Set)
+import           Data.Set (Set)
 
 -- * OPERATORS *
 

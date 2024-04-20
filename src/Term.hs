@@ -52,7 +52,6 @@ module Term
   , annotation
   , phantom
   , as
-  , covalue
   ) where
 
 import           Common
@@ -253,12 +252,10 @@ phantom x = (Phantom, Nothing) :< x
 as :: a -> Annotation a -> Annotated a
 as x a = (Phantom, Just a) :< x
 
-covalue :: Functor f => (Annotated a -> f (Annotated a)) -> a -> f a
-covalue f x = view value <$> f (phantom x)
-
 data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
               | TyReasonBind (Annotated Pat) (Annotated Exp)
               | TyReasonRead Name
+              -- TODO
               | Captured Name
               | CaseCongruence
               | ConPattern Name

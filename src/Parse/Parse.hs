@@ -7,7 +7,7 @@ import           Introspect
 import qualified Parse.Parse.Parser as Parser (run)
 import           Praxis
 import           Print
-import           Syntax
+import           Syntax.Parser
 import           Term
 import           Token
 

@@ -45,12 +45,6 @@ makeLenses ''Entry
 instance Semigroup (Entry a) where
   e1 <> e2 = Entry { _value = view value e1, _used = view used e1 || view used e2, _read = view read e1 || view read e2, _captured = view captured e1 || view captured e2 }
 
-{-
-deriving instance Functor Entry
-deriving instance Foldable Entry
-deriving instance Traversable Entry
--}
-
 instance Pretty a => Pretty (Entry a) where
   pretty Entry{ _value, _used, _read, _captured } = (<> pretty _value) $ ((if _used then "(u)" else "") <> (if _read then "(r)" else "") <> (if _captured then "(c)" else ""))
 

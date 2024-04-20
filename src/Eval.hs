@@ -196,5 +196,6 @@ tryMatch val (_ :< pat) = case pat of
 
   PatVar name
     -> Just $ vEnv %= Env.intro name val
+
   _
     -> Nothing

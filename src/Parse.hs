@@ -19,13 +19,10 @@ import           Praxis
 import           Stage
 import           Term
 
--- | A wrapper which runs tokenise, layout, parse & desugar
+-- | A wrapper which runs tokenise, parse, desugar, and rewrite
 parse :: forall a. Term a => String -> Praxis (Annotated a)
 parse text = save stage $ do
   stage .= Parse
   let topLevel = case witness :: I a of { IProgram -> True; _ -> False }
   tokens <- Tokenise.run topLevel text
-  term <- Parse.run tokens
-  term <- Desugar.run term
-  term <- Rewrite.run term
-  return term
+  Parse.run tokens >>= Desugar.run >>= Rewrite.run

@@ -198,6 +198,7 @@ normalise (a :< x) = case typeof x of
 
 -- Copy helpers
 data Truth = Yes | No | Maybe
+  deriving Eq
 
 conjunction :: Truth -> Truth -> Truth
 conjunction Yes Yes = Yes
@@ -205,24 +206,31 @@ conjunction No _    = No
 conjunction _ No    = No
 conjunction _ _     = Maybe
 
-canCopy :: Annotated Type -> Praxis Truth
-canCopy t = do
+usingAssumptions :: TyConstraint -> Praxis Truth -> Praxis Truth
+usingAssumptions constraint check = do
   assumptions' <- use (tySystem . assumptions)
-  if Copy t `Set.member` assumptions'
+  if constraint `Set.member` assumptions'
     then return Yes
-    else case view value t of
-      TyUnit                                       -> return Yes
-      TyFun _ _                                    -> return Yes
-      TyPair a b                                   -> liftA2 conjunction (canCopy a) (canCopy b)
-      TyVar _                                      -> return No
-      TyCon _                                      -> return No
-      TyApply (_ :< TyCon _) _                     -> return No
-      TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
-      TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
-      TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
-      TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> canCopy a
-      TyApply (_ :< TyView (_ :< ViewValue)) a     -> canCopy a
-      _                                            -> return Maybe
+    else do
+      truth <- check
+      when (truth == Yes) $ tySystem . assumptions %= Set.insert constraint
+      return truth
+
+canCopy :: Annotated Type -> Praxis Truth
+canCopy t = usingAssumptions (Copy t) $ case view value t of
+  TyUnit                                       -> return Yes
+  TyFun _ _                                    -> return Yes
+  TyPair a b                                   -> liftA2 conjunction (canCopy a) (canCopy b)
+  TyVar _                                      -> return No
+  TyCon _                                      -> return No
+  TyApply (_ :< TyCon _) _                     -> return No
+  TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
+  TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
+  TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
+  TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> canCopy a
+  TyApply (_ :< TyView (_ :< ViewValue)) a     -> canCopy a
+  _                                            -> return Maybe
+
 
 -- Check for undetermined unification variables, default them where possible
 tryDefault :: Term a => Annotated a -> Praxis (Annotated a)

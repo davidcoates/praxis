@@ -6,18 +6,17 @@ import           Common
 import qualified Data.Monoid.Colorful as Color
 import           Term                 (Lit (..), ViewDomain (..))
 
-data Token = QVarId (Qualified Name)
-           | QConId (Qualified Name)
-           | QVarSym (Qualified Name)
-           | QConSym (Qualified Name)
-           | ReservedCon String
-           | ReservedOp String
-           | ReservedId String
+data Token = Annotation (Printable String)
+           | ConId Name
            | Layout Char
            | Lit Lit
-           | Annotation (Printable String)
+           | ReservedCon Name
+           | ReservedSym Name
+           | ReservedId Name
            | Special Char
-           | Uni String -- ^ A unification variable
+           | Uni Name -- ^ A unification variable
+           | VarId Name
+           | VarSym Name
   deriving Eq
 
 unstyle :: Colored a -> Colored a
@@ -34,14 +33,13 @@ highlight = RGB 216 213 199
 instance Pretty Token where
   pretty (Annotation (Printable p)) = Printable (\opt -> let s = p opt in if null s then Nil else Fg Black (Bg highlight (Value "[" <> unstyle s <> Value "]")))
   pretty x = pretty $ case x of
-    QVarId q      -> Value $ show q
-    QConId q      -> Value $ show q
-    QVarSym q     -> Value $ show q
-    QConSym q     -> Value $ show q
-    ReservedCon s -> Value s
-    ReservedOp s  -> Fg Green $ Value s
-    ReservedId s  -> Style Bold $ Value s
+    ConId s       -> Value $ s
     Layout c      -> Fg DullRed $ Value [c]
     Lit l         -> Fg Blue $ Value $ show l
+    ReservedCon s -> Value s
+    ReservedSym s -> Fg Green $ Value s
+    ReservedId s  -> Style Bold $ Value s
     Special c     -> Fg Black $ Value [c]
     Uni s         -> Fg Magenta $ Value s
+    VarId s       -> Value $ s
+    VarSym s      -> Value $ s

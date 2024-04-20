@@ -43,7 +43,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> semiSpecial <|> literal <|> stuff)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> semiSpecial <|> literal <|> conId <|> varId <|> varSym)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment
@@ -60,7 +60,7 @@ special = Special <$> match (`elem` "(),`_")
 -- AKA contextually reserved operators.
 -- We want to treat them like special symbols for lexing (so e.g. "[&" lexes as two tokens, not one)
 semiSpecial :: Tokeniser Token
-semiSpecial = (\s -> QVarSym Qualified { qualification = [], unqualify = [s]}) <$> match (`elem` "[].") -- TODO qualification
+semiSpecial = (VarSym . (:[])) <$> match (`elem` "[].")
 
 literal :: Tokeniser Token
 literal = intLiteral <|> charLiteral <|> stringLiteral
@@ -101,22 +101,13 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unt
 
 reservedIds = ["read", "in", "if", "then", "else", "using", "datatype", "enum", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec", "boxed", "unboxed", "defer"]
 reservedCons = ["Type", "Constraint", "Copy"]
-reservedOps = [":", "=", "\\", "->", "@", "&", "?"] -- TODO should more of these be "contextual" ?
+reservedSyms = [":", "=", "\\", "->", "@", "&", "?"] -- TODO should more of these be "contextual" ?
 
--- Possibly qualified, possibly reserved conid / varid / consym / varsym
-stuff :: Tokeniser Token
-stuff = form <$> stuff' where
-  stuff' = ((:[]) <$> varid) <|> ((:[]) <$> sym) <|> qualified
-  varid = satisfy isLower *> while (satisfy isLetter) consume
-  conid = satisfy isUpper *> while (satisfy isLetter) consume
-  sym = satisfy isSymbol *> while (satisfy isSymbol) consume
-  qualified = (:) <$> conid <*> ((satisfies 2 (\[x, y] -> x == '.' && (isLower y || isUpper y || isSymbol y)) *> consume *> stuff') <|> pure [])
-  form :: [String] -> Token
-  form [x] | x `elem` reservedIds = ReservedId x
-           | x `elem` reservedCons = ReservedCon x
-           | x `elem` reservedOps = ReservedOp x
-  form xs = let qs = Qualified { qualification = init xs, unqualify = last xs } in case last xs of
-    x | isLower (head x) -> QVarId qs
-    x | isUpper (head x) -> QConId qs
-    x | head x == ':'    -> QConSym qs
-    _                    -> QVarSym qs
+varId :: Tokeniser Token
+varId = (\id -> if id `elem` reservedIds then ReservedId id else VarId id) <$> (satisfy isLower *> while (satisfy isLetter) consume)
+
+varSym :: Tokeniser Token
+varSym = (\sym -> if sym `elem` reservedSyms then ReservedSym sym else VarSym sym) <$> (satisfy isSymbol *> while (satisfy isSymbol) consume)
+
+conId :: Tokeniser Token
+conId = (\id -> if id `elem` reservedCons then ReservedCon id else ConId id) <$> (satisfy isUpper *> while (satisfy isLetter) consume)

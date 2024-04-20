@@ -89,7 +89,7 @@ data DataMode = DataUnboxed | DataBoxed | DataRec
 data Decl = DeclData DataMode Name (Maybe (Annotated TyPat)) [Annotated DataCon]
           | DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
           | DeclEnum Name [Name]
-          | DeclOp (Annotated Op) Name (Annotated OpRules) -- FIXME Qualified Name
+          | DeclOp (Annotated Op) Name (Annotated OpRules)
           | DeclRec [Annotated Decl]
           | DeclSig Name (Annotated QType) -- ^ Parsing only
           | DeclSyn Name (Annotated Type) -- ^ Parsing only
@@ -117,7 +117,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Specialise (Annotated Exp) Specialisation
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
-         | Var Name -- FIXME Qualified Name
+         | Var Name
          | VarRef Name -- ^ Parsing only
          | Where (Annotated Exp) [Annotated Decl]
   deriving (Eq, Ord)

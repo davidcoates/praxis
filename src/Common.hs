@@ -48,9 +48,6 @@ module Common
 
   , fold
   , foldMapA
-
-  , Qualified(..)
-  , unqualified
   ) where
 
 import           Common.Pretty
@@ -101,16 +98,6 @@ foldMapA f = foldr (liftA2 mappend . f) (pure mempty)
 
 just :: Functor f => (a -> f b) -> Maybe a -> f (Maybe b)
 just f (Just x) = Just <$> f x
-
-data Qualified a = Qualified { qualification :: [Name], unqualify :: a }
-  deriving (Eq, Ord)
-
--- TODO make this general while suppressing quotes for strings
-instance Show (Qualified Name) where
-  show q = intercalate "." (qualification q ++ [unqualify q])
-
-unqualified :: a -> Qualified a
-unqualified x = Qualified { qualification = [], unqualify = x }
 
 (%%=) :: MonadState s m => Lens' s a -> (a -> m a) -> m ()
 (%%=) l f = do

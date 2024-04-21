@@ -110,6 +110,7 @@ definePrisms ''Prec
 definePrisms ''Bind
 definePrisms ''DataCon
 definePrisms ''DataMode
+definePrisms ''DataType
 definePrisms ''Decl
 definePrisms ''Exp
 definePrisms ''Pat
@@ -140,7 +141,8 @@ syntax = \case
   IOpRules        -> opRules
   IPrec           -> prec
   -- | T0
-  IDataCon        -> dataAlt
+  IDataCon        -> dataCon
+  IDataType       -> dataType
   IDecl           -> decl
   IExp            -> exp
   IPat            -> pat
@@ -215,16 +217,19 @@ declSyn :: Syntax f => f Decl
 declSyn = _DeclSyn <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
 
 declData :: Syntax f => f Decl
-declData = _DeclData <$> reservedId "datatype" *> dataMode <*> conId <*> optional (annotated tyPat) <*> reservedSym "=" *> alts where
-  alts = _Cons <$> annotated dataAlt <*> many (contextualOp "|" *> annotated dataAlt)
+declData = _DeclData <$> annotated dataType
+
+dataType :: Syntax f => f DataType
+dataType = _DataType <$> reservedId "datatype" *> dataMode <*> conId <*> optional (annotated tyPat) <*> reservedSym "=" *> dataCons where
+  dataCons = _Cons <$> annotated dataCon <*> many (contextualOp "|" *> annotated dataCon)
   dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataRec <$> reservedId "rec") <|> (_DataUnboxed <$> (reservedId "unboxed" <|> pure ()))
+
+dataCon :: Syntax f => f DataCon
+dataCon = _DataCon <$> conId <*> annotated ty1
 
 declEnum :: Syntax f => f Decl
 declEnum = _DeclEnum <$> reservedId "enum" *> conId <*> reservedSym "=" *> alts where
   alts = _Cons <$> conId <*> many (contextualOp "|" *> conId)
-
-dataAlt :: Syntax f => f DataCon
-dataAlt = _DataCon <$> conId <*> annotated ty1
 
 tyPat :: Syntax f => f TyPat
 tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where

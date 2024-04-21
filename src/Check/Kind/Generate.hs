@@ -164,21 +164,24 @@ generateDataCon (a@(src, _) :< DataCon name arg) = do
   require $ (src, KindReasonType arg) :< (view kind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
   return dataCon
 
+generateDataType :: Annotated DataType -> Praxis (Annotated DataType)
+generateDataType (a@(src, _) :< DataType mode name arg alts) = do
+  k <- freshKindUni
+  when (mode == DataRec) $ introKind src name k
+  (arg, alts) <- save kEnv $ do
+      arg <- traverse generate arg
+      alts <- traverse generate alts
+      return (arg, alts)
+  unless (mode == DataRec) $ introKind src name k
+  case arg of
+    Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
+    Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
+  return $ (src, Just k) :< DataType mode name arg alts
+
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
 generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  DeclData mode name arg alts -> do
-    k <- freshKindUni
-    when (mode == DataRec) $ introKind src name k
-    (arg, alts) <- save kEnv $ do
-        arg <- traverse generate arg
-        alts <- traverse generate alts
-        return (arg, alts)
-    unless (mode == DataRec) $ introKind src name k
-    case arg of
-      Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
-      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
-    return $ DeclData mode name arg alts
+  DeclData dataType -> DeclData <$> generateDataType dataType
 
   DeclEnum name alts -> do
     introKind src name (phantom KindType)

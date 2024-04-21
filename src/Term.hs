@@ -15,12 +15,14 @@ module Term
   , Bind(..)
   , DataCon(..)
   , DataMode(..)
+  , DataType(..)
   , Decl(..)
   , Exp(..)
   , expIsRecSafe
   , Lit(..)
   , Pat(..)
   , Program(..)
+  , Specialisation
   , Stmt(..)
   , Tok(..)
 
@@ -43,8 +45,6 @@ module Term
   , KindRequirement(..)
   , TyReason(..)
   , KindReason(..)
-
-  , Specialisation
 
   , Annotation
   , Annotated
@@ -85,7 +85,10 @@ data DataCon = DataCon Name (Annotated Type)
 data DataMode = DataUnboxed | DataBoxed | DataRec
   deriving (Eq, Ord)
 
-data Decl = DeclData DataMode Name (Maybe (Annotated TyPat)) [Annotated DataCon]
+data DataType = DataType DataMode Name (Maybe (Annotated TyPat)) [Annotated DataCon]
+  deriving  (Eq, Ord)
+
+data Decl = DeclData (Annotated DataType)
           | DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
           | DeclEnum Name [Name]
           | DeclOp (Annotated Op) Name (Annotated OpRules)
@@ -234,6 +237,7 @@ type family Annotation a where
   Annotation QTyVar   = Annotated Kind
   Annotation View     = Annotated Kind
   Annotation DataCon  = Annotated QType
+  Annotation DataType = Annotated Kind
   Annotation TyRequirement   = TyReason
   Annotation KindRequirement = KindReason
   Annotation a               = Void

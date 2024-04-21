@@ -207,36 +207,38 @@ tyPatToQTyVars = extract (embedMonoid f) where
     TyPatViewVar d n -> [ phantom $ QViewVar d n ]
     _                -> []
 
+-- TODO Copy constraints needed!
+generateDataType :: Annotated DataType -> Praxis (Annotated DataType)
+generateDataType (a@(src, Just k) :< DataType mode name arg alts) = do
+
+  let
+    -- The return type of the constructors
+    retTy :: Annotated Type
+    retTy = case arg of
+      Nothing
+        -> TyCon name `as` k
+      Just arg | KindFun k1 k2 <- view value k
+        -> TyApply (TyCon name `as` k) (patToTy arg) `as` k2
+
+    qTyVars = case arg of
+      Nothing  -> []
+      Just arg -> tyPatToQTyVars arg
+
+    generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
+    generateDataCon ((src, Nothing) :< DataCon name argTy) = do
+      let qTy = phantom $ Forall qTyVars [] (fun argTy retTy) -- TODO add src?
+      introConTy src name qTy
+      return ((src, Just qTy) :< DataCon name argTy)
+
+  alts <- traverse generateDataCon alts
+
+  return $ (a :< DataType mode name arg alts)
+
+
 generateDecl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
 generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  -- TODO Copy constraints needed!
-  DeclData mode name arg alts -> do
-
-    -- TODO could be kind annotated to avoid this lookup
-    Just k <- kEnv `uses` Env.lookup name
-
-    let
-      -- The return type of the constructors
-      retTy :: Annotated Type
-      retTy = case arg of
-        Nothing
-          -> TyCon name `as` k
-        Just arg | KindFun k1 k2 <- view value k
-          -> TyApply (TyCon name `as` k) (patToTy arg) `as` k2
-
-      qTyVars = case arg of
-        Nothing  -> []
-        Just arg -> tyPatToQTyVars arg
-
-      generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
-      generateDataCon ((src, Nothing) :< DataCon name argTy) = do
-        let qTy = phantom $ Forall qTyVars [] (fun argTy retTy) -- TODO add src?
-        introConTy src name qTy
-        return ((src, Just qTy) :< DataCon name argTy)
-
-    alts <- traverse generateDataCon alts
-    return $ DeclData mode name arg alts
+  DeclData dataType -> DeclData <$> generateDataType dataType
 
   DeclEnum name alts -> do
     Just k <- kEnv `uses` Env.lookup name

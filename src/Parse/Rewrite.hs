@@ -210,9 +210,12 @@ rewriteDecl ((src, a) :< decl) = ((src, a) :<) <$> case decl of
     rewriteMap . varMap %= (Map.insert name name')
     return (DeclVar name' sig exp)
 
-  DeclData _ _ tyPat _ -> case tyPat of
-    Nothing    -> recurseTerm rewrite decl
-    Just tyPat -> saveTyVarMap (addRewriteFromTyPat tyPat >> recurseTerm rewrite decl)
+  DeclData dataTy -> DeclData <$> rewriteDataType dataTy where
+    rewriteDataType :: Annotated DataType -> Praxis (Annotated DataType)
+    rewriteDataType (a :< decl@(DataType _ _ tyPat _)) = (a :<) <$> do
+      case tyPat of
+        Nothing    -> recurseTerm rewrite decl
+        Just tyPat -> saveTyVarMap (addRewriteFromTyPat tyPat >> recurseTerm rewrite decl)
 
   DeclEnum name alts -> return $ DeclEnum name alts
 

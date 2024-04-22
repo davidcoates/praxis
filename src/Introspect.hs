@@ -294,8 +294,9 @@ instance Term TyConstraint where
   recurseAnnotation = trivial
   recurseTerm f = \case
     Class t      -> Class <$> f t
-    RefFree n t  -> RefFree n <$> f t
     Copy t       -> Copy <$> f t
+    NoCopy t     -> NoCopy <$> f t
+    RefFree n t  -> RefFree n <$> f t
     TEq a b      -> TEq <$> f a <*> f b
     TOpEq a b    -> TOpEq <$> f a <*> f b
 

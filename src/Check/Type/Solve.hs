@@ -206,30 +206,33 @@ conjunction No _    = No
 conjunction _ No    = No
 conjunction _ _     = Maybe
 
-usingAssumptions :: TyConstraint -> Praxis Truth -> Praxis Truth
-usingAssumptions constraint check = do
-  assumptions' <- use (tySystem . assumptions)
-  if constraint `Set.member` assumptions'
-    then return Yes
-    else do
-      truth <- check
-      when (truth == Yes) $ tySystem . assumptions %= Set.insert constraint
-      return truth
-
 canCopy :: Annotated Type -> Praxis Truth
-canCopy t = usingAssumptions (Copy t) $ case view value t of
-  TyUnit                                       -> return Yes
-  TyFun _ _                                    -> return Yes
-  TyPair a b                                   -> liftA2 conjunction (canCopy a) (canCopy b)
-  TyVar _                                      -> return No
-  TyCon _                                      -> return No
-  TyApply (_ :< TyCon _) _                     -> return No
-  TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
-  TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
-  TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
-  TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> canCopy a
-  TyApply (_ :< TyView (_ :< ViewValue)) a     -> canCopy a
-  _                                            -> return Maybe
+canCopy t = do
+  assumptions' <- use (tySystem . assumptions)
+  case (Copy t `Set.member` assumptions', NoCopy t `Set.member` assumptions') of
+    (True, False) -> return Yes
+    (False, True) -> return No
+    (False, False) -> do
+      truth <- canCopy'
+      case truth of
+        Yes   -> tySystem . assumptions %= Set.insert (Copy t)
+        No    -> tySystem . assumptions %= Set.insert (NoCopy t)
+        Maybe -> pure ()
+      return truth
+  where
+    canCopy' = case view value t of
+      TyUnit                                       -> return Yes
+      TyFun _ _                                    -> return Yes
+      TyPair a b                                   -> liftA2 conjunction (canCopy a) (canCopy b)
+      TyVar _                                      -> return No
+      TyCon _                                      -> return No
+      TyApply (_ :< TyCon _) _                     -> return No
+      TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
+      TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
+      TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
+      TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> canCopy a
+      TyApply (_ :< TyView (_ :< ViewValue)) a     -> canCopy a
+      _                                            -> return Maybe
 
 
 -- Check for undetermined unification variables, default them where possible

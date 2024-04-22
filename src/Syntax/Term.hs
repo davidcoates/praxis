@@ -195,8 +195,9 @@ rightWithSep s _P p = Prism f g <$> annotated p <*> (s *> (_Just <$> annotated (
     Nothing     -> Nothing
 
 tyConstraint :: Syntax f => f TyConstraint
-tyConstraint = _Copy <$> reservedCon "Copy" *> annotated ty <|>
-               _Class <$> annotated ty <|>
+tyConstraint = _Class <$> annotated ty <|>
+               _Copy <$> reservedCon "Copy" *> annotated ty <|>
+               unparseable (_NoCopy <$> reservedCon "NoCopy" *> annotated ty) <|>
                unparseable (_RefFree <$> varId <*> reservedId "ref-free" *> annotated ty) <|>
                unparseable (_TEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
                unparseable (_TOpEq <$> annotated ty <*> reservedSym "?=" *> annotated ty) <|>

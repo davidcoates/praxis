@@ -210,9 +210,10 @@ data Kind = KindUni Name
 
 data TyConstraint = Class (Annotated Type)
                   | Copy (Annotated Type)
+                  | NoCopy (Annotated Type)
+                  | RefFree Name (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated Type) (Annotated Type)
-                  | RefFree Name (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`

@@ -26,7 +26,6 @@ dependencies:
 - digits >= 0.3
 - template-haskell >= 2.2
 - colorful-monoids >= 0.2 && < 0.3
-- hspec >= 2.0
 - array >= 0.5
 - terminal-size
 - raw-strings-qq
@@ -38,12 +37,15 @@ dependencies:
 library:
   source-dirs: src
   default-extensions: LambdaCase
+  ghc-options:
+  - -O2
 
 executables:
   praxis:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
+    - -O2
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
@@ -55,8 +57,23 @@ tests:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
+    - -O2
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
+    - hspec >= 2.0
+    - praxis
+
+benchmarks:
+  criterion-benchmarks:
+    main:                Main.hs
+    source-dirs:         benchmark
+    ghc-options:
+    - -O2
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - criterion >= 1.6
     - praxis

@@ -164,7 +164,7 @@ generateDataCon (a@(src, _) :< DataCon name arg) = do
   require $ (src, KindReasonType arg) :< (view kind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
   return dataCon
 
-generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
+generateDeclType :: Annotated DeclType -> Praxis (Name, Annotated DeclType)
 generateDeclType (a@(src, _) :< ty) = case ty of
 
   DeclTypeData mode name arg alts -> do
@@ -178,17 +178,20 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     case arg of
       Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
       Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
-    return $ (src, Just k) :< DeclTypeData mode name arg alts
+    return $ (name, (src, Just k) :< DeclTypeData mode name arg alts)
 
   DeclTypeEnum name alts -> do
     let k = phantom KindType
     introKind src name k
-    return $ (src, Just k) :< DeclTypeEnum name alts
+    return $ (name, (src, Just k) :< DeclTypeEnum name alts)
 
 
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
 generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  DeclType ty -> DeclType <$> generateDeclType ty
+  DeclType ty -> do
+    (name, ty) <- generateDeclType ty
+    dtEnv %= Env.intro name ty
+    return (DeclType ty)
 
   decl        -> recurseTerm generate decl

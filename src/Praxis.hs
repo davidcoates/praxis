@@ -9,9 +9,10 @@ module Praxis
   , emptyState
 
   -- | State types
+  , CEnv(..)
+  , DTEnv(..)
   , KEnv(..)
   , TEnv(..)
-  , CEnv(..)
   , VEnv(..)
   , System(..)
 
@@ -52,9 +53,10 @@ module Praxis
   , fresh
   , stage
   , opContext
+  , cEnv
+  , dtEnv
   , kEnv
   , tEnv
-  , cEnv
   , vEnv
   , rewriteMap
   , tySynonyms
@@ -123,13 +125,15 @@ data Fresh = Fresh
 instance Show Fresh where
   show _ = "<fresh>"
 
-type VEnv = Env Value
+type CEnv = Env (Annotated QType)
+
+type DTEnv = Env (Annotated DeclType)
+
+type KEnv = Env (Annotated Kind)
 
 type TEnv = LEnv (Annotated QType)
 
-type CEnv = Env (Annotated QType)
-
-type KEnv = Env (Annotated Kind)
+type VEnv = Env Value
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix
@@ -165,9 +169,10 @@ data PraxisState = PraxisState
   , _fresh      :: Fresh
   , _stage      :: Stage               -- ^ Current stage of compilation
   , _opContext  :: OpContext
+  , _cEnv       :: CEnv                -- ^ Constructor environment
+  , _dtEnv      :: DTEnv               -- ^ DeclType environment
   , _kEnv       :: KEnv                -- ^ Kind environment
   , _tEnv       :: TEnv                -- ^ Type environment
-  , _cEnv       :: CEnv                -- ^ Constructor environment
   , _vEnv       :: VEnv                -- ^ Value environment for interpreter
   -- TODO encapsulate within desugarer?
   , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
@@ -199,9 +204,10 @@ emptyState = PraxisState
   , _fresh        = defaultFresh
   , _stage        = Unknown
   , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
+  , _cEnv         = Env.empty
+  , _dtEnv        = Env.empty
   , _kEnv         = Env.empty
   , _tEnv         = LEnv.empty
-  , _cEnv         = Env.empty
   , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }

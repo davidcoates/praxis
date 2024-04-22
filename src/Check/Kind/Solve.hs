@@ -70,7 +70,6 @@ reduce = \case
 solved :: Resolver -> Praxis (Reduction KindConstraint)
 solved resolve = do
   kEnv %%= traverse (pure . sub resolve)
-  dtEnv %%= traverse (pure . sub resolve)
   return (Solved (resolve, pure))
 
 is :: Name -> Kind -> Resolver

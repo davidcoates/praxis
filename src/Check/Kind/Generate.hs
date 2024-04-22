@@ -164,10 +164,11 @@ generateDataCon (a@(src, _) :< DataCon name arg) = do
   require $ (src, KindReasonType arg) :< (view kind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
   return dataCon
 
-generateDeclType :: Annotated DeclType -> Praxis (Name, Annotated DeclType)
+generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, _) :< ty) = case ty of
 
   DeclTypeData mode name arg alts -> do
+
     k <- freshKindUni
     when (mode == DataRec) $ introKind src name k
     (arg, alts) <- save kEnv $ do
@@ -178,20 +179,39 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     case arg of
       Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
       Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
-    return $ (name, (src, Just k) :< DeclTypeData mode name arg alts)
+
+    let
+      deduceCopy :: Maybe (Annotated Type) -> Copy
+      deduceCopy arg' = case mode of
+        DataBoxed   -> CanNotCopy
+        DataRec     -> CanNotCopy
+        DataUnboxed -> case (arg, arg') of
+          (Nothing, Nothing)    -> CanCopyOnlyIf [ conType | (_ :< DataCon _ conType) <- alts ]
+          (Just arg, Just arg') -> CanCopyOnlyIf [ sub (embedSub f) conType | (_ :< DataCon _ conType) <- alts ] where
+            f :: Annotated Type -> Maybe (Annotated Type)
+            f (_ :< t) = case t of
+              TyVar n                   -> n `lookup` specialisedVars
+              TyView (_ :< ViewVar _ n) -> n `lookup` specialisedVars
+              _                         -> Nothing
+            specialisedVars = bindTyPat arg arg' where
+              bindTyPat :: Annotated TyPat -> Annotated Type -> [(Name, Annotated Type)]
+              bindTyPat (_ :< TyPatPack p1 p2) (_ :< TyPack t1 t2) = bindTyPat p1 t1 ++ bindTyPat p2 t2
+              bindTyPat (_ :< TyPatVar n) t = [(n, t)]
+              bindTyPat (_ :< TyPatViewVar _ n) t = [(n, t)]
+
+    dtEnv %= Env.intro name deduceCopy
+    return $ (src, Just k) :< DeclTypeData mode name arg alts
 
   DeclTypeEnum name alts -> do
     let k = phantom KindType
     introKind src name k
-    return $ (name, (src, Just k) :< DeclTypeEnum name alts)
+    dtEnv %= Env.intro name (\Nothing -> CanCopy)
+    return $ (src, Just k) :< DeclTypeEnum name alts
 
 
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
 generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  DeclType ty -> do
-    (name, ty) <- generateDeclType ty
-    dtEnv %= Env.intro name ty
-    return (DeclType ty)
+  DeclType ty -> DeclType <$> generateDeclType ty
 
   decl        -> recurseTerm generate decl

@@ -273,7 +273,7 @@ qTy = _Forall <$> (mono <|> reservedId "forall" *> poly) <|> mark "quantified ty
   poly :: Syntax f => f ([Annotated QTyVar], ([Annotated TyConstraint], Annotated Type))
   poly = Prism id Just <$> some (annotated qTyVar) <*> tyConstraints <*> (dot *> annotated ty)
   tyConstraints :: Syntax f => f [Annotated TyConstraint]
-  tyConstraints = _Cons <$> (contextualOp "|" *> annotated tyConstraint) <*> many (annotated tyConstraint) <|> _Nil <$> pure ()
+  tyConstraints = _Cons <$> (contextualOp "|" *> annotated tyConstraint) <*> many (special ',' *> annotated tyConstraint) <|> _Nil <$> pure ()
 
 qTyVar :: Syntax f => f QTyVar
 qTyVar = _QTyVar <$> varId <|>

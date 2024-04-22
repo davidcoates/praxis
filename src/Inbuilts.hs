@@ -23,7 +23,7 @@ import           Text.RawString.QQ
 
 -- Include inbuilt kinds
 initialState0 :: PraxisState
-initialState0 = set kEnv initialKEnv $ emptyState
+initialState0 = set dtEnv initialDTEnv $ set kEnv initialKEnv $ emptyState
 
 -- Include inbuilts
 initialState1 :: PraxisState
@@ -33,7 +33,7 @@ initialState1 = set vEnv initialVEnv $ set tEnv initialTEnv $ initialState0
 initialState :: PraxisState
 initialState = fixup (runInternal initialState1 ((parse prelude :: Praxis (Annotated Program)) >> lift State.get)) where
   -- TODO a nicer way to do this. Undo all the things except the fields we care about.
-  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindSystem (view kindSystem emptyState) . set tySystem initialTySystem
+  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindSystem (view kindSystem emptyState) . set tySystem (view tySystem emptyState)
 
 mono :: String -> Annotated Type
 mono s = runInternal initialState0 (parse s :: Praxis (Annotated Type))
@@ -101,19 +101,17 @@ inbuiltKinds =
   , ("Copy",   kind "Type -> Constraint")
   ]
 
-initialVEnv :: VEnv
-initialVEnv = Env.fromList (map (\(n, _, v) -> (n, v)) inbuilts)
-
-initialTEnv :: TEnv
-initialTEnv = LEnv.fromList (map (\(n, t, _) -> (n, t)) inbuilts)
+initialDTEnv :: DTEnv
+initialDTEnv = Env.fromList [ ("Int", \Nothing -> CanCopy), ("Bool", \Nothing -> CanCopy), ("Char", \Nothing -> CanCopy), ("Array", \(Just _) -> CanNotCopy), ("String", \Nothing -> CanNotCopy) ]
 
 initialKEnv :: KEnv
 initialKEnv = Env.fromList inbuiltKinds
 
-initialTySystem :: System TyConstraint
-initialTySystem = System { _requirements = [], _assumptions = Set.fromList [ copy "Int", copy "Bool", copy "Char" ] } where
-  copy :: Name -> TyConstraint
-  copy n = Copy (TyCon n `as` phantom KindConstraint)
+initialTEnv :: TEnv
+initialTEnv = LEnv.fromList (map (\(n, t, _) -> (n, t)) inbuilts)
+
+initialVEnv :: VEnv
+initialVEnv = Env.fromList (map (\(n, _, v) -> (n, v)) inbuilts)
 
 -- TODO interfaces
 prelude = [r|

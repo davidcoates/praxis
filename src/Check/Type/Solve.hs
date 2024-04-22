@@ -11,6 +11,7 @@ module Check.Type.Solve
 
 import           Check.Solve
 import           Common
+import qualified Env.Env             as Env
 import qualified Env.LEnv            as LEnv
 import           Introspect
 import           Praxis
@@ -200,11 +201,25 @@ normalise (a :< x) = case typeof x of
 data Truth = Yes | No | Maybe
   deriving Eq
 
-conjunction :: Truth -> Truth -> Truth
-conjunction Yes Yes = Yes
-conjunction No _    = No
-conjunction _ No    = No
-conjunction _ _     = Maybe
+conjunction :: [Praxis Truth] -> Praxis Truth
+conjunction = conjunction' Yes where
+  conjunction' :: Truth -> [Praxis Truth] -> Praxis Truth
+  conjunction' t1 [] = return t1
+  conjunction' t1 (t2:ts) = do
+    t2 <- t2
+    case t2 of
+      Yes   -> conjunction' t1 ts
+      No    -> return No
+      Maybe -> conjunction' Maybe ts
+
+canCopyTyCon :: Name -> Maybe (Annotated Type) -> Praxis Truth
+canCopyTyCon name arg = do
+  l <- use dtEnv
+  let Just checkCanCopy = Env.lookup name l
+  case checkCanCopy arg of
+    CanCopy           -> return Yes
+    CanNotCopy        -> return No
+    CanCopyOnlyIf tys -> conjunction (map canCopy tys)
 
 canCopy :: Annotated Type -> Praxis Truth
 canCopy t = do
@@ -223,10 +238,10 @@ canCopy t = do
     canCopy' = case view value t of
       TyUnit                                       -> return Yes
       TyFun _ _                                    -> return Yes
-      TyPair a b                                   -> liftA2 conjunction (canCopy a) (canCopy b)
+      TyPair a b                                   -> conjunction [canCopy a, canCopy b]
       TyVar _                                      -> return No
-      TyCon _                                      -> return No
-      TyApply (_ :< TyCon _) _                     -> return No
+      TyCon n                                      -> canCopyTyCon n Nothing
+      TyApply (_ :< TyCon n) t                     -> canCopyTyCon n (Just t)
       TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
       TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
       TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes

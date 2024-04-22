@@ -10,6 +10,7 @@ module Praxis
 
   -- | State types
   , CEnv(..)
+  , Copy(..)
   , DTEnv(..)
   , KEnv(..)
   , TEnv(..)
@@ -127,7 +128,9 @@ instance Show Fresh where
 
 type CEnv = Env (Annotated QType)
 
-type DTEnv = Env (Annotated DeclType)
+data Copy = CanCopy | CanNotCopy | CanCopyOnlyIf [Annotated Type]
+
+type DTEnv = Env (Maybe (Annotated Type) -> Copy)
 
 type KEnv = Env (Annotated Kind)
 

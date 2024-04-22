@@ -170,10 +170,10 @@ desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
 desugarDecls []            = pure []
 desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
-  DeclData dataType -> do
-    dataType <- desugar dataType
+  DeclType ty -> do
+    ty <- desugar ty
     decls <- desugarDecls decls
-    return (a :< DeclData dataType : decls)
+    return (a :< DeclType ty : decls)
 
   DeclDef name args exp -> do
     args <- mapM desugar args
@@ -187,10 +187,6 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
       (_ :< DeclVar name' _ _) : _
         | name == name' -> throwAt src $ "multiple definitions for " <> quote (pretty name)
       decls -> return $ decl:decls
-
-  DeclEnum n ns -> do
-    decls <- desugarDecls decls
-    return (a :< decl : decls)
 
   DeclOp op name rules -> do
 

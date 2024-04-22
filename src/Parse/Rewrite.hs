@@ -198,8 +198,20 @@ rewritePat (a :< pat) = (a :<) <$> case pat of
   _         -> recurseTerm rewrite pat
 
 
+rewriteDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
+rewriteDeclType (a :< decl) = (a :< ) <$> case decl of
+
+  DeclTypeData _ _ tyPat _ -> case tyPat of
+    Nothing    -> recurseTerm rewrite decl
+    Just tyPat -> saveTyVarMap (addRewriteFromTyPat tyPat >> recurseTerm rewrite decl)
+
+  DeclTypeEnum name alts -> return $ DeclTypeEnum name alts
+
+
 rewriteDecl :: Annotated Decl -> Praxis (Annotated Decl)
 rewriteDecl ((src, a) :< decl) = ((src, a) :<) <$> case decl of
+
+  DeclType ty -> DeclType <$> rewriteDeclType ty
 
   DeclVar name sig exp -> do
     name' <- freshVar name
@@ -209,15 +221,6 @@ rewriteDecl ((src, a) :< decl) = ((src, a) :<) <$> case decl of
       Just sig -> saveTyVarMap (addRewriteFromQType sig >> rewriteBody)
     rewriteMap . varMap %= (Map.insert name name')
     return (DeclVar name' sig exp)
-
-  DeclData dataTy -> DeclData <$> rewriteDataType dataTy where
-    rewriteDataType :: Annotated DataType -> Praxis (Annotated DataType)
-    rewriteDataType (a :< decl@(DataType _ _ tyPat _)) = (a :<) <$> do
-      case tyPat of
-        Nothing    -> recurseTerm rewrite decl
-        Just tyPat -> saveTyVarMap (addRewriteFromTyPat tyPat >> recurseTerm rewrite decl)
-
-  DeclEnum name alts -> return $ DeclEnum name alts
 
   DeclRec decls -> do
     addVarRewrites src (map (\(_ :< DeclVar name _ _) -> name) decls)

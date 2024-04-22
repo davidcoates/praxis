@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE NamedFieldPuns       #-}
 {-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE Strict               #-}
+{-# LANGUAGE StrictData           #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -15,8 +17,8 @@ module Term
   , Bind(..)
   , DataCon(..)
   , DataMode(..)
-  , DataType(..)
   , Decl(..)
+  , DeclType(..)
   , Exp(..)
   , expIsRecSafe
   , Lit(..)
@@ -85,16 +87,16 @@ data DataCon = DataCon Name (Annotated Type)
 data DataMode = DataUnboxed | DataBoxed | DataRec
   deriving (Eq, Ord)
 
-data DataType = DataType DataMode Name (Maybe (Annotated TyPat)) [Annotated DataCon]
+data DeclType = DeclTypeData DataMode Name (Maybe (Annotated TyPat)) [Annotated DataCon]
+              | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
-data Decl = DeclData (Annotated DataType)
-          | DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
-          | DeclEnum Name [Name]
+data Decl = DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
           | DeclOp (Annotated Op) Name (Annotated OpRules)
           | DeclRec [Annotated Decl]
           | DeclSig Name (Annotated QType) -- ^ Parsing only
           | DeclSyn Name (Annotated Type) -- ^ Parsing only
+          | DeclType (Annotated DeclType)
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
 
@@ -237,7 +239,7 @@ type family Annotation a where
   Annotation QTyVar   = Annotated Kind
   Annotation View     = Annotated Kind
   Annotation DataCon  = Annotated QType
-  Annotation DataType = Annotated Kind
+  Annotation DeclType = Annotated Kind
   Annotation TyRequirement   = TyReason
   Annotation KindRequirement = KindReason
   Annotation a               = Void

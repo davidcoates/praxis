@@ -179,8 +179,9 @@ translateQType ((src, _) :< Forall vs _ t) = translateQType' (translatableQTyVar
       return $ "template<" <> intercalate ", " vs <> ">" <> t
 
 
-translateDataType :: Annotated DataType -> Praxis Code
-translateDataType (_ :< DataType mode name tyPat alts) = do
+translateDeclType :: Annotated DeclType -> Praxis Code
+translateDeclType (_ :< DeclTypeEnum name alts) = return $ "enum " <> Text name <> " " <> LBrace <> intercalate ", " [ "_con" <> Text alt | alt <- alts ] <> RBrace <> Semi
+translateDeclType (_ :< DeclTypeData mode name tyPat alts) = do
 
   let tyPats = case tyPat of { Just tyPat -> unpackTyPat tyPat; Nothing -> []; }
 
@@ -246,6 +247,7 @@ translateDataType (_ :< DataType mode name tyPat alts) = do
       TyPatViewVar Ref _        -> []
 
 
+
 translateDecl :: Bool -> Annotated Decl -> Praxis Code
 translateDecl topLevel ((src, _) :< decl) = case decl of
 
@@ -262,9 +264,7 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
     body <- translateDeclVarBody sig Nil topLevel exp
     return $ Crumb src <> "auto " <> Text name <> " = " <> body <> Semi
 
-  DeclData dataType -> translateDataType dataType
-
-  DeclEnum name alts -> return $ "enum " <> Text name <> " " <> LBrace <> intercalate ", " [ "_con" <> Text alt | alt <- alts ] <> RBrace <> Semi
+  DeclType ty -> translateDeclType ty
 
   where
     templateVars :: Maybe (Annotated QType) -> [Annotated QTyVar]

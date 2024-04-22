@@ -164,27 +164,31 @@ generateDataCon (a@(src, _) :< DataCon name arg) = do
   require $ (src, KindReasonType arg) :< (view kind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
   return dataCon
 
-generateDataType :: Annotated DataType -> Praxis (Annotated DataType)
-generateDataType (a@(src, _) :< DataType mode name arg alts) = do
-  k <- freshKindUni
-  when (mode == DataRec) $ introKind src name k
-  (arg, alts) <- save kEnv $ do
-      arg <- traverse generate arg
-      alts <- traverse generate alts
-      return (arg, alts)
-  unless (mode == DataRec) $ introKind src name k
-  case arg of
-    Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
-    Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
-  return $ (src, Just k) :< DataType mode name arg alts
+generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
+generateDeclType (a@(src, _) :< ty) = case ty of
+
+  DeclTypeData mode name arg alts -> do
+    k <- freshKindUni
+    when (mode == DataRec) $ introKind src name k
+    (arg, alts) <- save kEnv $ do
+        arg <- traverse generate arg
+        alts <- traverse generate alts
+        return (arg, alts)
+    unless (mode == DataRec) $ introKind src name k
+    case arg of
+      Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
+      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
+    return $ (src, Just k) :< DeclTypeData mode name arg alts
+
+  DeclTypeEnum name alts -> do
+    let k = phantom KindType
+    introKind src name k
+    return $ (src, Just k) :< DeclTypeEnum name alts
+
 
 generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
 generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  DeclData dataType -> DeclData <$> generateDataType dataType
+  DeclType ty -> DeclType <$> generateDeclType ty
 
-  DeclEnum name alts -> do
-    introKind src name (phantom KindType)
-    return $ DeclEnum name alts
-
-  decl -> recurseTerm generate decl
+  decl        -> recurseTerm generate decl

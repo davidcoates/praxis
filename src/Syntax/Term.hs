@@ -110,8 +110,8 @@ definePrisms ''Prec
 definePrisms ''Bind
 definePrisms ''DataCon
 definePrisms ''DataMode
-definePrisms ''DataType
 definePrisms ''Decl
+definePrisms ''DeclType
 definePrisms ''Exp
 definePrisms ''Pat
 definePrisms ''Program
@@ -142,8 +142,8 @@ syntax = \case
   IPrec           -> prec
   -- | T0
   IDataCon        -> dataCon
-  IDataType       -> dataType
   IDecl           -> decl
+  IDeclType       -> declType
   IExp            -> exp
   IPat            -> pat
   IProgram        -> program
@@ -211,25 +211,25 @@ program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) where -- TODO module
 
 decl :: Syntax f => f Decl
-decl = declSyn <|> declData <|> declEnum <|> declOp <|> declTerm -- TODO imports
+decl = declSyn <|> (_DeclType <$> annotated declType) <|> declOp <|> declTerm -- TODO imports
 
 declSyn :: Syntax f => f Decl
 declSyn = _DeclSyn <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
 
-declData :: Syntax f => f Decl
-declData = _DeclData <$> annotated dataType
+declType :: Syntax f => f DeclType
+declType = declTypeData <|> declTypeEnum
 
-dataType :: Syntax f => f DataType
-dataType = _DataType <$> reservedId "datatype" *> dataMode <*> conId <*> optional (annotated tyPat) <*> reservedSym "=" *> dataCons where
+declTypeData :: Syntax f => f DeclType
+declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> optional (annotated tyPat) <*> reservedSym "=" *> dataCons where
   dataCons = _Cons <$> annotated dataCon <*> many (contextualOp "|" *> annotated dataCon)
   dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataRec <$> reservedId "rec") <|> (_DataUnboxed <$> (reservedId "unboxed" <|> pure ()))
 
+declTypeEnum :: Syntax f => f DeclType
+declTypeEnum = _DeclTypeEnum <$> reservedId "enum" *> conId <*> reservedSym "=" *> alts where
+  alts = _Cons <$> conId <*> many (contextualOp "|" *> conId)
+
 dataCon :: Syntax f => f DataCon
 dataCon = _DataCon <$> conId <*> annotated ty1
-
-declEnum :: Syntax f => f Decl
-declEnum = _DeclEnum <$> reservedId "enum" *> conId <*> reservedSym "=" *> alts where
-  alts = _Cons <$> conId <*> many (contextualOp "|" *> conId)
 
 tyPat :: Syntax f => f TyPat
 tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where

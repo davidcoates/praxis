@@ -5,6 +5,8 @@
 {-# LANGUAGE Rank2Types            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE Strict                #-}
+{-# LANGUAGE StrictData            #-}
 {-# LANGUAGE TypeOperators         #-}
 
 module Introspect
@@ -47,8 +49,8 @@ data I a where
   -- | T0
   IBind     :: I Bind
   IDataCon  :: I DataCon
-  IDataType :: I DataType
   IDecl     :: I Decl
+  IDeclType :: I DeclType
   IExp      :: I Exp
   IPat      :: I Pat
   IProgram  :: I Program
@@ -82,8 +84,8 @@ switch a b eq neq = case (a, b) of
   -- | T0
   (IBind, IBind)                       -> eq
   (IDataCon, IDataCon)                 -> eq
-  (IDataType, IDataType)               -> eq
   (IDecl, IDecl)                       -> eq
+  (IDeclType, IDeclType)               -> eq
   (IExp, IExp)                         -> eq
   (IPat, IPat)                         -> eq
   (IProgram, IProgram)                 -> eq
@@ -173,19 +175,19 @@ instance Term DataCon where
   recurseTerm f = \case
     DataCon n t -> DataCon n <$> f t
 
-instance Term DataType where
-  witness = IDataType
+instance Term DeclType where
+  witness = IDeclType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    DataType m n t as -> DataType m n <$> traverse f t <*> traverse f as
+    DeclTypeData m n t as -> DeclTypeData m n <$> traverse f t <*> traverse f as
+    DeclTypeEnum n as     -> pure (DeclTypeEnum n as)
 
 instance Term Decl where
   witness = IDecl
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclData t     -> DeclData <$> f t
+    DeclType t     -> DeclType <$> f t
     DeclDef n ps e -> DeclDef n <$> traverse f ps <*> f e
-    DeclEnum n as  -> pure (DeclEnum n as)
     DeclOp o d rs  -> DeclOp <$> f o <*> pure d <*> f rs
     DeclRec ds     -> DeclRec <$> traverse f ds
     DeclSig n t    -> DeclSig n <$> f t

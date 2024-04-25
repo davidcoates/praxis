@@ -1,8 +1,9 @@
 module Value
   ( Value(..)
-  , len
+  , lenArray
   , readArray
   , writeArray
+  , newArray
   ) where
 
 import {-# SOURCE #-}           Praxis           (Praxis, liftIOUnsafe)
@@ -25,14 +26,17 @@ data Value = Data Name Value
            | Pair Value Value
            | Unit
 
-len :: Array -> Praxis Int
-len a = liftIOUnsafe (snd <$> ArrayIO.getBounds a)
+lenArray :: Array -> Praxis Int
+lenArray a = liftIOUnsafe (snd <$> ArrayIO.getBounds a)
 
 readArray :: Array -> Int -> Praxis Value
 readArray a i = liftIOUnsafe (ArrayIO.readArray a i)
 
 writeArray :: Array -> Int -> Value -> Praxis ()
 writeArray a i e = liftIOUnsafe (ArrayIO.writeArray a i e)
+
+newArray :: Int -> Value -> Praxis Value
+newArray i v = liftIOUnsafe (Array <$> ArrayIO.newArray (0, i) v)
 
 showValue :: Value -> IO String
 showValue = \case

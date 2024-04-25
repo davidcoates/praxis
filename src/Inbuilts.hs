@@ -67,11 +67,13 @@ inbuilts =
       Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
   , ("print",        poly "forall &r a. &r a -> ()",
       Fun (\x -> liftIOUnsafe (print x >> pure Unit))) -- TODO should have Show constraint
-  , ("at",           poly "forall &r a. (&r Array a, Int) -> a",
+  , ("new_array",    poly "forall a. (Int, () -> a) -> Array a",
+      Fun (\(Pair (Int i) v) -> Value.newArray i v))
+  , ("at_array",     poly "forall &r a. (&r Array a, Int) -> &r a",
       Fun (\(Pair (Array a) (Int i)) -> Value.readArray a i))
-  , ("len",          poly "forall &r a. &r Array a -> Int",
-      Fun (\(Array a) -> Value.Int <$> Value.len a))
-  , ("set",          poly "forall a. (Array a, Int, a) -> Array a",
+  , ("len_array",    poly "forall &r a. &r Array a -> Int",
+      Fun (\(Array a) -> Value.Int <$> Value.lenArray a))
+  , ("set_array",    poly "forall a. (Array a, Int, a) -> Array a",
       Fun (\(Pair (Array a) (Pair (Int i) e)) -> Value.writeArray a i e >> pure (Array a)))
   , ("not",          poly "Bool -> Bool", Fun (\(Bool a) -> pure (Bool (not a))))
   , ("or",           poly "(Bool, Bool) -> Bool", liftB (||))
@@ -137,9 +139,9 @@ operator (+ _) = unary_plus_int where
 operator (_ . _) = compose where
   right associative
 
-operator (_ [ _ ]) = at
+operator (_ [ _ ]) = at_array
 
-operator (_ [ _ ] <- _) = set
+operator (_ [ _ ] <- _) = set_array
 
 operator (! _) = not
 

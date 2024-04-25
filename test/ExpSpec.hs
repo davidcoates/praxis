@@ -115,21 +115,21 @@ sign : Int -> Int
 sign n = switch
   n  < 0 -> -1
   n == 0 ->  0
-  n  > 0 -> +1
+  n  > 0 ->  1
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
 sign_0 : Int -> Int = \ n_0 -> switch
   lt_int ( n_0 , 0 ) -> negate_int 1
   eq_int ( n_0 , 0 ) -> 0
-  gt_int ( n_0 , 0 ) -> unary_plus_int 1
+  gt_int ( n_0 , 0 ) -> 1
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
 sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
   [( Int , Int ) -> Bool] lt_int ( [Int] n_0 , [Int] 0 ) -> [Int -> Int] negate_int [Int] 1
   [( Int , Int ) -> Bool] eq_int ( [Int] n_0 , [Int] 0 ) -> [Int] 0
-  [( Int , Int ) -> Bool] gt_int ( [Int] n_0 , [Int] 0 ) -> [Int -> Int] unary_plus_int [Int] 1
+  [( Int , Int ) -> Bool] gt_int ( [Int] n_0 , [Int] 0 ) -> [Int] 1
 |]
 
     it "evaluates" $ do
@@ -138,7 +138,7 @@ sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
       interpret program "sign (-5)" `shouldReturn` "-1"
       interpret program "sign -5"   `shouldReturn` trim [r|
 type check error: unable to satisfy: Int = Int -> Int
-  | derived from: ( Int , Int ) -> Int = ( Int -> Int , Int ) -> ^t6
+  | derived from: ( Int , Int ) -> Int = ( Int -> Int , Int ) -> ^t5
   | primary cause: application [( Int , Int ) -> Int] subtract_int ($) ( [Int -> Int] sign_0 , [Int] 5 ) at 1:1
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
@@ -154,7 +154,7 @@ auto sign_0 = std::function([](int _temp_0){
       return 0;
     }
     if (std::move(gt_int)(std::make_pair(std::move(n_0), 0))) {
-      return std::move(unary_plus_int)(1);
+      return 1;
     }
     throw praxis::SwitchFail("3:10");
   }();

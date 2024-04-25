@@ -51,8 +51,6 @@ inbuilts =
   , ("multiply_int", poly "(Int, Int) -> Int", liftI (*))
   , ("negate_int",   poly "Int -> Int",
       Fun (\(Int x) -> pure (Int (negate x))))
-  , ("unary_plus_int",   poly "Int -> Int",
-      Fun (\(Int x) -> pure (Int x)))
   , ("get_int",      poly "() -> Int",
       Fun (\Unit -> liftIOUnsafe (Int <$> readLn)))
   , ("get_str", poly "() -> String",
@@ -132,9 +130,6 @@ operator (_ * _) = multiply_int where
 
 operator (- _) = negate_int where
   precedence above (_ * _)
-
-operator (+ _) = unary_plus_int where
-  precedence equal (- _)
 
 operator (_ . _) = compose where
   right associative

@@ -135,17 +135,17 @@ expIsRecSafe term = case view value term of
 -- TODO: Array literals?
 data Lit = Bool Bool
          | Char Char
-         | Int Int
+         | Integer Integer
          | String String
   deriving (Eq, Ord)
 
 -- TODO remove?
 instance Show Lit where
   show = \case
-    Bool b   -> show b
-    Char c   -> show c
-    Int i    -> show i
-    String s -> show s
+    Bool b    -> show b
+    Char c    -> show c
+    Integer i -> show i
+    String s  -> show s
 
 data Pat = PatAt Name (Annotated Pat)
          | PatData Name (Annotated Pat)
@@ -262,6 +262,7 @@ as x a = (Phantom, Just a) :< x
 data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
               | TyReasonBind (Annotated Pat) (Annotated Exp)
               | TyReasonRead Name
+              | TyReasonIntegerLiteral Integer
               -- TODO
               | Captured Name
               | CaseCongruence

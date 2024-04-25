@@ -287,6 +287,13 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
         return $ DeclVar name (Just sig) exp
 
 
+generateInteger :: Source -> Integer -> Praxis (Annotated Type)
+generateInteger src n = do
+  t <- freshTyUni
+  let integral = TyCon "Integeral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint)) -- TODO pull from environment?
+  require $ (src, TyReasonIntegerLiteral n) :< Class (TyApply integral t `as` phantom KindConstraint)
+  return $ t
+
 generateExp :: Annotated Exp -> Praxis (Annotated Exp)
 generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp of
 
@@ -344,13 +351,16 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     return (view ty exp :< Let bind exp)
 
   -- TODO pull from environment?
-  Lit lit -> ((\t -> t `as` phantom KindType :< Lit lit) <$>) $ case lit of
-    Int  _   -> return $ TyCon "Int"
-    Bool _   -> return $ TyCon "Bool"
-    Char _   -> return $ TyCon "Char"
+  Lit lit -> ((\t -> t :< Lit lit) <$>) $ case lit of
+    Integer n
+      -> generateInteger src n
+    Bool _
+      -> return $ TyCon "Bool" `as` phantom KindType
+    Char _
+      -> return $ TyCon "Char" `as` phantom KindType
     String _ -> do
       op <- freshTyViewUni RefOrValue
-      return $ TyApply op (TyCon "String" `as` phantom KindType)
+      return $ TyApply op (TyCon "String" `as` phantom KindType) `as` phantom KindType
 
   Read var exp -> scope src $ do
     (refName, refType, specialisation) <- readVar src var
@@ -463,12 +473,11 @@ generatePat op pat = snd <$> generatePat' pat where
       return (t, wrap t :< PatVar var)
 
     -- TODO think about how view literals would work, e.g. x@"abc"
-    PatLit lit -> let t = TyCon (litName lit) `as` phantom KindType in return (t, t :< PatLit lit) where
-      litName = \case
-        Bool _   -> "Bool"
-        Char _   -> "Char"
-        Int _    -> "Int"
-        String _ -> "String"
+    PatLit lit -> (\t -> (t, t :< PatLit lit)) <$> case lit of
+      Bool _    -> return $ TyCon "Bool" `as` phantom KindType
+      Char _    -> return $ TyCon "Char" `as` phantom KindType
+      Integer n -> generateInteger src n
+      String _  -> return $ TyCon "String" `as` phantom KindType
 
     PatPair pat1 pat2 -> do
       (t1, pat1) <- generatePat' pat1

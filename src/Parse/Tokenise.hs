@@ -66,8 +66,8 @@ literal :: Tokeniser Token
 literal = intLiteral <|> charLiteral <|> stringLiteral
 
 intLiteral :: Tokeniser Token
-intLiteral = satisfy isDigit *> (Lit . Int <$> decimal)
-  where decimal :: Tokeniser Int
+intLiteral = satisfy isDigit *> (Lit . Integer <$> decimal)
+  where decimal :: Tokeniser Integer
         decimal = read <$> while (satisfy isDigit) consume
 
 charEscapeSeqs = [

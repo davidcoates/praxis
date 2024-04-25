@@ -109,9 +109,10 @@ label ((s, a) :< x) = case a of
 
 instance Pretty TyReason where
   pretty = \case
-    TyReasonApply f x -> "application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
-    TyReasonRead n    -> "read of " <> pretty n
-    TyReasonBind p e  -> "binding " <> pretty p <> pretty (Fg Red (" (<-) " :: Colored String)) <> pretty e
+    TyReasonApply f x        -> "application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
+    TyReasonRead n           -> "read of " <> pretty n
+    TyReasonBind p e         -> "binding " <> pretty p <> pretty (Fg Red (" (<-) " :: Colored String)) <> pretty e
+    TyReasonIntegerLiteral i -> "integer literal " <> pretty (show i)
     -- TODO
     Captured n       -> "variable " <> quote (pretty n) <> " captured"
     CaseCongruence   -> "alternatives of case expression must have the same type"

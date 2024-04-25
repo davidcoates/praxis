@@ -297,13 +297,17 @@ translateDecl topLevel ((src, _) :< decl) = case decl of
         = return Nil
 
 
-translateLit :: Lit -> Praxis Code
-translateLit lit = return $ Text (translateLit' lit) where
-  translateLit' lit = case lit of
-    Bool bool     -> if bool then "true" else "false"
-    Char char     -> show char
-    Int int       -> show int
-    String string -> show string
+translateLit :: Annotated Type -> Lit -> Praxis Code
+translateLit ty lit = case lit of
+  Bool bool
+    -> return (if bool then "true" else "false")
+  Char char
+    -> return (Text (show char))
+  Integer int -> do
+    ty <- translateType ty
+    return $ "static_cast<" <> ty <> ">(" <> Text (show int) <> ")"
+  String string
+    -> return (Text (show string))
 
 captureList :: Bool -> Code
 captureList nonLocal = if nonLocal then "[]" else "[&]"
@@ -361,7 +365,7 @@ translateExp' recPrefix nonLocal ((src, Just expTy) :< exp) = case exp of
     bind <- translateBind tempVar pat exp2
     return $ lambdaWrap nonLocal ("auto " <> Text tempVar <> " = " <> exp1 <> Semi <> bind)
 
-  Lit lit -> translateLit lit
+  Lit lit -> translateLit expTy lit
 
   Read name exp -> do
     tempVar <- freshTempVar
@@ -446,7 +450,7 @@ translateTryMatch var ((_, Just patTy) :< pat) onMatch = case pat of
   PatHole -> return onMatch
 
   PatLit lit -> do
-    lit <- translateLit lit
+    lit <- translateLit patTy lit
     return $ "if (" <> Text var <> " == " <> lit <> ") " <> LBrace <> onMatch <> RBrace <> Newline
 
   PatPair pat1 pat2 -> do

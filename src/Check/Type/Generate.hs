@@ -290,7 +290,7 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 generateInteger :: Source -> Integer -> Praxis (Annotated Type)
 generateInteger src n = do
   t <- freshTyUni
-  let integral = TyCon "Integeral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint)) -- TODO pull from environment?
+  let integral = TyCon "Integral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint)) -- TODO pull from environment?
   require $ (src, TyReasonIntegerLiteral n) :< Class (TyApply integral t `as` phantom KindConstraint)
   return $ t
 

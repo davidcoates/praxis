@@ -12,7 +12,7 @@ import           Praxis
 import           Stage
 import           Term
 import qualified Value
-import           Value             (Value)
+import           Value             (Value, integerToValue, valueToInteger)
 
 import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
@@ -106,10 +106,10 @@ evalExp ((src, Just t) :< exp) = case exp of
     evalExp exp
 
   Lit lit -> pure $ case lit of
-    Bool val   -> Value.Bool val
-    Char val   -> Value.Char val
-    Int val    -> Value.Int val
-    String val -> Value.String val
+    Bool    val -> Value.Bool val
+    Char    val -> Value.Char val
+    Integer val -> let (_ :< TyCon n) = t in integerToValue n val
+    String  val -> Value.String val
 
   Read _ exp -> evalExp exp
 
@@ -122,7 +122,11 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Sig exp _ -> evalExp exp
 
-  Specialise exp _ -> evalExp exp
+  Specialise exp specialisation -> do
+    exp <- evalExp exp
+    case exp of
+      Value.Polymorphic polyFun -> return (polyFun specialisation)
+      _                         -> return exp
 
   Switch alts -> evalSwitch src alts
 
@@ -167,7 +171,7 @@ evalBind ((src, _) :< Bind pat exp) = do
   forceMatch src exp pat
 
 tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
-tryMatch val (_ :< pat) = case pat of
+tryMatch val ((_, Just t) :< pat) = case pat of
 
   PatAt name pat
     -> (\doMatch -> do { vEnv %= Env.intro name val; doMatch }) <$> tryMatch val pat
@@ -185,7 +189,7 @@ tryMatch val (_ :< pat) = case pat of
     match = case (pat, val) of
       (Bool v, Value.Bool v') -> v == v'
       (Char v, Value.Char v') -> v == v'
-      (Int v,  Value.Int  v') -> v == v'
+      (Integer v, v')         -> v == valueToInteger v'
       _                       -> False
 
   PatPair pat1 pat2 | Value.Pair val1 val2 <- val

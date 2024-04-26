@@ -46,50 +46,112 @@ kind s = runInternal emptyState (parse s :: Praxis (Annotated Kind))
 
 inbuilts :: [(Name, Annotated QType, Value)]
 inbuilts =
-  [ ("add" ,     poly "forall a | Integral a . (a, a) -> a", liftI (+)) -- TODO should be Num, not Integral
-  , ("subtract", poly "forall a | Integral a . (a, a) -> a", liftI (-))
-  , ("multiply", poly "forall a | Integral a . (a, a) -> a", liftI (*))
-  , ("negate",   poly "forall a | Integral a . a -> a",
-      Fun (\(Int x) -> pure (Int (negate x))))
-  , ("get_int",      poly "() -> Int",
-      Fun (\Unit -> liftIOUnsafe (Int <$> readLn)))
-  , ("get_str", poly "() -> String",
-      Fun (\Unit -> Value.String <$> liftIOUnsafe getContents)) -- TODO need to make many of these functions strict?
-  , ("put_int",      poly "Int -> ()",
-      Fun (\(Int x) -> liftIOUnsafe (print x >> pure Unit)))
-  , ("put_str",      poly "forall &r. &r String -> ()",
-      Fun (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit))
-  , ("put_str_ln",   poly "forall &r. &r String -> ()",
-      Fun (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit))
-  , ("compose",      poly "forall a b c. (b -> c, a -> b) -> a -> c",
-      Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f))))
-  , ("print",        poly "forall &r a. &r a -> ()",
-      Fun (\x -> liftIOUnsafe (print x >> pure Unit))) -- TODO should have Show constraint
-  , ("new_array",    poly "forall a. (Int, () -> a) -> Array a",
-      Fun (\(Pair (Int i) v) -> Value.newArray i v))
-  , ("at_array",     poly "forall &r a. (&r Array a, Int) -> &r a",
-      Fun (\(Pair (Array a) (Int i)) -> Value.readArray a i))
-  , ("len_array",    poly "forall &r a. &r Array a -> Int",
-      Fun (\(Array a) -> Value.Int <$> Value.lenArray a))
-  , ("set_array",    poly "forall a. (Array a, Int, a) -> Array a",
-      Fun (\(Pair (Array a) (Pair (Int i) e)) -> Value.writeArray a i e >> pure (Array a)))
-  , ("not",          poly "Bool -> Bool", Fun (\(Bool a) -> pure (Bool (not a))))
-  , ("or",           poly "(Bool, Bool) -> Bool", liftB (||))
-  , ("and",  poly "(Bool, Bool) -> Bool", liftB (&&))
-  , ("eq",       poly "forall a | Integral a . (a, a) -> Bool", liftE (==)) -- TODO should be Eq, not Integral
-  , ("neq",      poly "forall a | Integral a . (a, a) -> Bool", liftE (/=))
-  , ("lt",       poly "forall a | Integral a . (a, a) -> Bool", liftE (<)) -- TODO should be Ord, not Integral
-  , ("gt",       poly "forall a | Integral a . (a, a) -> Bool", liftE (>))
-  , ("lte",      poly "forall a | Integral a . (a, a) -> Bool", liftE (<=))
-  , ("gte",      poly "forall a | Integral a . (a, a) -> Bool", liftE (>=))
+  [ ("add"
+    , poly "forall a | Integral a . (a, a) -> a" -- TODO should be Num, not Integral
+    , liftIII (+)
+    )
+  , ("subtract"
+    , poly "forall a | Integral a . (a, a) -> a"
+    , liftIII (-)
+    )
+  , ("multiply"
+    , poly "forall a | Integral a . (a, a) -> a"
+    , liftIII (*)
+    )
+  , ("negate"
+    , poly "forall a | Integral a . a -> a"
+    , liftI $ \(con, decon) -> Fun (\x -> return (con (negate (decon x))))
+    )
+  , ("get_int"
+    , poly "forall a | Integral a . () -> a"
+    , liftI $ \(con, decon) -> Fun (\Unit -> liftIOUnsafe (con <$> readLn))
+    )
+  , ("get_str"
+    , poly "() -> String"
+    , Fun (\Unit -> Value.String <$> liftIOUnsafe getContents)) -- TODO need to make many of these functions strict?
+  , ("put_int"
+    , poly "forall a | Integral a. a -> ()"
+    , liftI $ \(_, decon) -> Fun (\i -> liftIOUnsafe (print (decon i) >> pure Unit))
+    )
+  , ("put_str"
+    , poly "forall &r. &r String -> ()"
+    , Fun (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit)
+    )
+  , ("put_str_ln"
+    , poly "forall &r. &r String -> ()"
+    , Fun (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit)
+    )
+  , ("compose"
+    , poly "forall a b c. (b -> c, a -> b) -> a -> c"
+    , Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f)))
+    )
+  , ("print"
+    , poly "forall &r a. &r a -> ()" -- TODO should have Show constraint
+    , Fun (\x -> liftIOUnsafe (print x >> pure Unit))
+    )
+  , ("new_array"
+    , poly "forall a. (USize, () -> a) -> Array a"
+    , Fun (\(Pair (USize i) v) -> Value.newArray i v)
+    )
+  , ("at_array"
+    , poly "forall &r a. (&r Array a, USize) -> &r a"
+    , Fun (\(Pair (Array a) (USize i)) -> Value.readArray a i)
+    )
+  , ("len_array"
+    , poly "forall &r a. &r Array a -> USize"
+    , Fun (\(Array a) -> USize <$> Value.lenArray a)
+    )
+  , ("set_array"
+    , poly "forall a. (Array a, USize, a) -> Array a"
+    , Fun (\(Pair (Array a) (Pair (USize i) e)) -> Value.writeArray a i e >> pure (Array a))
+    )
+  , ("not"
+    , poly "Bool -> Bool"
+    , Fun (\(Bool a) -> pure (Bool (not a)))
+    )
+  , ("or"
+    , poly "(Bool, Bool) -> Bool"
+    , liftBBB (||)
+    )
+  , ("and"
+    , poly "(Bool, Bool) -> Bool"
+    , liftBBB (&&))
+  , ("eq"
+    , poly "forall a | Integral a . (a, a) -> Bool" -- TODO should be Eq, not Integral
+    , liftIIB (==)
+    )
+  , ("neq"
+    , poly "forall a | Integral a . (a, a) -> Bool"
+    , liftIIB (/=)
+    )
+  , ("lt"
+    , poly "forall a | Integral a . (a, a) -> Bool" -- TODO should be Ord, not Integral
+    , liftIIB (<)
+    )
+  , ("gt"
+    , poly "forall a | Integral a . (a, a) -> Bool"
+    , liftIIB (>)
+    )
+  , ("lte"
+    , poly "forall a | Integral a . (a, a) -> Bool"
+    , liftIIB (<=)
+    )
+  , ("gte"
+    , poly "forall a | Integral a . (a, a) -> Bool"
+    , liftIIB (>=)
+    )
   ]
   where
-    liftI :: Integral a => (a -> a -> a) -> Value
-    liftI f = undefined -- TODO
-    liftE :: Integral a => (a -> a -> Bool) -> Value
-    liftE f = undefined
-    liftB :: (Bool -> Bool -> Bool) -> Value
-    liftB f = Fun (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
+    liftI :: ((Integer -> Value, Value -> Integer) -> Value) -> Value
+    liftI f = Polymorphic $ \[(_, _ :< TyCon ty)] -> f (integerToValue ty, valueToInteger)
+    liftII :: (forall a. Integral a => (a -> a)) -> Value
+    liftII f = liftI $ \(con, decon) -> Fun (\x -> return (con (f (decon x))))
+    liftIII :: (forall a. Integral a => (a -> a -> a)) -> Value
+    liftIII f = liftI $ \(con, decon) -> Fun (\(Pair x y) -> return (con (f (decon x) (decon y))))
+    liftIIB :: (forall a. Integral a => (a -> a -> Bool)) -> Value
+    liftIIB f = liftI $ \(con, decon) -> Fun (\(Pair x y) -> return (Bool (f (decon x) (decon y))))
+    liftBBB :: (Bool -> Bool -> Bool) -> Value
+    liftBBB f = Fun (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
 
 inbuiltKinds :: [(Name, Annotated Kind)]
 inbuiltKinds =

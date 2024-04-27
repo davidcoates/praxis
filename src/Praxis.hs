@@ -184,9 +184,6 @@ data PraxisState = PraxisState
   , _kindSystem :: System KindConstraint
   }
 
-instance Show PraxisState where
-  show s = "<praxis state>"
-
 type Praxis = ExceptT String (StateT PraxisState IO)
 
 defaultFlags :: Flags

@@ -78,6 +78,7 @@ hideLabel x = case typeof x of
     Lambda _ _     -> True
     Read _ _       -> True
     Specialise _ _ -> True
+    Sig _ _        -> True
     _              -> False
   IPat -> case x of
     PatPair _ _ -> True -- Note: Not trivial due to views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
@@ -109,9 +110,10 @@ label ((s, a) :< x) = case a of
 
 instance Pretty TyReason where
   pretty = \case
-    TyReasonApply f x -> "application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
-    TyReasonRead n    -> "read of " <> pretty n
-    TyReasonBind p e  -> "binding " <> pretty p <> pretty (Fg Red (" (<-) " :: Colored String)) <> pretty e
+    TyReasonApply f x        -> "application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
+    TyReasonRead n           -> "read of " <> pretty n
+    TyReasonBind p e         -> "binding " <> pretty p <> pretty (Fg Red (" (<-) " :: Colored String)) <> pretty e
+    TyReasonIntegerLiteral i -> "integer literal " <> pretty (show i)
     -- TODO
     Captured n       -> "variable " <> quote (pretty n) <> " captured"
     CaseCongruence   -> "alternatives of case expression must have the same type"

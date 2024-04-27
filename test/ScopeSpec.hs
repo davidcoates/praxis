@@ -92,7 +92,7 @@ x () = x ()
 
     let program = [r|
 f x = f x where
-  f : Int -> Int
+  f : I32 -> I32
   f x = x
 
 g x = f x where rec
@@ -108,30 +108,30 @@ h x = f x where
 
     it "parses" $ parse program `shouldReturn` trim [r|
 f_0 = \ x_0 -> f_1 x_0 where
-  f_1 : Int -> Int = \ x_1 -> x_1
+  f_1 : I32 -> I32 = \ x_1 -> x_1
 g_0 = \ x_2 -> f_2 x_2 where
   rec
     f_2 = cases
       0 -> 1
-      n_0 -> multiply_int ( f_2 subtract_int ( n_0 , 1 ) , n_0 )
+      n_0 -> multiply ( f_2 subtract ( n_0 , 1 ) , n_0 )
 h_0 = \ x_3 -> f_3 x_3 where
   f_3 = cases
     0 -> 1
-    n_1 -> multiply_int ( f_0 subtract_int ( n_1 , 1 ) , n_1 )
+    n_1 -> multiply ( f_0 subtract ( n_1 , 1 ) , n_1 )
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-f_0 = \ [Int] x_0 -> [Int] [Int -> Int] f_1 [Int] x_0 where
-  f_1 : Int -> Int = \ [Int] x_1 -> [Int] x_1
-g_0 = \ [Int] x_2 -> [Int] [Int -> Int] f_2 [Int] x_2 where
+f_0 = \ [I32] x_0 -> [I32] [I32 -> I32] f_1 [I32] x_0 where
+  f_1 : I32 -> I32 = \ [I32] x_1 -> [I32] x_1
+g_0 = \ [I32] x_2 -> [I32] [I32 -> I32] f_2 [I32] x_2 where
   rec
-    f_2 = [Int -> Int] cases
-      [Int] 0 -> [Int] 1
-      [Int] n_0 -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f_2 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) , [Int] n_0 )
-h_0 = \ [Int] x_3 -> [Int] [Int -> Int] f_3 [Int] x_3 where
-  f_3 = [Int -> Int] cases
-    [Int] 0 -> [Int] 1
-    [Int] n_1 -> [( Int , Int ) -> Int] multiply_int ( [Int -> Int] f_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int] 1 ) , [Int] n_1 )
+    f_2 = [I32 -> I32] cases
+      [I32] 0 -> [I32] 1
+      [I32] n_0 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_2 [( I32 , I32 ) -> I32] subtract ( [I32] n_0 , [I32] 1 ) , [I32] n_0 )
+h_0 = \ [I32] x_3 -> [I32] [I32 -> I32] f_3 [I32] x_3 where
+  f_3 = [I32 -> I32] cases
+    [I32] 0 -> [I32] 1
+    [I32] n_1 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_0 [( I32 , I32 ) -> I32] subtract ( [I32] n_1 , [I32] 1 ) , [I32] n_1 )
 |]
 
     it "evaluates" $ do

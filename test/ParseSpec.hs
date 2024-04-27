@@ -41,12 +41,12 @@ spec = do
   describe "simple types" $ do
 
     let types =
-          [ ("Int -> Int -> Int", "Int -> (Int -> Int)")
+          [ ("I32 -> I32 -> I32", "I32 -> (I32 -> I32)")
           , ("A B C", "A (B C)")
           , ("Maybe Maybe a -> Maybe b", "(Maybe (Maybe a)) -> (Maybe b)")
           , ("forall a b. (a, b)", "forall a b . ( a, b )")
-          , ("forall &r. &r Array Int -> ()", "forall &r . &r Array Int -> ()")
-          , ("forall ?r. ?r Array Int -> ()", "forall ?r . ?r Array Int -> ()")
+          , ("forall &r. &r Array I32 -> ()", "forall &r . &r Array I32 -> ()")
+          , ("forall ?r. ?r Array I32 -> ()", "forall ?r . ?r Array I32 -> ()")
           ]
 
     forM_ types $ \(a, b) -> do
@@ -96,7 +96,7 @@ iff (a, b) = (a && b) || (!a && !b)
 operator (_ <-> _) = iff where
   precedence below (_ --> _)
 
-ifthenelse : (Bool, Int, Int) -> Int
+ifthenelse : (Bool, I32, I32) -> I32
 ifthenelse (c, a, b) = if c then a else b
 
 operator (_ <?> _ <:> _) = ifthenelse where
@@ -110,7 +110,7 @@ iff_0 : ( Bool , Bool ) -> Bool = \ ( a_1 , b_1 ) -> or ( and ( a_1 , b_1 ) , an
 operator ( _ <-> _ ) = iff_0 where
   precedence
     below ( _ --> _ )
-ifthenelse_0 : ( Bool , Int , Int ) -> Int = \ ( c_0 , a_2 , b_2 ) -> if c_0 then a_2 else b_2
+ifthenelse_0 : ( Bool , I32 , I32 ) -> I32 = \ ( c_0 , a_2 , b_2 ) -> if c_0 then a_2 else b_2
 operator ( _ <?> _ <:> _ ) = ifthenelse_0 where
   precedence
     below ( _ <-> _ )

@@ -22,22 +22,22 @@ foo = do
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
-foo_0 = let x_0 = 1 in ( ) seq let y_0 = 2 in add_int ( x_0 , y_0 )
+foo_0 = let x_0 = 1 in ( ) seq let y_0 = 2 in add ( x_0 , y_0 )
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-foo_0 = [Int] let [Int] x_0 = [Int] 1 in [Int] [( )] ( ) seq [Int] let [Int] y_0 = [Int] 2 in [( Int , Int ) -> Int] add_int ( [Int] x_0 , [Int] y_0 )
+foo_0 = [I32] let [I32] x_0 = [I32] 1 in [I32] [( )] ( ) seq [I32] let [I32] y_0 = [I32] 2 in [( I32 , I32 ) -> I32] add ( [I32] x_0 , [I32] y_0 )
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
 auto foo_0 = [](){
-  auto _temp_0 = 1;
+  auto _temp_0 = static_cast<I32>(1);
   auto x_0 = std::move(_temp_0);
   return (std::monostate{}, [&](){
-    auto _temp_1 = 2;
+    auto _temp_1 = static_cast<I32>(2);
     auto y_0 = std::move(_temp_1);
-    return std::move(add_int)(std::make_pair(std::move(x_0), std::move(y_0)));
+    return std::move(add).template operator()<I32>()(std::make_pair(std::move(x_0), std::move(y_0)));
     throw praxis::BindFail("5:7");
   }());
   throw praxis::BindFail("3:7");
@@ -58,12 +58,12 @@ x_0 = ( 1 , True , "abc" )
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-x_0 = ( [Int] 1 , [Bool] True , [& 'l0 String] "abc" )
+x_0 = ( [I32] 1 , [Bool] True , [& 'l0 String] "abc" )
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-auto x_0 = std::make_pair(1, std::make_pair(true, "abc"));
+auto x_0 = std::make_pair(static_cast<I32>(1), std::make_pair(true, "abc"));
 |]
 
     it "compiles" $ compile program `shouldReturn` True
@@ -75,11 +75,11 @@ auto x_0 = std::make_pair(1, std::make_pair(true, "abc"));
     let program = "min (x, y) = if x < y then x else y"
 
     it "parses" $ parse program `shouldReturn` trim [r|
-min_0 = \ ( x_0 , y_0 ) -> if lt_int ( x_0 , y_0 ) then x_0 else y_0
+min_0 = \ ( x_0 , y_0 ) -> if lt ( x_0 , y_0 ) then x_0 else y_0
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-min_0 = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int ( [Int] x_0 , [Int] y_0 ) then [Int] x_0 else [Int] y_0
+min_0 = \ ( [I32] x_0 , [I32] y_0 ) -> [I32] if [( I32 , I32 ) -> Bool] lt ( [I32] x_0 , [I32] y_0 ) then [I32] x_0 else [I32] y_0
 |]
 
     it "evaluates" $ do
@@ -89,12 +89,12 @@ min_0 = \ ( [Int] x_0 , [Int] y_0 ) -> [Int] if [( Int , Int ) -> Bool] lt_int (
 
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 1:1 */
-auto min_0 = std::function([](std::pair<int, int> _temp_0){
+auto min_0 = std::function([](std::pair<I32, I32> _temp_0){
   auto _temp_1 = praxis::first(_temp_0);
   auto _temp_2 = praxis::second(_temp_0);
   auto x_0 = std::move(_temp_1);
   auto y_0 = std::move(_temp_2);
-  return (std::move(lt_int)(std::make_pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
+  return (std::move(lt).template operator()<I32>()(std::make_pair(std::move(x_0), std::move(y_0)))) ? (std::move(x_0)) : (std::move(y_0));
   throw praxis::BindFail("1:5");
 });
 |]
@@ -111,25 +111,25 @@ auto min_0 = std::function([](std::pair<int, int> _temp_0){
   describe "switch (sign)" $ do
 
     let program = [r|
-sign : Int -> Int
+sign : I32 -> I32
 sign n = switch
   n  < 0 -> -1
   n == 0 ->  0
-  n  > 0 -> +1
+  n  > 0 ->  1
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
-sign_0 : Int -> Int = \ n_0 -> switch
-  lt_int ( n_0 , 0 ) -> negate_int 1
-  eq_int ( n_0 , 0 ) -> 0
-  gt_int ( n_0 , 0 ) -> unary_plus_int 1
+sign_0 : I32 -> I32 = \ n_0 -> switch
+  lt ( n_0 , 0 ) -> negate 1
+  eq ( n_0 , 0 ) -> 0
+  gt ( n_0 , 0 ) -> 1
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
-sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
-  [( Int , Int ) -> Bool] lt_int ( [Int] n_0 , [Int] 0 ) -> [Int -> Int] negate_int [Int] 1
-  [( Int , Int ) -> Bool] eq_int ( [Int] n_0 , [Int] 0 ) -> [Int] 0
-  [( Int , Int ) -> Bool] gt_int ( [Int] n_0 , [Int] 0 ) -> [Int -> Int] unary_plus_int [Int] 1
+sign_0 : I32 -> I32 = \ [I32] n_0 -> [I32] switch
+  [( I32 , I32 ) -> Bool] lt ( [I32] n_0 , [I32] 0 ) -> [I32 -> I32] negate [I32] 1
+  [( I32 , I32 ) -> Bool] eq ( [I32] n_0 , [I32] 0 ) -> [I32] 0
+  [( I32 , I32 ) -> Bool] gt ( [I32] n_0 , [I32] 0 ) -> [I32] 1
 |]
 
     it "evaluates" $ do
@@ -137,24 +137,25 @@ sign_0 : Int -> Int = \ [Int] n_0 -> [Int] switch
       interpret program "sign 10"   `shouldReturn` "1"
       interpret program "sign (-5)" `shouldReturn` "-1"
       interpret program "sign -5"   `shouldReturn` trim [r|
-type check error: unable to satisfy: Int = Int -> Int
-  | derived from: ( Int , Int ) -> Int = ( Int -> Int , Int ) -> ^t6
-  | primary cause: application [( Int , Int ) -> Int] subtract_int ($) ( [Int -> Int] sign_0 , [Int] 5 ) at 1:1
+type check error: unable to satisfy: I32 -> I32 = I32
+  | derived from: Integral ( I32 -> I32 )
+  | primary cause: integer literal 5 at 1:7
+  | secondary cause: application [( I32 -> I32 , I32 -> I32 ) -> I32 -> I32] subtract ($) ( [I32 -> I32] sign_0 , [I32 -> I32] 5 ) at 1:1
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
     it "translates" $ translate program `shouldReturn` trim [r|
 /* 2:1 */
-auto sign_0 = std::function([](int _temp_0){
+auto sign_0 = std::function([](I32 _temp_0){
   auto n_0 = std::move(_temp_0);
   return [&](){
-    if (std::move(lt_int)(std::make_pair(std::move(n_0), 0))) {
-      return std::move(negate_int)(1);
+    if (std::move(lt).template operator()<I32>()(std::make_pair(std::move(n_0), static_cast<I32>(0)))) {
+      return std::move(negate).template operator()<I32>()(static_cast<I32>(1));
     }
-    if (std::move(eq_int)(std::make_pair(std::move(n_0), 0))) {
-      return 0;
+    if (std::move(eq).template operator()<I32>()(std::make_pair(std::move(n_0), static_cast<I32>(0)))) {
+      return static_cast<I32>(0);
     }
-    if (std::move(gt_int)(std::make_pair(std::move(n_0), 0))) {
-      return std::move(unary_plus_int)(1);
+    if (std::move(gt).template operator()<I32>()(std::make_pair(std::move(n_0), static_cast<I32>(0)))) {
+      return static_cast<I32>(1);
     }
     throw praxis::SwitchFail("3:10");
   }();

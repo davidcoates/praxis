@@ -26,8 +26,8 @@ datatype unboxed Either [ a_0 , b_0 ] = [forall a_0 b_0 . a_0 -> Either [ a_0 , 
 |]
 
     it "evaluates" $ do
-      interpret program "Left 0 : Either [Int, ()]"  `shouldReturn` "Left 0"
-      interpret program "Right 1 : Either [(), Int]" `shouldReturn` "Right 1"
+      interpret program "Left 0 : Either [I32, ()]"  `shouldReturn` "Left 0"
+      interpret program "Right 1 : Either [(), I32]" `shouldReturn` "Right 1"
 
 
 
@@ -145,7 +145,7 @@ rec
     Cons (x, xs) -> Cons (f x, (map f) xs)
 
 rec
-  sum : forall &r. &r List Int -> Int
+  sum : forall &r. &r List I32 -> I32
   sum = cases
     Nil ()       -> 0
     Cons (x, xs) -> x + sum xs
@@ -158,9 +158,9 @@ rec
     Nil ( ) -> Nil ( )
     Cons ( x_0 , xs_0 ) -> Cons ( f_0 x_0 , ( map_0 f_0 ) xs_0 )
 rec
-  sum_0 : forall & r_0 . & r_0 List Int -> Int = cases
+  sum_0 : forall & r_0 . & r_0 List I32 -> I32 = cases
     Nil ( ) -> 0
-    Cons ( x_1 , xs_1 ) -> add_int ( x_1 , sum_0 xs_1 )
+    Cons ( x_1 , xs_1 ) -> add ( x_1 , sum_0 xs_1 )
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
@@ -170,9 +170,9 @@ rec
     [? v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
     [? v_0 List a_1] Cons ( [? v_0 a_1] x_0 , [? v_0 List a_1] xs_0 ) -> [( b_0 , List b_0 ) -> List b_0] Cons ( [? v_0 a_1 -> b_0] f_0 [? v_0 a_1] x_0 , ( [( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0] map_0 [? v_0 a_1 -> b_0] f_0 ) [? v_0 List a_1] xs_0 )
 rec
-  sum_0 : forall & r_0 . & r_0 List Int -> Int = [& r_0 List Int -> Int] cases
-    [& r_0 List Int] Nil [( )] ( ) -> [Int] 0
-    [& r_0 List Int] Cons ( [Int] x_1 , [& r_0 List Int] xs_1 ) -> [( Int , Int ) -> Int] add_int ( [Int] x_1 , [& r_0 List Int -> Int] sum_0 [& r_0 List Int] xs_1 )
+  sum_0 : forall & r_0 . & r_0 List I32 -> I32 = [& r_0 List I32 -> I32] cases
+    [& r_0 List I32] Nil [( )] ( ) -> [I32] 0
+    [& r_0 List I32] Cons ( [I32] x_1 , [& r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add ( [I32] x_1 , [& r_0 List I32 -> I32] sum_0 [& r_0 List I32] xs_1 )
 |]
 
     it "evaluates" $ do
@@ -244,14 +244,14 @@ auto _temp_0 = [](auto _temp_1){
   };
 };
 auto [map_0] = _temp_0(_temp_0);
-auto _temp_8 = [](auto _temp_9) -> std::tuple<std::function<int(praxis::apply<praxis::View::REF, List<int>>)>> {
+auto _temp_8 = [](auto _temp_9) -> std::tuple<std::function<I32(praxis::apply<praxis::View::REF, List<I32>>)>> {
   return std::tuple{
     /* 10:1 */
-    std::function([&](praxis::apply<praxis::View::REF, List<int>> _temp_10){
+    std::function([&](praxis::apply<praxis::View::REF, List<I32>> _temp_10){
       auto [sum_0] = _temp_9(_temp_9);
       if (_temp_10.index() == _idxNil) {
         auto _temp_11 = _temp_10.template get<_idxNil>();
-        return 0;
+        return static_cast<I32>(0);
       }
       if (_temp_10.index() == _idxCons) {
         auto _temp_12 = _temp_10.template get<_idxCons>();
@@ -259,7 +259,7 @@ auto _temp_8 = [](auto _temp_9) -> std::tuple<std::function<int(praxis::apply<pr
         auto _temp_14 = praxis::second(_temp_12);
         auto x_1 = std::move(_temp_13);
         auto xs_1 = std::move(_temp_14);
-        return std::move(add_int)(std::make_pair(std::move(x_1), std::move(sum_0)(std::move(xs_1))));
+        return std::move(add).template operator()<I32>()(std::make_pair(std::move(x_1), std::move(sum_0)(std::move(xs_1))));
       }
       throw praxis::CaseFail("12:9");
     })

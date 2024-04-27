@@ -42,11 +42,8 @@ foo = copy Boxed 1
 |]
 
       it "does not type check" $ check program  `shouldReturn` trim [r|
-type check error: unable to satisfy: Copy Boxed Int
+type check error: unable to satisfy: Copy Boxed ^t2
   | primary cause: specialisation of 'copy_0' at 7:7
-  | secondary causes:
-  | - application [Int -> Boxed Int] Boxed ($) [Int] 1 at 7:12
-  | - application [Boxed Int -> ( Boxed Int , Boxed Int )] copy_0 ($) [Int -> Boxed Int] Boxed [Int] 1 at 7:7
 |]
 
 
@@ -103,7 +100,7 @@ foo = copy (Unboxed (1, 'c'))
       it "type checks" $ check program `shouldReturn` trim [r|
 datatype unboxed Unboxed [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 , b_0 ) -> Unboxed [ a_0 , b_0 ]] Unboxed ( a_0 , b_0 )
 copy_0 : forall a_1 b_1 | Copy Unboxed [ a_1 , b_1 ] . Unboxed [ a_1 , b_1 ] -> ( Unboxed [ a_1 , b_1 ] , Unboxed [ a_1 , b_1 ] ) = \ [Unboxed [ a_1 , b_1 ]] x_0 -> ( [Unboxed [ a_1 , b_1 ]] x_0 , [Unboxed [ a_1 , b_1 ]] x_0 )
-foo_0 = [Unboxed [ Int , Char ] -> ( Unboxed [ Int , Char ] , Unboxed [ Int , Char ] )] copy_0 [( Int , Char ) -> Unboxed [ Int , Char ]] Unboxed ( [Int] 1 , [Char] 'c' )
+foo_0 = [Unboxed [ I32 , Char ] -> ( Unboxed [ I32 , Char ] , Unboxed [ I32 , Char ] )] copy_0 [( I32 , Char ) -> Unboxed [ I32 , Char ]] Unboxed ( [I32] 1 , [Char] 'c' )
 |]
 
 
@@ -122,6 +119,6 @@ foo = copy (Unboxed (1, 'c'))
       it "type checks" $ check program `shouldReturn` trim [r|
 datatype unboxed Unboxed [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 , b_0 ) -> Unboxed [ a_0 , b_0 ]] Unboxed ( a_0 , b_0 )
 copy_0 : forall a_1 b_1 | Copy a_1 , Copy b_1 . Unboxed [ a_1 , b_1 ] -> ( Unboxed [ a_1 , b_1 ] , Unboxed [ a_1 , b_1 ] ) = \ [Unboxed [ a_1 , b_1 ]] x_0 -> ( [Unboxed [ a_1 , b_1 ]] x_0 , [Unboxed [ a_1 , b_1 ]] x_0 )
-foo_0 = [Unboxed [ Int , Char ] -> ( Unboxed [ Int , Char ] , Unboxed [ Int , Char ] )] copy_0 [( Int , Char ) -> Unboxed [ Int , Char ]] Unboxed ( [Int] 1 , [Char] 'c' )
+foo_0 = [Unboxed [ I32 , Char ] -> ( Unboxed [ I32 , Char ] , Unboxed [ I32 , Char ] )] copy_0 [( I32 , Char ) -> Unboxed [ I32 , Char ]] Unboxed ( [I32] 1 , [Char] 'c' )
 |]
 

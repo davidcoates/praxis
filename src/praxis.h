@@ -43,8 +43,6 @@ auto recursive(F f)
   return recursive_helper<I, F>(f, std::make_index_sequence<I>{});
 }
 
-using String = std::string;
-
 template<typename T>
 struct Copy
 {
@@ -113,7 +111,7 @@ struct Apply<View::REF, T>
 };
 
 template<>
-struct Apply<View::REF, String>
+struct Apply<View::REF, std::string>
 {
   using Type = const char *;
 };
@@ -126,7 +124,7 @@ auto ref(const T& obj) -> apply<View::REF, T>
 {
   if constexpr (can_copy<T>)
     return obj;
-  else if constexpr (std::is_same_v<T, String>)
+  else if constexpr (std::is_same_v<T, std::string>)
     return Ref(obj.data());
   else
     return Ref(&obj);
@@ -240,9 +238,6 @@ struct SwitchFail : public Exception
   using Exception::Exception;
 };
 
-template<typename T>
-using Array = std::vector<T>;
-
 } // namespace praxis
 
 namespace praxis::user {
@@ -297,6 +292,14 @@ using U16 = std::uint16_t;
 using U32 = std::uint32_t;
 using U64 = std::uint64_t;
 using USize = std::size_t;
+
+using Bool = bool;
+using Char = char;
+using String = std::string;
+
+template<typename T>
+using Array = std::vector<T>;
+
 
 /*
 std::function<int()> get_int = []()

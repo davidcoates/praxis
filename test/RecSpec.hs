@@ -100,7 +100,7 @@ rec
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
-auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<bool(I32)>, std::function<bool(I32)>> {
+auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<Bool(I32)>, std::function<Bool(I32)>> {
   return std::tuple{
     /* 2:1 */
     std::function([&](I32 _temp_2){

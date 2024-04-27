@@ -145,13 +145,7 @@ translateType (_ :< t) = case t of
     t2 <- translateType t2
     return $ t1 <> "<" <> t2 <> ">"
 
-  TyCon n -> return $ Text (translateName n) where
-    translateName n = case n of
-      "Array"  -> "praxis::Array"
-      "Char"   -> "char"
-      "Bool"   -> "bool"
-      "String" -> "praxis::String"
-      _        -> n -- FIXME consistency with int
+  TyCon n -> return $ Text n
 
   TyFun t1 t2 -> do
     t1 <- translateType t1

@@ -16,6 +16,7 @@ import           Common
 import           Env.Env       (Env (..))
 import qualified Env.Env       as Env
 import qualified Env.LEnv      as LEnv
+import           Inbuilts      (integral)
 import           Introspect
 import           Praxis
 import           Print
@@ -63,8 +64,8 @@ specialise src name vars cs = do
   return (tyRewrite, specialisation)
 
 specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Specialisation)
-specialiseQType s n (_ :< Forall vs cs t) = do
-  (tyRewrite, specialisation) <- specialise s n vs cs
+specialiseQType src name (_ :< Forall vs cs t) = do
+  (tyRewrite, specialisation) <- specialise src name vs cs
   let t' = tyRewrite t
   -- Require polymorphic terms to be copyable.
   --
@@ -72,7 +73,7 @@ specialiseQType s n (_ :< Forall vs cs t) = do
   -- instead of at every call site.
   --
   -- Ideally this check would happen at the definition of the polymorphic term, but that's not so easy.
-  when (not (null vs)) $ require $ (s, Specialisation n) :< Copy t'
+  when (not (null vs)) $ require $ (src, Specialisation name) :< Copy t'
   return (t', specialisation)
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
@@ -290,8 +291,7 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 generateInteger :: Source -> Integer -> Praxis (Annotated Type)
 generateInteger src n = do
   t <- freshTyUni
-  let integral = TyCon "Integral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint)) -- TODO pull from environment?
-  require $ (src, TyReasonIntegerLiteral n) :< Class (TyApply integral t `as` phantom KindConstraint)
+  require $ (src, TyReasonIntegerLiteral n) :< integral t
   return $ t
 
 generateExp :: Annotated Exp -> Praxis (Annotated Exp)

@@ -5,6 +5,7 @@
 
 module Inbuilts
   ( initialState
+  , integral
   ) where
 
 import           Common
@@ -33,7 +34,7 @@ initialState1 = set vEnv initialVEnv $ set tEnv initialTEnv $ initialState0
 initialState :: PraxisState
 initialState = fixup (runInternal initialState1 ((parse prelude :: Praxis (Annotated Program)) >> lift State.get)) where
   -- TODO a nicer way to do this. Undo all the things except the fields we care about.
-  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindSystem (view kindSystem emptyState) . set tySystem (view tySystem emptyState)
+  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindSystem (view kindSystem emptyState) . set tySystem initialTySystem
 
 mono :: String -> Annotated Type
 mono s = runInternal initialState0 (parse s :: Praxis (Annotated Type))
@@ -176,6 +177,10 @@ inbuiltKinds =
   , ("Integral", kind "Type -> Constraint")
   ]
 
+-- TODO very gross, should be replaced with instances in prelude
+integral :: Annotated Type -> TyConstraint
+integral t = Class (TyApply (TyCon "Integral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType)
+
 initialDTEnv :: DTEnv
 initialDTEnv = Env.fromList
   [ ("Array",  \(Just _) -> CanNotCopy)
@@ -202,6 +207,12 @@ initialTEnv = LEnv.fromList (map (\(n, t, _) -> (n, t)) inbuilts)
 
 initialVEnv :: VEnv
 initialVEnv = Env.fromList (map (\(n, _, v) -> (n, v)) inbuilts)
+
+initialTySystem :: System TyConstraint
+initialTySystem = System
+  { _requirements = []
+  , _assumptions = Set.fromList [ integral (TyCon n `as` phantom KindType) | n <- [ "I8", "I16", "I32", "I64", "ISize", "U8", "U16", "U32", "U64", "USize" ] ]
+  }
 
 -- TODO interfaces
 prelude = [r|

@@ -78,6 +78,7 @@ hideLabel x = case typeof x of
     Lambda _ _     -> True
     Read _ _       -> True
     Specialise _ _ -> True
+    Sig _ _        -> True
     _              -> False
   IPat -> case x of
     PatPair _ _ -> True -- Note: Not trivial due to views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.

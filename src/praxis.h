@@ -48,31 +48,7 @@ using String = std::string;
 template<typename T>
 struct Copy
 {
-  static constexpr bool value = false;
-};
-
-template<>
-struct Copy<int>
-{
-  static constexpr bool value = true;
-};
-
-template<>
-struct Copy<char>
-{
-  static constexpr bool value = true;
-};
-
-template<>
-struct Copy<bool>
-{
-  static constexpr bool value = true;
-};
-
-template<>
-struct Copy<const char *>
-{
-  static constexpr bool value = true;
+  static constexpr bool value = std::is_scalar_v<T>;
 };
 
 template<typename T>
@@ -271,23 +247,56 @@ using Array = std::vector<T>;
 
 namespace praxis::user {
 
-#define BINARY_OP(name, ret_type, lhs_type, rhs_type, op) ret_type name(std::pair<lhs_type, rhs_type> args) { return args.first op args.second; }
-#define UNARY_OP(name, ret_type, arg_type, op) ret_type name(arg_type arg) { return op arg; }
+#define ARITH_OP(name, op) auto name = []<typename T>() -> std::function<T(std::pair<T, T>)>\
+{\
+	return [](std::pair<T, T> arg)\
+	{\
+		return arg.first op arg.second;\
+	};\
+}
 
-BINARY_OP(add_int, int, int, int, +);
-BINARY_OP(subtract_int, int, int, int, -);
-BINARY_OP(multiply_int, int, int, int, *);
-UNARY_OP(negate_int, int, int, -);
-UNARY_OP(unary_plus_int, int, int, +);
-BINARY_OP(lt_int, bool, int, int, <);
-BINARY_OP(gt_int, bool, int, int, >);
-BINARY_OP(lte_int, bool, int, int, <);
-BINARY_OP(gte_int, bool, int, int, >=);
-BINARY_OP(eq_int, bool, int, int, ==);
-BINARY_OP(neq_int, bool, int, int, !=);
+ARITH_OP(add, +);
+ARITH_OP(subtract, -);
+ARITH_OP(multiply, *);
 
-#undef UNARY_OP
-#undef BINARY_OP
+#undef ARITH_OP
+
+auto negate = []<typename T>() -> std::function<T(T)>
+{
+	return [](T arg)
+	{
+		return -arg;
+	};
+};
+
+#define CMP_OP(name, op) auto name = []<typename T>() -> std::function<bool(std::pair<T, T>)>\
+{\
+	return [](std::pair<T, T> arg)\
+	{\
+		return arg.first op arg.second;\
+	};\
+}
+
+CMP_OP(lt, <);
+CMP_OP(gt, >);
+CMP_OP(lte, <=);
+CMP_OP(gte, >=);
+CMP_OP(eq, ==);
+CMP_OP(neq, !=);
+
+#undef CMP_OP
+
+using I8 = std::int8_t;
+using I16 = std::int16_t;
+using I32 = std::int32_t;
+using I64 = std::int64_t;
+using ISize = std::ptrdiff_t;
+
+using U8 = std::uint8_t;
+using U16 = std::uint16_t;
+using U32 = std::uint32_t;
+using U64 = std::uint64_t;
+using USize = std::size_t;
 
 /*
 std::function<int()> get_int = []()

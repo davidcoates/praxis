@@ -16,22 +16,22 @@ spec = do
     let program = [r|
 rec
   fac = cases
-    0 -> 1
+    0 -> 1 : I64
     n -> n * fac (n - 1)
 |]
 
     it "parses" $ parse program `shouldReturn` trim [r|
 rec
   fac_0 = cases
-    0 -> 1
-    n_0 -> multiply_int ( n_0 , fac_0 subtract_int ( n_0 , 1 ) )
+    0 -> 1 : I64
+    n_0 -> multiply ( n_0 , fac_0 subtract ( n_0 , 1 ) )
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
 rec
-  fac_0 = [Int -> Int] cases
-    [Int] 0 -> [Int] 1
-    [Int] n_0 -> [( Int , Int ) -> Int] multiply_int ( [Int] n_0 , [Int -> Int] fac_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 ) )
+  fac_0 = [I64 -> I64] cases
+    [I64] 0 -> [I64] 1 : I64
+    [I64] n_0 -> [( I64 , I64 ) -> I64] multiply ( [I64] n_0 , [I64 -> I64] fac_0 [( I64 , I64 ) -> I64] subtract ( [I64] n_0 , [I64] 1 ) )
 |]
 
     it "evaluates" $ do
@@ -40,16 +40,16 @@ rec
       interpret program "fac 15" `shouldReturn` "1307674368000"
 
     it "translates" $ translate program `shouldReturn` trim [r|
-auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<int(int)>> {
+auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<I64(I64)>> {
   return std::tuple{
     /* 2:1 */
-    std::function([&](int _temp_2){
+    std::function([&](I64 _temp_2){
       auto [fac_0] = _temp_1(_temp_1);
-      if (_temp_2 == 0) {
-        return 1;
+      if (_temp_2 == static_cast<I64>(0)) {
+        return static_cast<I64>(1);
       }
       auto n_0 = std::move(_temp_2);
-      return std::move(multiply_int)(std::make_pair(std::move(n_0), std::move(fac_0)(std::move(subtract_int)(std::make_pair(std::move(n_0), 1)))));
+      return std::move(multiply).template operator()<I64>()(std::make_pair(std::move(n_0), std::move(fac_0)(std::move(subtract).template operator()<I64>()(std::make_pair(std::move(n_0), static_cast<I64>(1))))));
       throw praxis::CaseFail("3:9");
     })
   };
@@ -62,7 +62,7 @@ auto [fac_0] = _temp_0(_temp_0);
     it "runs" $ do
       compileAndRun program "fac 0"  `shouldReturn` "1"
       compileAndRun program "fac 5"  `shouldReturn` "120"
-      compileAndRun program "fac 15" `shouldReturn` "2004310016" -- overflow moment (TODO should use fixed width)
+      compileAndRun program "fac 15" `shouldReturn` "1307674368000"
 
 
 
@@ -83,43 +83,43 @@ rec
 rec
   is_even_0 = cases
     0 -> True
-    n_0 -> is_odd_0 subtract_int ( n_0 , 1 )
+    n_0 -> is_odd_0 subtract ( n_0 , 1 )
   is_odd_0 = cases
     0 -> False
-    n_1 -> is_even_0 subtract_int ( n_1 , 1 )
+    n_1 -> is_even_0 subtract ( n_1 , 1 )
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
 rec
-  is_even_0 = [Int -> Bool] cases
-    [Int] 0 -> [Bool] True
-    [Int] n_0 -> [Int -> Bool] is_odd_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_0 , [Int] 1 )
-  is_odd_0 = [Int -> Bool] cases
-    [Int] 0 -> [Bool] False
-    [Int] n_1 -> [Int -> Bool] is_even_0 [( Int , Int ) -> Int] subtract_int ( [Int] n_1 , [Int] 1 )
+  is_even_0 = [I32 -> Bool] cases
+    [I32] 0 -> [Bool] True
+    [I32] n_0 -> [I32 -> Bool] is_odd_0 [( I32 , I32 ) -> I32] subtract ( [I32] n_0 , [I32] 1 )
+  is_odd_0 = [I32 -> Bool] cases
+    [I32] 0 -> [Bool] False
+    [I32] n_1 -> [I32 -> Bool] is_even_0 [( I32 , I32 ) -> I32] subtract ( [I32] n_1 , [I32] 1 )
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
-auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<bool(int)>, std::function<bool(int)>> {
+auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<bool(I32)>, std::function<bool(I32)>> {
   return std::tuple{
     /* 2:1 */
-    std::function([&](int _temp_2){
+    std::function([&](I32 _temp_2){
       auto [is_even_0, is_odd_0] = _temp_1(_temp_1);
-      if (_temp_2 == 0) {
+      if (_temp_2 == static_cast<I32>(0)) {
         return true;
       }
       auto n_0 = std::move(_temp_2);
-      return std::move(is_odd_0)(std::move(subtract_int)(std::make_pair(std::move(n_0), 1)));
+      return std::move(is_odd_0)(std::move(subtract).template operator()<I32>()(std::make_pair(std::move(n_0), static_cast<I32>(1))));
       throw praxis::CaseFail("3:13");
     }),
     /* 2:1 */
-    std::function([&](int _temp_3){
+    std::function([&](I32 _temp_3){
       auto [is_even_0, is_odd_0] = _temp_1(_temp_1);
-      if (_temp_3 == 0) {
+      if (_temp_3 == static_cast<I32>(0)) {
         return false;
       }
       auto n_1 = std::move(_temp_3);
-      return std::move(is_even_0)(std::move(subtract_int)(std::make_pair(std::move(n_1), 1)));
+      return std::move(is_even_0)(std::move(subtract).template operator()<I32>()(std::make_pair(std::move(n_1), static_cast<I32>(1))));
       throw praxis::CaseFail("7:12");
     })
   };

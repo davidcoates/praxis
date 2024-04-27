@@ -13,6 +13,7 @@
 
 module Check.Solve
   ( Resolver
+  , Disambiguating
   , Normaliser
   , Reduction(..)
   , Reducer(..)
@@ -41,6 +42,8 @@ data Reduction c = Contradiction | Skip | Solved Solution | Subgoals [c] | Tauto
 
 type Reducer c = c -> Praxis (Reduction c)
 
+type Disambiguating c = Bool -> c
+
 data Tree c = Branch c [Tree c]
   deriving (Functor, Foldable, Traversable)
 
@@ -62,22 +65,22 @@ solve :: forall c a.
   , Term (Requirement c)
   , Pretty (Annotation (Requirement c))
   , Ord (Annotation (Requirement c))
-  ) => Lens' PraxisState (System c) -> Reducer c -> Annotated a -> Praxis (Annotated a)
+  ) => Lens' PraxisState (System c) -> Disambiguating (Reducer c) -> Annotated a -> Praxis (Annotated a)
 
 solve system reduce term = do
   requirements' <- use (system . requirements)
   let goals = [ Goal [(src, reason)] (Branch constraint []) | ((src, Just reason) :< Requirement constraint) <- requirements' ]
-  (term, [], _) <- solve' (term, goals)
+  (term, [], _) <- solve' False (term, goals)
   return term
   where
-    solve' :: (Annotated a, [Goal c]) -> Praxis (Annotated a, [Goal c], Bool)
-    solve' (term, []) = return (term, [], undefined)
-    solve' (term, goals) = do
-      (goals, reduction) <- reduceGoals system reduce (goals)
+    solve' :: Bool -> (Annotated a, [Goal c]) -> Praxis (Annotated a, [Goal c], Bool)
+    solve' _ (term, []) = return (term, [], undefined)
+    solve' disambiguate (term, goals) = do
+      (goals, reduction) <- reduceGoals system (reduce disambiguate) (goals)
       case reduction of
 
         TreeProgress
-          -> solve' (term, goals)
+          -> solve' False (term, goals)
 
         TreeSolved (resolve, normalise) crumbs2
           -> do
@@ -109,10 +112,11 @@ solve system reduce term = do
             term <- rewrite term
             goals <- traverse rewriteGoal goals
             (system . assumptions) %%= (\as -> Set.fromList <$> (traverse (recurseTerm rewrite) (Set.toList as)))
-            solve' (term, goals)
+            solve' False (term, goals)
 
-        TreeSkip -- Shouldn't happen...
-          -> throw ("!!! failed to solve constraints !!!" :: String)
+        TreeSkip
+          | disambiguate -> throw ("!!! failed to solve constraints !!!" :: String) -- TODO need a better error message here
+          | otherwise    -> solve' True (term, goals)
 
 
 data TreeReduction c = TreeContradiction [c] | TreeProgress | TreeSolved Solution (Crumbs c) | TreeSkip

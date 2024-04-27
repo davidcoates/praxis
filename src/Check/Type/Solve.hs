@@ -31,8 +31,8 @@ run term = do
   term <- solve tySystem reduce term
   tryDefault term
 
-reduce :: Reducer TyConstraint
-reduce = \case
+reduce :: Disambiguating (Reducer TyConstraint)
+reduce disambiguate = \case
 
   Copy t -> do
     r <- canCopy t
@@ -45,7 +45,7 @@ reduce = \case
 
   TEq (_ :< TyUni x) t -> if x `Set.member` tyUnis t then return Contradiction else solved (x `is` view value t) -- Note: Occurs check here
 
-  TEq t1 t2@(_ :< TyUni _) -> reduce (t2 `TEq` t1) -- handle by the above case
+  TEq t1 t2@(_ :< TyUni _) -> reduce disambiguate (t2 `TEq` t1) -- handle by the above case
 
   TEq (_ :< TyApply (_ :< TyCon n1) t1) (_ :< TyApply (_ :< TyCon n2) t2)
     | n1 == n2 -> return $ Subgoals [ TEq t1 t2 ]
@@ -59,7 +59,7 @@ reduce = \case
 
   TEq t1@(_ :< TyApply (_ :< TyView _) t1') t2 -> return $ Subgoals [ TEq (stripOuterViews t1') (stripOuterViews t2), TOpEq t1 t2 ]
 
-  TEq t1 t2@(_ :< TyApply (_:< TyView _) _) -> reduce (t2 `TEq` t1) -- handled by the above case
+  TEq t1 t2@(_ :< TyApply (_:< TyView _) _) -> reduce disambiguate (t2 `TEq` t1) -- handled by the above case
 
   TOpEq t1 t2 | outerViews t1 == outerViews t2 -> return Tautology
 
@@ -91,6 +91,14 @@ reduce = \case
       -> return Tautology
     | otherwise
       -> return Skip
+
+  Class (_ :< cls) | disambiguate -> case cls of
+    TyApply (_ :< TyCon "Integral") t
+      -> return $ Subgoals [ TEq t (TyCon "I32" `as` phantom KindType) ]
+    _
+      -> return Contradiction
+
+  Class _ | not disambiguate -> return Skip -- TODO
 
   _ -> return Contradiction
 

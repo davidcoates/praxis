@@ -27,14 +27,14 @@ run term = do
   term <- solve kindSystem reduce term
   tryDefault term
 
-reduce :: Reducer KindConstraint
-reduce = \case
+reduce :: Disambiguating (Reducer KindConstraint)
+reduce disambiguate = \case
 
   KEq k1 k2 | k1 == k2 -> return Tautology
 
   KEq (_ :< KindUni x) k -> if x `Set.member` kindUnis k then return Contradiction else solved (x `is` view value k) -- Note: Occurs check here
 
-  KEq k1 k2@(_ :< KindUni _) -> reduce (k2 `KEq` k1) -- handled by the above case
+  KEq k1 k2@(_ :< KindUni _) -> reduce disambiguate (k2 `KEq` k1) -- handled by the above case
 
   KEq (_ :< KindFun k1 k2) (_ :< KindFun l1 l2) -> return $ Subgoals [ KEq k1 l1, KEq k2 l2 ]
 

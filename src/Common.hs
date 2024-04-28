@@ -7,6 +7,16 @@ module Common
   , module Common.Tag
 
   , Name
+  , I8
+  , I16
+  , I32
+  , I64
+  , ISize
+  , U8
+  , U16
+  , U32
+  , U64
+  , USize
 
   , asum
   , series
@@ -65,11 +75,24 @@ import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import           Control.Monad.Trans.State  (StateT (..))
 import           Data.Foldable              (fold)
 import           Data.Functor.Identity      (Identity (..))
+import           Data.Int
 import           Data.List                  (intercalate, intersperse)
 import           Data.Traversable           (sequenceA)
 import           Data.Void                  (Void, absurd)
+import           Data.Word
 
-type Name = String
+type Name  = String
+type I8    = Int8
+type I16   = Int16
+type I32   = Int32
+type I64   = Int64
+type ISize = Int64
+type U8    = Word8
+type U16   = Word16
+type U32   = Word32
+type U64   = Word64
+type USize = Word64
+
 
 -- | asum is similar to msum but works over an applicative (not to be confused with Data.Foldable.asum)
 asum :: (Monoid a, Applicative f, Traversable t) => t (f a) -> f a

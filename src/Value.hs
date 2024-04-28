@@ -14,12 +14,8 @@ import                          Term             (Specialisation)
 import                          Common
 import                          Data.Array.IO    (IOArray)
 import                qualified Data.Array.IO    as ArrayIO
-import                          Data.Int
-import                          Data.Word
 import                          System.IO.Unsafe (unsafePerformIO)
 
-type ISize = Int64
-type USize = Word64
 
 type Array = IOArray USize Value
 
@@ -29,18 +25,18 @@ data Value = Array Array
            | Data Name Value
            | Enum Name
            | Fun (Value -> Praxis Value)
-           | I8 Int8
-           | I16 Int16
-           | I32 Int32
-           | I64 Int64
+           | I8 I8
+           | I16 I16
+           | I32 I32
+           | I64 I64
            | ISize ISize
            | Pair Value Value
            | Polymorphic (Specialisation -> Value)
            | String String
-           | U8 Word8
-           | U16 Word16
-           | U32 Word32
-           | U64 Word64
+           | U8 U8
+           | U16 U16
+           | U32 U32
+           | U64 U64
            | USize USize
            | Unit
 

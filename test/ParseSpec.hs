@@ -110,6 +110,6 @@ ifthenelse_0 : ( Bool , I32 , I32 ) -> I32 = \ ( c_0 , a_2 , b_2 ) -> if c_0 the
 |]
 
     it "evaluates" $ do
-      interpret program "False <-> True <?> 1 <:> 0" `shouldReturn` "0"
+      evaluate program "False <-> True <?> 1 <:> 0" `shouldReturn` "0"
 
 

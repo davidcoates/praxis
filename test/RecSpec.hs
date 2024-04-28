@@ -34,35 +34,14 @@ rec
     [I64] n_0 -> [( I64 , I64 ) -> I64] multiply ( [I64] n_0 , [I64 -> I64] fac_0 [( I64 , I64 ) -> I64] subtract ( [I64] n_0 , [I64] 1 ) )
 |]
 
-    it "evaluates" $ do
-      interpret program "fac 0"  `shouldReturn` "1"
-      interpret program "fac 5"  `shouldReturn` "120"
-      interpret program "fac 15" `shouldReturn` "1307674368000"
-
     it "translates" $ translate program `shouldReturn` trim [r|
-auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<I64(I64)>> {
-  return std::tuple{
-    /* 2:1 */
-    std::function([&](I64 _temp_2){
-      auto [fac_0] = _temp_1(_temp_1);
-      if (_temp_2 == static_cast<I64>(0)) {
-        return static_cast<I64>(1);
-      }
-      auto n_0 = std::move(_temp_2);
-      return std::move(multiply).template operator()<I64>()(std::make_pair(std::move(n_0), std::move(fac_0)(std::move(subtract).template operator()<I64>()(std::make_pair(std::move(n_0), static_cast<I64>(1))))));
-      throw praxis::CaseFail("3:9");
-    })
-  };
-};
-auto [fac_0] = _temp_0(_temp_0);
+TODO
 |]
 
-    it "compiles" $ compile program `shouldReturn` True
-
-    it "runs" $ do
-      compileAndRun program "fac 0"  `shouldReturn` "1"
-      compileAndRun program "fac 5"  `shouldReturn` "120"
-      compileAndRun program "fac 15" `shouldReturn` "1307674368000"
+    it "evaluates" $ do
+      evaluate program "fac 0"  `shouldReturn` "1"
+      evaluate program "fac 5"  `shouldReturn` "120"
+      evaluate program "fac 15" `shouldReturn` "1307674368000"
 
 
 
@@ -100,41 +79,15 @@ rec
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
-auto _temp_0 = [](auto _temp_1) -> std::tuple<std::function<Bool(I32)>, std::function<Bool(I32)>> {
-  return std::tuple{
-    /* 2:1 */
-    std::function([&](I32 _temp_2){
-      auto [is_even_0, is_odd_0] = _temp_1(_temp_1);
-      if (_temp_2 == static_cast<I32>(0)) {
-        return true;
-      }
-      auto n_0 = std::move(_temp_2);
-      return std::move(is_odd_0)(std::move(subtract).template operator()<I32>()(std::make_pair(std::move(n_0), static_cast<I32>(1))));
-      throw praxis::CaseFail("3:13");
-    }),
-    /* 2:1 */
-    std::function([&](I32 _temp_3){
-      auto [is_even_0, is_odd_0] = _temp_1(_temp_1);
-      if (_temp_3 == static_cast<I32>(0)) {
-        return false;
-      }
-      auto n_1 = std::move(_temp_3);
-      return std::move(is_even_0)(std::move(subtract).template operator()<I32>()(std::make_pair(std::move(n_1), static_cast<I32>(1))));
-      throw praxis::CaseFail("7:12");
-    })
-  };
-};
-auto [is_even_0, is_odd_0] = _temp_0(_temp_0);
+TODO
 |]
 
-    it "compiles" $ compile program `shouldReturn` True
-
     it "evaluates" $ do
-      interpret program "is_even 0" `shouldReturn` "True"
-      interpret program "is_even 1" `shouldReturn` "False"
-      interpret program "is_even 2" `shouldReturn` "True"
-      interpret program "is_even 3" `shouldReturn` "False"
-      interpret program "is_odd 0" `shouldReturn` "False"
-      interpret program "is_odd 1" `shouldReturn` "True"
-      interpret program "is_odd 2" `shouldReturn` "False"
-      interpret program "is_odd 3" `shouldReturn` "True"
+      evaluate program "is_even 0" `shouldReturn` "True"
+      evaluate program "is_even 1" `shouldReturn` "False"
+      evaluate program "is_even 2" `shouldReturn` "True"
+      evaluate program "is_even 3" `shouldReturn` "False"
+      evaluate program "is_odd 0" `shouldReturn` "False"
+      evaluate program "is_odd 1" `shouldReturn` "True"
+      evaluate program "is_odd 2" `shouldReturn` "False"
+      evaluate program "is_odd 3" `shouldReturn` "True"

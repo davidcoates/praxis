@@ -14,7 +14,6 @@ module Praxis
   , IEnv(..)
   , KEnv(..)
   , TEnv(..)
-  , VEnv(..)
   , System(..)
 
   -- | Operators
@@ -58,7 +57,6 @@ module Praxis
   , iEnv
   , kEnv
   , tEnv
-  , vEnv
   , rewriteMap
   , tySynonyms
   , tySystem
@@ -107,7 +105,6 @@ import qualified Env.LEnv                     as LEnv
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
-import           Value
 
 data Flags = Flags
   { _debug  :: Bool
@@ -132,8 +129,6 @@ type IEnv = Env (Map Name (Maybe (Annotated Type) -> Instance))
 type KEnv = Env (Annotated Kind)
 
 type TEnv = LEnv (Annotated QType)
-
-type VEnv = Env Value
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix
@@ -173,7 +168,6 @@ data PraxisState = PraxisState
   , _iEnv       :: IEnv                -- ^ Instance environment
   , _kEnv       :: KEnv                -- ^ Kind environment
   , _tEnv       :: TEnv                -- ^ Type environment
-  , _vEnv       :: VEnv                -- ^ Value environment for interpreter
   -- TODO encapsulate within desugarer?
   , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
   , _rewriteMap :: RewriteMap
@@ -205,7 +199,6 @@ emptyState = PraxisState
   , _iEnv         = Env.empty
   , _kEnv         = Env.empty
   , _tEnv         = LEnv.empty
-  , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
   , _tySystem     = emptySystem

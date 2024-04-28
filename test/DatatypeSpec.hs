@@ -26,8 +26,8 @@ datatype unboxed Either [ a_0 , b_0 ] = [forall a_0 b_0 . a_0 -> Either [ a_0 , 
 |]
 
     it "evaluates" $ do
-      interpret program "Left 0 : Either [I32, ()]"  `shouldReturn` "Left 0"
-      interpret program "Right 1 : Either [(), I32]" `shouldReturn` "Right 1"
+      evaluate program "Left 0 : Either [I32, ()]"  `shouldReturn` "Left 0"
+      evaluate program "Right 1 : Either [(), I32]" `shouldReturn` "Right 1"
 
 
 
@@ -56,7 +56,7 @@ unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , 
 id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
 
-    it "evaluates" $ interpret program "(unbox_fun id_fun ()) 4"  `shouldReturn` "4"
+    it "evaluates" $ evaluate program "(unbox_fun id_fun ()) 4"  `shouldReturn` "4"
 
 
 
@@ -71,20 +71,7 @@ datatype unboxed Unboxed a_0 = [forall a_0 . a_0 -> Unboxed a_0] Unboxed a_0
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
-template<typename a_0>
-struct Unboxed : std::variant<a_0> {
-  using std::variant<a_0>::variant;
-  template<size_t index>
-  inline const auto& get() const { return std::get<index>(*this); }
-  template<size_t index>
-  inline auto& get() { return std::get<index>(*this); }
-};
-static constexpr size_t _idxUnboxed = 0;
-auto _conUnboxed = []<typename a_0>(){
-  return std::function([](a_0&& arg) -> Unboxed<a_0> {
-    return Unboxed<a_0>(std::in_place_index<_idxUnboxed>, std::move(arg));
-  });
-};
+TODO
 |]
 
 
@@ -99,24 +86,7 @@ datatype boxed Boxed a_0 = [forall a_0 . a_0 -> Boxed a_0] Boxed a_0
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
-template<typename a_0>
-struct _implBoxed;
-template<typename a_0>
-using Boxed = praxis::Boxed<_implBoxed<a_0>>;
-template<typename a_0>
-struct _implBoxed : std::variant<a_0> {
-  using std::variant<a_0>::variant;
-  template<size_t index>
-  inline const auto& get() const { return std::get<index>(*this); }
-  template<size_t index>
-  inline auto& get() { return std::get<index>(*this); }
-};
-static constexpr size_t _idxBoxed = 0;
-auto _conBoxed = []<typename a_0>(){
-  return std::function([](a_0&& arg) -> Boxed<a_0> {
-    return praxis::mkBoxed<_implBoxed<a_0>>(std::in_place_index<_idxBoxed>, std::move(arg));
-  });
-};
+TODO
 |]
 
 
@@ -175,100 +145,21 @@ rec
     [& r_0 List I32] Cons ( [I32] x_1 , [& r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add ( [I32] x_1 , [& r_0 List I32 -> I32] sum_0 [& r_0 List I32] xs_1 )
 |]
 
+    it "translates" $ translate program `shouldReturn` trim [r|
+TODO
+|]
+
     it "evaluates" $ do
 
-      interpret program [r|
+      evaluate program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
   sum &xs
 |] `shouldReturn` "6"
 
-      interpret program [r|
+      evaluate program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
   let ys = (map (\x -> x * 2)) &xs
   sum &ys
 |] `shouldReturn` "12"
-
-
-    it "translates" $ translate program `shouldReturn` trim [r|
-template<typename a_0>
-struct _implList;
-template<typename a_0>
-using List = praxis::Boxed<_implList<a_0>>;
-template<typename a_0>
-struct _implList : std::variant<std::monostate, std::pair<a_0, List<a_0>>> {
-  using std::variant<std::monostate, std::pair<a_0, List<a_0>>>::variant;
-  template<size_t index>
-  inline const auto& get() const { return std::get<index>(*this); }
-  template<size_t index>
-  inline auto& get() { return std::get<index>(*this); }
-};
-static constexpr size_t _idxNil = 0;
-static constexpr size_t _idxCons = 1;
-auto _conNil = []<typename a_0>(){
-  return std::function([](std::monostate&& arg) -> List<a_0> {
-    return praxis::mkBoxed<_implList<a_0>>(std::in_place_index<_idxNil>, std::move(arg));
-  });
-};
-auto _conCons = []<typename a_0>(){
-  return std::function([](std::pair<a_0, List<a_0>>&& arg) -> List<a_0> {
-    return praxis::mkBoxed<_implList<a_0>>(std::in_place_index<_idxCons>, std::move(arg));
-  });
-};
-auto _temp_0 = [](auto _temp_1){
-  return std::tuple{
-    /* 4:1 */
-    [&]<praxis::View v_0, typename a_1, typename b_0>(){
-      return std::function([&](std::function<b_0(praxis::apply<v_0, a_1>)> _temp_2){
-        auto [map_0] = _temp_1(_temp_1);
-        auto f_0 = std::move(_temp_2);
-        return std::function([&](praxis::apply<v_0, List<a_1>> _temp_3){
-          if (_temp_3.index() == _idxNil) {
-            auto _temp_4 = _temp_3.template get<_idxNil>();
-            return _conNil.template operator()<b_0>()(std::monostate{});
-          }
-          if (_temp_3.index() == _idxCons) {
-            auto _temp_5 = _temp_3.template get<_idxCons>();
-            auto _temp_6 = praxis::first(_temp_5);
-            auto _temp_7 = praxis::second(_temp_5);
-            auto x_0 = std::move(_temp_6);
-            auto xs_0 = std::move(_temp_7);
-            return _conCons.template operator()<b_0>()(std::make_pair(std::move(f_0)(std::move(x_0)), std::move(map_0).template operator()<v_0, a_1, b_0>()(std::move(f_0))(std::move(xs_0))));
-          }
-          throw praxis::CaseFail("6:11");
-        });
-        throw praxis::BindFail("6:7");
-      });
-    }
-  };
-};
-auto [map_0] = _temp_0(_temp_0);
-auto _temp_8 = [](auto _temp_9) -> std::tuple<std::function<I32(praxis::apply<praxis::View::REF, List<I32>>)>> {
-  return std::tuple{
-    /* 10:1 */
-    std::function([&](praxis::apply<praxis::View::REF, List<I32>> _temp_10){
-      auto [sum_0] = _temp_9(_temp_9);
-      if (_temp_10.index() == _idxNil) {
-        auto _temp_11 = _temp_10.template get<_idxNil>();
-        return static_cast<I32>(0);
-      }
-      if (_temp_10.index() == _idxCons) {
-        auto _temp_12 = _temp_10.template get<_idxCons>();
-        auto _temp_13 = praxis::first(_temp_12);
-        auto _temp_14 = praxis::second(_temp_12);
-        auto x_1 = std::move(_temp_13);
-        auto xs_1 = std::move(_temp_14);
-        return std::move(add).template operator()<I32>()(std::make_pair(std::move(x_1), std::move(sum_0)(std::move(xs_1))));
-      }
-      throw praxis::CaseFail("12:9");
-    })
-  };
-};
-auto [sum_0] = _temp_8(_temp_8);
-|]
-
-    it "compiles" $ compile program `shouldReturn` True
-
-    it "runs" $ compileAndRun program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in sum &xs" `shouldReturn` "6"
-

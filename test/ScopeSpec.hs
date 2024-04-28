@@ -135,5 +135,5 @@ h_0 = \ [I32] x_3 -> [I32] [I32 -> I32] f_3 [I32] x_3 where
 |]
 
     it "evaluates" $ do
-      interpret program "f 5" `shouldReturn` "5"
-      interpret program "g 5" `shouldReturn` "120"
+      evaluate program "f 5" `shouldReturn` "5"
+      evaluate program "g 5" `shouldReturn` "120"

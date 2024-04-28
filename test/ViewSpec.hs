@@ -27,20 +27,8 @@ view_0 : forall ? v_0 a_0 b_0 . ? v_0 ( a_0 , b_0 ) -> ( ? v_0 b_0 , ? v_0 a_0 )
 |]
 
     it "translates" $ translate program `shouldReturn` trim [r|
-/* 2:1 */
-auto view_0 = []<praxis::View v_0, typename a_0, typename b_0>(){
-  return std::function([&](praxis::apply<v_0, std::pair<a_0, b_0>> _temp_0){
-    auto _temp_1 = praxis::first(_temp_0);
-    auto _temp_2 = praxis::second(_temp_0);
-    auto x_0 = std::move(_temp_1);
-    auto y_0 = std::move(_temp_2);
-    return std::make_pair(std::move(y_0), std::move(x_0));
-    throw praxis::BindFail("3:6");
-  });
-};
+TODO
 |]
-
-    it "compiles" $ compile program `shouldReturn` True
 
 
 
@@ -69,7 +57,7 @@ box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
     -- TODO should also try with ? instead of &
     it "evaluates" $ do
 
-      interpret program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
+      evaluate program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
 type check error: unable to satisfy: & ^v3 List ^t4 ?= List ^t4
   | derived from: ( ^t4 , List ^t4 ) -> List ^t4 = ( ^t4 , List ^t4 ) -> & ^v3 List ^t4
   | primary cause: application [( ^t4 , List ^t4 ) -> List ^t4] Cons ($) ( [^t4] 1 , [( ^t6 , List ^t6 ) -> List ^t6] Cons ( [^t7] 2 , [( ^t9 , List ^t9 ) -> List ^t9] Cons ( [^t10] 3 , [( ) -> List ^t12] Nil [( )] ( ) ) ) ) at 1:10
@@ -78,7 +66,7 @@ type check error: unable to satisfy: & ^v3 List ^t4 ?= List ^t4
   | - application [& ^v3 List ^t4 -> Box [ & ^v3 , List ^t4 ]] Box ($) [& ^v3 List ^t4] xs_0 at 1:50
 |]
 
-      interpret program [r|
+      evaluate program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
   read xs in do

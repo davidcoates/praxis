@@ -7,12 +7,10 @@ import           Executors
 import           Inbuilts              (initialState)
 import           Praxis
 import           Term
-import           Value
 
 import           Control.Monad         (void, when)
 import           Data.List             (delete)
 import           System.Environment
-import           System.FilePath.Posix (dropExtension)
 import           System.IO
 
 main :: IO ()
@@ -70,24 +68,25 @@ parseOpts args = do
       Nothing   -> throw (pretty "missing file (interpret mode)")
 
 parse :: [String] -> Praxis ()
-parse xs = do
+parse xs = return () -- TODO
+{-
   mode <- parseOpts xs
   case mode of
     Interactive file -> do
       case file of
         Just file -> do
           text <- liftIO (readFile file)
-          interpretProgram text
+          evaluateProgram text
           repl
         Nothing   -> repl
     Interpret file -> do
       text <- liftIO (readFile file)
-      interpretProgram text
-      runMain
+      evaluateProgram text
     Compile file -> do
       text <- liftIO (readFile file)
       let outFile = dropExtension file
-      compileProgram text (Just outFile)
+      error "TODO" -- FIXME
+-}
 
 help :: Praxis a
 help = Praxis.abort helpStr where
@@ -97,13 +96,6 @@ help = Praxis.abort helpStr where
     , "-i interactive"
     , "-h help"
     , "-c compile" ]
-
-runMain :: Praxis ()
-runMain = do
-  requireMain
-  Just (Fun f) <- vEnv `uses` Env.lookup "main_0"
-  f Value.Unit
-  return ()
 
 forever :: Praxis a -> Praxis a
 forever p = try p >> forever p
@@ -116,6 +108,6 @@ repl = forever $ do
 eval :: String -> Praxis ()
 eval s = do
   -- TODO fix this so we can have declarations
-  v <- interpretExp s
+  v <- evaluateExp s
   liftIO $ print v
 

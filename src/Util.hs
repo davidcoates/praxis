@@ -3,7 +3,15 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators       #-}
 
-module Util where
+module Util
+  ( check
+  , parse
+  , parseAs
+  , translate
+  , evaluate
+
+  , trim
+  ) where
 
 import qualified Check      (check)
 import           Common
@@ -39,10 +47,10 @@ parseAs :: forall a. Term a => I a -> String -> IO String
 parseAs _ term = runPretty (Parse.parse term :: Praxis (Annotated a))
 
 -- Helper for interperting a program followed by an expression and printing the resulting value
-interpret :: String -> String -> IO String
-interpret program exp = runShow $ do
-  interpretProgram program
-  interpretExp exp
+evaluate :: String -> String -> IO String
+evaluate program exp = runShow $ do
+  evaluateProgram program
+  evaluateExp exp
 
 translate :: String -> IO String
 translate program = runWith id (translateProgram program)
@@ -53,18 +61,3 @@ trim = rtrim . ltrim where
     ('\n':s) -> ltrim s
     s        -> s
   rtrim = reverse . ltrim . reverse
-
-compile :: String -> IO Bool
-compile program = do
-  (result, _) <- runPraxis (compileProgram program Nothing) initialState
-  case result of
-    Left error   -> return False
-    Right result -> return True
-
-compileAndRun :: String -> String -> IO String
-compileAndRun program exp  = do
-  let program' = program ++ "\n" ++ "main : () -> ()\n" ++ "main () = print (" ++ exp ++ ")"
-  (result, _) <- runPraxis (compileAndRunProgram program') initialState
-  case result of
-    Left error   -> return error
-    Right result -> return (trim result)

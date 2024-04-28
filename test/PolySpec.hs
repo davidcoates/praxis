@@ -26,26 +26,16 @@ swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( a_0 , b_0 ) -> ( 
 swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b_0 ) -> ( [b_0] b_0 , [a_0] a_0 )
 |]
 
-    it "evaluates" $ do
-      interpret program "swap (0, 1)"      `shouldReturn` "(1, 0)"
-      interpret program "swap (True, 1)"   `shouldReturn` "(1, True)"
-      interpret program "swap (1, 2, 3)"   `shouldReturn` "((2, 3), 1)"
-      interpret program "swap ((2, 3), 1)" `shouldReturn` "(1, (2, 3))"
-      interpret program "swap (\"abc\", 0)" `shouldReturn` "(0, \"abc\")"
-
     it "translates" $ translate program `shouldReturn` trim [r|
-/* 2:1 */
-auto swap_0 = []<typename a_0, typename b_0>(){
-  return std::function([&](std::pair<a_0, b_0> _temp_0){
-    auto _temp_1 = praxis::first(_temp_0);
-    auto _temp_2 = praxis::second(_temp_0);
-    auto a_0 = std::move(_temp_1);
-    auto b_0 = std::move(_temp_2);
-    return std::make_pair(std::move(b_0), std::move(a_0));
-    throw praxis::BindFail("3:6");
-  });
-};
+TODO
 |]
+
+    it "evaluates" $ do
+      evaluate program "swap (0, 1)"      `shouldReturn` "(1, 0)"
+      evaluate program "swap (True, 1)"   `shouldReturn` "(1, True)"
+      evaluate program "swap (1, 2, 3)"   `shouldReturn` "((2, 3), 1)"
+      evaluate program "swap ((2, 3), 1)" `shouldReturn` "(1, (2, 3))"
+      evaluate program "swap (\"abc\", 0)" `shouldReturn` "(0, \"abc\")"
 
 
 
@@ -65,5 +55,5 @@ copy_0 : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x
 |]
 
     it "evaluates" $ do
-      interpret program "copy 0"         `shouldReturn` "(0, 0)"
-      interpret program "copy (0, True)" `shouldReturn` "((0, True), (0, True))"
+      evaluate program "copy 0"         `shouldReturn` "(0, 0)"
+      evaluate program "copy (0, True)" `shouldReturn` "((0, True), (0, True))"

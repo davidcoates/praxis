@@ -30,6 +30,8 @@ dependencies:
 - terminal-size
 - raw-strings-qq
 - mtl >= 2.2.2
+- llvm-codegen
+- text
 
 library:
   source-dirs: src

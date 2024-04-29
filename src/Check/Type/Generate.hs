@@ -265,8 +265,6 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
         _                    -> throwAt src ("illegal non-term in recursive block" :: String)
 
 
-  DeclSyn name t -> return $ DeclSyn name t
-
   DeclVar name sig exp -> do
 
     case sig of

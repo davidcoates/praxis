@@ -105,15 +105,8 @@ operator (_ <?> _ <:> _) = ifthenelse where
 
     it "parses" $ parse program `shouldReturn` trim [r|
 implies_0 : ( Bool , Bool ) -> Bool = \ ( a_0 , b_0 ) -> or ( b_0 , not a_0 )
-operator ( _ --> _ ) = implies_0
 iff_0 : ( Bool , Bool ) -> Bool = \ ( a_1 , b_1 ) -> or ( and ( a_1 , b_1 ) , and ( not a_1 , not b_1 ) )
-operator ( _ <-> _ ) = iff_0 where
-  precedence
-    below ( _ --> _ )
 ifthenelse_0 : ( Bool , I32 , I32 ) -> I32 = \ ( c_0 , a_2 , b_2 ) -> if c_0 then a_2 else b_2
-operator ( _ <?> _ <:> _ ) = ifthenelse_0 where
-  precedence
-    below ( _ <-> _ )
 |]
 
     it "evaluates" $ do

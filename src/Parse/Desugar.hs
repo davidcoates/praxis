@@ -227,7 +227,7 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
     opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
 
     decls <- desugarDecls decls
-    return (a :< DeclOp op name rules : decls)
+    return decls
 
 
   DeclRec recDecls -> do
@@ -246,7 +246,7 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
     ty <- desugar ty
     tySynonyms %= Map.insert name ty
     decls <- desugarDecls decls
-    return (a :< DeclSyn name ty : decls)
+    return decls
 
 
 -- TODO check for overlapping patterns?

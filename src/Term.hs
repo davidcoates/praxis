@@ -92,7 +92,7 @@ data DeclType = DeclTypeData DataMode Name (Maybe (Annotated TyPat)) [Annotated 
   deriving  (Eq, Ord)
 
 data Decl = DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
-          | DeclOp (Annotated Op) Name (Annotated OpRules)
+          | DeclOp (Annotated Op) Name (Annotated OpRules) -- ^ Parsing only
           | DeclRec [Annotated Decl]
           | DeclSig Name (Annotated QType) -- ^ Parsing only
           | DeclSyn Name (Annotated Type) -- ^ Parsing only

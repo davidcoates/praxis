@@ -233,6 +233,3 @@ rewriteDecl ((src, a) :< decl) = ((src, a) :<) <$> case decl of
         Just sig -> saveTyVarMap (addRewriteFromQType sig >> rewriteDeclVar' decl)
       rewriteDeclVar' :: Decl -> Praxis Decl
       rewriteDeclVar' (DeclVar name sig exp) = DeclVar <$> rewriteVar name <*> traverse rewrite sig <*> rewriteExp exp
-
-  DeclOp op name opRules -> (\name -> DeclOp op name opRules) <$> rewriteVar name
-

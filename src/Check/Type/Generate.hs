@@ -290,6 +290,7 @@ generateInteger :: Source -> Integer -> Praxis (Annotated Type)
 generateInteger src n = do
   t <- freshTyUni
   require $ (src, TyReasonIntegerLiteral n) :< integral t
+  require $ (src, TyReasonIntegerLiteral n) :< HoldsInteger n t
   return $ t
 
 generateExp :: Annotated Exp -> Praxis (Annotated Exp)

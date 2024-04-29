@@ -210,6 +210,7 @@ data Kind = KindUni Name
 
 data TyConstraint = Class (Annotated Type)
                   | Copy (Annotated Type)
+                  | HoldsInteger Integer (Annotated Type)
                   | NoCopy (Annotated Type)
                   | RefFree Name (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)

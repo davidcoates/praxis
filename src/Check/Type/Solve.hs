@@ -1,5 +1,6 @@
 {-# LANGUAGE ImpredicativeTypes   #-}
 {-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -99,6 +100,22 @@ reduce disambiguate = \case
       -> return Contradiction
 
   Class _ | not disambiguate -> return Skip -- TODO
+
+  HoldsInteger n (_ :< t) -> case t of
+    TyCon "I8"    -> checkBounds n (undefined :: I8)
+    TyCon "I16"   -> checkBounds n (undefined :: I16)
+    TyCon "I32"   -> checkBounds n (undefined :: I32)
+    TyCon "I64"   -> checkBounds n (undefined :: I64)
+    TyCon "ISize" -> checkBounds n (undefined :: ISize)
+    TyCon "U8"    -> checkBounds n (undefined :: U8)
+    TyCon "U16"   -> checkBounds n (undefined :: U16)
+    TyCon "U32"   -> checkBounds n (undefined :: U32)
+    TyCon "U64"   -> checkBounds n (undefined :: U64)
+    TyCon "USize" -> checkBounds n (undefined :: USize)
+    _             -> return Skip
+    where
+      checkBounds :: forall a. (Integral a, Bounded a) => Integer -> a -> Praxis (Reduction TyConstraint)
+      checkBounds n _ = if toInteger (minBound :: a) <= n && n <= toInteger (maxBound :: a) then return Tautology else return Contradiction
 
   _ -> return Contradiction
 

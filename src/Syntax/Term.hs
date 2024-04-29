@@ -194,9 +194,16 @@ rightWithSep s _P p = Prism f g <$> annotated p <*> (s *> (_Just <$> annotated (
     Just (x, y) -> Just (x, Just y)
     Nothing     -> Nothing
 
+integer :: Syntax f => f Integer
+integer = match f (Token.Lit . Integer) where
+  f = \case
+    Token.Lit (Integer n) -> Just n
+    _                     -> Nothing
+
 tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = _Class <$> annotated ty <|>
                _Copy <$> reservedCon "Copy" *> annotated ty <|>
+               unparseable (_HoldsInteger <$> integer <*> reservedSym "∈" *> annotated ty) <|>
                unparseable (_NoCopy <$> reservedCon "NoCopy" *> annotated ty) <|>
                unparseable (_RefFree <$> varId <*> reservedId "ref-free" *> annotated ty) <|>
                unparseable (_TEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>

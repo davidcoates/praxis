@@ -120,14 +120,14 @@ sign n = switch
 
     it "parses" $ parse program `shouldReturn` trim [r|
 sign_0 : I32 -> I32 = \ n_0 -> switch
-  lt ( n_0 , 0 ) -> negate 1
+  lt ( n_0 , 0 ) -> -1
   eq ( n_0 , 0 ) -> 0
   gt ( n_0 , 0 ) -> 1
 |]
 
     it "type checks" $ check program `shouldReturn` trim [r|
 sign_0 : I32 -> I32 = \ [I32] n_0 -> [I32] switch
-  [( I32 , I32 ) -> Bool] lt ( [I32] n_0 , [I32] 0 ) -> [I32 -> I32] negate [I32] 1
+  [( I32 , I32 ) -> Bool] lt ( [I32] n_0 , [I32] 0 ) -> [I32] -1
   [( I32 , I32 ) -> Bool] eq ( [I32] n_0 , [I32] 0 ) -> [I32] 0
   [( I32 , I32 ) -> Bool] gt ( [I32] n_0 , [I32] 0 ) -> [I32] 1
 |]
@@ -136,10 +136,11 @@ sign_0 : I32 -> I32 = \ [I32] n_0 -> [I32] switch
       interpret program "sign 0"    `shouldReturn` "0"
       interpret program "sign 10"   `shouldReturn` "1"
       interpret program "sign (-5)" `shouldReturn` "-1"
-      interpret program "sign -5"   `shouldReturn` trim [r|
+      interpret program "sign -5"   `shouldReturn` "-1"
+      interpret program "sign - 5"  `shouldReturn` trim [r|
 type check error: unable to satisfy: I32 -> I32 = I32
   | derived from: Integral ( I32 -> I32 )
-  | primary cause: integer literal 5 at 1:7
+  | primary cause: integer literal 5 at 1:8
   | secondary cause: application [( I32 -> I32 , I32 -> I32 ) -> I32 -> I32] subtract ($) ( [I32 -> I32] sign_0 , [I32 -> I32] 5 ) at 1:1
 |]  -- Note: Parses as "sign - 5" (binary subtract)
 
@@ -149,7 +150,7 @@ auto sign_0 = std::function([](I32 _temp_0){
   auto n_0 = std::move(_temp_0);
   return [&](){
     if (std::move(lt).template operator()<I32>()(std::make_pair(std::move(n_0), static_cast<I32>(0)))) {
-      return std::move(negate).template operator()<I32>()(static_cast<I32>(1));
+      return static_cast<I32>(-1);
     }
     if (std::move(eq).template operator()<I32>()(std::make_pair(std::move(n_0), static_cast<I32>(0)))) {
       return static_cast<I32>(0);

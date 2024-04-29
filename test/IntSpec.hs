@@ -32,8 +32,6 @@ type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
   | primary cause: integer literal |] <> number <> [r| at 1:5
   | secondary cause: user-supplied signature at 1:5|]
 
-    -- TODO underflows (the minus sign needs to be parsed as part of the literal)
-    {-
     let
       underflows =
         [ ("-1", "U8")
@@ -50,7 +48,4 @@ type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
       it (number ++ " underflows " ++ ty) $ check ("x = " ++ number ++ " : " ++ ty) `shouldReturn` trim [r|
 type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
   | primary cause: integer literal |] <> number <> [r| at 1:5
-  | secondary causes:
-  | - application [I64 -> I64] negate ($) [I64] |] <> number <> [r| at 1:6
-  | - user-supplied signature at 1:5|]
-    -}
+  | secondary cause: user-supplied signature at 1:5|]

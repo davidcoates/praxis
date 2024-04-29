@@ -46,10 +46,10 @@ token :: Tokeniser (Maybe Token)
 token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> semiSpecial <|> literal <|> conId <|> varId <|> varSym)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
-whitespace = newline <|> space <|> comment
-  where newline = match (`elem` "\r\n\f") *> pure ()
-        space = match isSpace *> pure ()
-        comment = satisfies 3 (\[a, b, c] -> a == '-' && b == '-' && not (isSymbol c)) *> until newline consume *> pure ()
+whitespace = newline <|> space <|> comment where
+  newline = match (`elem` "\r\n\f") *> pure ()
+  space = match isSpace *> pure ()
+  comment = satisfies 3 (\[a, b, c] -> a == '-' && b == '-' && not (isSymbol c)) *> until newline consume *> pure ()
 
 layout :: Tokeniser Token
 layout = Layout <$> match (`elem` "{};")
@@ -66,9 +66,13 @@ literal :: Tokeniser Token
 literal = intLiteral <|> charLiteral <|> stringLiteral
 
 intLiteral :: Tokeniser Token
-intLiteral = satisfy isDigit *> (Lit . Integer <$> decimal)
-  where decimal :: Tokeniser Integer
-        decimal = read <$> while (satisfy isDigit) consume
+intLiteral = (satisfy isDigit <|> satisfies 2 (\[sign, digit] -> sign `elem` "-+" && isDigit digit)) *> (Lit . Integer <$> decimal) where
+  decimal :: Tokeniser Integer
+  decimal = build <$> consume <*> while (satisfy isDigit) consume
+  build :: Char -> [Char] -> Integer
+  build '+' ns = read ns
+  build '-' ns = negate (read ns)
+  build n   ns = read (n:ns)
 
 charEscapeSeqs = [
   ('0', '\0'),

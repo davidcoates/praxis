@@ -208,13 +208,13 @@ data Kind = KindUni Name
           | KindType
   deriving (Eq, Ord)
 
-data TyConstraint = Class (Annotated Type)
-                  | Copy (Annotated Type)
-                  | HoldsInteger Integer (Annotated Type)
-                  | NoCopy (Annotated Type)
+data TyConstraint = HoldsInteger Integer (Annotated Type)
+                  | Instance (Annotated Type)
+                  | Not (Annotated TyConstraint) -- Note: Only Instance _ / Trivial _ are expected here.
                   | RefFree Name (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated Type) (Annotated Type)
+                  | Trivial (Annotated Type) -- Note: Only Clone _ / Dispose _ are expected here.
   deriving (Eq, Ord)
 
 infixl 8 `TEq`
@@ -272,7 +272,7 @@ data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
               | FunSignature Name
               | IfCondition
               | IfCongruence
-              | Instance Name
+              | InstanceOf Name
               | MultiAlias Name
               | MultiUse Name
               | Specialisation Name

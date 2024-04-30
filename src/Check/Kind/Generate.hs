@@ -11,15 +11,17 @@ module Check.Kind.Generate
 
 import           Check.Error
 import           Common
-import qualified Env.Env     as Env
+import qualified Env.Env         as Env
+import           Inbuilts        (clone, copy, dispose)
 import           Introspect
 import           Praxis
 import           Print
 import           Stage
 import           Term
 
-import           Data.List   (nub, sort)
-import qualified Data.Set    as Set
+import           Data.List       (nub, sort)
+import qualified Data.Map.Strict as Map
+import qualified Data.Set        as Set
 
 
 require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
@@ -181,31 +183,45 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
 
     let
-      deduceCopy :: Maybe (Annotated Type) -> Copy
-      deduceCopy arg' = case mode of
-        DataBoxed   -> CanNotCopy
-        DataRec     -> CanNotCopy
-        DataUnboxed -> case (arg, arg') of
-          (Nothing, Nothing)    -> CanCopyOnlyIf [ conType | (_ :< DataCon _ conType) <- alts ]
-          (Just arg, Just arg') -> CanCopyOnlyIf [ sub (embedSub f) conType | (_ :< DataCon _ conType) <- alts ] where
-            f :: Annotated Type -> Maybe (Annotated Type)
-            f (_ :< t) = case t of
-              TyVar n                   -> n `lookup` specialisedVars
-              TyView (_ :< ViewVar _ n) -> n `lookup` specialisedVars
-              _                         -> Nothing
-            specialisedVars = bindTyPat arg arg' where
-              bindTyPat :: Annotated TyPat -> Annotated Type -> [(Name, Annotated Type)]
-              bindTyPat (_ :< TyPatPack p1 p2) (_ :< TyPack t1 t2) = bindTyPat p1 t1 ++ bindTyPat p2 t2
-              bindTyPat (_ :< TyPatVar n) t = [(n, t)]
-              bindTyPat (_ :< TyPatViewVar _ n) t = [(n, t)]
+      deduce :: (Annotated Type -> Annotated Type) -> Maybe (Annotated Type) -> (Trivial, Instance)
+      deduce mkConstraint arg' = case (arg, arg') of
+        (Nothing, Nothing)    -> (IsTrivial, IsInstanceOnlyIf [ mkConstraint conType | (_ :< DataCon _ conType) <- alts ])
+        (Just arg, Just arg') -> (IsTrivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
+          f :: Annotated Type -> Maybe (Annotated Type)
+          f (_ :< t) = case t of
+            TyVar n                   -> n `lookup` specialisedVars
+            TyView (_ :< ViewVar _ n) -> n `lookup` specialisedVars
+            _                         -> Nothing
+          specialisedVars = bindTyPat arg arg' where
+            bindTyPat :: Annotated TyPat -> Annotated Type -> [(Name, Annotated Type)]
+            bindTyPat (_ :< TyPatPack p1 p2) (_ :< TyPack t1 t2) = bindTyPat p1 t1 ++ bindTyPat p2 t2
+            bindTyPat (_ :< TyPatVar n) t = [(n, t)]
+            bindTyPat (_ :< TyPatViewVar _ n) t = [(n, t)]
 
-    dtEnv %= Env.intro name deduceCopy
+      instances = case mode of
+        DataUnboxed -> Map.fromList
+          [ ("Clone", deduce clone)
+          , ("Dispose", deduce dispose)
+          , ("Copy", deduce copy)
+          ]
+        _ -> Map.fromList
+          [ ("Clone", deduce clone)
+          , ("Dispose", deduce dispose)
+          ]
+
+    iEnv %= Env.intro name instances
     return $ (src, Just k) :< DeclTypeData mode name arg alts
 
   DeclTypeEnum name alts -> do
     let k = phantom KindType
     introKind src name k
-    dtEnv %= Env.intro name (\Nothing -> CanCopy)
+    let
+      instances = Map.fromList
+        [ ("Copy",    \Nothing -> (IsTrivial, IsInstance))
+        , ("Clone",   \Nothing -> (IsTrivial, IsInstance))
+        , ("Dispose", \Nothing -> (IsTrivial, IsInstance))
+        ]
+    iEnv %= Env.intro name instances
     return $ (src, Just k) :< DeclTypeEnum name alts
 
 

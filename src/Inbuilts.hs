@@ -6,6 +6,9 @@
 module Inbuilts
   ( initialState
   , integral
+  , clone
+  , dispose
+  , copy
   ) where
 
 import           Common
@@ -19,12 +22,14 @@ import           Value
 
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import qualified Control.Monad.Trans.State as State (get)
+import           Data.Map.Strict           (Map)
+import qualified Data.Map.Strict           as Map
 import qualified Data.Set                  as Set
 import           Text.RawString.QQ
 
 -- Include inbuilt kinds
 initialState0 :: PraxisState
-initialState0 = set dtEnv initialDTEnv $ set kEnv initialKEnv $ emptyState
+initialState0 = set iEnv initialIEnv $ set kEnv initialKEnv $ emptyState
 
 -- Include inbuilts
 initialState1 :: PraxisState
@@ -177,27 +182,52 @@ inbuiltKinds =
   , ("Integral", kind "Type -> Constraint")
   ]
 
--- TODO very gross, should be replaced with instances in prelude
-integral :: Annotated Type -> TyConstraint
-integral t = Class (TyApply (TyCon "Integral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType)
+-- TODO quite gross, should be replaced with instances in prelude
+integral :: Annotated Type -> Annotated Type
+integral t = TyApply (TyCon "Integral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
 
-initialDTEnv :: DTEnv
-initialDTEnv = Env.fromList
-  [ ("Array",  \(Just _) -> CanNotCopy)
-  , ("Bool",   \Nothing  -> CanCopy)
-  , ("Char",   \Nothing  -> CanCopy)
-  , ("I8",     \Nothing  -> CanCopy)
-  , ("I16",    \Nothing  -> CanCopy)
-  , ("I32",    \Nothing  -> CanCopy)
-  , ("I64",    \Nothing  -> CanCopy)
-  , ("ISize",  \Nothing  -> CanCopy)
-  , ("U8",     \Nothing  -> CanCopy)
-  , ("U16",    \Nothing  -> CanCopy)
-  , ("U32",    \Nothing  -> CanCopy)
-  , ("U64",    \Nothing  -> CanCopy)
-  , ("USize",  \Nothing  -> CanCopy)
-  , ("String", \Nothing  -> CanNotCopy)
-  ]
+clone :: Annotated Type -> Annotated Type
+clone t = TyApply (TyCon "Clone" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+
+dispose :: Annotated Type -> Annotated Type
+dispose t = TyApply (TyCon "Dispose" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+
+copy :: Annotated Type -> Annotated Type
+copy t = TyApply (TyCon "Copy" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+
+initialIEnv :: IEnv
+initialIEnv = Env.fromList
+  [ ("Array", Map.fromList
+    [ ("Clone",   \(Just t) -> (IsNonTrivial, IsInstanceOnlyIf [clone t]))
+    , ("Dispose", \(Just t) -> (IsNonTrivial, IsInstanceOnlyIf [dispose t]))
+    ]
+    )
+  , ("Bool",  primitive)
+  , ("Char",  primitive)
+  , ("I8",    integral)
+  , ("I16",   integral)
+  , ("I32",   integral)
+  , ("I64",   integral)
+  , ("ISize", integral)
+  , ("U8",    integral)
+  , ("U16",   integral)
+  , ("U32",   integral)
+  , ("U64",   integral)
+  , ("USize", integral)
+  , ("String", Map.fromList
+    [ ("Clone",   \Nothing -> (IsNonTrivial, IsInstance))
+    , ("Dispose", \Nothing -> (IsNonTrivial, IsInstance))
+    ]
+    )
+  ] where
+    primitive = Map.fromList
+      [ ("Clone",   \Nothing -> (IsTrivial, IsInstance))
+      , ("Dispose", \Nothing -> (IsTrivial, IsInstance))
+      , ("Copy",    \Nothing -> (IsTrivial, IsInstance))
+      ]
+    integral = primitive `Map.union` Map.fromList
+      [ ("Integral", \Nothing -> (IsNonTrivial, IsInstance))
+      ]
 
 initialKEnv :: KEnv
 initialKEnv = Env.fromList inbuiltKinds
@@ -211,7 +241,7 @@ initialVEnv = Env.fromList (map (\(n, _, v) -> (n, v)) inbuilts)
 initialTySystem :: System TyConstraint
 initialTySystem = System
   { _requirements = []
-  , _assumptions = Set.fromList [ integral (TyCon n `as` phantom KindType) | n <- [ "I8", "I16", "I32", "I64", "ISize", "U8", "U16", "U32", "U64", "USize" ] ]
+  , _assumptions = Set.empty
   }
 
 -- TODO interfaces

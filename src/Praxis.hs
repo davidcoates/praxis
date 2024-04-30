@@ -10,8 +10,9 @@ module Praxis
 
   -- | State types
   , CEnv(..)
-  , Copy(..)
-  , DTEnv(..)
+  , Trivial(..)
+  , Instance(..)
+  , IEnv(..)
   , KEnv(..)
   , TEnv(..)
   , VEnv(..)
@@ -55,7 +56,7 @@ module Praxis
   , stage
   , opContext
   , cEnv
-  , dtEnv
+  , iEnv
   , kEnv
   , tEnv
   , vEnv
@@ -128,9 +129,11 @@ instance Show Fresh where
 
 type CEnv = Env (Annotated QType)
 
-data Copy = CanCopy | CanNotCopy | CanCopyOnlyIf [Annotated Type]
+data Trivial = IsTrivial | IsNonTrivial
 
-type DTEnv = Env (Maybe (Annotated Type) -> Copy)
+data Instance = IsInstance | IsInstanceOnlyIf [Annotated Type]
+
+type IEnv = Env (Map Name (Maybe (Annotated Type) -> (Trivial, Instance))) -- Note: Trivial is only needed for Clone / Dispose
 
 type KEnv = Env (Annotated Kind)
 
@@ -173,7 +176,7 @@ data PraxisState = PraxisState
   , _stage      :: Stage               -- ^ Current stage of compilation
   , _opContext  :: OpContext
   , _cEnv       :: CEnv                -- ^ Constructor environment
-  , _dtEnv      :: DTEnv               -- ^ DeclType environment
+  , _iEnv       :: IEnv                -- ^ Instance environment
   , _kEnv       :: KEnv                -- ^ Kind environment
   , _tEnv       :: TEnv                -- ^ Type environment
   , _vEnv       :: VEnv                -- ^ Value environment for interpreter
@@ -205,7 +208,7 @@ emptyState = PraxisState
   , _stage        = Unknown
   , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
   , _cEnv         = Env.empty
-  , _dtEnv        = Env.empty
+  , _iEnv         = Env.empty
   , _kEnv         = Env.empty
   , _tEnv         = LEnv.empty
   , _vEnv         = Env.empty

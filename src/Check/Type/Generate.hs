@@ -16,7 +16,7 @@ import           Common
 import           Env.Env       (Env (..))
 import qualified Env.Env       as Env
 import qualified Env.LEnv      as LEnv
-import           Inbuilts      (integral)
+import           Inbuilts      (copy, integral)
 import           Introspect
 import           Praxis
 import           Print
@@ -73,7 +73,7 @@ specialiseQType src name (_ :< Forall vs cs t) = do
   -- instead of at every call site.
   --
   -- Ideally this check would happen at the definition of the polymorphic term, but that's not so easy.
-  when (not (null vs)) $ require $ (src, Specialisation name) :< Copy t'
+  when (not (null vs)) $ require $ (src, Specialisation name) :< Instance (copy t')
   return (t', specialisation)
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
@@ -119,8 +119,8 @@ readVar src name = do
     Just entry -> do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
       tEnv %= LEnv.setRead name
-      requires [ (src, UnsafeRead name) :< Copy t | view LEnv.used entry ]
-      requires [ (src,   Captured name) :< Copy t | view LEnv.captured entry ]
+      requires [ (src, UnsafeRead name) :< Instance (copy t) | view LEnv.used entry ]
+      requires [ (src,   Captured name) :< Instance (copy t) | view LEnv.captured entry ]
       return $ (refName, phantom (TyApply (phantom (TyView r)) t), specialisation)
     Nothing -> throwAt src (NotInScope name)
 
@@ -133,8 +133,8 @@ useVar src name = do
     Just entry -> do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
       tEnv %= LEnv.setUsed name
-      requires [ (src, MultiUse name) :< Copy t | view LEnv.used entry ]
-      requires [ (src, Captured name) :< Copy t | view LEnv.captured entry ]
+      requires [ (src, MultiUse name) :< Instance (copy t) | view LEnv.used entry ]
+      requires [ (src, Captured name) :< Instance (copy t) | view LEnv.captured entry ]
       return (t, specialisation)
     Nothing -> throwAt src (NotInScope name)
 
@@ -212,7 +212,6 @@ generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of
 
   DeclTypeData mode name arg alts -> do
-    -- TODO Copy constraints needed!
     let
       -- The return type of the constructors
       retTy :: Annotated Type
@@ -289,7 +288,7 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 generateInteger :: Source -> Integer -> Praxis (Annotated Type)
 generateInteger src n = do
   t <- freshTyUni
-  require $ (src, TyReasonIntegerLiteral n) :< integral t
+  require $ (src, TyReasonIntegerLiteral n) :< Instance (integral t)
   require $ (src, TyReasonIntegerLiteral n) :< HoldsInteger n t
   return $ t
 
@@ -441,7 +440,7 @@ generatePat op pat = snd <$> generatePat' pat where
     PatAt name pat -> do
       (t, pat) <- generatePat' pat
       introTy src name (mono t)
-      require $ (src, MultiAlias name) :< Copy t
+      require $ (src, MultiAlias name) :< Instance (copy t)
       return (t, wrap t :< PatAt name pat)
 
     PatData name pat -> do

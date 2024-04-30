@@ -11,8 +11,8 @@ module Check.Type.Solve
   ) where
 
 import           Check.Solve
+import           Check.Type.Instance
 import           Common
-import qualified Env.Env             as Env
 import qualified Env.LEnv            as LEnv
 import           Introspect
 import           Praxis
@@ -22,7 +22,7 @@ import           Term
 import           Control.Applicative (liftA2)
 import           Data.List           (foldl', nub, sort)
 import           Data.Maybe          (fromMaybe)
-import           Data.Set            (Set, union)
+import           Data.Set            (Set)
 import qualified Data.Set            as Set
 import           Data.Traversable    (forM)
 
@@ -34,13 +34,6 @@ run term = do
 
 reduce :: Disambiguating (Reducer TyConstraint)
 reduce disambiguate = \case
-
-  Copy t -> do
-    r <- canCopy t
-    return $ case r of
-      Yes   -> Tautology
-      No    -> Contradiction
-      Maybe -> Skip
 
   TEq t1 t2 | t1 == t2 -> return Tautology
 
@@ -93,13 +86,18 @@ reduce disambiguate = \case
     | otherwise
       -> return Skip
 
-  Class (_ :< cls) | disambiguate -> case cls of
-    TyApply (_ :< TyCon "Integral") t
-      -> return $ Subgoals [ TEq t (TyCon "I32" `as` phantom KindType) ]
-    _
-      -> return Contradiction
+  Instance inst -> case view value inst of
 
-  Class _ | not disambiguate -> return Skip -- TODO
+    TyApply (_ :< TyCon "Integral") t | disambiguate
+      -> return $ Subgoals [ TEq t (TyCon "I32" `as` phantom KindType) ]
+
+    _ -> do
+      r <- isInstance inst
+      return $ case r of
+        Yes   -> Tautology
+        No    -> Contradiction
+        Maybe -> Skip
+
 
   HoldsInteger n (_ :< t) -> case t of
     TyCon "I8"    -> checkBounds n (undefined :: I8)
@@ -220,59 +218,6 @@ normalise (a :< x) = case typeof x of
   _ -> continue
 
   where continue = recurse normalise (a :< x)
-
-
--- Copy helpers
-data Truth = Yes | No | Maybe
-  deriving Eq
-
-conjunction :: [Praxis Truth] -> Praxis Truth
-conjunction = conjunction' Yes where
-  conjunction' :: Truth -> [Praxis Truth] -> Praxis Truth
-  conjunction' t1 [] = return t1
-  conjunction' t1 (t2:ts) = do
-    t2 <- t2
-    case t2 of
-      Yes   -> conjunction' t1 ts
-      No    -> return No
-      Maybe -> conjunction' Maybe ts
-
-canCopyTyCon :: Name -> Maybe (Annotated Type) -> Praxis Truth
-canCopyTyCon name arg = do
-  l <- use dtEnv
-  let Just checkCanCopy = Env.lookup name l
-  case checkCanCopy arg of
-    CanCopy           -> return Yes
-    CanNotCopy        -> return No
-    CanCopyOnlyIf tys -> conjunction (map canCopy tys)
-
-canCopy :: Annotated Type -> Praxis Truth
-canCopy t = do
-  assumptions' <- use (tySystem . assumptions)
-  case (Copy t `Set.member` assumptions', NoCopy t `Set.member` assumptions') of
-    (True, False) -> return Yes
-    (False, True) -> return No
-    (False, False) -> do
-      truth <- canCopy'
-      case truth of
-        Yes   -> tySystem . assumptions %= Set.insert (Copy t)
-        No    -> tySystem . assumptions %= Set.insert (NoCopy t)
-        Maybe -> pure ()
-      return truth
-  where
-    canCopy' = case view value t of
-      TyUnit                                       -> return Yes
-      TyFun _ _                                    -> return Yes
-      TyPair a b                                   -> conjunction [canCopy a, canCopy b]
-      TyVar _                                      -> return No
-      TyCon n                                      -> canCopyTyCon n Nothing
-      TyApply (_ :< TyCon n) t                     -> canCopyTyCon n (Just t)
-      TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
-      TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
-      TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
-      TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> canCopy a
-      TyApply (_ :< TyView (_ :< ViewValue)) a     -> canCopy a
-      _                                            -> return Maybe
 
 
 -- Check for undetermined unification variables, default them where possible

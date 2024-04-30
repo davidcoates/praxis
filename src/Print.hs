@@ -122,7 +122,7 @@ instance Pretty TyReason where
     FunSignature n   -> "function signature for " <> quote (pretty n)
     IfCondition      -> "type of if condition must be Bool"
     IfCongruence     -> "branches of if expression must have the same type"
-    Instance n       -> "monomorphic usage of " <> quote (pretty n)
+    InstanceOf n     -> "monomorphic usage of " <> quote (pretty n)
     MultiAlias n     -> "variable " <> quote (pretty n) <> " is not a unique alias"
     MultiUse n       -> "variable " <> quote (pretty n) <> " used more than once"
     Specialisation n -> "specialisation of " <> quote (pretty n)

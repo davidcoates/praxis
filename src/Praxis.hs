@@ -10,7 +10,6 @@ module Praxis
 
   -- | State types
   , CEnv(..)
-  , Trivial(..)
   , Instance(..)
   , IEnv(..)
   , KEnv(..)
@@ -124,16 +123,11 @@ data Fresh = Fresh
   , _freshVars     :: Map Name Int
   }
 
-instance Show Fresh where
-  show _ = "<fresh>"
-
 type CEnv = Env (Annotated QType)
-
-data Trivial = IsTrivial | IsNonTrivial
 
 data Instance = IsInstance | IsInstanceOnlyIf [Annotated Type]
 
-type IEnv = Env (Map Name (Maybe (Annotated Type) -> (Trivial, Instance))) -- Note: Trivial is only needed for Clone / Dispose
+type IEnv = Env (Map Name (Maybe (Annotated Type) -> Instance))
 
 type KEnv = Env (Annotated Kind)
 

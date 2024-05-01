@@ -12,7 +12,7 @@ module Check.Kind.Generate
 import           Check.Error
 import           Common
 import qualified Env.Env         as Env
-import           Inbuilts        (clone, copy, dispose)
+import           Inbuilts
 import           Introspect
 import           Praxis
 import           Print
@@ -183,10 +183,10 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
 
     let
-      deduce :: (Annotated Type -> Annotated Type) -> Maybe (Annotated Type) -> (Trivial, Instance)
+      deduce :: (Annotated Type -> Annotated Type) -> Maybe (Annotated Type) -> Instance
       deduce mkConstraint arg' = case (arg, arg') of
-        (Nothing, Nothing)    -> (IsTrivial, IsInstanceOnlyIf [ mkConstraint conType | (_ :< DataCon _ conType) <- alts ])
-        (Just arg, Just arg') -> (IsTrivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
+        (Nothing, Nothing)    -> IsInstanceOnlyIf [ mkConstraint conType | (_ :< DataCon _ conType) <- alts ]
+        (Just arg, Just arg') -> IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ] where
           f :: Annotated Type -> Maybe (Annotated Type)
           f (_ :< t) = case t of
             TyVar n                   -> n `lookup` specialisedVars
@@ -200,13 +200,17 @@ generateDeclType (a@(src, _) :< ty) = case ty of
 
       instances = case mode of
         DataUnboxed -> Map.fromList
-          [ ("Clone", deduce clone)
-          , ("Dispose", deduce dispose)
-          , ("Copy", deduce copy)
+          [ ("Clone",          deduce clone)
+          , ("CloneTrivial",   deduce cloneTrivial)
+          , ("Dispose",        deduce dispose)
+          , ("DisposeTrivial", deduce disposeTrivial)
+          , ("Copy",           deduce copy)
           ]
         _ -> Map.fromList
-          [ ("Clone", deduce clone)
-          , ("Dispose", deduce dispose)
+          [ ("Clone",          deduce clone)
+          , ("CloneTrivial",   deduce cloneTrivial)
+          , ("Dispose",        deduce dispose)
+          , ("DisposeTrivial", deduce disposeTrivial)
           ]
 
     iEnv %= Env.intro name instances
@@ -217,9 +221,11 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     introKind src name k
     let
       instances = Map.fromList
-        [ ("Copy",    \Nothing -> (IsTrivial, IsInstance))
-        , ("Clone",   \Nothing -> (IsTrivial, IsInstance))
-        , ("Dispose", \Nothing -> (IsTrivial, IsInstance))
+        [ ("Clone",          \Nothing -> IsInstance)
+        , ("CloneTrivial",   \Nothing -> IsInstance)
+        , ("Dispose",        \Nothing -> IsInstance)
+        , ("DisposeTrivial", \Nothing -> IsInstance)
+        , ("Copy",           \Nothing -> IsInstance)
         ]
     iEnv %= Env.intro name instances
     return $ (src, Just k) :< DeclTypeEnum name alts

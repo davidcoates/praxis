@@ -7,7 +7,9 @@ module Inbuilts
   ( initialState
   , integral
   , clone
+  , cloneTrivial
   , dispose
+  , disposeTrivial
   , copy
   ) where
 
@@ -178,8 +180,12 @@ inbuiltKinds =
   , ("U64",      kind "Type")
   , ("USize",    kind "Type")
   -- Constraints
-  , ("Copy",     kind "Type -> Constraint")
-  , ("Integral", kind "Type -> Constraint")
+  , ("Clone",          kind "Type -> Constraint")
+  , ("TrivialClone",   kind "Type -> Constraint")
+  , ("Dispose",        kind "Type -> Constraint")
+  , ("TrivialDispose", kind "Type -> Constraint")
+  , ("Copy",           kind "Type -> Constraint")
+  , ("Integral",       kind "Type -> Constraint")
   ]
 
 -- TODO quite gross, should be replaced with instances in prelude
@@ -189,8 +195,14 @@ integral t = TyApply (TyCon "Integral" `as` phantom (KindFun (phantom KindType) 
 clone :: Annotated Type -> Annotated Type
 clone t = TyApply (TyCon "Clone" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
 
+cloneTrivial :: Annotated Type -> Annotated Type
+cloneTrivial t = TyApply (TyCon "CloneTrivial" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+
 dispose :: Annotated Type -> Annotated Type
 dispose t = TyApply (TyCon "Dispose" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+
+disposeTrivial :: Annotated Type -> Annotated Type
+disposeTrivial t = TyApply (TyCon "DisposeTrivial" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
 
 copy :: Annotated Type -> Annotated Type
 copy t = TyApply (TyCon "Copy" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
@@ -198,8 +210,8 @@ copy t = TyApply (TyCon "Copy" `as` phantom (KindFun (phantom KindType) (phantom
 initialIEnv :: IEnv
 initialIEnv = Env.fromList
   [ ("Array", Map.fromList
-    [ ("Clone",   \(Just t) -> (IsNonTrivial, IsInstanceOnlyIf [clone t]))
-    , ("Dispose", \(Just t) -> (IsNonTrivial, IsInstanceOnlyIf [dispose t]))
+    [ ("Clone",   \(Just t) -> IsInstanceOnlyIf [clone t])
+    , ("Dispose", \(Just t) -> IsInstanceOnlyIf [dispose t])
     ]
     )
   , ("Bool",  primitive)
@@ -215,18 +227,20 @@ initialIEnv = Env.fromList
   , ("U64",   integral)
   , ("USize", integral)
   , ("String", Map.fromList
-    [ ("Clone",   \Nothing -> (IsNonTrivial, IsInstance))
-    , ("Dispose", \Nothing -> (IsNonTrivial, IsInstance))
+    [ ("Clone",   \Nothing -> IsInstance)
+    , ("Dispose", \Nothing -> IsInstance)
     ]
     )
   ] where
     primitive = Map.fromList
-      [ ("Clone",   \Nothing -> (IsTrivial, IsInstance))
-      , ("Dispose", \Nothing -> (IsTrivial, IsInstance))
-      , ("Copy",    \Nothing -> (IsTrivial, IsInstance))
+      [ ("Clone",          \Nothing -> IsInstance)
+      , ("CloneTrivial",   \Nothing -> IsInstance)
+      , ("Dispose",        \Nothing -> IsInstance)
+      , ("DisposeTrivial", \Nothing -> IsInstance)
+      , ("Copy",           \Nothing -> IsInstance)
       ]
     integral = primitive `Map.union` Map.fromList
-      [ ("Integral", \Nothing -> (IsNonTrivial, IsInstance))
+      [ ("Integral", \Nothing -> IsInstance)
       ]
 
 initialKEnv :: KEnv

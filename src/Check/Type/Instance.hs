@@ -1,4 +1,3 @@
-
 module Check.Type.Instance
   ( Truth(..)
   , isInstance
@@ -36,50 +35,57 @@ isTyConInstance cls name arg = do
   let Just instances = Env.lookup name l
   case Map.lookup cls instances of
     Just resolver -> case resolver arg of
-      (_, IsInstance)           -> return Yes
-      (_, IsInstanceOnlyIf tys) -> conjunction (map isInstance tys)
-    Nothing                     -> return No
+      IsInstance           -> return Yes
+      IsInstanceOnlyIf tys -> conjunction (map isInstance tys)
+    Nothing                -> return No
 
 isInstance :: Annotated Type -> Praxis Truth
-isInstance inst@(_ :< TyApply (_ :< TyCon n) t) = do
+isInstance constraint = do
   assumptions' <- use (tySystem . assumptions)
-  case (Instance inst `Set.member` assumptions', Not (phantom (Instance inst)) `Set.member` assumptions') of
+  let
+    inst    = Instance constraint
+    notInst = Not (phantom inst)
+  case (inst `Set.member` assumptions', notInst `Set.member` assumptions') of
     (True, False) -> return Yes
     (False, True) -> return No
     (False, False) -> do
-      truth <- isInstance'
+      truth <- isInstance' constraint
       case truth of
-        Yes   -> tySystem . assumptions %= Set.insert (Instance inst)
-        No    -> tySystem . assumptions %= Set.insert (Not (phantom (Instance inst)))
+        Yes   -> tySystem . assumptions %= Set.insert inst
+        No    -> tySystem . assumptions %= Set.insert notInst
         Maybe -> pure ()
       return truth
-  where
-    isInstance' = case n of
-      "Copy"    -> canCopy t
-      "Clone"   -> canClone t
-      "Dispose" -> return Yes
-      cls       -> case view value t of
-        TyApply (_ :< TyCon n) t -> isTyConInstance cls n (Just t)
-        TyCon n                  -> isTyConInstance cls n Nothing
-        _                        -> return Maybe
 
-canClone :: Annotated Type -> Praxis Truth
-canClone t = undefined
+mkConstraint :: Name -> Annotated Type -> Annotated Type
+mkConstraint cls t = phantom (TyApply (phantom (TyCon cls)) t)
 
-canDispose :: Annotated Type -> Praxis Truth
-canDispose t = undefined
+isInstance' :: Annotated Type -> Praxis Truth
+isInstance' constraint@(_ :< TyApply (_ :< TyCon cls) t) = case view value t of
+  TyApply (_ :< TyCon n) t -> isTyConInstance cls n (Just t)
+  TyCon n                  -> isTyConInstance cls n Nothing
+  TyVar _                  -> return No
+  _ | cls `elem` ["Copy", "Clone", "Dispose"] -> case view value t of
+    TyUnit                                       -> return Yes
+    TyFun _ _                                    -> return Yes
+    TyPair a b                                   -> conjunction [isInstance (mkConstraint cls a), isInstance (mkConstraint cls b)]
+    TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
+    TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
+    TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
+    TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> isInstance (mkConstraint cls a)
+    _                                            -> return Maybe
+  _ | cls `elem` ["CloneTrivial", "DisposeTrivial"] -> case view value t of
+      TyUnit                                       -> return Yes
+      TyFun _ _                                    -> return No -- !
+      TyPair a b                                   -> conjunction [isInstance (mkConstraint cls a), isInstance (mkConstraint cls b)]
+      TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
+      TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
+      TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
+      TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> isInstance (mkConstraint cls a)
+      _                                            -> return Maybe
+  TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return No
+  TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return No
+  TyApply (_ :< TyView (_ :< ViewVar _ _)) _   -> return No
+  _                                            -> return Maybe
 
 canCopy :: Annotated Type -> Praxis Truth
-canCopy t = case view value t of
-  TyUnit                                       -> return Yes
-  TyFun _ _                                    -> return Yes
-  TyPair a b                                   -> conjunction [isInstance (copy a), isInstance (copy b)]
-  TyVar _                                      -> return No
-  TyCon n                                      -> isTyConInstance "Copy" n Nothing
-  TyApply (_ :< TyCon n) t                     -> isTyConInstance "Copy" n (Just t)
-  TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
-  TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
-  TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
-  TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> isInstance (copy a)
-  TyApply (_ :< TyView (_ :< ViewValue)) a     -> isInstance (copy a)
-  _                                            -> return Maybe
+canCopy t = isInstance (mkConstraint "Copy" t)

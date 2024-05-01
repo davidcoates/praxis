@@ -5,6 +5,7 @@
 
 module Util
   ( check
+  , check'
   , parse
   , parseAs
   , translate
@@ -39,6 +40,12 @@ runWith show p = do
 
 check :: String -> IO String
 check program = runPretty (Parse.parse program >>= Check.check :: Praxis (Annotated Program))
+
+-- TODO make these names consistent
+check' :: String -> String -> IO String
+check' program exp = runPretty $ do
+  (Parse.parse program >>= Check.check) :: Praxis (Annotated Program)
+  (Parse.parse exp >>= Check.check) :: Praxis (Annotated Exp)
 
 parse :: String -> IO String
 parse program = runPretty (Parse.parse program :: Praxis (Annotated Program))

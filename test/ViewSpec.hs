@@ -55,9 +55,10 @@ box_0 = [& 'l0 String -> Box [ & 'l0 , String ]] Box [& 'l0 String] "x"
 |]
 
     -- TODO should also try with ? instead of &
-    it "evaluates" $ do
+    describe "construct with non-reference" $
 
-      evaluate program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
+      it "does not type check" $ do
+        check' program "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs" `shouldReturn` trim [r|
 type check error: unable to satisfy: & ^v3 List ^t4 ?= List ^t4
   | derived from: ( ^t4 , List ^t4 ) -> List ^t4 = ( ^t4 , List ^t4 ) -> & ^v3 List ^t4
   | primary cause: application [( ^t4 , List ^t4 ) -> List ^t4] Cons ($) ( [^t4] 1 , [( ^t6 , List ^t6 ) -> List ^t6] Cons ( [^t7] 2 , [( ^t9 , List ^t9 ) -> List ^t9] Cons ( [^t10] 3 , [( ) -> List ^t12] Nil [( )] ( ) ) ) ) at 1:10
@@ -66,13 +67,16 @@ type check error: unable to satisfy: & ^v3 List ^t4 ?= List ^t4
   | - application [& ^v3 List ^t4 -> Box [ & ^v3 , List ^t4 ]] Box ($) [& ^v3 List ^t4] xs_0 at 1:50
 |]
 
-      evaluate program [r|
+    describe "construct with reference" $
+
+      it "type checks" $ do
+        check' program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
   read xs in do
     Box xs
     () -- Note, Box xs can't escape the read
-|] `shouldReturn` "()"
+|] `shouldReturn` "[( )] let [List I32] xs_0 = [( I32 , List I32 ) -> List I32] Cons ( [I32] 1 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 2 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 3 , [( ) -> List I32] Nil [( )] ( ) ) ) ) in read xs_0 in [( )] [& 'l1 List I32 -> Box [ & 'l1 , List I32 ]] Box [& 'l1 List I32] xs_0 seq [( )] ( )"
 
 
 

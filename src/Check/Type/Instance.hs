@@ -64,28 +64,18 @@ isInstance' constraint@(_ :< TyApply (_ :< TyCon cls) t) = case view value t of
   TyApply (_ :< TyCon n) t -> isTyConInstance cls n (Just t)
   TyCon n                  -> isTyConInstance cls n Nothing
   TyVar _                  -> return No
-  _ | cls `elem` ["Copy", "Clone", "Dispose"] -> case view value t of
-    TyUnit                                       -> return Yes
-    TyFun _ _                                    -> return Yes
-    TyPair a b                                   -> conjunction [isInstance (mkConstraint cls a), isInstance (mkConstraint cls b)]
-    TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
-    TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
-    TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
-    TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> isInstance (mkConstraint cls a)
-    _                                            -> return Maybe
-  _ | cls `elem` ["CloneTrivial", "DisposeTrivial"] -> case view value t of
-      TyUnit                                       -> return Yes
-      TyFun _ _                                    -> return No -- !
-      TyPair a b                                   -> conjunction [isInstance (mkConstraint cls a), isInstance (mkConstraint cls b)]
+  _ -> if cls `elem` ["Copy", "Clone", "Dispose", "CloneTrivial", "DisposeTrivial"]
+    then case view value t of
       TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
       TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
       TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
       TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> isInstance (mkConstraint cls a)
       _                                            -> return Maybe
-  TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return No
-  TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return No
-  TyApply (_ :< TyView (_ :< ViewVar _ _)) _   -> return No
-  _                                            -> return Maybe
+    else case view value t of
+      TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return No
+      TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return No
+      TyApply (_ :< TyView (_ :< ViewVar _ _)) _   -> return No
+      _                                            -> return Maybe
 
 canCopy :: Annotated Type -> Praxis Truth
 canCopy t = isInstance (mkConstraint "Copy" t)

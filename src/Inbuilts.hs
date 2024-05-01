@@ -5,6 +5,9 @@
 
 module Inbuilts
   ( initialState
+  , fn
+  , unit
+  , pair
   , integral
   , clone
   , cloneTrivial
@@ -134,6 +137,7 @@ inbuiltKinds =
     ("Array",    kind "Type -> Type")
   , ("Bool",     kind "Type")
   , ("Char",     kind "Type")
+  , ("Fn",       kind "(Type, Type) -> Type")
   , ("I8",       kind "Type")
   , ("I16",      kind "Type")
   , ("I32",      kind "Type")
@@ -145,6 +149,8 @@ inbuiltKinds =
   , ("U32",      kind "Type")
   , ("U64",      kind "Type")
   , ("USize",    kind "Type")
+  , ("Unit",     kind "Type")
+  , ("Pair",     kind "(Type, Type) -> Type")
   -- Constraints
   , ("Clone",          kind "Type -> Constraint")
   , ("TrivialClone",   kind "Type -> Constraint")
@@ -154,24 +160,34 @@ inbuiltKinds =
   , ("Integral",       kind "Type -> Constraint")
   ]
 
--- TODO quite gross, should be replaced with instances in prelude
+fn :: Annotated Type -> Annotated Type -> Annotated Type
+fn a b = TyApply (TyCon "Fn" `as` kind "(Type, Type) -> Type") (TyPack a b `as` kind "(Type, Type)") `as` kind "Type"
+
+unit :: Annotated Type
+unit = TyCon "Unit" `as` kind "Type"
+
+pair :: Annotated Type -> Annotated Type -> Annotated Type
+pair a b = TyApply (TyCon "Pair" `as` kind "(Type, Type) -> Type") (TyPack a b `as` kind "(Type, Type)") `as` kind "Type"
+
+-- TODO should be replaced with instances in prelude
+
 integral :: Annotated Type -> Annotated Type
-integral t = TyApply (TyCon "Integral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+integral t = TyApply (TyCon "Integral" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 clone :: Annotated Type -> Annotated Type
-clone t = TyApply (TyCon "Clone" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+clone t = TyApply (TyCon "Clone" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 cloneTrivial :: Annotated Type -> Annotated Type
-cloneTrivial t = TyApply (TyCon "CloneTrivial" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+cloneTrivial t = TyApply (TyCon "CloneTrivial" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 dispose :: Annotated Type -> Annotated Type
-dispose t = TyApply (TyCon "Dispose" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+dispose t = TyApply (TyCon "Dispose" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 disposeTrivial :: Annotated Type -> Annotated Type
-disposeTrivial t = TyApply (TyCon "DisposeTrivial" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+disposeTrivial t = TyApply (TyCon "DisposeTrivial" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 copy :: Annotated Type -> Annotated Type
-copy t = TyApply (TyCon "Copy" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+copy t = TyApply (TyCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 initialIEnv :: IEnv
 initialIEnv = Env.fromList
@@ -182,6 +198,12 @@ initialIEnv = Env.fromList
     )
   , ("Bool",  primitive)
   , ("Char",  primitive)
+  , ("Fn", Map.fromList
+    [ ("Clone",   \(Just _) -> IsInstance)
+    , ("Dispose", \(Just _) -> IsInstance)
+    , ("Copy"   , \(Just _) -> IsInstance)
+    ]
+    )
   , ("I8",    integral)
   , ("I16",   integral)
   , ("I32",   integral)
@@ -192,6 +214,22 @@ initialIEnv = Env.fromList
   , ("U32",   integral)
   , ("U64",   integral)
   , ("USize", integral)
+  , ("Unit", Map.fromList
+    [ ("Clone",          \(Just _) -> IsInstance)
+    , ("CloneTrivial",   \(Just _) -> IsInstance)
+    , ("Dispose",        \(Just _) -> IsInstance)
+    , ("DisposeTrivial", \(Just _) -> IsInstance)
+    , ("Copy",           \(Just _) -> IsInstance)
+    ]
+    )
+  , ("Pair", Map.fromList
+    [ ("Clone",          \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [clone a, clone b])
+    , ("CloneTrivial",   \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [cloneTrivial a, cloneTrivial b])
+    , ("Dispose",        \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [dispose a, dispose b])
+    , ("DisposeTrivial", \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [disposeTrivial a, disposeTrivial b])
+    , ("Copy",           \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [copy a, copy b])
+    ]
+    )
   , ("String", Map.fromList
     [ ("Clone",   \Nothing -> IsInstance)
     , ("Dispose", \Nothing -> IsInstance)

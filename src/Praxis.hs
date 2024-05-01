@@ -362,7 +362,7 @@ requireMain = do
   case ty of
     Nothing -> throw ("missing main function" :: String)
     Just ty
-      | (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) <- ty
+      | (_ :< Forall [] [] (_ :< TyApply (_ :< TyCon "Fn") (_ :< TyPack (_ :< TyCon "Unit") (_ :< TyCon "Unit")))) <- ty
         -> return ()
       | otherwise
         -> throwAt (view source ty) $ "main function has bad type " <> quote (pretty ty) <> ", expected () -> ()"

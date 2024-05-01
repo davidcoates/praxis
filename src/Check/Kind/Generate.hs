@@ -105,31 +105,14 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
         Just k  -> return (k :< TyCon con)
         Nothing -> throwAt src (NotInScope con)
 
-    TyFun ty1 ty2 -> do
-      ty1 <- generateTy ty1
-      ty2 <- generateTy ty2
-      require $ (src, KindReasonType ty1) :< (view kind ty1 `KEq` phantom KindType)
-      require $ (src, KindReasonType ty2) :< (view kind ty2 `KEq` phantom KindType)
-      return (phantom KindType :< TyFun ty1 ty2)
-
     TyView v -> do
       v <- generateView v
       return (view kind v :< TyView v)
-
-    TyPair ty1 ty2 -> do
-      ty1 <- generateTy ty1
-      ty2 <- generateTy ty2
-      require $ (src, KindReasonType ty1) :< (view kind ty1 `KEq` phantom KindType)
-      require $ (src, KindReasonType ty2) :< (view kind ty2 `KEq` phantom KindType)
-      return (phantom KindType :< TyPair ty1 ty2)
 
     TyPack ty1 ty2 -> do
       ty1 <- generateTy ty1
       ty2 <- generateTy ty2
       return (phantom (KindPair (view kind ty1) (view kind ty2)) :< TyPack ty1 ty2)
-
-    TyUnit -> do
-      return (phantom KindType :< TyUnit)
 
     TyVar var -> do
       entry <- kEnv `uses` Env.lookup var

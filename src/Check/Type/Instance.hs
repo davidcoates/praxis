@@ -29,53 +29,62 @@ conjunction = conjunction' Yes where
       No    -> return No
       Maybe -> conjunction' Maybe ts
 
-isTyConInstance :: Name -> Name -> Maybe (Annotated Type) -> Praxis Truth
-isTyConInstance cls name arg = do
+isTyConInstance :: Bool -> Name -> Name -> Maybe (Annotated Type) -> Praxis Truth
+isTyConInstance requireTrivial cls name arg = do
   l <- use iEnv
   let Just instances = Env.lookup name l
   case Map.lookup cls instances of
     Just resolver -> case resolver arg of
-      IsInstance           -> return Yes
-      IsInstanceOnlyIf tys -> conjunction (map isInstance tys)
-    Nothing                -> return No
+      (origin, _) | requireTrivial && origin /= Trivial
+        -> return No
+      (_, IsInstance)           -> return Yes
+      (_, IsInstanceOnlyIf tys) -> conjunction (map (isInstance' requireTrivial) tys)
+    Nothing                     -> return No
 
 isInstance :: Annotated Type -> Praxis Truth
-isInstance constraint = do
+isInstance = isInstance' False
+
+isTrivialInstance :: Annotated Type -> Praxis Truth
+isTrivialInstance = isInstance' True
+
+isInstance' :: Bool -> Annotated Type -> Praxis Truth
+isInstance' requireTrivial constraint = do
   assumptions' <- use (tySystem . assumptions)
   let
-    inst    = Instance constraint
+    inst    = if requireTrivial then TrivialInstance constraint else Instance constraint
     notInst = Not (phantom inst)
   case (inst `Set.member` assumptions', notInst `Set.member` assumptions') of
     (True, False) -> return Yes
     (False, True) -> return No
     (False, False) -> do
-      truth <- isInstance' constraint
+      truth <- isInstance'' requireTrivial constraint
       case truth of
         Yes   -> tySystem . assumptions %= Set.insert inst
         No    -> tySystem . assumptions %= Set.insert notInst
         Maybe -> pure ()
       return truth
 
-mkConstraint :: Name -> Annotated Type -> Annotated Type
-mkConstraint cls t = phantom (TyApply (phantom (TyCon cls)) t)
-
-isInstance' :: Annotated Type -> Praxis Truth
-isInstance' constraint@(_ :< TyApply (_ :< TyCon cls) t) = case view value t of
-  TyApply (_ :< TyCon n) t -> isTyConInstance cls n (Just t)
-  TyCon n                  -> isTyConInstance cls n Nothing
+isInstance'' :: Bool -> Annotated Type -> Praxis Truth
+isInstance'' requireTrivial constraint@(_ :< TyApply (_ :< TyCon cls) t) = case view value t of
+  TyApply (_ :< TyCon n) t -> isTyConInstance requireTrivial cls n (Just t)
+  TyCon n                  -> isTyConInstance requireTrivial cls n Nothing
   TyVar _                  -> return No
-  _ -> if cls `elem` ["Copy", "Clone", "Dispose", "CloneTrivial", "DisposeTrivial"]
+
+  _ -> if cls == "Copy" -- Note: Copy is the only instance which is defined for references
     then case view value t of
       TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return Yes
       TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return Yes
       TyApply (_ :< TyView (_ :< ViewVar Ref _)) _ -> return Yes
-      TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> isInstance (mkConstraint cls a)
+      TyApply (_ :< TyView (_ :< ViewVar _ _)) a   -> isInstance' requireTrivial (mkConstraint cls a)
       _                                            -> return Maybe
     else case view value t of
       TyApply (_ :< TyView (_ :< ViewRef _))   _   -> return No
       TyApply (_ :< TyView (_ :< ViewUni Ref _)) _ -> return No
       TyApply (_ :< TyView (_ :< ViewVar _ _)) _   -> return No
       _                                            -> return Maybe
+
+mkConstraint :: Name -> Annotated Type -> Annotated Type
+mkConstraint cls t = phantom (TyApply (phantom (TyCon cls)) t)
 
 canCopy :: Annotated Type -> Praxis Truth
 canCopy t = isInstance (mkConstraint "Copy" t)

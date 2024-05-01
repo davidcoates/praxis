@@ -10,6 +10,7 @@ module Praxis
 
   -- | State types
   , CEnv(..)
+  , InstanceOrigin(..)
   , Instance(..)
   , IEnv(..)
   , KEnv(..)
@@ -122,9 +123,12 @@ data Fresh = Fresh
 
 type CEnv = Env (Annotated QType)
 
+data InstanceOrigin = Inbuilt | Trivial | User
+  deriving Eq
+
 data Instance = IsInstance | IsInstanceOnlyIf [Annotated Type]
 
-type IEnv = Env (Map Name (Maybe (Annotated Type) -> Instance))
+type IEnv = Env (Map Name (Maybe (Annotated Type) -> (InstanceOrigin, Instance)))
 
 type KEnv = Env (Annotated Kind)
 

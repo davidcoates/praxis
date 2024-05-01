@@ -293,13 +293,13 @@ instance Term TyConstraint where
   witness = ITyConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
-    HoldsInteger n t -> HoldsInteger n <$> f t
-    Instance t       -> Instance <$> f t
-    Not t            -> Not <$> f t
-    RefFree n t      -> RefFree n <$> f t
-    TEq a b          -> TEq <$> f a <*> f b
-    TOpEq a b        -> TOpEq <$> f a <*> f b
-    Trivial t        -> Trivial <$> f t
+    HoldsInteger n t  -> HoldsInteger n <$> f t
+    Instance t        -> Instance <$> f t
+    Not t             -> Not <$> f t
+    RefFree n t       -> RefFree n <$> f t
+    TEq a b           -> TEq <$> f a <*> f b
+    TOpEq a b         -> TOpEq <$> f a <*> f b
+    TrivialInstance t -> TrivialInstance <$> f t
 
 instance Term QType where
   witness = IQType

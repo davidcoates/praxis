@@ -163,10 +163,10 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
 
     let
-      deduce :: (Annotated Type -> Annotated Type) -> Maybe (Annotated Type) -> Instance
+      deduce :: (Annotated Type -> Annotated Type) -> Maybe (Annotated Type) -> (InstanceOrigin, Instance)
       deduce mkConstraint arg' = case (arg, arg') of
-        (Nothing, Nothing)    -> IsInstanceOnlyIf [ mkConstraint conType | (_ :< DataCon _ conType) <- alts ]
-        (Just arg, Just arg') -> IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ] where
+        (Nothing, Nothing)    -> (Trivial, IsInstanceOnlyIf [ mkConstraint conType | (_ :< DataCon _ conType) <- alts ])
+        (Just arg, Just arg') -> (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
           f :: Annotated Type -> Maybe (Annotated Type)
           f (_ :< t) = case t of
             TyVar n                   -> n `lookup` specialisedVars
@@ -181,16 +181,12 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       instances = case mode of
         DataUnboxed -> Map.fromList
           [ ("Clone",          deduce clone)
-          , ("CloneTrivial",   deduce cloneTrivial)
           , ("Dispose",        deduce dispose)
-          , ("DisposeTrivial", deduce disposeTrivial)
           , ("Copy",           deduce copy)
           ]
         _ -> Map.fromList
           [ ("Clone",          deduce clone)
-          , ("CloneTrivial",   deduce cloneTrivial)
           , ("Dispose",        deduce dispose)
-          , ("DisposeTrivial", deduce disposeTrivial)
           ]
 
     iEnv %= Env.intro name instances
@@ -201,11 +197,9 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     introKind src name k
     let
       instances = Map.fromList
-        [ ("Clone",          \Nothing -> IsInstance)
-        , ("CloneTrivial",   \Nothing -> IsInstance)
-        , ("Dispose",        \Nothing -> IsInstance)
-        , ("DisposeTrivial", \Nothing -> IsInstance)
-        , ("Copy",           \Nothing -> IsInstance)
+        [ ("Clone",          \Nothing -> (Trivial, IsInstance))
+        , ("Dispose",        \Nothing -> (Trivial, IsInstance))
+        , ("Copy",           \Nothing -> (Trivial, IsInstance))
         ]
     iEnv %= Env.intro name instances
     return $ (src, Just k) :< DeclTypeEnum name alts

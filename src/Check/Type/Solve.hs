@@ -94,7 +94,6 @@ reduce disambiguate = \case
         No    -> Contradiction
         Maybe -> Skip
 
-
   HoldsInteger n (_ :< t) -> case t of
     TyCon "I8"    -> checkBounds n (undefined :: I8)
     TyCon "I16"   -> checkBounds n (undefined :: I16)

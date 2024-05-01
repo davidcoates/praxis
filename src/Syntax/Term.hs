@@ -207,7 +207,7 @@ tyConstraint = unparseable (_HoldsInteger <$> integer <*> reservedSym "∈" *> a
                unparseable (_RefFree <$> varId <*> reservedId "ref-free" *> annotated ty) <|>
                unparseable (_TEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
                unparseable (_TOpEq <$> annotated ty <*> reservedSym "?=" *> annotated ty) <|>
-               unparseable (_Trivial <$> reservedCon "Trivial" *> annotated ty) <|>
+               unparseable (_TrivialInstance <$> reservedId "trivial" *> annotated ty) <|>
                mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint

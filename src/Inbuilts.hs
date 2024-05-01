@@ -192,16 +192,16 @@ copy t = TyApply (TyCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type
 initialIEnv :: IEnv
 initialIEnv = Env.fromList
   [ ("Array", Map.fromList
-    [ ("Clone",   \(Just t) -> IsInstanceOnlyIf [clone t])
-    , ("Dispose", \(Just t) -> IsInstanceOnlyIf [dispose t])
+    [ ("Clone",   \(Just t) -> (Inbuilt, IsInstanceOnlyIf [clone t]))
+    , ("Dispose", \(Just t) -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
     ]
     )
   , ("Bool",  primitive)
   , ("Char",  primitive)
   , ("Fn", Map.fromList
-    [ ("Clone",   \(Just _) -> IsInstance)
-    , ("Dispose", \(Just _) -> IsInstance)
-    , ("Copy"   , \(Just _) -> IsInstance)
+    [ ("Clone",   \(Just _) -> (Inbuilt, IsInstance))
+    , ("Dispose", \(Just _) -> (Inbuilt, IsInstance))
+    , ("Copy"   , \(Just _) -> (Inbuilt, IsInstance))
     ]
     )
   , ("I8",    integral)
@@ -215,36 +215,30 @@ initialIEnv = Env.fromList
   , ("U64",   integral)
   , ("USize", integral)
   , ("Unit", Map.fromList
-    [ ("Clone",          \(Just _) -> IsInstance)
-    , ("CloneTrivial",   \(Just _) -> IsInstance)
-    , ("Dispose",        \(Just _) -> IsInstance)
-    , ("DisposeTrivial", \(Just _) -> IsInstance)
-    , ("Copy",           \(Just _) -> IsInstance)
-    ]
+    [ ("Clone",          \(Just _) -> (Trivial, IsInstance))
+    , ("Dispose",        \(Just _) -> (Trivial, IsInstance))
+    , ("Copy",           \(Just _) -> (Trivial, IsInstance))
+   ]
     )
   , ("Pair", Map.fromList
-    [ ("Clone",          \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [clone a, clone b])
-    , ("CloneTrivial",   \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [cloneTrivial a, cloneTrivial b])
-    , ("Dispose",        \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [dispose a, dispose b])
-    , ("DisposeTrivial", \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [disposeTrivial a, disposeTrivial b])
-    , ("Copy",           \(Just (_ :< TyPack a b)) -> IsInstanceOnlyIf [copy a, copy b])
+    [ ("Clone",          \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
+    , ("Dispose",        \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
+    , ("Copy",           \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
     ]
     )
   , ("String", Map.fromList
-    [ ("Clone",   \Nothing -> IsInstance)
-    , ("Dispose", \Nothing -> IsInstance)
+    [ ("Clone",   \Nothing -> (Inbuilt, IsInstance))
+    , ("Dispose", \Nothing -> (Inbuilt, IsInstance))
     ]
     )
   ] where
     primitive = Map.fromList
-      [ ("Clone",          \Nothing -> IsInstance)
-      , ("CloneTrivial",   \Nothing -> IsInstance)
-      , ("Dispose",        \Nothing -> IsInstance)
-      , ("DisposeTrivial", \Nothing -> IsInstance)
-      , ("Copy",           \Nothing -> IsInstance)
+      [ ("Clone",          \Nothing -> (Trivial, IsInstance))
+      , ("Dispose",        \Nothing -> (Trivial, IsInstance))
+      , ("Copy",           \Nothing -> (Trivial, IsInstance))
       ]
     integral = primitive `Map.union` Map.fromList
-      [ ("Integral", \Nothing -> IsInstance)
+      [ ("Integral", \Nothing -> (Inbuilt, IsInstance))
       ]
 
 initialKEnv :: KEnv

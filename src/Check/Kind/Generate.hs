@@ -139,9 +139,6 @@ generateTyPat (a@(src, _) :< tyPat) = (\(k :< t) -> (src, Just k) :< t) <$> case
     return (phantom (KindPair (view kind tyPat1) (view kind tyPat2)) :< TyPatPack tyPat1 tyPat2)
 
 
-fun :: Annotated Kind -> Annotated Kind -> Annotated Kind
-fun a b = phantom (KindFun a b)
-
 generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon (a@(src, _) :< DataCon name arg) = do
   arg <- generate arg

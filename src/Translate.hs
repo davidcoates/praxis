@@ -8,8 +8,8 @@ import           Praxis
 import           Stage
 import           Term
 
+import qualified Data.Text    as Text
 import qualified LLVM.Codegen as LLVM
-import qualified Data.Text as Text
 
 
 data Mode = NoPrelude | Prelude | PreludeWithMain
@@ -63,4 +63,4 @@ translateType (_ :< ty) = case ty of
     _       -> error "TODO"
 
 
-  
+

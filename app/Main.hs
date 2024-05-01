@@ -1,15 +1,15 @@
 module Main where
 
 import           Common
-import qualified Env.Env               as Env
-import qualified Env.LEnv              as LEnv
+import qualified Env.Env            as Env
+import qualified Env.LEnv           as LEnv
 import           Executors
-import           Inbuilts              (initialState)
+import           Inbuilts           (initialState)
 import           Praxis
 import           Term
 
-import           Control.Monad         (void, when)
-import           Data.List             (delete)
+import           Control.Monad      (void, when)
+import           Data.List          (delete)
 import           System.Environment
 import           System.IO
 

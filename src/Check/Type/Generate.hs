@@ -16,7 +16,7 @@ import           Common
 import           Env.Env       (Env (..))
 import qualified Env.Env       as Env
 import qualified Env.LEnv      as LEnv
-import           Inbuilts      (copy, integral, fn, pair, unit)
+import           Inbuilts      (copy, fn, integral, pair, unit)
 import           Introspect
 import           Praxis
 import           Print

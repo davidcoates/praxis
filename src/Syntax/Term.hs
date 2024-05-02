@@ -51,12 +51,12 @@ dot = contextualOp "."
 block :: Syntax f => f a -> f [a]
 block p = layout '{' *> _Cons <$> p <*> (layout ';' *> p) `until` layout '}'
 
-blockOrLine :: Syntax f => f a -> f (a, [a])
-blockOrLine f = layout '{' *> f <*> (layout ';' *> f) `until` layout '}' <|>
-                f <*> _Nil <$> pure ()
+blockOrLine :: Syntax f => f a -> f [a]
+blockOrLine f = _Cons <$> layout '{' *> f <*> (layout ';' *> f) `until` layout '}' <|>
+                _Cons <$> f <*> _Nil <$> pure ()
 
 blockLike :: Syntax f => f () -> f a -> f [a]
-blockLike f g = _Cons <$> f *> blockOrLine g <|>
+blockLike f g = f *> blockOrLine g <|>
                 _Nil <$> pure ()
 
 conId :: Syntax f => f Name
@@ -216,7 +216,7 @@ kindConstraint = unparseable (_KEq <$> annotated kind <*> reservedSym "=" *> ann
                  mark "kind constraint"
 
 program :: Syntax f => f Program
-program = _Program <$> block (annotated decl) where -- TODO module
+program = _Program <$> block (annotated decl) -- TODO module
 
 decl :: Syntax f => f Decl
 decl = declSyn <|> (_DeclType <$> annotated declType) <|> declOp <|> declTerm -- TODO imports
@@ -247,11 +247,12 @@ tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
            mark "type pattern(0)"
 
 declTerm :: Syntax f => f Decl
-declTerm = prefix varId (_DeclSigSweet, declSig) (_DeclDefSweet, declDef) <|> declRec <|> unparseable declVar <|> mark "term declaration/definition" where
-  declRec = _DeclRec <$> blockLike (reservedId "rec") (annotated declTerm)
+declTerm = declRec <|> declTerm' <|> mark "term declaration/definition" where
+  declTerm' = prefix varId (_DeclSigSweet, declSig) (_DeclDefSweet, declDef) <|> unparseable declVar <|> mark "non-rec term declaration/definition"
   declSig = reservedSym ":" *> annotated qTy
   declDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declVar = _DeclVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
+  declRec = _DeclRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
 
 bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> mark "binding"

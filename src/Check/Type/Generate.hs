@@ -175,8 +175,9 @@ generate term = ($ term) $ case typeof (view value term) of
   IExp     -> generateExp
   IBind    -> generateBind
   IDataCon -> error "standalone DataCon"
-  IDecl    -> generateDecl Nothing
+  IDecl    -> error "standalone Decl"
   IPat     -> error "standalone Pat"
+  IProgram -> generateProgram
   _        -> value (recurseTerm generate)
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
@@ -203,6 +204,11 @@ tyPatToQTyVars = extract (embedMonoid f) where
     TyPatVar n       -> [ phantom $ QTyVar n ]
     TyPatViewVar d n -> [ phantom $ QViewVar d n ]
     _                -> []
+
+generateProgram :: Annotated Program -> Praxis (Annotated Program)
+generateProgram (a :< Program decls) = do
+  decls <- traverse (generateDecl True Nothing) decls
+  return (a :< Program decls)
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of
@@ -237,15 +243,14 @@ generateDeclType (a@(src, Just k) :< ty) = case ty of
     return $ (a :< DeclTypeEnum name alts)
 
 
-generateDecl :: Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
-generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
+generateDecl :: Bool -> Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
+generateDecl topLevel forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   DeclType ty -> DeclType <$> generateDeclType ty
 
   DeclRec decls -> do
-
     terms <- mapM preDeclare decls
-    decls <- mapM (\(ty, decl) -> generateDecl (Just ty) decl) terms
+    decls <- mapM (\(ty, decl) -> generateDecl topLevel (Just ty) decl) terms
     return $ DeclRec decls
     where
       getTyFromSig = \case
@@ -255,21 +260,17 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
         ((src, _) :< DeclVar name sig exp)
           | expIsRecSafe exp -> do { ty <- getTyFromSig sig; introTy src name ty; return (ty, decl) }
           | otherwise        -> throwAt src $ "non-function " <> quote (pretty name) <> " can not be recursive"
-        _                    -> throwAt src ("illegal non-term in recursive block" :: String)
-
 
   DeclVar name sig exp -> do
-
     case sig of
-
       Nothing -> do
         exp <- generateExp exp
         case forwardT of
           Just (_ :< Forall [] [] t) -> require $ (src, FnCongruence name) :< (t `TEq` view ty exp)
           Nothing                    -> introTy src name (mono (view ty exp))
         return $ DeclVar name Nothing exp
-
       Just sig@(_ :< Forall boundVars constraints t) -> do
+        when (not topLevel && not (null boundVars)) $ throwAt src $ "illegal local polymorphic term " <> quote (pretty name)
         tySystem . assumptions %= (Set.union (Set.fromList [ view value constraint | constraint <- constraints ])) -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardT of
@@ -396,7 +397,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     return (t :< Specialise ((src, Just t) :< Var name) specialisation)
 
   Where exp decls -> scope src $ do
-    decls <- traverse (generateDecl Nothing) decls
+    decls <- traverse (generateDecl False Nothing) decls
     exp <- generateExp exp
     return (view ty exp :< Where exp decls)
 

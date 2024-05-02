@@ -65,6 +65,7 @@ specialise src name vars cs = do
 
 specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Specialisation)
 specialiseQType src name (_ :< Forall vs cs t) = do
+
   (tyRewrite, specialisation) <- specialise src name vs cs
   let t' = tyRewrite t
   -- Require polymorphic terms to be copyable.
@@ -77,37 +78,37 @@ specialiseQType src name (_ :< Forall vs cs t) = do
   return (t', specialisation)
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
-join src f1 f2 = do
-  l <- use tEnv
-  x <- f1
+join src branch1 branch2 = do
+  l0 <- use tEnv
+  x <- branch1
   l1 <- use tEnv
-  tEnv .= l
-  y <- f2
+  tEnv .= l0
+  y <- branch2
   l2 <- use tEnv
   tEnv .= LEnv.join l1 l2
   return (x, y)
 
 closure :: Source -> Praxis a -> Praxis a
-closure src x = do
-  l1 <- use tEnv
-  tEnv %= LEnv.setCaptured
-  a <- scope src x
-  l2 <- use tEnv
-  -- Restore captured bit but save used bit
-  tEnv .= Env.zipWith (\e1 e2 -> set LEnv.captured (view LEnv.captured e1) e2) l1 l2 -- This is disgusting
-  return a
+closure src block = do
+  Env l1 <- use tEnv
+  x <- scope src block
+  Env l2 <- use tEnv
+  let captured = [ (name, view LEnv.value e1) | (name, e1) <- l1, (_, e2) <- l2, LEnv.touched e2 && not (LEnv.touched e1) ]
+  -- Note: For polymorphic terms we already check the specialisation is copyable
+  requires [ (src, Captured name) :< Instance (copy t) | (name, _ :< Forall vs _ t) <- captured, null vs ]
+  return x
 
 scope :: Source -> Praxis a -> Praxis a
-scope src x = do
+scope src block = do
   Env l1 <- use tEnv
-  a <- x
+  x <- block
   Env l2 <- use tEnv
   let n = length l2 - length l1
       (newVars, oldVars) = splitAt n l2
-      unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, not (view LEnv.used e) && not (view LEnv.read e) ]
+      unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, not (LEnv.touched e) ]
   series $ [ throwAt src (Unused n) | (n, _) <- unusedVars, head n /= '_' ] -- hacky
   tEnv .= Env oldVars
-  return a
+  return x
 
 -- | Marks a variable as read, returning the view-type of the variable and the view ref-name.
 -- A Copy constraint will be generated if the variable has already been used or has been captured.
@@ -120,7 +121,6 @@ readVar src name = do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
       tEnv %= LEnv.setRead name
       requires [ (src, UnsafeRead name) :< Instance (copy t) | view LEnv.used entry ]
-      requires [ (src,   Captured name) :< Instance (copy t) | view LEnv.captured entry ]
       return $ (refName, phantom (TyApply (phantom (TyView r)) t), specialisation)
     Nothing -> throwAt src (NotInScope name)
 
@@ -134,7 +134,6 @@ useVar src name = do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
       tEnv %= LEnv.setUsed name
       requires [ (src, MultiUse name) :< Instance (copy t) | view LEnv.used entry ]
-      requires [ (src, Captured name) :< Instance (copy t) | view LEnv.captured entry ]
       return (t, specialisation)
     Nothing -> throwAt src (NotInScope name)
 

@@ -174,8 +174,7 @@ generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case typeof (view value term) of
   IBind     -> generateBind
   IDataCon  -> error "standalone DataCon"
-  IDecl     -> generateDecl
-  IDeclTerm -> error "standalone DeclTem"
+  IDeclTerm -> generateDeclTerm
   IDeclType -> generateDeclType
   IExp      -> generateExp
   IPat      -> error "standalone Pat"
@@ -205,14 +204,6 @@ tyPatToQTyVars = extract (embedMonoid f) where
     TyPatVar n       -> [ phantom $ QTyVar n ]
     TyPatViewVar d n -> [ phantom $ QViewVar d n ]
     _                -> []
-
-generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
-generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
-
-  DeclType ty   -> DeclType <$> generateDeclType ty
-
-  DeclTerm term -> DeclTerm <$> generateDeclTerm True term
-
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of
@@ -247,15 +238,15 @@ generateDeclType (a@(src, Just k) :< ty) = case ty of
     return $ (a :< DeclTypeEnum name alts)
 
 
-generateDeclTerm :: Bool -> Annotated DeclTerm -> Praxis (Annotated DeclTerm)
+generateDeclTerm ::Annotated DeclTerm -> Praxis (Annotated DeclTerm)
 generateDeclTerm = generateDeclTerm' Nothing
 
-generateDeclTerm' :: Maybe (Annotated QType) -> Bool -> Annotated DeclTerm -> Praxis (Annotated DeclTerm)
-generateDeclTerm' forwardT global (a@(src, _) :< decl) = (a :<) <$> case decl of
+generateDeclTerm' :: Maybe (Annotated QType) -> Annotated DeclTerm -> Praxis (Annotated DeclTerm)
+generateDeclTerm' forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   DeclTermRec decls -> do
     terms <- mapM preDeclare decls
-    decls <- mapM (\(ty, decl) -> generateDeclTerm' (Just ty) global decl) terms
+    decls <- mapM (\(ty, decl) -> generateDeclTerm' (Just ty) decl) terms
     return $ DeclTermRec decls
     where
       getTyFromSig = \case
@@ -275,7 +266,6 @@ generateDeclTerm' forwardT global (a@(src, _) :< decl) = (a :<) <$> case decl of
           Nothing                    -> introTy src name (mono (view ty exp))
         return $ DeclTermVar name Nothing exp
       Just sig@(_ :< Forall boundVars constraints t) -> do
-        when (not global && not (null boundVars)) $ throwAt src $ "illegal local polymorphic term " <> quote (pretty name)
         tySystem . assumptions %= (Set.union (Set.fromList [ view value constraint | constraint <- constraints ])) -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardT of
@@ -402,7 +392,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     return (t :< Specialise ((src, Just t) :< Var name) specialisation)
 
   Where exp decls -> scope src $ do
-    decls <- traverse (generateDeclTerm False) decls
+    decls <- traverse generateDeclTerm decls
     exp <- generateExp exp
     return (view ty exp :< Where exp decls)
 

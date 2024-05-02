@@ -18,6 +18,7 @@ module Term
   , DataCon(..)
   , DataMode(..)
   , Decl(..)
+  , DeclTerm(..)
   , DeclType(..)
   , Exp(..)
   , expIsRecSafe
@@ -91,13 +92,16 @@ data DeclType = DeclTypeData DataMode Name (Maybe (Annotated TyPat)) [Annotated 
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
-data Decl = DeclDefSweet Name [Annotated Pat] (Annotated Exp)
-          | DeclOpSweet (Annotated Op) Name (Annotated OpRules)
-          | DeclRec [Annotated Decl]
-          | DeclSigSweet Name (Annotated QType)
+data DeclTerm = DeclTermRec [Annotated DeclTerm]
+              | DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
+              | DeclTermDefSweet Name [Annotated Pat] (Annotated Exp)
+              | DeclTermSigSweet Name (Annotated QType)
+  deriving (Eq, Ord)
+
+data Decl = DeclOpSweet (Annotated Op) Name (Annotated OpRules)
           | DeclSynSweet Name (Annotated Type)
           | DeclType (Annotated DeclType)
-          | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
+          | DeclTerm (Annotated DeclTerm)
   deriving (Eq, Ord)
 
 -- TODO constraints
@@ -123,7 +127,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Unit
          | Var Name
          | VarRefSweet Name
-         | Where (Annotated Exp) [Annotated Decl]
+         | Where (Annotated Exp) [Annotated DeclTerm]
   deriving (Eq, Ord)
 
 expIsRecSafe :: Annotated Exp -> Bool

@@ -50,6 +50,7 @@ data I a where
   IBind     :: I Bind
   IDataCon  :: I DataCon
   IDecl     :: I Decl
+  IDeclTerm :: I DeclTerm
   IDeclType :: I DeclType
   IExp      :: I Exp
   IPat      :: I Pat
@@ -85,6 +86,7 @@ switch a b eq neq = case (a, b) of
   (IBind, IBind)                       -> eq
   (IDataCon, IDataCon)                 -> eq
   (IDecl, IDecl)                       -> eq
+  (IDeclTerm, IDeclTerm)               -> eq
   (IDeclType, IDeclType)               -> eq
   (IExp, IExp)                         -> eq
   (IPat, IPat)                         -> eq
@@ -175,24 +177,30 @@ instance Term DataCon where
   recurseTerm f = \case
     DataCon n t -> DataCon n <$> f t
 
+instance Term Decl where
+  witness = IDecl
+  recurseAnnotation = trivial
+  recurseTerm f = \case
+    DeclOpSweet o d rs -> DeclOpSweet <$> f o <*> pure d <*> f rs
+    DeclSynSweet n t   -> DeclSynSweet n <$> f t
+    DeclType t         -> DeclType <$> f t
+    DeclTerm t         -> DeclTerm <$> f t
+
+instance Term DeclTerm where
+  witness = IDeclTerm
+  recurseAnnotation = trivial
+  recurseTerm f = \case
+    DeclTermRec ds          -> DeclTermRec <$> traverse f ds
+    DeclTermVar n t e       -> DeclTermVar n <$> traverse f t <*> f e
+    DeclTermDefSweet n ps e -> DeclTermDefSweet n <$> traverse f ps <*> f e
+    DeclTermSigSweet n t    -> DeclTermSigSweet n <$> f t
+
 instance Term DeclType where
   witness = IDeclType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
     DeclTypeData m n t as -> DeclTypeData m n <$> traverse f t <*> traverse f as
     DeclTypeEnum n as     -> pure (DeclTypeEnum n as)
-
-instance Term Decl where
-  witness = IDecl
-  recurseAnnotation = trivial
-  recurseTerm f = \case
-    DeclType t     -> DeclType <$> f t
-    DeclDefSweet n ps e -> DeclDefSweet n <$> traverse f ps <*> f e
-    DeclOpSweet o d rs  -> DeclOpSweet <$> f o <*> pure d <*> f rs
-    DeclRec ds     -> DeclRec <$> traverse f ds
-    DeclSigSweet n t    -> DeclSigSweet n <$> f t
-    DeclSynSweet n t    -> DeclSynSweet n <$> f t
-    DeclVar n t e  -> DeclVar n <$> traverse f t <*> f e
 
 
 pair :: (Term a, Term b) => Applicative f => TermAction f -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)

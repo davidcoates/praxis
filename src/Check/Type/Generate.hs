@@ -172,13 +172,14 @@ run term = do
 
 generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case typeof (view value term) of
-  IExp     -> generateExp
-  IBind    -> generateBind
-  IDataCon -> error "standalone DataCon"
-  IDecl    -> error "standalone Decl"
-  IPat     -> error "standalone Pat"
-  IProgram -> generateProgram
-  _        -> value (recurseTerm generate)
+  IBind     -> generateBind
+  IDataCon  -> error "standalone DataCon"
+  IDecl     -> generateDecl
+  IDeclTerm -> error "standalone DeclTem"
+  IDeclType -> generateDeclType
+  IExp      -> generateExp
+  IPat      -> error "standalone Pat"
+  _         -> value (recurseTerm generate)
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -205,10 +206,13 @@ tyPatToQTyVars = extract (embedMonoid f) where
     TyPatViewVar d n -> [ phantom $ QViewVar d n ]
     _                -> []
 
-generateProgram :: Annotated Program -> Praxis (Annotated Program)
-generateProgram (a :< Program decls) = do
-  decls <- traverse (generateDecl True Nothing) decls
-  return (a :< Program decls)
+generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
+generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
+
+  DeclType ty   -> DeclType <$> generateDeclType ty
+
+  DeclTerm term -> DeclTerm <$> generateDeclTerm True term
+
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of
@@ -243,41 +247,42 @@ generateDeclType (a@(src, Just k) :< ty) = case ty of
     return $ (a :< DeclTypeEnum name alts)
 
 
-generateDecl :: Bool -> Maybe (Annotated QType) -> Annotated Decl -> Praxis (Annotated Decl)
-generateDecl topLevel forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
+generateDeclTerm :: Bool -> Annotated DeclTerm -> Praxis (Annotated DeclTerm)
+generateDeclTerm = generateDeclTerm' Nothing
 
-  DeclType ty -> DeclType <$> generateDeclType ty
+generateDeclTerm' :: Maybe (Annotated QType) -> Bool -> Annotated DeclTerm -> Praxis (Annotated DeclTerm)
+generateDeclTerm' forwardT global (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  DeclRec decls -> do
+  DeclTermRec decls -> do
     terms <- mapM preDeclare decls
-    decls <- mapM (\(ty, decl) -> generateDecl topLevel (Just ty) decl) terms
-    return $ DeclRec decls
+    decls <- mapM (\(ty, decl) -> generateDeclTerm' (Just ty) global decl) terms
+    return $ DeclTermRec decls
     where
       getTyFromSig = \case
         Nothing -> mono <$> freshTyUni
         Just ty -> pure ty
       preDeclare decl = case decl of
-        ((src, _) :< DeclVar name sig exp)
+        ((src, _) :< DeclTermVar name sig exp)
           | expIsRecSafe exp -> do { ty <- getTyFromSig sig; introTy src name ty; return (ty, decl) }
           | otherwise        -> throwAt src $ "non-function " <> quote (pretty name) <> " can not be recursive"
 
-  DeclVar name sig exp -> do
+  DeclTermVar name sig exp -> do
     case sig of
       Nothing -> do
         exp <- generateExp exp
         case forwardT of
           Just (_ :< Forall [] [] t) -> require $ (src, FnCongruence name) :< (t `TEq` view ty exp)
           Nothing                    -> introTy src name (mono (view ty exp))
-        return $ DeclVar name Nothing exp
+        return $ DeclTermVar name Nothing exp
       Just sig@(_ :< Forall boundVars constraints t) -> do
-        when (not topLevel && not (null boundVars)) $ throwAt src $ "illegal local polymorphic term " <> quote (pretty name)
+        when (not global && not (null boundVars)) $ throwAt src $ "illegal local polymorphic term " <> quote (pretty name)
         tySystem . assumptions %= (Set.union (Set.fromList [ view value constraint | constraint <- constraints ])) -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardT of
           Just _  -> return () -- forwardT is sig, so a FnCongruence constraint is redundant (covered by the below FnSignature constraint)
           Nothing -> introTy src name sig
         require $ (src, FnSignature name) :< (t `TEq` view ty exp)
-        return $ DeclVar name (Just sig) exp
+        return $ DeclTermVar name (Just sig) exp
 
 
 generateInteger :: Source -> Integer -> Praxis (Annotated Type)
@@ -397,7 +402,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     return (t :< Specialise ((src, Just t) :< Var name) specialisation)
 
   Where exp decls -> scope src $ do
-    decls <- traverse (generateDecl False Nothing) decls
+    decls <- traverse (generateDeclTerm False) decls
     exp <- generateExp exp
     return (view ty exp :< Where exp decls)
 

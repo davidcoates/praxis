@@ -111,6 +111,7 @@ definePrisms ''Bind
 definePrisms ''DataCon
 definePrisms ''DataMode
 definePrisms ''Decl
+definePrisms ''DeclTerm
 definePrisms ''DeclType
 definePrisms ''Exp
 definePrisms ''Pat
@@ -143,6 +144,7 @@ syntax = \case
   -- | T0
   IDataCon        -> dataCon
   IDecl           -> decl
+  IDeclTerm       -> declTerm
   IDeclType       -> declType
   IExp            -> exp
   IPat            -> pat
@@ -219,7 +221,7 @@ program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) -- TODO module
 
 decl :: Syntax f => f Decl
-decl = declSyn <|> (_DeclType <$> annotated declType) <|> declOp <|> declTerm -- TODO imports
+decl = declSyn <|> (_DeclType <$> annotated declType) <|> declOp <|> (_DeclTerm <$> annotated declTerm) -- TODO imports
 
 declSyn :: Syntax f => f Decl
 declSyn = _DeclSynSweet <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
@@ -246,13 +248,13 @@ tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
            unparseable (pack _TyPatPack tyPat) <|>
            mark "type pattern(0)"
 
-declTerm :: Syntax f => f Decl
-declTerm = declRec <|> declTerm' <|> mark "term declaration/definition" where
-  declTerm' = prefix varId (_DeclSigSweet, declSig) (_DeclDefSweet, declDef) <|> unparseable declVar <|> mark "non-rec term declaration/definition"
-  declSig = reservedSym ":" *> annotated qTy
-  declDef = annotated pat `until` reservedSym "=" <*> annotated exp
-  declVar = _DeclVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
-  declRec = _DeclRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
+declTerm :: Syntax f => f DeclTerm
+declTerm = declTermRec <|> declTerm' <|> mark "term declaration/definition" where
+  declTerm' = prefix varId (_DeclTermSigSweet, declTermSig) (_DeclTermDefSweet, declTermDef) <|> unparseable declTermVar <|> mark "non-rec term declaration/definition"
+  declTermSig = reservedSym ":" *> annotated qTy
+  declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
+  declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
+  declTermRec = _DeclTermRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
 
 bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> mark "binding"

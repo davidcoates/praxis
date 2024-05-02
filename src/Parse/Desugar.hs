@@ -41,14 +41,15 @@ run term = do
 
 desugar :: Term a => Annotated a -> Praxis (Annotated a)
 desugar term = ($ term) $ case typeof (view value term) of
-  IProgram -> desugarProgram
-  IExp     -> desugarExp
-  IPat     -> desugarPat
-  IType    -> desugarTy
-  IOp      -> desugarOp
-  IOpRules -> error "standalone IOpRules"
-  IDecl    -> error "standalone Decl"
-  _        -> value (recurseTerm desugar)
+  IDecl     -> error "standalone IDecl"
+  IDeclTerm -> error "standalone IDeclTerm"
+  IExp      -> desugarExp
+  IOp       -> desugarOp
+  IOpRules  -> error "standalone IOpRules"
+  IPat      -> desugarPat
+  IProgram  -> desugarProgram
+  IType     -> desugarTy
+  _         -> value (recurseTerm desugar)
 
 
 -- Desugaring proper
@@ -58,6 +59,7 @@ desugarProgram (a :< Program decls) = do
   decls <- desugarDecls decls
   return (a :< Program decls)
 
+
 collectFreeVars :: Annotated Exp -> Set Name
 collectFreeVars x = collectFreeVars' x where
   collectFreeVars' :: Term a => Annotated a -> Set Name
@@ -65,9 +67,9 @@ collectFreeVars x = collectFreeVars' x where
     IExp -> case x of
       Var n -> Set.singleton n
       _     -> continue
-    IDecl -> case x of
-      DeclVar n _ e -> Set.delete n (collectFreeVars' e)
-      _             -> continue
+    IDeclTerm -> case x of
+      DeclTermVar n _ e -> Set.delete n (collectFreeVars' e)
+      _                 -> continue
     _     -> continue
     where continue = getConst $ recurseTerm (Const . collectFreeVars') x
 
@@ -132,7 +134,7 @@ desugarExp (a@(src, _) :< exp) = case exp of
 
   Where exp decls -> do
     exp <- desugar exp
-    decls <- desugarDecls decls
+    decls <- desugarDeclTerms decls
     return (a :< Where exp decls)
 
   _           -> (a :<) <$> recurseTerm desugar exp
@@ -166,27 +168,39 @@ desugarOpRules op (a@(src, _) :< OpRulesSweet rules) = do
     return (a :< OpRules (listToMaybe assocs) (concat precs))
 
 
-desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
-desugarDecls []            = pure []
-desugarDecls (a@(src, _) :< decl : decls) = case decl of
+desugarDeclTerms :: [Annotated DeclTerm] -> Praxis [Annotated DeclTerm]
+desugarDeclTerms [] = pure []
+desugarDeclTerms (a@(src, _) :< decl : decls) = case decl of
 
-  DeclType ty -> do
-    ty <- desugar ty
-    decls <- desugarDecls decls
-    return (a :< DeclType ty : decls)
-
-  DeclDefSweet name args exp -> do
+  DeclTermDefSweet name args exp -> do
     args <- mapM desugar args
     exp <- desugar exp
-    let decl = a :< DeclVar name Nothing (curry args exp)
+    let decl = a :< DeclTermVar name Nothing (curry args exp)
         curry :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
         curry     [] e = e
         curry (p:ps) e = (src, Nothing) :< Lambda p (curry ps e)
-    desugarDecls decls >>= \case
+    desugarDeclTerms decls >>= \case
       [] -> return $ [decl]
-      (_ :< DeclVar name' _ _) : _
+      (_ :< DeclTermVar name' _ _) : _
         | name == name' -> throwAt src $ "multiple definitions for " <> quote (pretty name)
       decls -> return $ decl:decls
+
+  DeclTermRec recDeclTerms -> do
+    recDeclTerms <- desugarDeclTerms recDeclTerms
+    decls <- desugarDeclTerms decls
+    return (a :< DeclTermRec recDeclTerms : decls)
+
+  DeclTermSigSweet name ty -> do
+    ty <- desugar ty
+    desugarDeclTerms decls >>= \case
+      (a' :< DeclTermVar name' Nothing exp) : decls
+        | name == name' -> return $ ((a <> a') :< DeclTermVar name (Just ty) exp) : decls
+      _ -> throwAt src $ "declaration of " <> quote (pretty name) <> " lacks an accompanying binding"
+
+
+desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
+desugarDecls [] = pure []
+desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
   DeclOpSweet op name rules -> do
 
@@ -229,25 +243,30 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
     decls <- desugarDecls decls
     return decls
 
-
-  DeclRec recDecls -> do
-    recDecls <- desugarDecls recDecls
-    decls <- desugarDecls decls
-    return (a :< DeclRec recDecls : decls)
-
-  DeclSigSweet name ty -> do
-    ty <- desugar ty
-    desugarDecls decls >>= \case
-      (a' :< DeclVar name' Nothing exp) : decls
-        | name == name' -> return $ ((a <> a') :< DeclVar name (Just ty) exp) : decls
-      _ -> throwAt src $ "declaration of " <> quote (pretty name) <> " lacks an accompanying binding"
-
   DeclSynSweet name ty -> do
     ty <- desugar ty
     tySynonyms %= Map.insert name ty
     decls <- desugarDecls decls
     return decls
 
+  DeclTerm term -> do
+    let (terms, decls') = coalesceDeclTerms decls
+    terms <- desugarDeclTerms (term:terms)
+    decls' <- desugarDecls decls'
+    return $ (map (\term@(a :< _) -> (a :< DeclTerm term)) terms) ++ decls'
+
+  DeclType ty -> do
+    ty <- desugar ty
+    decls <- desugarDecls decls
+    return (a :< DeclType ty : decls)
+
+
+coalesceDeclTerms :: [Annotated Decl] -> ([Annotated DeclTerm], [Annotated Decl])
+coalesceDeclTerms [] = ([], [])
+coalesceDeclTerms (decl:decls) = let (terms, decls') = coalesceDeclTerms decls in
+  case view value decl of
+    DeclTerm term -> (term : terms, decls')
+    _             -> (terms, decl : decls')
 
 -- TODO check for overlapping patterns?
 desugarPat :: Annotated Pat -> Praxis (Annotated Pat)

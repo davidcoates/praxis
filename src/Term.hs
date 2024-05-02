@@ -21,7 +21,6 @@ module Term
   , DeclTerm(..)
   , DeclType(..)
   , Exp(..)
-  , expIsRecSafe
   , Lit(..)
   , Pat(..)
   , Program(..)
@@ -129,12 +128,6 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | VarRefSweet Name
          | Where (Annotated Exp) [Annotated DeclTerm]
   deriving (Eq, Ord)
-
-expIsRecSafe :: Annotated Exp -> Bool
-expIsRecSafe term = case view value term of
-  Lambda _ _ -> True
-  Cases _    -> True
-  _          -> False
 
 -- TODO: Array literals?
 data Lit = Bool Bool

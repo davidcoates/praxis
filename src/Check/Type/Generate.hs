@@ -43,6 +43,12 @@ ty = annotation . just
 mono :: Annotated Type -> Annotated QType
 mono t = (view source t, Nothing) :< Forall [] [] t
 
+expIsFunction :: Annotated Exp -> Bool
+expIsFunction (_ :< exp) = case exp of
+  Lambda _ _ -> True
+  Cases  _   -> True
+  _          -> False
+
 specialiseQTyVar :: Annotated QTyVar -> Praxis (Name, Annotated Type)
 specialiseQTyVar (a :< qTyVar) = case qTyVar of
   QTyVar n     -> (\t -> (n, a :< view value t)) <$> freshTyUni
@@ -65,17 +71,8 @@ specialise src name vars cs = do
 
 specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Specialisation)
 specialiseQType src name (_ :< Forall vs cs t) = do
-
   (tyRewrite, specialisation) <- specialise src name vs cs
-  let t' = tyRewrite t
-  -- Require polymorphic terms to be copyable.
-  --
-  -- This will give the compiler the freedom to allocate just once per (type-distinct) specialisation
-  -- instead of at every call site.
-  --
-  -- Ideally this check would happen at the definition of the polymorphic term, but that's not so easy.
-  when (not (null vs)) $ require $ (src, Specialisation name) :< Instance (copy t')
-  return (t', specialisation)
+  return (tyRewrite t, specialisation)
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
 join src branch1 branch2 = do
@@ -253,8 +250,8 @@ generateDeclTerm' forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
         Just ty -> pure ty
       preDeclare decl = case decl of
         ((src, _) :< DeclTermVar name sig exp)
-          | expIsRecSafe exp -> do { ty <- getTyFromSig sig; introTy src name ty; return (ty, decl) }
-          | otherwise        -> throwAt src $ "non-function " <> quote (pretty name) <> " can not be recursive"
+          | expIsFunction exp -> do { ty <- getTyFromSig sig; introTy src name ty; return (ty, decl) }
+          | otherwise         -> throwAt src $ "non-function " <> quote (pretty name) <> " can not be recursive"
 
   DeclTermVar name sig exp -> do
     case sig of
@@ -265,6 +262,7 @@ generateDeclTerm' forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
           Nothing                    -> introTy src name (mono (view ty exp))
         return $ DeclTermVar name Nothing exp
       Just sig@(_ :< Forall boundVars constraints t) -> do
+        when (not (null boundVars) && not (expIsFunction exp)) $ throwAt src $ "non-function " <> quote (pretty name) <> " can not be polymorphic"
         tySystem . assumptions %= (Set.union (Set.fromList [ view value constraint | constraint <- constraints ])) -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardT of

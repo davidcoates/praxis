@@ -282,7 +282,7 @@ instance Term Type where
     TyUni n         -> pure (TyUni n)
     TyApply a b     -> TyApply <$> f a <*> f b
     TyCon n         -> pure (TyCon n)
-    TyFunSweet a b  -> TyFunSweet <$> f a <*> f b
+    TyFnSweet a b  -> TyFnSweet <$> f a <*> f b
     TyView v        -> TyView <$> f v
     TyPack a b      -> TyPack <$> f a <*> f b
     TyPairSweet a b -> TyPairSweet <$> f a <*> f b
@@ -320,7 +320,7 @@ instance Term Kind where
   recurseTerm f = \case
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
-    KindFun a b    -> KindFun <$> f a <*> f b
+    KindFn a b    -> KindFn <$> f a <*> f b
     KindView d     -> pure (KindView d)
     KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType

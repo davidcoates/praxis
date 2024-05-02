@@ -270,7 +270,7 @@ desugarTy (a :< ty) = case ty of
       Just ty -> ty
       Nothing -> a :< TyCon name
 
-  TyFunSweet t1 t2 -> do
+  TyFnSweet t1 t2 -> do
     t1 <- desugarTy t1
     t2 <- desugarTy t2
     return (a :< TyApply (a :< TyCon "Fn") (a :< TyPack t1 t2))

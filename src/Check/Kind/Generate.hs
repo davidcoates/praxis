@@ -95,7 +95,7 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
         _ -> do
           k1 <- freshKindUni
           k2 <- freshKindUni
-          require $ (src, KindReasonTyApply f x) :< (view kind f `KEq` phantom (KindFun k1 k2))
+          require $ (src, KindReasonTyApply f x) :< (view kind f `KEq` phantom (KindFn k1 k2))
           require $ (src, KindReasonTyApply f x) :< (view kind x `KSub` k1)
           return (k2 :< TyApply f x)
 
@@ -160,7 +160,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     unless (mode == DataRec) $ introKind src name k
     case arg of
       Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
-      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
+      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFn (view kind arg) (phantom KindType)))
 
     let
       deduce :: (Annotated Type -> Annotated Type) -> Maybe (Annotated Type) -> (InstanceOrigin, Instance)

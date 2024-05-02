@@ -185,7 +185,7 @@ data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
 data Type = TyUni Name -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
-          | TyFunSweet (Annotated Type) (Annotated Type)
+          | TyFnSweet (Annotated Type) (Annotated Type)
           | TyView (Annotated View)
           | TyPack (Annotated Type) (Annotated Type)
           | TyPairSweet (Annotated Type) (Annotated Type)
@@ -201,7 +201,7 @@ data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)
 
 data Kind = KindUni Name
           | KindConstraint
-          | KindFun (Annotated Kind) (Annotated Kind)
+          | KindFn (Annotated Kind) (Annotated Kind)
           | KindView ViewDomain
           | KindPair (Annotated Kind) (Annotated Kind)
           | KindType
@@ -267,8 +267,8 @@ data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
               | Captured Name
               | CaseCongruence
               | ConPattern Name
-              | FunCongruence Name
-              | FunSignature Name
+              | FnCongruence Name
+              | FnSignature Name
               | IfCondition
               | IfCongruence
               | InstanceOf Name

@@ -265,7 +265,7 @@ pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> mark "patte
          mark "pattern(0)"
 
 kind :: Syntax f => f Kind
-kind = kind0 `join` (_KindFun, reservedSym "->" *> annotated kind) <|> mark "kind" where
+kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> mark "kind" where
   kind0 = _KindView <$> reservedCon "View" *> viewDomain <|>
           _KindType <$> reservedCon "Type" <|>
           unparseable (_KindUni <$> uni) <|>
@@ -288,7 +288,7 @@ qTyVar = _QTyVar <$> varId <|>
           mark "type variable"
 
 ty :: Syntax f => f Type
-ty = ty1 `join` (_TyFunSweet, reservedSym "->" *> annotated ty) <|> mark "type"
+ty = ty1 `join` (_TyFnSweet, reservedSym "->" *> annotated ty) <|> mark "type"
 
 viewDomain :: Syntax f => f ViewDomain
 viewDomain = _Ref <$> reservedSym "&" <|>

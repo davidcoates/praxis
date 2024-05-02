@@ -214,7 +214,7 @@ generateDeclType (a@(src, Just k) :< ty) = case ty of
       retTy = case arg of
         Nothing
           -> TyCon name `as` k
-        Just arg | KindFun k1 k2 <- view value k
+        Just arg | KindFn k1 k2 <- view value k
           -> TyApply (TyCon name `as` k) (patToTy arg) `as` k2
 
       qTyVars = case arg of
@@ -265,7 +265,7 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
       Nothing -> do
         exp <- generateExp exp
         case forwardT of
-          Just (_ :< Forall [] [] t) -> require $ (src, FunCongruence name) :< (t `TEq` view ty exp)
+          Just (_ :< Forall [] [] t) -> require $ (src, FnCongruence name) :< (t `TEq` view ty exp)
           Nothing                    -> introTy src name (mono (view ty exp))
         return $ DeclVar name Nothing exp
 
@@ -273,9 +273,9 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
         tySystem . assumptions %= (Set.union (Set.fromList [ view value constraint | constraint <- constraints ])) -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardT of
-          Just _  -> return () -- forwardT is sig, so a FunCongruence constraint is redundant (covered by the below FunSignature constraint)
+          Just _  -> return () -- forwardT is sig, so a FnCongruence constraint is redundant (covered by the below FnSignature constraint)
           Nothing -> introTy src name sig
-        require $ (src, FunSignature name) :< (t `TEq` view ty exp)
+        require $ (src, FnSignature name) :< (t `TEq` view ty exp)
         return $ DeclVar name (Just sig) exp
 
 

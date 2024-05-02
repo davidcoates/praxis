@@ -36,7 +36,7 @@ reduce disambiguate = \case
 
   KEq k1 k2@(_ :< KindUni _) -> reduce disambiguate (k2 `KEq` k1) -- handled by the above case
 
-  KEq (_ :< KindFun k1 k2) (_ :< KindFun l1 l2) -> return $ Subgoals [ KEq k1 l1, KEq k2 l2 ]
+  KEq (_ :< KindFn k1 k2) (_ :< KindFn l1 l2) -> return $ Subgoals [ KEq k1 l1, KEq k2 l2 ]
 
   KEq (_ :< KindPair k1 k2) (_ :< KindPair l1 l2) -> return $ Subgoals [ KEq k1 l1, KEq k2 l2 ]
 

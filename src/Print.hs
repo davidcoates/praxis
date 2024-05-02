@@ -118,8 +118,8 @@ instance Pretty TyReason where
     Captured n       -> "variable " <> quote (pretty n) <> " captured"
     CaseCongruence   -> "alternatives of case expression must have the same type"
     ConPattern n     -> "constructor pattern " <> quote (pretty n)
-    FunCongruence n  -> "function " <> quote (pretty n)
-    FunSignature n   -> "function signature for " <> quote (pretty n)
+    FnCongruence n  -> "function " <> quote (pretty n)
+    FnSignature n   -> "function signature for " <> quote (pretty n)
     IfCondition      -> "type of if condition must be Bool"
     IfCongruence     -> "branches of if expression must have the same type"
     InstanceOf n     -> "monomorphic usage of " <> quote (pretty n)

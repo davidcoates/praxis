@@ -154,7 +154,7 @@ instance Term OpRules where
   recurseAnnotation = trivial
   recurseTerm f = \case
     OpRules a ps    -> OpRules <$> traverse f a <*> traverse f ps
-    OpMultiRules rs -> OpMultiRules <$> traverse (bitraverse f (traverse f)) rs
+    OpRulesSweet rs -> OpRulesSweet <$> traverse (bitraverse f (traverse f)) rs
 
 instance Term Prec where
   witness = IPrec
@@ -187,11 +187,11 @@ instance Term Decl where
   recurseAnnotation = trivial
   recurseTerm f = \case
     DeclType t     -> DeclType <$> f t
-    DeclDef n ps e -> DeclDef n <$> traverse f ps <*> f e
-    DeclOp o d rs  -> DeclOp <$> f o <*> pure d <*> f rs
+    DeclDefSweet n ps e -> DeclDefSweet n <$> traverse f ps <*> f e
+    DeclOpSweet o d rs  -> DeclOpSweet <$> f o <*> pure d <*> f rs
     DeclRec ds     -> DeclRec <$> traverse f ds
-    DeclSig n t    -> DeclSig n <$> f t
-    DeclSyn n t    -> DeclSyn n <$> f t
+    DeclSigSweet n t    -> DeclSigSweet n <$> f t
+    DeclSynSweet n t    -> DeclSynSweet n <$> f t
     DeclVar n t e  -> DeclVar n <$> traverse f t <*> f e
 
 
@@ -210,12 +210,12 @@ instance Term Exp where
     Cases as        -> Cases <$> pairs f as
     Con n           -> pure (Con n)
     Defer a b       -> Defer <$> f a <*> f b
-    Do ss           -> Do <$> traverse f ss
+    DoSweet ss      -> DoSweet <$> traverse f ss
     If a b c        -> If <$> f a <*> f b <*> f c
     Lambda a b      -> Lambda <$> f a <*> f b
     Let a b         -> Let <$> f a <*> f b
     Lit l           -> pure (Lit l)
-    Mixfix ts       -> Mixfix <$> traverse f ts
+    MixfixSweet ts  -> MixfixSweet <$> traverse f ts
     Read n a        -> Read n <$> f a
     Pair a b        -> Pair <$> f a <*> f b
     Seq a b         -> Seq <$> f a <*> f b
@@ -224,7 +224,7 @@ instance Term Exp where
     Switch as       -> Switch <$> pairs f as
     Unit            -> pure Unit
     Var n           -> pure (Var n)
-    VarRef n        -> pure (VarRef n)
+    VarRefSweet n   -> pure (VarRefSweet n)
     Where a bs      -> Where <$> f a <*> traverse f bs
 
 instance Term Pat where
@@ -279,15 +279,15 @@ instance Term Type where
   witness = IType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    TyUni n     -> pure (TyUni n)
-    TyApply a b -> TyApply <$> f a <*> f b
-    TyCon n     -> pure (TyCon n)
-    TyFun a b   -> TyFun <$> f a <*> f b
-    TyView v    -> TyView <$> f v
-    TyPack a b  -> TyPack <$> f a <*> f b
-    TyPair a b  -> TyPair <$> f a <*> f b
-    TyUnit      -> pure TyUnit
-    TyVar n     -> pure (TyVar n)
+    TyUni n         -> pure (TyUni n)
+    TyApply a b     -> TyApply <$> f a <*> f b
+    TyCon n         -> pure (TyCon n)
+    TyFunSweet a b  -> TyFunSweet <$> f a <*> f b
+    TyView v        -> TyView <$> f v
+    TyPack a b      -> TyPack <$> f a <*> f b
+    TyPairSweet a b -> TyPairSweet <$> f a <*> f b
+    TyUnitSweet     -> pure TyUnitSweet
+    TyVar n         -> pure (TyVar n)
 
 instance Term TyConstraint where
   witness = ITyConstraint

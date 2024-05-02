@@ -242,8 +242,6 @@ generateDecl forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   DeclType ty -> DeclType <$> generateDeclType ty
 
-  op@(DeclOp _ _ _) -> return op
-
   DeclRec decls -> do
 
     terms <- mapM preDeclare decls

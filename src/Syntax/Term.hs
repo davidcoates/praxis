@@ -222,7 +222,7 @@ decl :: Syntax f => f Decl
 decl = declSyn <|> (_DeclType <$> annotated declType) <|> declOp <|> declTerm -- TODO imports
 
 declSyn :: Syntax f => f Decl
-declSyn = _DeclSyn <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
+declSyn = _DeclSynSweet <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
 
 declType :: Syntax f => f DeclType
 declType = declTypeData <|> declTypeEnum
@@ -247,7 +247,7 @@ tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
            mark "type pattern(0)"
 
 declTerm :: Syntax f => f Decl
-declTerm = prefix varId (_DeclSig, declSig) (_DeclDef, declDef) <|> declRec <|> unparseable declVar <|> mark "term declaration/definition" where
+declTerm = prefix varId (_DeclSigSweet, declSig) (_DeclDefSweet, declDef) <|> declRec <|> unparseable declVar <|> mark "term declaration/definition" where
   declRec = _DeclRec <$> blockLike (reservedId "rec") (annotated declTerm)
   declSig = reservedSym ":" *> annotated qTy
   declDef = annotated pat `until` reservedSym "=" <*> annotated exp
@@ -288,7 +288,7 @@ qTyVar = _QTyVar <$> varId <|>
           mark "type variable"
 
 ty :: Syntax f => f Type
-ty = ty1 `join` (_TyFun, reservedSym "->" *> annotated ty) <|> mark "type"
+ty = ty1 `join` (_TyFunSweet, reservedSym "->" *> annotated ty) <|> mark "type"
 
 viewDomain :: Syntax f => f ViewDomain
 viewDomain = _Ref <$> reservedSym "&" <|>
@@ -302,7 +302,7 @@ ty1 = right _TyApply ty0 <|> mark "type(1)" where
         _TyCon <$> conId <|>
         unparseable (_TyUni <$> uni) <|>
         pack _TyPack ty <|>
-        tuple _TyUnit _TyPair ty <|>
+        tuple _TyUnitSweet _TyPairSweet ty <|>
         mark "type(0)"
 
 view' :: Syntax f => f View
@@ -318,9 +318,9 @@ exp = exp5 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
   exp4 = rightWithSep (reservedId "defer") _Defer exp3 <|> mark "expression(4)"
   exp3 = mixfix <$> some (annotated (_TOp <$> varSym <|> _TExp <$> annotated exp2)) <|> unparseable exp2 <|> mark "expression(3)" -- FIXME unparseable is a hack here
-  mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> Mixfix ts }) (\case { Mixfix ts -> Just ts; _ -> Nothing })
+  mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> MixfixSweet ts }) (\case { MixfixSweet ts -> Just ts; _ -> Nothing })
   exp2 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
-         _Do <$> reservedId "do" *> block (annotated stmt) <|>
+         _DoSweet <$> reservedId "do" *> block (annotated stmt) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
@@ -330,7 +330,7 @@ exp = exp5 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          _Switch <$> reservedId "switch" *> block switch <|>
          exp1 <|> mark "expression(2)"
   exp1 = right _Apply exp0 <|> mark "expression(1)"
-  exp0 = _VarRef <$> reservedSym "&" *> varId <|>
+  exp0 = _VarRefSweet <$> reservedSym "&" *> varId <|>
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
@@ -349,14 +349,14 @@ alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedSym "->" *> annotated exp <|> mark "case alternative"
 
 declOp :: Syntax f => f Decl
-declOp = _DeclOp <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
+declOp = _DeclOpSweet <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
 
 op :: Syntax f => f Op
 op = _Op <$> special '(' *> atLeast 2 atom <* special ')' where
   atom = _Nothing <$> special '_' <|> _Just <$> varSym
 
 opRules :: Syntax f => f OpRules
-opRules = _OpMultiRules <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
+opRules = _OpRulesSweet <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
           unparseable (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
           unparseable (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
 

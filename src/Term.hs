@@ -69,7 +69,7 @@ data Op = Op [Maybe Name] -- TDO qualification over this
   deriving (Eq, Ord)
 
 data OpRules = OpRules (Maybe (Annotated Assoc)) [Annotated Prec]
-             | OpMultiRules [Either (Annotated Assoc) [Annotated Prec]] -- ^Parsing only
+             | OpRulesSweet [Either (Annotated Assoc) [Annotated Prec]]
   deriving (Eq, Ord)
 
 data Prec = Prec Ordering Op
@@ -91,11 +91,11 @@ data DeclType = DeclTypeData DataMode Name (Maybe (Annotated TyPat)) [Annotated 
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
-data Decl = DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
-          | DeclOp (Annotated Op) Name (Annotated OpRules) -- ^ Parsing only
+data Decl = DeclDefSweet Name [Annotated Pat] (Annotated Exp)
+          | DeclOpSweet (Annotated Op) Name (Annotated OpRules)
           | DeclRec [Annotated Decl]
-          | DeclSig Name (Annotated QType) -- ^ Parsing only
-          | DeclSyn Name (Annotated Type) -- ^ Parsing only
+          | DeclSigSweet Name (Annotated QType)
+          | DeclSynSweet Name (Annotated Type)
           | DeclType (Annotated DeclType)
           | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
   deriving (Eq, Ord)
@@ -108,12 +108,12 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Cases [(Annotated Pat, Annotated Exp)]
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
-         | Do [Annotated Stmt] -- ^ Parsing only
+         | DoSweet [Annotated Stmt]
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
          | Let (Annotated Bind) (Annotated Exp)
          | Lit Lit
-         | Mixfix [Annotated Tok] -- ^ Parsing only
+         | MixfixSweet [Annotated Tok]
          | Read Name (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
@@ -122,7 +122,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name
-         | VarRef Name -- ^ Parsing only
+         | VarRefSweet Name
          | Where (Annotated Exp) [Annotated Decl]
   deriving (Eq, Ord)
 
@@ -164,7 +164,6 @@ data Stmt = StmtBind (Annotated Bind)
           | StmtExp (Annotated Exp)
   deriving (Eq, Ord)
 
--- |Parsing only
 data Tok = TExp (Annotated Exp)
          | TOp Name
   deriving (Eq, Ord)
@@ -186,11 +185,11 @@ data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
 data Type = TyUni Name -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
-          | TyFun (Annotated Type) (Annotated Type) -- ^ Parsing only
+          | TyFunSweet (Annotated Type) (Annotated Type)
           | TyView (Annotated View)
           | TyPack (Annotated Type) (Annotated Type)
-          | TyPair (Annotated Type) (Annotated Type) -- ^ Parsing only
-          | TyUnit -- ^ Parsing only
+          | TyPairSweet (Annotated Type) (Annotated Type)
+          | TyUnitSweet
           | TyVar Name
   deriving (Eq, Ord)
 

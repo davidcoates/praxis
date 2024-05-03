@@ -69,10 +69,12 @@ specialise src name vars cs = do
   requires [ (src, Specialisation name) :< view value (tyRewrite c) | c <- cs ]
   return (tyRewrite, specialisation)
 
-specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Specialisation)
-specialiseQType src name (_ :< Forall vs cs t) = do
-  (tyRewrite, specialisation) <- specialise src name vs cs
-  return (tyRewrite t, specialisation)
+specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Maybe Specialisation)
+specialiseQType src name (_ :< Forall vs cs t) = case vs of
+  [] -> return (t, Nothing)
+  _  -> do
+    (tyRewrite, specialisation) <- specialise src name vs cs
+    return (tyRewrite t, Just specialisation)
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
 join src branch1 branch2 = do
@@ -91,7 +93,7 @@ closure src block = do
   x <- scope src block
   Env l2 <- use tEnv
   let captured = [ (name, view LEnv.value e1) | (name, e1) <- l1, (_, e2) <- l2, LEnv.touched e2 && not (LEnv.touched e1) ]
-  -- Note: For polymorphic terms we already check the specialisation is copyable
+  -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, Captured name) :< Instance (copy t) | (name, _ :< Forall vs _ t) <- captured, null vs ]
   return x
 
@@ -109,28 +111,32 @@ scope src block = do
 
 -- | Marks a variable as read, returning the view-type of the variable and the view ref-name.
 -- A Copy constraint will be generated if the variable has already been used or has been captured.
-readVar :: Source -> Name -> Praxis (Name, Annotated Type, Specialisation)
+readVar :: Source -> Name -> Praxis (Name, Annotated Type)
 readVar src name = do
   l <- use tEnv
   r@(_ :< ViewRef refName) <- freshViewRef
   case Env.lookup name l of
     Just entry -> do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
+      -- reading a polymorphic term is illformed and unnecessary (since every specialisation is copyable anyway)
+      -- TODO should we prohibit all Copy-ables here?
+      when (isJust specialisation) $ throwAt src $ "read variable " <> quote (pretty name) <> "is polymorphic (read is not necessary)"
       tEnv %= LEnv.setRead name
       requires [ (src, UnsafeRead name) :< Instance (copy t) | view LEnv.used entry ]
-      return $ (refName, phantom (TyApply (phantom (TyView r)) t), specialisation)
+      return $ (refName, phantom (TyApply (phantom (TyView r)) t))
     Nothing -> throwAt src (NotInScope name)
 
 -- | Marks a variable as used, returning the type of the variable.
 -- A Copy constraint will be generated if the variable has already been used or has been captured.
-useVar :: Source -> Name -> Praxis (Annotated Type, Specialisation)
+useVar :: Source -> Name -> Praxis (Annotated Type, Maybe Specialisation)
 useVar src name = do
   l <- use tEnv
   case Env.lookup name l of
     Just entry -> do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
       tEnv %= LEnv.setUsed name
-      requires [ (src, MultiUse name) :< Instance (copy t) | view LEnv.used entry ]
+      unless (isJust specialisation) $ do
+        requires [ (src, MultiUse name) :< Instance (copy t) | view LEnv.used entry ]
       return (t, specialisation)
     Nothing -> throwAt src (NotInScope name)
 
@@ -311,7 +317,9 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
   Con name -> do
     qTy <- getConTy src name
     (t, specialisation) <- specialiseQType src name qTy
-    return (t :< Specialise ((src, Just t) :< Con name) specialisation)
+    case specialisation of
+      Just specialisation -> return (t :< Specialise ((src, Just t) :< Con name) specialisation)
+      Nothing             -> return (t :< Con name)
 
   Defer exp1 exp2 -> do
     exp1 <- generateExp exp1
@@ -348,15 +356,11 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
       return $ TyApply op (TyCon "String" `as` phantom KindType) `as` phantom KindType
 
   Read var exp -> scope src $ do
-    (refName, refType, specialisation) <- readVar src var
+    (refName, refType) <- readVar src var
     tEnv %= LEnv.intro var (mono refType)
     exp <- generateExp exp
     let t = view ty exp
     require $ (src, TyReasonRead var) :< RefFree refName t
-    -- Reading a polymorphic term is unnecessary (since it's Copyable).
-    -- We prohibit since we can't correctly wrap with Specialise (it only makes sense to wrap var, not Read var exp).
-    -- TODO should we prohibit all Copy-ables here? It would require a NoCopy / Not constraint.
-    when (not (null specialisation)) $ throwAt src $ "read variable " <> quote (pretty var) <> "is polymorphic (read is not necessary)"
     return (t :< Read var exp)
 
   Pair exp1 exp2 -> do
@@ -386,7 +390,9 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
   Var name -> do
     (t, specialisation) <- useVar src name
-    return (t :< Specialise ((src, Just t) :< Var name) specialisation)
+    case specialisation of
+      Just specialisation -> return (t :< Specialise ((src, Just t) :< Var name) specialisation)
+      Nothing             -> return (t :< Var name)
 
   Where exp decls -> scope src $ do
     decls <- traverse generateDeclTerm decls

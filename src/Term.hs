@@ -274,7 +274,6 @@ data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
               | Specialisation Name
               | SwitchCondition
               | SwitchCongruence
-              | UnsafeRead Name
               | UserSignature
   deriving (Eq, Ord)
 

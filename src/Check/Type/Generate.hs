@@ -118,11 +118,12 @@ readVar src name = do
   case Env.lookup name l of
     Just entry -> do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
-      -- reading a polymorphic term is illformed and unnecessary (since every specialisation is copyable anyway)
-      -- TODO should we prohibit all Copy-ables here?
-      when (isJust specialisation) $ throwAt src $ "read variable " <> quote (pretty name) <> "is polymorphic (read is not necessary)"
+      -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
+      when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> quote (pretty name)
       tEnv %= LEnv.setRead name
-      requires [ (src, UnsafeRead name) :< Instance (copy t) | view LEnv.used entry ]
+      when (view LEnv.used entry) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
+      -- require read variables to *not* be copyable (if the variable is copyable, the read is unnecessary)
+      require $ (src, TyReasonRead name) :< Not (phantom (Instance (copy t)))
       return $ (refName, phantom (TyApply (phantom (TyView r)) t))
     Nothing -> throwAt src (NotInScope name)
 

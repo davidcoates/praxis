@@ -128,7 +128,6 @@ instance Pretty TyReason where
     Specialisation n -> "specialisation of " <> quote (pretty n)
     SwitchCondition  -> "type of switch condition must be Bool"
     SwitchCongruence -> "branches of switch expression must have the same type"
-    UnsafeRead n     -> "variable " <> quote (pretty n) <> " read after being used"
     UserSignature    -> "user-supplied signature"
 
 instance Pretty KindReason where

@@ -94,6 +94,13 @@ reduce disambiguate = \case
         No    -> Contradiction
         Maybe -> Skip
 
+  Not (_ :< Instance inst) -> do
+    r <- isInstance inst
+    return $ case r of
+      Yes   -> Contradiction
+      No    -> Tautology
+      Maybe -> Skip
+
   HoldsInteger n (_ :< t) -> case t of
     TyCon "I8"    -> checkBounds n (undefined :: I8)
     TyCon "I16"   -> checkBounds n (undefined :: I16)

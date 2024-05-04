@@ -3,8 +3,8 @@ module Main where
 import           Common
 import qualified Env.Env            as Env
 import qualified Env.LEnv           as LEnv
-import           Executors
 import           Inbuilts           (initialState)
+import           Interpret
 import           Praxis
 import           Term
 
@@ -76,12 +76,12 @@ parse xs = return () -- TODO
       case file of
         Just file -> do
           text <- liftIO (readFile file)
-          evaluateProgram text
+          interpretProgram text
           repl
         Nothing   -> repl
     Interpret file -> do
       text <- liftIO (readFile file)
-      evaluateProgram text
+      intepretProgram text
     Compile file -> do
       text <- liftIO (readFile file)
       let outFile = dropExtension file
@@ -108,6 +108,5 @@ repl = forever $ do
 eval :: String -> Praxis ()
 eval s = do
   -- TODO fix this so we can have declarations
-  v <- evaluateExp s
+  v <- interpretExp s
   liftIO $ print v
-

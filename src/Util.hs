@@ -14,15 +14,15 @@ module Util
   , trim
   ) where
 
-import qualified Check      (check)
+import qualified Check
 import           Common
-import           Executors
 import           Inbuilts
 import           Introspect
-import qualified Parse      (parse)
+import qualified Parse
 import           Praxis
 import           Print
 import           Term
+import qualified Translate
 
 
 runShow :: Show a => Praxis a -> IO String
@@ -53,14 +53,17 @@ parse program = runPretty (Parse.parse program :: Praxis (Annotated Program))
 parseAs :: forall a. Term a => I a -> String -> IO String
 parseAs _ term = runPretty (Parse.parse term :: Praxis (Annotated a))
 
+translate :: String -> IO String
+translate program = runWith id $ (Parse.parse program >>= Check.check :: Praxis (Annotated Program)) >>= Translate.translate Translate.NoPrelude
+
 -- Helper for interperting a program followed by an expression and printing the resulting value
 evaluate :: String -> String -> IO String
-evaluate program exp = runShow $ do
+evaluate program exp = return "TODO evaluate"
+{-
+runShow $ do
   evaluateProgram program
   evaluateExp exp
-
-translate :: String -> IO String
-translate program = runWith id (translateProgram program)
+-}
 
 trim :: String -> String
 trim = rtrim . ltrim where

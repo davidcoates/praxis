@@ -337,6 +337,7 @@ exp = exp5 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
+         unparseable (_Closure <$> (special '[' *> many (varId <*> empty) <* special ']') <*> annotated exp) <|>
          unparseable (_Specialise <$> annotated exp <*> empty) <|>
          tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          mark "expression(0)"

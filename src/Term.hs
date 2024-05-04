@@ -109,6 +109,7 @@ type Specialisation = [(Annotated QTyVar, Annotated Type)]
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
+         | Closure [(Name, Annotated QType)] (Annotated Exp)
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
          | DoSweet [Annotated Stmt]

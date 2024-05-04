@@ -75,6 +75,7 @@ hideLabel x = case typeof x of
   IExp -> case x of
     Pair _ _       -> True
     Apply _ _      -> True
+    Closure _ _    -> True
     Lambda _ _     -> True
     Read _ _       -> True
     Specialise _ _ -> True

@@ -87,15 +87,15 @@ join src branch1 branch2 = do
   tEnv .= LEnv.join l1 l2
   return (x, y)
 
-closure :: Source -> Praxis a -> Praxis a
-closure src block = do
+closure :: Source -> Praxis (Tag (Annotated Type) Exp) -> Praxis (Tag (Annotated Type) Exp)
+closure src exp = do
   Env l1 <- use tEnv
-  x <- scope src block
+  (t :< x) <- scope src exp
   Env l2 <- use tEnv
-  let captured = [ (name, view LEnv.value e1) | (name, e1) <- l1, (_, e2) <- l2, LEnv.touched e2 && not (LEnv.touched e1) ]
+  let captures = [ (name, view LEnv.value e1) | ((name, e1), (_, e2)) <- zip l1 l2, LEnv.touched e2 && not (LEnv.touched e1) ]
   -- Note: copy restrictions do not apply to polymorphic terms
-  requires [ (src, Captured name) :< Instance (copy t) | (name, _ :< Forall vs _ t) <- captured, null vs ]
-  return x
+  requires [ (src, Captured name) :< Instance (copy t) | (name, _ :< Forall vs _ t) <- captures, null vs ]
+  return $ t :< Closure captures ((src, Just t) :< x)
 
 scope :: Source -> Praxis a -> Praxis a
 scope src block = do

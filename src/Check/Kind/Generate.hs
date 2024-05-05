@@ -163,7 +163,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFn (view kind arg) (phantom KindType)))
 
     let
-      deduce :: (Annotated Type -> Annotated Type) -> Maybe (Annotated Type) -> (InstanceOrigin, Instance)
+      deduce :: (Annotated Type -> TyConstraint) -> Maybe (Annotated Type) -> (InstanceOrigin, Instance)
       deduce mkConstraint arg' = case (arg, arg') of
         (Nothing, Nothing)    -> (Trivial, IsInstanceOnlyIf [ mkConstraint conType | (_ :< DataCon _ conType) <- alts ])
         (Just arg, Just arg') -> (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where

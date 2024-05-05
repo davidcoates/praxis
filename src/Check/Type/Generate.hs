@@ -94,8 +94,10 @@ closure src exp = do
   Env l2 <- use tEnv
   let captures = [ (name, view LEnv.value e1) | ((name, e1), (_, e2)) <- zip l1 l2, LEnv.touched e2 && not (LEnv.touched e1) ]
   -- Note: copy restrictions do not apply to polymorphic terms
-  requires [ (src, Captured name) :< Instance (copy t) | (name, _ :< Forall vs _ t) <- captures, null vs ]
-  return $ t :< Closure captures ((src, Just t) :< x)
+  requires [ (src, Captured name) :< copy t | (name, _ :< Forall vs _ t) <- captures, null vs ]
+  if null captures
+    then return $ t :< x
+    else return $ t :< Closure captures ((src, Just t) :< x)
 
 scope :: Source -> Praxis a -> Praxis a
 scope src block = do
@@ -110,7 +112,7 @@ scope src block = do
   return x
 
 -- | Marks a variable as read, returning the view-type of the variable and the view ref-name.
--- A Copy constraint will be generated if the variable has already been used or has been captured.
+-- A copy constraint will be generated if the variable has already been used or has been captured.
 readVar :: Source -> Name -> Praxis (Name, Annotated Type)
 readVar src name = do
   l <- use tEnv
@@ -118,17 +120,15 @@ readVar src name = do
   case Env.lookup name l of
     Just entry -> do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
+      when (view LEnv.used entry) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
       -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
       when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> quote (pretty name)
       tEnv %= LEnv.setRead name
-      when (view LEnv.used entry) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
-      -- require read variables to *not* be copyable (if the variable is copyable, the read is unnecessary)
-      require $ (src, TyReasonRead name) :< Not (phantom (Instance (copy t)))
       return $ (refName, phantom (TyApply (phantom (TyView r)) t))
     Nothing -> throwAt src (NotInScope name)
 
 -- | Marks a variable as used, returning the type of the variable.
--- A Copy constraint will be generated if the variable has already been used or has been captured.
+-- A copy constraint will be generated if the variable has already been used or has been captured.
 useVar :: Source -> Name -> Praxis (Annotated Type, Maybe Specialisation)
 useVar src name = do
   l <- use tEnv
@@ -137,7 +137,7 @@ useVar src name = do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
       tEnv %= LEnv.setUsed name
       unless (isJust specialisation) $ do
-        requires [ (src, MultiUse name) :< Instance (copy t) | view LEnv.used entry ]
+        requires [ (src, MultiUse name) :< copy t | view LEnv.used entry ]
       return (t, specialisation)
     Nothing -> throwAt src (NotInScope name)
 
@@ -282,7 +282,7 @@ generateDeclTerm' forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
 generateInteger :: Source -> Integer -> Praxis (Annotated Type)
 generateInteger src n = do
   t <- freshTyUni
-  require $ (src, TyReasonIntegerLiteral n) :< Instance (integral t)
+  require $ (src, TyReasonIntegerLiteral n) :< integral t
   require $ (src, TyReasonIntegerLiteral n) :< HoldsInteger n t
   return $ t
 
@@ -432,7 +432,7 @@ generatePat op pat = snd <$> generatePat' pat where
     PatAt name pat -> do
       (t, pat) <- generatePat' pat
       introTy src name (mono t)
-      require $ (src, MultiAlias name) :< Instance (copy t)
+      require $ (src, MultiAlias name) :< copy t
       return (t, wrap t :< PatAt name pat)
 
     PatData name pat -> do

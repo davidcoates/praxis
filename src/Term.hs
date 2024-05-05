@@ -207,11 +207,9 @@ data Kind = KindUni Name
 
 data TyConstraint = HoldsInteger Integer (Annotated Type)
                   | Instance (Annotated Type)
-                  | Not (Annotated TyConstraint) -- Note: Only Instance _ and TrivialInstance _ is expected here.
                   | RefFree Name (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated Type) (Annotated Type)
-                  | TrivialInstance (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`

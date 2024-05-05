@@ -1,14 +1,15 @@
-{-# LANGUAGE DeriveFoldable      #-}
-{-# LANGUAGE DeriveTraversable   #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE ImpredicativeTypes  #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE Rank2Types          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE DeriveFoldable       #-}
+{-# LANGUAGE DeriveTraversable    #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE ImpredicativeTypes   #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE Rank2Types           #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TupleSections        #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 
 module Check.Solve
@@ -58,6 +59,11 @@ type Crumbs c = [Crumb c]
 -- Note: Goal definition is split like this for "deriving" to work.
 type Goal c = GoalT (Crumbs c) c
 
+instance Pretty (Annotated c) => Pretty (Tree c) where
+  pretty (Branch c cs) = pretty (phantom c) <> "(" <> separate ", " cs <> ")"
+
+instance Pretty (Tree c) => Pretty (GoalT x c) where
+  pretty (Goal _ tree) = pretty tree
 
 solve :: forall c a.
   ( Term a
@@ -68,8 +74,8 @@ solve :: forall c a.
   , Ord (Annotation (Requirement c))
   ) => Lens' PraxisState (Check.State c) -> Disambiguating (Reducer c) -> Annotated a -> Praxis (Annotated a)
 
-solve system reduce term = do
-  requirements' <- use (system . requirements)
+solve state reduce term = do
+  requirements' <- use (state . requirements)
   let goals = [ Goal [(src, reason)] (Branch constraint []) | ((src, Just reason) :< Requirement constraint) <- requirements' ]
   (term, [], _) <- solve' False (term, goals)
   return term
@@ -77,7 +83,7 @@ solve system reduce term = do
     solve' :: Bool -> (Annotated a, [Goal c]) -> Praxis (Annotated a, [Goal c], Bool)
     solve' _ (term, []) = return (term, [], undefined)
     solve' disambiguate (term, goals) = do
-      (goals, reduction) <- reduceGoals system (reduce disambiguate) (goals)
+      (goals, reduction) <- reduceGoals state (reduce disambiguate) (goals)
       case reduction of
 
         TreeProgress
@@ -112,11 +118,11 @@ solve system reduce term = do
 
             term <- rewrite term
             goals <- traverse rewriteGoal goals
-            (system . assumptions) %%= (\as -> Set.fromList <$> (traverse (recurseTerm rewrite) (Set.toList as)))
+            (state . assumptions) %%= (\as -> Set.fromList <$> (traverse (recurseTerm rewrite) (Set.toList as)))
             solve' False (term, goals)
 
         TreeSkip
-          | disambiguate -> throw ("!!! failed to solve constraints !!!" :: String) -- TODO need a better error message here
+          | disambiguate -> throw $ "failed to solve constraints: " <> separate ", " goals
           | otherwise    -> solve' True (term, goals)
 
 
@@ -127,9 +133,9 @@ noskip TreeSkip = TreeProgress
 noskip r        = r
 
 reduceGoals :: forall c. (Term c, Ord c, Pretty (Annotation (Requirement c))) => Lens' PraxisState (Check.State c) -> Reducer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
-reduceGoals system reduce [] = return ([], TreeSkip)
-reduceGoals system reduce ((Goal crumbs tree):goals) = do
-  (tree, r1) <- reduceTree system reduce tree
+reduceGoals state reduce [] = return ([], TreeSkip)
+reduceGoals state reduce ((Goal crumbs tree):goals) = do
+  (tree, r1) <- reduceTree state reduce tree
   let
     goal = case tree of
       Just tree -> [Goal crumbs tree]
@@ -138,12 +144,12 @@ reduceGoals system reduce ((Goal crumbs tree):goals) = do
     TreeContradiction trace
       -> throw (printTrace trace)
     TreeProgress -> do
-      (goals, r2) <- reduceGoals system reduce goals
+      (goals, r2) <- reduceGoals state reduce goals
       return (goal ++ goals, noskip r2)
     TreeSolved solution _
       -> return (goal ++ goals, TreeSolved solution crumbs)
     TreeSkip ->  do
-      (goals, r2) <- reduceGoals system reduce goals
+      (goals, r2) <- reduceGoals state reduce goals
       return (goal ++ goals, r2)
   where
     printTrace :: [c] -> Printable String
@@ -159,15 +165,15 @@ reduceGoals system reduce ((Goal crumbs tree):goals) = do
 
 
 reduceTree :: forall c. (Ord c, Term c) => Lens' PraxisState (Check.State c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
-reduceTree system reduce tree@(Branch constraint _) = do
+reduceTree state reduce tree@(Branch constraint _) = do
 
-   assumptions' <- use (system . assumptions)
+   assumptions' <- use (state . assumptions)
    (tree, r) <- reduceTree' tree
    if constraint `Set.member` assumptions'
      then return (Nothing, TreeProgress)
      else do
        case tree of
-         Nothing -> system . assumptions %= (Set.insert constraint)
+         Nothing -> state . assumptions %= (Set.insert constraint)
          _       -> pure ()
        return (tree, r)
 
@@ -182,7 +188,7 @@ reduceTree system reduce tree@(Branch constraint _) = do
         Skip              -> return (Just tree, TreeSkip)
         Solved solution   -> return (Nothing, TreeSolved solution undefined)
         Subgoals subgoals -> do
-          (tree, r2) <- reduceTree system reduce (Branch constraint (map (\c -> Branch c []) subgoals))
+          (tree, r2) <- reduceTree state reduce (Branch constraint (map (\c -> Branch c []) subgoals))
           return (tree, noskip r2)
         Tautology         -> return (Nothing, TreeProgress)
 
@@ -205,7 +211,7 @@ reduceTree system reduce tree@(Branch constraint _) = do
       if abort
         then return (subtree : subtrees, r1)
         else do
-          (subtree, r2) <- reduceTree system reduce subtree
+          (subtree, r2) <- reduceTree state reduce subtree
           let
             r3 = case r1 of
               TreeSkip     -> r2

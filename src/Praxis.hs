@@ -48,6 +48,9 @@ module Praxis
   , Check.requirements
   , Check.assumptions
 
+  -- | Translate state lenses
+  , Translate.llvmModule
+
   -- | Praxis lenses
   , flags
   , fresh
@@ -61,6 +64,7 @@ module Praxis
   , tySynonyms
   , tyCheck
   , kindCheck
+  , translation
 
   -- | RewriteMap lenses
   , tyVarMap
@@ -86,6 +90,7 @@ import           Common
 import           Print
 import           Stage
 import           Term
+import qualified Translate.State              as Translate
 
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent
@@ -124,7 +129,7 @@ type CEnv = Env (Annotated QType)
 data InstanceOrigin = Inbuilt | Trivial | User
   deriving Eq
 
-data Instance = IsInstance | IsInstanceOnlyIf [Annotated Type]
+data Instance = IsInstance | IsInstanceOnlyIf [TyConstraint]
 
 type IEnv = Env (Map Name (Maybe (Annotated Type) -> (InstanceOrigin, Instance)))
 
@@ -149,19 +154,20 @@ data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name N
 makeLenses ''RewriteMap
 
 data PraxisState = PraxisState
-  { _flags      :: Flags               -- ^ Flags
-  , _fresh      :: Fresh
-  , _stage      :: Stage               -- ^ Current stage of compilation
-  , _opContext  :: OpContext
-  , _cEnv       :: CEnv                -- ^ Constructor environment
-  , _iEnv       :: IEnv                -- ^ Instance environment
-  , _kEnv       :: KEnv                -- ^ Kind environment
-  , _tEnv       :: TEnv                -- ^ Type environment
+  { _flags       :: Flags               -- ^ Flags
+  , _fresh       :: Fresh
+  , _stage       :: Stage               -- ^ Current stage of compilation
+  , _opContext   :: OpContext
+  , _cEnv        :: CEnv                -- ^ Constructor environment
+  , _iEnv        :: IEnv                -- ^ Instance environment
+  , _kEnv        :: KEnv                -- ^ Kind environment
+  , _tEnv        :: TEnv                -- ^ Type environment
   -- TODO encapsulate within desugarer?
-  , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
-  , _rewriteMap :: RewriteMap
-  , _tyCheck    :: Check.State TyConstraint
-  , _kindCheck  :: Check.State KindConstraint
+  , _tySynonyms  :: Map Name (Annotated Type) -- ^ Type synonyms
+  , _rewriteMap  :: RewriteMap
+  , _tyCheck     :: Check.State TyConstraint
+  , _kindCheck   :: Check.State KindConstraint
+  , _translation :: Translate.State
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -192,6 +198,7 @@ emptyState = PraxisState
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
   , _tyCheck      = Check.emptyState
   , _kindCheck    = Check.emptyState
+  , _translation  = Translate.emptyState
   }
 
 makeLenses ''Flags

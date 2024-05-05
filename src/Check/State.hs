@@ -15,7 +15,7 @@ import qualified Data.Set     as Set
 
 
 data State c = State
-  { _requirements :: [Annotated (Requirement c)] -- TODO colored string?
+  { _requirements :: [Annotated (Requirement c)]
   , _assumptions  :: Set c
   }
 

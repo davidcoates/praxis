@@ -32,7 +32,7 @@ import           Prelude       hiding (log)
 
 
 require :: Tag (Source, TyReason) TyConstraint -> Praxis ()
-require ((src, reason) :< con) = tySystem . requirements %= (((src, Just reason) :< Requirement con):)
+require ((src, reason) :< con) = tyCheck . requirements %= (((src, Just reason) :< Requirement con):)
 
 requires :: [Tag (Source, TyReason) TyConstraint] -> Praxis ()
 requires = mapM_ require
@@ -166,7 +166,7 @@ run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- generate term
   display term `ifFlag` debug
-  requirements' <- use (tySystem . requirements)
+  requirements' <- use (tyCheck . requirements)
   (`ifFlag` debug) $ do
     display (separate "\n\n" (nub . sort $ requirements'))
     use tEnv >>= display
@@ -270,7 +270,7 @@ generateDeclTerm' forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
         return $ DeclTermVar name Nothing exp
       Just sig@(_ :< Forall boundVars constraints t) -> do
         when (not (null boundVars) && not (expIsFunction exp)) $ throwAt src $ "non-function " <> quote (pretty name) <> " can not be polymorphic"
-        tySystem . assumptions %= (Set.union (Set.fromList [ view value constraint | constraint <- constraints ])) -- constraints in the signature are added as assumptions
+        tyCheck . assumptions %= (Set.union (Set.fromList [ view value constraint | constraint <- constraints ])) -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardT of
           Just _  -> return () -- forwardT is sig, so a FnCongruence constraint is redundant (covered by the below FnSignature constraint)

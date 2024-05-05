@@ -15,7 +15,6 @@ module Praxis
   , IEnv(..)
   , KEnv(..)
   , TEnv(..)
-  , System(..)
 
   -- | Operators
   , Fixity(..)
@@ -45,9 +44,9 @@ module Praxis
   -- | Flag lenses
   , debug
 
-  -- | System lenses
-  , requirements
-  , assumptions
+  -- | Check state lenses
+  , Check.requirements
+  , Check.assumptions
 
   -- | Praxis lenses
   , flags
@@ -60,8 +59,8 @@ module Praxis
   , tEnv
   , rewriteMap
   , tySynonyms
-  , tySystem
-  , kindSystem
+  , tyCheck
+  , kindCheck
 
   -- | RewriteMap lenses
   , tyVarMap
@@ -82,6 +81,7 @@ module Praxis
   )
   where
 
+import qualified Check.State                  as Check
 import           Common
 import           Print
 import           Stage
@@ -97,8 +97,6 @@ import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
-import           Data.Set                     (Set)
-import qualified Data.Set                     as Set
 import           Env.Env                      (Env)
 import qualified Env.Env                      as Env
 import           Env.LEnv                     (LEnv)
@@ -150,19 +148,6 @@ data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name N
 
 makeLenses ''RewriteMap
 
-data System c = System
-  { _requirements :: [Annotated (Requirement c)] -- TODO colored string?
-  , _assumptions  :: Set c
-  }
-
-emptySystem :: System c
-emptySystem = System
-  { _requirements = []
-  , _assumptions  = Set.empty
-  }
-
-makeLenses ''System
-
 data PraxisState = PraxisState
   { _flags      :: Flags               -- ^ Flags
   , _fresh      :: Fresh
@@ -175,8 +160,8 @@ data PraxisState = PraxisState
   -- TODO encapsulate within desugarer?
   , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
   , _rewriteMap :: RewriteMap
-  , _tySystem   :: System TyConstraint
-  , _kindSystem :: System KindConstraint
+  , _tyCheck    :: Check.State TyConstraint
+  , _kindCheck  :: Check.State KindConstraint
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -205,8 +190,8 @@ emptyState = PraxisState
   , _tEnv         = LEnv.empty
   , _tySynonyms   = Map.empty
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
-  , _tySystem     = emptySystem
-  , _kindSystem   = emptySystem
+  , _tyCheck      = Check.emptyState
+  , _kindCheck    = Check.emptyState
   }
 
 makeLenses ''Flags

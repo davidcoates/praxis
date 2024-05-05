@@ -25,7 +25,7 @@ import qualified Data.Set        as Set
 
 
 require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
-require ((src, reason) :< con) = kindSystem . requirements %= (((src, Just reason) :< Requirement con):)
+require ((src, reason) :< con) = kindCheck . requirements %= (((src, Just reason) :< Requirement con):)
 
 kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
 kind = annotation . just
@@ -34,7 +34,7 @@ run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- generate term
   display term `ifFlag` debug
-  requirements' <- use (kindSystem . requirements)
+  requirements' <- use (kindCheck . requirements)
   display (separate "\n\n" (nub . sort $ requirements')) `ifFlag` debug
   return term
 

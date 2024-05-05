@@ -20,6 +20,7 @@ module Check.Solve
   , solve
   ) where
 
+import qualified Check.State   as Check
 import           Common
 import           Introspect
 import           Praxis
@@ -65,7 +66,7 @@ solve :: forall c a.
   , Term (Requirement c)
   , Pretty (Annotation (Requirement c))
   , Ord (Annotation (Requirement c))
-  ) => Lens' PraxisState (System c) -> Disambiguating (Reducer c) -> Annotated a -> Praxis (Annotated a)
+  ) => Lens' PraxisState (Check.State c) -> Disambiguating (Reducer c) -> Annotated a -> Praxis (Annotated a)
 
 solve system reduce term = do
   requirements' <- use (system . requirements)
@@ -125,7 +126,7 @@ noskip :: TreeReduction c -> TreeReduction c
 noskip TreeSkip = TreeProgress
 noskip r        = r
 
-reduceGoals :: forall c. (Term c, Ord c, Pretty (Annotation (Requirement c))) => Lens' PraxisState (System c) -> Reducer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
+reduceGoals :: forall c. (Term c, Ord c, Pretty (Annotation (Requirement c))) => Lens' PraxisState (Check.State c) -> Reducer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
 reduceGoals system reduce [] = return ([], TreeSkip)
 reduceGoals system reduce ((Goal crumbs tree):goals) = do
   (tree, r1) <- reduceTree system reduce tree
@@ -157,7 +158,7 @@ reduceGoals system reduce ((Goal crumbs tree):goals) = do
     printCrumb (src, reason) = pretty reason <> " at " <> pretty (show src)
 
 
-reduceTree :: forall c. (Ord c, Term c) => Lens' PraxisState (System c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
+reduceTree :: forall c. (Ord c, Term c) => Lens' PraxisState (Check.State c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
 reduceTree system reduce tree@(Branch constraint _) = do
 
    assumptions' <- use (system . assumptions)

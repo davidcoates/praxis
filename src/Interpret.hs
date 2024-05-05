@@ -3,7 +3,7 @@ module Interpret
   , interpretProgram
   ) where
 
-import Praxis
+import           Praxis
 
 
 interpretExp :: String -> Praxis String

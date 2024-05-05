@@ -49,7 +49,7 @@ isTrivialInstance = isInstance' True
 
 isInstance' :: Bool -> Annotated Type -> Praxis Truth
 isInstance' requireTrivial constraint = do
-  assumptions' <- use (tySystem . assumptions)
+  assumptions' <- use (tyCheck . assumptions)
   let
     inst    = if requireTrivial then TrivialInstance constraint else Instance constraint
     notInst = Not (phantom inst)
@@ -59,8 +59,8 @@ isInstance' requireTrivial constraint = do
     (False, False) -> do
       truth <- isInstance'' requireTrivial constraint
       case truth of
-        Yes   -> tySystem . assumptions %= Set.insert inst
-        No    -> tySystem . assumptions %= Set.insert notInst
+        Yes   -> tyCheck . assumptions %= Set.insert inst
+        No    -> tyCheck . assumptions %= Set.insert notInst
         Maybe -> pure ()
       return truth
 

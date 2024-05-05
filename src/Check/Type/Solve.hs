@@ -29,7 +29,7 @@ import           Data.Traversable    (forM)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
-  term <- solve tySystem reduce term
+  term <- solve tyCheck reduce term
   tryDefault term
 
 reduce :: Disambiguating (Reducer TyConstraint)

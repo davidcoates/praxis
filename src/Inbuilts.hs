@@ -43,7 +43,7 @@ initialState1 = set tEnv initialTEnv $ initialState0
 initialState :: PraxisState
 initialState = fixup (runInternal initialState1 ((parse prelude :: Praxis (Annotated Program)) >> lift State.get)) where
   -- TODO a nicer way to do this. Undo all the things except the fields we care about.
-  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindSystem (view kindSystem emptyState) . set tySystem initialTySystem
+  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindCheck (view kindCheck emptyState) . set tyCheck (view tyCheck emptyState)
 
 mono :: String -> Annotated Type
 mono s = runInternal initialState0 (parse s :: Praxis (Annotated Type))
@@ -246,12 +246,6 @@ initialKEnv = Env.fromList inbuiltKinds
 
 initialTEnv :: TEnv
 initialTEnv = LEnv.fromList inbuilts
-
-initialTySystem :: System TyConstraint
-initialTySystem = System
-  { _requirements = []
-  , _assumptions = Set.empty
-  }
 
 -- TODO interfaces
 prelude = [r|

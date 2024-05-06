@@ -16,7 +16,7 @@ import           Common
 import           Env.Env       (Env (..))
 import qualified Env.Env       as Env
 import qualified Env.LEnv      as LEnv
-import           Inbuilts      (copy, fn, integral, pair, unit)
+import           Inbuilts      (copy, integral)
 import           Introspect
 import           Praxis
 import           Print
@@ -95,9 +95,7 @@ closure src exp = do
   let captures = [ (name, view LEnv.value e1) | ((name, e1), (_, e2)) <- zip l1 l2, LEnv.touched e2 && not (LEnv.touched e1) ]
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, Captured name) :< copy t | (name, _ :< Forall vs _ t) <- captures, null vs ]
-  if null captures
-    then return $ t :< x
-    else return $ t :< Closure captures ((src, Just t) :< x)
+  return $ t :< Closure captures ((src, Just t) :< x)
 
 scope :: Source -> Praxis a -> Praxis a
 scope src block = do
@@ -227,7 +225,7 @@ generateDeclType (a@(src, Just k) :< ty) = case ty of
 
       generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
       generateDataCon ((src, Nothing) :< DataCon name argTy) = do
-        let qTy = phantom $ Forall qTyVars [] (fn argTy retTy) -- TODO add src?
+        let qTy = phantom $ Forall qTyVars [] (TyFn argTy retTy `as` phantom KindType) -- TODO add src?
         introConTy src name qTy
         return ((src, Just qTy) :< DataCon name argTy)
 
@@ -295,7 +293,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     x <- generateExp x
     let fTy = view ty f
     let xTy = view ty x
-    require $ (src, TyReasonApply f x) :< (fTy `TEq` fn xTy rTy)
+    require $ (src, TyReasonApply f x) :< (fTy `TEq` (TyFn xTy rTy `as` phantom KindType))
     return (rTy :< Apply f x)
 
   Case exp alts -> do
@@ -313,7 +311,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     alts <- parallel src (map (generateAlt op) alts)
     ty1 <- equals (map fst alts) CaseCongruence
     ty2 <- equals (map snd alts) CaseCongruence
-    return (fn ty1 ty2 :< Cases alts)
+    let t = TyFn ty1 ty2 `as` phantom KindType
+    return (t :< Cases alts)
 
   Con name -> do
     qTy <- getConTy src name
@@ -337,7 +336,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
   Lambda pat exp -> closure src $ do
     op <- freshTyViewUni RefOrValue
     (pat, exp) <- generateAlt op (pat, exp)
-    return (fn (view ty pat) (view ty exp) :< Lambda pat exp)
+    let t = TyFn (view ty pat) (view ty exp) `as` phantom KindType
+    return (t :< Lambda pat exp)
 
   Let bind exp -> scope src $ do
     bind <- generateBind bind
@@ -367,7 +367,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
   Pair exp1 exp2 -> do
     exp1 <- generateExp exp1
     exp2 <- generateExp exp2
-    return (pair (view ty exp1) (view ty exp2) :< Pair exp1 exp2)
+    let t = TyPair (view ty exp1) (view ty exp2) `as` phantom KindType
+    return (t :< Pair exp1 exp2)
 
   Seq exp1 exp2 -> do
     exp1 <- generateExp exp1
@@ -387,7 +388,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     return (t :< Switch (zip conditions exps))
 
   Unit -> do
-    return (unit :< Unit)
+    let t = TyUnit `as` phantom KindType
+    return (t :< Unit)
 
   Var name -> do
     (t, specialisation) <- useVar src name
@@ -439,7 +441,7 @@ generatePat op pat = snd <$> generatePat' pat where
       qTy <- getConTy src name
       let (_ :< Forall vs cs t) = qTy
       case t of
-        (_ :< TyApply (_ :< TyCon "Fn") (_ :< TyPack argTy retTy)) -> do
+        (_ :< TyFn argTy retTy) -> do
           (tyRewrite, _) <- specialise src name vs cs
           let (argTy', retTy') = (tyRewrite argTy, tyRewrite retTy)
           (patArgType, pat) <- generatePat' pat
@@ -451,7 +453,7 @@ generatePat op pat = snd <$> generatePat' pat where
       qTy <- getConTy src name
       let (_ :< Forall vs cs t) = qTy
       case t of
-        (_ :< TyApply (_ :< TyCon "Fn") _) -> throwAt src $ "unexpected argument in enum pattern " <> quote (pretty name)
+        (_ :< TyFn _ _) -> throwAt src $ "unexpected argument in enum pattern " <> quote (pretty name)
         _  -> do
           return (t, t :< PatEnum name)
 
@@ -472,11 +474,11 @@ generatePat op pat = snd <$> generatePat' pat where
     PatPair pat1 pat2 -> do
       (t1, pat1) <- generatePat' pat1
       (t2, pat2) <- generatePat' pat2
-      let t = pair t1 t2
+      let t = TyPair t1 t2 `as` phantom KindType
       return (t, wrap t :< PatPair pat1 pat2)
 
     PatUnit -> do
-      let t = unit
+      let t = TyUnit `as` phantom KindType
       return (t, t :< PatUnit)
 
     PatVar var -> do

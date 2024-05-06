@@ -49,6 +49,10 @@ reduce disambiguate = \case
 
   TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> return $ Subgoals [ TEq s1 t1, TEq s2 t2 ]
 
+  TEq (_ :< TyPair s1 s2) (_ :< TyPair t1 t2) -> return $ Subgoals [ TEq s1 t1, TEq s2 t2 ]
+
+  TEq (_ :< TyFn t1 t2) (_ :< TyFn s1 s2) -> return $ Subgoals [ TEq t1 s1, TEq t2 s2 ]
+
   TEq t1@(_ :< TyApply (_ :< TyView _) t1') t2 -> return $ Subgoals [ TEq (stripOuterViews t1') (stripOuterViews t2), TOpEq t1 t2 ]
 
   TEq t1 t2@(_ :< TyApply (_:< TyView _) _) -> reduce disambiguate (t2 `TEq` t1) -- handled by the above case
@@ -104,6 +108,9 @@ reduce disambiguate = \case
           Yes -> reduceTyConInstance cls "Ref" (Just t)
           No  -> error "unnormalised"
           _   -> return Skip
+      TyPair t1 t2             -> reduceTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
+      TyFn t1 t2               -> reduceTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
+      TyUnit                   -> reduceTyConInstance cls "Unit" Nothing
       TyApply (_ :< TyCon n) t -> reduceTyConInstance cls n (Just t)
       TyCon n                  -> reduceTyConInstance cls n Nothing
       TyVar _                  -> return Contradiction
@@ -256,6 +263,9 @@ isAffine t = do
   where
     isAffine' :: Annotated Type -> Praxis Truth
     isAffine' (a :< t) = case t of
+      TyPair t1 t2 -> isTyConAffine "Pair" (Just (phantom (TyPack t1 t2)))
+      TyFn t1 t2 -> isTyConAffine "Fn" (Just (phantom (TyPack t1 t2)))
+      TyUnit -> isTyConAffine "Unit" Nothing
       TyCon n -> isTyConAffine n Nothing
       TyApply (_ :< TyCon n) t -> isTyConAffine n (Just t)
       TyApply (_ :< TyView (_ :< view)) t -> truthAnd (truthNot (isRef view)) <$> isAffine t

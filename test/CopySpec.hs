@@ -21,7 +21,7 @@ f x = (x, x)
 |]
 
       it "type checks" $ check program `shouldReturn` trim [r|
-f_0 : forall & r_0 a_0 . Fn [ & r_0 a_0 , Pair [ & r_0 a_0 , & r_0 a_0 ] ] = \ [& r_0 a_0] x_0 -> ( [& r_0 a_0] x_0 , [& r_0 a_0] x_0 )
+f_0 : forall & r_0 a_0 . & r_0 a_0 -> ( & r_0 a_0 , & r_0 a_0 ) = \ [& r_0 a_0] x_0 -> ( [& r_0 a_0] x_0 , [& r_0 a_0] x_0 )
 |]
 
   describe "generic views" $ do
@@ -34,7 +34,7 @@ f x = (x, x)
 |]
 
       it "type checks" $ check program `shouldReturn` trim [r|
-f_0 : forall ? r_0 a_0 | Copy a_0 . Fn [ a_0 , Pair [ a_0 , a_0 ] ] = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
+f_0 : forall ? r_0 a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
 |]
 
     describe "can not be copied if the underlying type can not be copied" $ do

@@ -288,15 +288,15 @@ instance Term Type where
   witness = IType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    TyUni n         -> pure (TyUni n)
-    TyApply a b     -> TyApply <$> f a <*> f b
-    TyCon n         -> pure (TyCon n)
-    TyFnSweet a b  -> TyFnSweet <$> f a <*> f b
-    TyView v        -> TyView <$> f v
-    TyPack a b      -> TyPack <$> f a <*> f b
-    TyPairSweet a b -> TyPairSweet <$> f a <*> f b
-    TyUnitSweet     -> pure TyUnitSweet
-    TyVar n         -> pure (TyVar n)
+    TyUni n     -> pure (TyUni n)
+    TyApply a b -> TyApply <$> f a <*> f b
+    TyCon n     -> pure (TyCon n)
+    TyFn a b    -> TyFn <$> f a <*> f b
+    TyView v    -> TyView <$> f v
+    TyPack a b  -> TyPack <$> f a <*> f b
+    TyPair a b  -> TyPair <$> f a <*> f b
+    TyUnit      -> pure TyUnit
+    TyVar n     -> pure (TyVar n)
 
 instance Term TyConstraint where
   witness = ITyConstraint

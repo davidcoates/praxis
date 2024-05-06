@@ -289,19 +289,6 @@ desugarTy (a :< ty) = case ty of
       Just ty -> ty
       Nothing -> a :< TyCon name
 
-  TyFnSweet t1 t2 -> do
-    t1 <- desugarTy t1
-    t2 <- desugarTy t2
-    return (a :< TyApply (a :< TyCon "Fn") (a :< TyPack t1 t2))
-
-  TyPairSweet t1 t2 -> do
-    t1 <- desugarTy t1
-    t2 <- desugarTy t2
-    return (a :< TyApply (a :< TyCon "Pair") (a :< TyPack t1 t2))
-
-  TyUnitSweet -> do
-    return (a :< TyCon "Unit")
-
   _           -> (a :<) <$> recurseTerm desugar ty
 
 

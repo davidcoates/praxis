@@ -5,9 +5,6 @@
 
 module Inbuilts
   ( initialState
-  , fn
-  , unit
-  , pair
   , integral
   , clone
   , dispose
@@ -160,15 +157,6 @@ inbuiltKinds =
 
 -- TODO do we actually need kinds here?
 
-fn :: Annotated Type -> Annotated Type -> Annotated Type
-fn a b = TyApply (TyCon "Fn" `as` kind "(Type, Type) -> Type") (TyPack a b `as` kind "(Type, Type)") `as` kind "Type"
-
-unit :: Annotated Type
-unit = TyCon "Unit" `as` kind "Type"
-
-pair :: Annotated Type -> Annotated Type -> Annotated Type
-pair a b = TyApply (TyCon "Pair" `as` kind "(Type, Type) -> Type") (TyPack a b `as` kind "(Type, Type)") `as` kind "Type"
-
 -- TODO should be replaced with instances in prelude
 
 integral :: Annotated Type -> TyConstraint
@@ -204,15 +192,15 @@ initialIEnv = Env.fromList
   , ("I64", integral)
   , ("ISize", integral)
   , ("Pair", Map.fromList
-    [ ("Clone",          \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
-    , ("Dispose",        \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
-    , ("Copy",           \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
+    [ ("Clone",   \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
+    , ("Dispose", \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
+    , ("Copy",    \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
     ]
     )
   , ("Ref", Map.fromList
-    [ ("Clone",          \(Just _) -> (Trivial, IsInstance))
-    , ("Dispose",        \(Just _) -> (Trivial, IsInstance))
-    , ("Copy",           \(Just _) -> (Trivial, IsInstance))
+    [ ("Clone",   \(Just _) -> (Trivial, IsInstance))
+    , ("Dispose", \(Just _) -> (Trivial, IsInstance))
+    , ("Copy",    \(Just _) -> (Trivial, IsInstance))
     ]
     )
   , ("String", Map.fromList
@@ -228,9 +216,9 @@ initialIEnv = Env.fromList
   , ("Unit", primitive)
   ] where
     primitive = Map.fromList
-      [ ("Clone",          \Nothing -> (Trivial, IsInstance))
-      , ("Dispose",        \Nothing -> (Trivial, IsInstance))
-      , ("Copy",           \Nothing -> (Trivial, IsInstance))
+      [ ("Clone",   \Nothing -> (Trivial, IsInstance))
+      , ("Dispose", \Nothing -> (Trivial, IsInstance))
+      , ("Copy",    \Nothing -> (Trivial, IsInstance))
       ]
     integral = primitive `Map.union` Map.fromList
       [ ("Integral", \Nothing -> (Inbuilt, IsInstance))

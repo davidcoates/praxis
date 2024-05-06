@@ -289,7 +289,7 @@ qTyVar = _QTyVar <$> varId <|>
           mark "type variable"
 
 ty :: Syntax f => f Type
-ty = ty1 `join` (_TyFnSweet, reservedSym "->" *> annotated ty) <|> mark "type"
+ty = ty1 `join` (_TyFn, reservedSym "->" *> annotated ty) <|> mark "type"
 
 viewDomain :: Syntax f => f ViewDomain
 viewDomain = _Ref <$> reservedSym "&" <|>
@@ -303,7 +303,7 @@ ty1 = right _TyApply ty0 <|> mark "type(1)" where
         _TyCon <$> conId <|>
         unparseable (_TyUni <$> uni) <|>
         pack _TyPack ty <|>
-        tuple _TyUnitSweet _TyPairSweet ty <|>
+        tuple _TyUnit _TyPair ty <|>
         mark "type(0)"
 
 view' :: Syntax f => f View
@@ -326,6 +326,7 @@ exp = exp5 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedSym "\\" *> alt <|>
+         unparseable (_Closure <$> empty <*> annotated exp) <|>
          _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
          unparseable (_Seq <$> annotated exp <*> reservedId "seq" *> annotated exp) <|>
          _Switch <$> reservedId "switch" *> block switch <|>
@@ -335,7 +336,6 @@ exp = exp5 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
-         unparseable (_Closure <$> (special '[' *> many (varId <*> empty) <* special ']') <*> annotated exp) <|>
          unparseable (_Specialise <$> annotated exp <*> empty) <|>
          tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          mark "expression(0)"

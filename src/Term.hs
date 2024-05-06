@@ -183,11 +183,11 @@ data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
 data Type = TyUni Name -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
-          | TyFnSweet (Annotated Type) (Annotated Type)
+          | TyFn (Annotated Type) (Annotated Type)
           | TyView (Annotated View)
           | TyPack (Annotated Type) (Annotated Type)
-          | TyPairSweet (Annotated Type) (Annotated Type)
-          | TyUnitSweet
+          | TyPair (Annotated Type) (Annotated Type)
+          | TyUnit
           | TyVar Name
   deriving (Eq, Ord)
 

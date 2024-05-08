@@ -45,7 +45,8 @@ f x = (x, x)
 |]
 
       it "does not type check" $ check program `shouldReturn` trim [r|
-type check error: unable to satisfy: Copy ? r_0 a_0
+type check error: unable to satisfy: Copy a_0
+  | derived from: Copy ? r_0 a_0
   | primary cause: variable 'x_0' used more than once at 3:11
   | secondary cause: function signature for 'f_0' at 2:1
 |]
@@ -114,7 +115,8 @@ copy x =  (x, x)
 |]
 
         it "does not type check" $ check program  `shouldReturn` trim [r|
-type check error: unable to satisfy: Copy Unboxed [ a_1 , b_1 ]
+type check error: unable to satisfy: Copy a_1
+  | derived from: Copy Unboxed [ a_1 , b_1 ]
   | primary cause: variable 'x_0' used more than once at 5:15
   | secondary cause: function signature for 'copy_0' at 4:1
 |]

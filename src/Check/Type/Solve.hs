@@ -44,16 +44,16 @@ reduce disambiguate = \case
   TEq t1 t2@(_ :< TyUni _) -> reduce disambiguate (t2 `TEq` t1) -- handle by the above case
 
   TEq (_ :< TyApply (_ :< TyCon n1) t1) (_ :< TyApply (_ :< TyCon n2) t2)
-    | n1 == n2 -> return $ Subgoals [ TEq t1 t2 ]
+    | n1 == n2 -> return $ Subgoals [ Subgoal (TEq t1 t2) ]
     | otherwise -> return Contradiction
 
-  TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> return $ Subgoals [ TEq s1 t1, TEq s2 t2 ]
+  TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> return $ Subgoals [ Subgoal (TEq s1 t1), Subgoal (TEq s2 t2) ]
 
-  TEq (_ :< TyPair s1 s2) (_ :< TyPair t1 t2) -> return $ Subgoals [ TEq s1 t1, TEq s2 t2 ]
+  TEq (_ :< TyPair s1 s2) (_ :< TyPair t1 t2) -> return $ Subgoals [ Subgoal (TEq s1 t1), Subgoal (TEq s2 t2) ]
 
-  TEq (_ :< TyFn t1 t2) (_ :< TyFn s1 s2) -> return $ Subgoals [ TEq t1 s1, TEq t2 s2 ]
+  TEq (_ :< TyFn t1 t2) (_ :< TyFn s1 s2) -> return $ Subgoals [ Subgoal (TEq t1 s1), Subgoal (TEq t2 s2) ]
 
-  TEq t1@(_ :< TyApply (_ :< TyView _) t1') t2 -> return $ Subgoals [ TEq (stripOuterViews t1') (stripOuterViews t2), TOpEq t1 t2 ]
+  TEq t1@(_ :< TyApply (_ :< TyView _) t1') t2 -> return $ Subgoals [ Subgoal (TEq (stripOuterViews t1') (stripOuterViews t2)), Subgoal (TOpEq t1 t2) ]
 
   TEq t1 t2@(_ :< TyApply (_:< TyView _) _) -> reduce disambiguate (t2 `TEq` t1) -- handled by the above case
 
@@ -89,25 +89,24 @@ reduce disambiguate = \case
     | otherwise
       -> return Skip
 
-  Instance inst -> case view value inst of
-
-    TyApply (_ :< TyCon "Copy") t -> do
-      affine <- isAffine t
-      case affine of
-        Unknown -> return Skip
-        No      -> return Tautology
-        _       -> return Contradiction
+  Instance (a0 :< inst) -> case inst of
 
     TyApply (_ :< TyCon "Integral") t | disambiguate
-      -> return $ Subgoals [ TEq t (TyCon "I32" `as` phantom KindType) ]
+      -> return $ Subgoals [ Subgoal (TEq t (TyCon "I32" `as` phantom KindType)) ]
 
-    TyApply (_ :< TyCon cls) t -> case view value t of
+    TyApply (a1 :< TyCon cls) t -> case view value t of
       TyApply tyView@(_ :< TyView (_ :< view)) t -> do
-        ref <- truthAnd (isRef view) <$> isAffine t
-        case ref of
-          Yes -> reduceTyConInstance cls "Ref" (Just t)
-          No  -> error "unnormalised"
-          _   -> return Skip
+        let
+          instVal = Instance (a0 :< TyApply (a1 :< TyCon cls) t)
+          instRef = Instance (a0 :< TyApply (a1 :< TyCon cls) (phantom (TyApply (phantom (TyCon "Ref")) t)))
+        affine <- isAffine t
+        case (isRef view, affine) of
+          (No, _)         -> error "unnormalised"
+          (_, No)         -> error "unnormalised"
+          (Yes, Yes)      -> reduceTyConInstance cls "Ref" (Just t)
+          (Yes, Variable) -> return $ Subgoals [ Subgoal instRef, copy t `Implies` instVal ]
+          (Variable, _)   -> return $ Subgoals [ Subgoal instRef, Subgoal instVal ]
+          _               -> return Skip
       TyPair t1 t2             -> reduceTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
       TyFn t1 t2               -> reduceTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
       TyUnit                   -> reduceTyConInstance cls "Unit" Nothing
@@ -143,9 +142,9 @@ reduce disambiguate = \case
       let Just instances = Env.lookup name l
       case Map.lookup cls instances of
         Just resolver -> case resolver arg of
-          (_, IsInstance)                -> return Tautology
-          (_, IsInstanceOnlyIf subgoals) -> return (Subgoals subgoals)
-        Nothing                          -> return Contradiction
+          (_, IsInstance)          -> return Tautology
+          (_, IsInstanceOnlyIf cs) -> return (Subgoals (map Subgoal cs))
+        Nothing                    -> return Contradiction
 
     tyUnis :: forall a. Term a => Annotated a -> Set Name
     tyUnis = extract (embedMonoid f) where

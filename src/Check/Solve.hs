@@ -16,6 +16,7 @@ module Check.Solve
   ( Resolver
   , Disambiguating
   , Normaliser
+  , Subgoal(..)
   , Reduction(..)
   , Reducer(..)
   , solve
@@ -40,13 +41,15 @@ type Normaliser = forall a. Term a => Annotated a -> Praxis (Annotated a)
 
 type Solution = (Resolver, Normaliser)
 
-data Reduction c = Contradiction | Skip | Solved Solution | Subgoals [c] | Tautology
+data Subgoal c = Subgoal c | Implies c c
+
+data Reduction c = Contradiction | Skip | Solved Solution | Subgoals [Subgoal c] | Tautology
 
 type Reducer c = c -> Praxis (Reduction c)
 
 type Disambiguating c = Bool -> c
 
-data Tree c = Branch c [Tree c]
+data Tree c = Branch c [Tree c] | Assume c (Tree c)
   deriving (Functor, Foldable, Traversable)
 
 data GoalT x c = Goal x (Tree c)
@@ -60,7 +63,9 @@ type Crumbs c = [Crumb c]
 type Goal c = GoalT (Crumbs c) c
 
 instance Pretty (Annotated c) => Pretty (Tree c) where
-  pretty (Branch c cs) = pretty (phantom c) <> "(" <> separate ", " cs <> ")"
+  pretty (Branch c [])  = pretty (phantom c)
+  pretty (Branch c cs)  = pretty (phantom c) <> " (" <> separate ", " cs <> ")" where
+  pretty (Assume c1 c2) = pretty (phantom c1) <> " --> " <> pretty c2
 
 instance Pretty (Tree c) => Pretty (GoalT x c) where
   pretty (Goal _ tree) = pretty tree
@@ -165,6 +170,13 @@ reduceGoals state reduce ((Goal crumbs tree):goals) = do
 
 
 reduceTree :: forall c. (Ord c, Term c) => Lens' PraxisState (Check.State c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
+
+-- Note: The supplied assumption may only be used locally (i.e. within 'tree').
+-- This means the assumption state needs to be reverted before exiting, to avoid the local assumption *or any consequents* from escaping the local context.
+reduceTree state reduce (Assume constraint tree) = save (state . assumptions) $ do
+  state . assumptions %= (Set.insert constraint)
+  reduceTree state reduce tree
+
 reduceTree state reduce tree@(Branch constraint _) = do
 
    assumptions' <- use (state . assumptions)
@@ -188,7 +200,7 @@ reduceTree state reduce tree@(Branch constraint _) = do
         Skip              -> return (Just tree, TreeSkip)
         Solved solution   -> return (Nothing, TreeSolved solution undefined)
         Subgoals subgoals -> do
-          (tree, r2) <- reduceTree state reduce (Branch constraint (map (\c -> Branch c []) subgoals))
+          (tree, r2) <- reduceTree state reduce (Branch constraint (map (\subgoal -> case subgoal of { Subgoal c -> Branch c []; Implies c1 c2 -> Assume c1 (Branch c2 []) }) subgoals))
           return (tree, noskip r2)
         Tautology         -> return (Nothing, TreeProgress)
 

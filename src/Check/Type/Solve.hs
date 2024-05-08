@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Check.Type.Solve
-  ( assume
+  ( assumeFromQType
   , run
   , normalise
   ) where
@@ -32,54 +32,11 @@ import           Data.Traversable    (forM)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
-  requirements' <- use (tyCheck . requirements)
-  term <- solve (Set.toList requirements') reduce assumeLocal term
+  term <- solve tyCheck reduce term
   tryDefault term
 
-assumeLocal :: TyConstraint -> Praxis a -> Praxis a
-assumeLocal constraint context = save (tyCheck . assumptions) $ do
-  assume (Set.singleton constraint)
-  context
-
-assume :: Set TyConstraint -> Praxis ()
-assume constraints = do
-  constraints <- mapM assume' (Set.toList constraints)
-  tyCheck . assumptions %= Set.union (Set.unions (map Set.fromList constraints))
-  where
-    assume' :: TyConstraint -> Praxis [TyConstraint]
-    assume' constraint = do
-      constraint <- (recurseTerm normalise) constraint
-      case constraint of
-        Instance (a0 :< inst) -> case inst of
-          TyApply (a1 :< TyCon cls) t -> case view value t of
-            -- TODO, what should we do for views?
-            -- TyApply tyView@(_ :< TyView (_ :< view)) t
-            TyPair t1 t2             -> assumeTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
-            TyFn t1 t2               -> assumeTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
-            TyUnit                   -> assumeTyConInstance cls "Unit" Nothing
-            TyApply (_ :< TyCon n) t -> assumeTyConInstance cls n (Just t)
-            TyCon n                  -> assumeTyConInstance cls n Nothing
-            TyVar _                  -> return [constraint]
-      where
-        assumeTyConInstance :: Name -> Name -> Maybe (Annotated Type) -> Praxis [TyConstraint]
-        assumeTyConInstance cls name arg = do
-          l <- use iEnv
-          let Just instances = Env.lookup name l
-          case Map.lookup cls instances of
-            Just resolver -> case resolver arg of
-              (_, IsInstance)          -> throw ("redundant constraint: " <> pretty (phantom constraint))
-              (_, IsInstanceOnlyIf cs) -> concat <$> mapM assume' cs
-            _ -> return [constraint] -- Note: The instance may be satisfied later (at the call site)
-
-checkAssumptions :: TyConstraint -> Praxis (Reduction TyConstraint) -> Praxis (Reduction TyConstraint)
-checkAssumptions constraint otherwise = do
-  assumptions' <- use (tyCheck . assumptions)
-  if constraint `Set.member` assumptions'
-    then return Tautology
-    else otherwise
-
 reduce :: Disambiguating (Reducer TyConstraint)
-reduce disambiguate constraint = checkAssumptions constraint $ case constraint of
+reduce disambiguate = \case
 
   TEq t1 t2 | t1 == t2 -> return Tautology
 
@@ -364,3 +321,62 @@ tryDefault term@((src, _) :< _) = do
         ViewUni _ n -> Set.singleton n
         _           -> Set.empty
 
+
+-- When we encounter a polymorphic function with constraints, we should add the constraints to the assumption set when type checking the body.
+-- However, since the solver acts globally, the best we can do is add the constraints to the global assumption set.
+-- We need to be extra careful about the constraints introduced (to avoid unsatisfiable constraints which cause bad global deductions),
+-- in particular we require all of the constraints to only include the bound type variables at their leaves.
+--
+-- We also "expand" the assumptions, e.g. if there is an instance C t => D t, the the assumption D t should also include C t.
+
+-- TODO handle views!
+assumeFromQType :: [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis ()
+assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
+
+  assumeConstraint :: Annotated TyConstraint -> Praxis ()
+  assumeConstraint constraint = do
+    constraint <- normalise constraint
+    checkConstraint constraint
+    constraints <- expandConstraint (view source constraint) (view value constraint)
+    tyCheck . assumptions %= Set.union (Set.fromList constraints)
+
+  expandConstraint :: Source -> TyConstraint -> Praxis [TyConstraint]
+  expandConstraint src constraint = ((constraint:) <$>) $ case constraint of
+    Instance (a0 :< inst) -> case inst of
+      TyApply (a1 :< TyCon cls) t -> case view value t of
+        TyPair t1 t2             -> expandTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
+        TyFn t1 t2               -> expandTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
+        TyUnit                   -> expandTyConInstance cls "Unit" Nothing
+        TyApply (_ :< TyCon n) t -> expandTyConInstance cls n (Just t)
+        TyCon n                  -> expandTyConInstance cls n Nothing
+        TyVar _                  -> return []
+    where
+      expandTyConInstance :: Name -> Name -> Maybe (Annotated Type) -> Praxis [TyConstraint]
+      expandTyConInstance cls name arg = do
+        l <- use iEnv
+        let Just instances = Env.lookup name l
+        case Map.lookup cls instances of
+          Just resolver -> case resolver arg of
+            (_, IsInstance)          -> throwAt src ("redundant constraint: " <> pretty (phantom constraint))
+            (_, IsInstanceOnlyIf cs) -> concat <$> mapM (expandConstraint src) cs
+          _ -> return [] -- Note: The instance may be satisfied later (at the call site)
+
+  boundVarNames = Set.fromList $ map (\boundVar -> case boundVar of { (_ :< QTyVar n) -> n; (_ :< QViewVar _ n) -> n }) boundVars
+
+  checkConstraint :: Annotated TyConstraint -> Praxis ()
+  checkConstraint constraint = case view value constraint of
+    Instance (_ :< TyApply _ ty) -> checkConstraintTy ty where
+      checkConstraintTy :: Annotated Type -> Praxis ()
+      checkConstraintTy ((src, _) :< ty) = case ty of
+        TyApply (_ :< TyCon _) t
+          -> checkConstraintTy t
+        TyPack t1 t2
+          -> checkConstraintTy t1 >> checkConstraintTy t2
+        TyPair t1 t2
+          -> checkConstraintTy t1 >> checkConstraintTy t2
+        TyFn t1 t2
+          -> checkConstraintTy t1 >> checkConstraintTy t2
+        TyVar n | n `elem` boundVarNames
+          -> return ()
+        _
+          -> throwAt src $ "illegal constraint: " <> pretty constraint

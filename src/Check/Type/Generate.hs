@@ -13,7 +13,7 @@ module Check.Type.Generate
   ) where
 
 import           Check.Error
-import           Check.Type.Solve (assume)
+import           Check.Type.Solve (assumeFromQType)
 import           Common
 import           Env.Env          (Env (..))
 import qualified Env.Env          as Env
@@ -270,27 +270,7 @@ generateDeclTerm' forwardT (a@(src, _) :< decl) = (a :<) <$> case decl of
         return $ DeclTermVar name Nothing exp
       Just sig@(_ :< Forall boundVars constraints t) -> do
         when (not (null boundVars) && not (expIsFunction exp)) $ throwAt src $ "non-function " <> quote (pretty name) <> " can not be polymorphic"
-        let
-          boundVarNames = Set.fromList $ map (\boundVar -> case boundVar of { (_ :< QTyVar n) -> n; (_ :< QViewVar _ n) -> n }) boundVars
-          checkConstraint :: Annotated TyConstraint -> Praxis ()
-          checkConstraint constraint = case view value constraint of
-            Instance (_ :< TyApply _ ty) -> checkConstraintTy ty where
-              checkConstraintTy :: Annotated Type -> Praxis ()
-              checkConstraintTy ((src, _) :< ty) = case ty of
-                TyApply (_ :< TyCon _) t
-                  -> checkConstraintTy t
-                TyPack t1 t2
-                  -> checkConstraintTy t1 >> checkConstraintTy t2
-                TyPair t1 t2
-                  -> checkConstraintTy t1 >> checkConstraintTy t2
-                TyFn t1 t2
-                  -> checkConstraintTy t1 >> checkConstraintTy t2
-                TyVar n | n `elem` boundVarNames
-                  -> return ()
-                _
-                  -> throwAt src $ "illegal constraint: " <> pretty constraint
-        mapM checkConstraint constraints
-        assume (Set.fromList [ view value constraint | constraint <- constraints ]) -- constraints in the signature are added as assumptions
+        assumeFromQType boundVars constraints -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardT of
           Just _  -> return () -- forwardT is sig, so a FnCongruence constraint is redundant (covered by the below FnSignature constraint)

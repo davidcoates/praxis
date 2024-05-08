@@ -13,8 +13,7 @@
 
 
 module Check.Solve
-  ( Assumer(..)
-  , Resolver
+  ( Resolver
   , Disambiguating
   , Normaliser
   , Subgoal(..)
@@ -23,6 +22,7 @@ module Check.Solve
   , solve
   ) where
 
+import qualified Check.State   as Check
 import           Common
 import           Introspect
 import           Praxis
@@ -32,9 +32,8 @@ import           Term
 import           Control.Monad (foldM)
 import           Data.Maybe    (isJust)
 import           Data.Monoid   (Any (..))
+import qualified Data.Set      as Set
 
-
-type Assumer c = forall a. c -> Praxis a -> Praxis a
 
 type Resolver = forall a. Term a => Annotated a -> Maybe (Annotated a)
 
@@ -78,17 +77,18 @@ solve :: forall c a.
   , Term (Requirement c)
   , Pretty (Annotation (Requirement c))
   , Ord (Annotation (Requirement c))
-  ) => [Annotated (Requirement c)] -> Disambiguating (Reducer c) -> Assumer c -> Annotated a -> Praxis (Annotated a)
+  ) => Lens' PraxisState (Check.State c) -> Disambiguating (Reducer c) -> Annotated a -> Praxis (Annotated a)
 
-solve requirements reduce assume term = do
-  let goals = [ Goal [(src, reason)] (Branch constraint []) | ((src, Just reason) :< Requirement constraint) <- requirements ]
+solve state reduce term = do
+  requirements' <- Set.toList <$> use (state . requirements)
+  let goals = [ Goal [(src, reason)] (Branch constraint []) | ((src, Just reason) :< Requirement constraint) <- requirements' ]
   (term, [], _) <- solve' False (term, goals)
   return term
   where
     solve' :: Bool -> (Annotated a, [Goal c]) -> Praxis (Annotated a, [Goal c], Bool)
     solve' _ (term, []) = return (term, [], undefined)
     solve' disambiguate (term, goals) = do
-      (goals, reduction) <- reduceGoals (reduce disambiguate) assume goals
+      (goals, reduction) <- reduceGoals state (reduce disambiguate) goals
       case reduction of
 
         TreeProgress
@@ -140,14 +140,14 @@ reduceGoals :: forall c.
   ( Term c
   , Ord c
   , Pretty (Annotation (Requirement c))
-  ) => Reducer c -> Assumer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
+  ) => Lens' PraxisState (Check.State c) -> Reducer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
 
-reduceGoals reduce assume = \case
+reduceGoals state reduce = \case
 
   [] -> return ([], TreeSkip)
 
   (Goal crumbs tree):goals -> do
-    (tree, r1) <- reduceTree reduce assume tree
+    (tree, r1) <- reduceTree state reduce tree
     let
       goal = case tree of
         Just tree -> [Goal crumbs tree]
@@ -156,12 +156,12 @@ reduceGoals reduce assume = \case
       TreeContradiction trace
         -> throw (printTrace trace)
       TreeProgress -> do
-        (goals, r2) <- reduceGoals reduce assume goals
+        (goals, r2) <- reduceGoals state reduce goals
         return (goal ++ goals, noskip r2)
       TreeSolved solution _
         -> return (goal ++ goals, TreeSolved solution crumbs)
       TreeSkip ->  do
-        (goals, r2) <- reduceGoals reduce assume goals
+        (goals, r2) <- reduceGoals state reduce goals
         return (goal ++ goals, r2)
     where
       printTrace :: [c] -> Printable String
@@ -179,40 +179,47 @@ reduceGoals reduce assume = \case
 reduceTree :: forall c.
   ( Ord c
   , Term c
-  ) => Reducer c -> Assumer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
+  ) => Lens' PraxisState (Check.State c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
 
 -- Note: The supplied assumption may only be used locally (i.e. within 'tree').
 -- This means the assumption state needs to be reverted before exiting, to avoid the local assumption *or any consequents* from escaping the local context.
-reduceTree reduce assume (Assume constraint tree) = assume constraint (reduceTree reduce assume tree)
+reduceTree state reduce tree = case tree of
 
--- leaf case (the constraint has not yet been reduced)
-reduceTree reduce assume tree@(Branch constraint []) = do
-  r1 <- reduce constraint
-  case r1 of
-    Contradiction     -> return (Just tree, TreeContradiction [constraint])
-    Skip              -> return (Just tree, TreeSkip)
-    Solved solution   -> return (Nothing, TreeSolved solution undefined)
-    Subgoals subgoals -> do
-      (tree, r2) <- reduceTree reduce assume (Branch constraint (map subgoalToTree subgoals))
-      return (tree, noskip r2)
-    Tautology         -> return (Nothing, TreeProgress)
-  where
-    subgoalToTree = \case
-      Subgoal c     -> Branch c []
-      Implies c1 c2 -> Assume c1 (Branch c2 [])
+  Assume constraint tree -> save (state . assumptions) $ do
+    state . assumptions %= (Set.insert constraint)
+    reduceTree state reduce tree
 
--- recursive case
-reduceTree reduce assume (Branch constraint subtrees) = do
-  (subtrees, r1) <- foldM combine ([], TreeSkip) subtrees
-  let
-    r2 = case r1 of
-      TreeContradiction trace -> TreeContradiction (constraint:trace)
-      _                       -> r1
-  let
-    tree = case subtrees of
-      [] -> Nothing
-      _  -> Just (Branch constraint subtrees)
-  return (tree, r2)
+  Branch constraint subtrees -> do
+    assumptions' <- use (state . assumptions)
+    if constraint `Set.member` assumptions'
+      then return (Nothing, TreeProgress)
+      else case subtrees of
+        [] -> do
+          -- leaf case (the constraint has not yet been reduced)
+          r1 <- reduce constraint
+          case r1 of
+            Contradiction     -> return (Just tree, TreeContradiction [constraint])
+            Skip              -> return (Just tree, TreeSkip)
+            Solved solution   -> return (Nothing, TreeSolved solution undefined)
+            Subgoals subgoals -> do
+              (tree, r2) <- reduceTree state reduce (Branch constraint (map subgoalToTree subgoals))
+              return (tree, noskip r2)
+            Tautology         -> return (Nothing, TreeProgress)
+          where
+            subgoalToTree = \case
+              Subgoal c     -> Branch c []
+              Implies c1 c2 -> Assume c1 (Branch c2 [])
+        _ -> do
+          (subtrees, r1) <- foldM combine ([], TreeSkip) subtrees
+          let
+            r2 = case r1 of
+              TreeContradiction trace -> TreeContradiction (constraint:trace)
+              _                       -> r1
+          let
+            tree = case subtrees of
+              [] -> Nothing
+              _  -> Just (Branch constraint subtrees)
+          return (tree, r2)
   where
     combine :: ([Tree c], TreeReduction c) -> Tree c -> Praxis ([Tree c], TreeReduction c)
     combine (subtrees, r1) subtree = do
@@ -220,7 +227,7 @@ reduceTree reduce assume (Branch constraint subtrees) = do
       if abort
         then return (subtree : subtrees, r1)
         else do
-          (subtree, r2) <- reduceTree reduce assume subtree
+          (subtree, r2) <- reduceTree state reduce subtree
           let
             r3 = case r1 of
               TreeSkip     -> r2

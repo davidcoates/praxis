@@ -9,6 +9,7 @@ module Inbuilts
   , clone
   , dispose
   , copy
+  , capture
   ) where
 
 import           Common
@@ -151,6 +152,7 @@ inbuiltKinds =
   , ("Clone",          kind "Type -> Constraint")
   , ("Dispose",        kind "Type -> Constraint")
   , ("Copy",           kind "Type -> Constraint")
+  , ("Capture",        kind "Type -> Constraint")
   , ("Integral",       kind "Type -> Constraint")
   ]
 
@@ -171,6 +173,9 @@ dispose t = Instance $ TyApply (TyCon "Dispose" `as` kind "Type -> Constraint") 
 copy :: Annotated Type -> TyConstraint
 copy t = Instance $ TyApply (TyCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type"
 
+capture :: Annotated Type -> TyConstraint
+capture t = Instance $ TyApply (TyCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
+
 initialIEnv :: IEnv
 initialIEnv = Env.fromList
   [ ("Array", Map.fromList
@@ -183,7 +188,8 @@ initialIEnv = Env.fromList
   , ("Fn", Map.fromList
     [ ("Clone",   \(Just _) -> (Inbuilt, IsInstance))
     , ("Dispose", \(Just _) -> (Inbuilt, IsInstance))
-    , ("Copy"   , \(Just _) -> (Inbuilt, IsInstance))
+    , ("Copy",    \(Just _) -> (Inbuilt, IsInstance))
+    , ("Capture", \(Just _) -> (Inbuilt, IsInstance))
     ]
     )
   , ("I8", integral)
@@ -195,6 +201,7 @@ initialIEnv = Env.fromList
     [ ("Clone",   \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
     , ("Dispose", \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
     , ("Copy",    \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
+    , ("Capture", \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
     ]
     )
   , ("Ref", Map.fromList
@@ -219,6 +226,7 @@ initialIEnv = Env.fromList
       [ ("Clone",   \Nothing -> (Trivial, IsInstance))
       , ("Dispose", \Nothing -> (Trivial, IsInstance))
       , ("Copy",    \Nothing -> (Trivial, IsInstance))
+      , ("Capture", \Nothing -> (Trivial, IsInstance))
       ]
     integral = primitive `Map.union` Map.fromList
       [ ("Integral", \Nothing -> (Inbuilt, IsInstance))

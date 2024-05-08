@@ -16,7 +16,7 @@ import           Common
 import           Env.Env       (Env (..))
 import qualified Env.Env       as Env
 import qualified Env.LEnv      as LEnv
-import           Inbuilts      (copy, integral)
+import           Inbuilts      (capture, copy, integral)
 import           Introspect
 import           Praxis
 import           Print
@@ -94,7 +94,7 @@ closure src exp = do
   Env l2 <- use tEnv
   let captures = [ (name, view LEnv.value e1) | ((name, e1), (_, e2)) <- zip l1 l2, LEnv.touched e2 && not (LEnv.touched e1) ]
   -- Note: copy restrictions do not apply to polymorphic terms
-  requires [ (src, Captured name) :< copy t | (name, _ :< Forall vs _ t) <- captures, null vs ]
+  requires [ (src, Captured name) :< capture t | (name, _ :< Forall vs _ t) <- captures, null vs ]
   return $ t :< Closure captures ((src, Just t) :< x)
 
 scope :: Source -> Praxis a -> Praxis a

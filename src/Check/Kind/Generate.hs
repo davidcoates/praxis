@@ -200,6 +200,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
           [ ("Clone",          deduce clone)
           , ("Dispose",        deduce dispose)
           , ("Copy",           deduce copy)
+          , ("Capture",        deduce capture)
           ]
         _ -> Map.fromList
           [ ("Clone",          deduce clone)
@@ -214,9 +215,10 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     introKind src name k
     let
       instances = Map.fromList
-        [ ("Clone",          \Nothing -> (Trivial, IsInstance))
-        , ("Dispose",        \Nothing -> (Trivial, IsInstance))
-        , ("Copy",           \Nothing -> (Trivial, IsInstance))
+        [ ("Clone",   \Nothing -> (Trivial, IsInstance))
+        , ("Dispose", \Nothing -> (Trivial, IsInstance))
+        , ("Copy",    \Nothing -> (Trivial, IsInstance))
+        , ("Capture", \Nothing -> (Trivial, IsInstance))
         ]
     iEnv %= Env.intro name instances
     return $ (src, Just k) :< DeclTypeEnum name alts

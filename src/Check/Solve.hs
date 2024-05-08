@@ -200,9 +200,13 @@ reduceTree state reduce tree@(Branch constraint _) = do
         Skip              -> return (Just tree, TreeSkip)
         Solved solution   -> return (Nothing, TreeSolved solution undefined)
         Subgoals subgoals -> do
-          (tree, r2) <- reduceTree state reduce (Branch constraint (map (\subgoal -> case subgoal of { Subgoal c -> Branch c []; Implies c1 c2 -> Assume c1 (Branch c2 []) }) subgoals))
+          (tree, r2) <- reduceTree state reduce (Branch constraint (map subgoalToTree subgoals))
           return (tree, noskip r2)
         Tautology         -> return (Nothing, TreeProgress)
+      where
+        subgoalToTree = \case
+          Subgoal c     -> Branch c []
+          Implies c1 c2 -> Assume c1 (Branch c2 [])
 
     -- recursive case
     reduceTree' (Branch constraint subtrees) = do

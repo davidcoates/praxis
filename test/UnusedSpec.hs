@@ -25,7 +25,6 @@ fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
     it "does not type check" $ check program `shouldReturn` "type check error at 2:5: 'y_0' is not used"
 
 
-
   describe "unused underscore" $ do
 
     let program = trim [r|
@@ -42,7 +41,6 @@ fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _0 ) -> [a
 |]
 
 
-
   describe "unused read variable" $ do
 
     let program = trim [r|
@@ -55,7 +53,6 @@ fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x
 |]
 
     it "does not type checks" $ check program `shouldReturn` "type check error at 2:14: 'y_0' is not used"
-
 
 
   describe "used read variable" $ do
@@ -72,4 +69,3 @@ fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x
     it "type checks" $ check program `shouldReturn` trim [r|
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] y_0 ) -> read y_0 in [a_0] [a_0] x_0 defer [& 'l0 b_0] y_0
 |]
-

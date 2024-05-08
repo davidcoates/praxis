@@ -30,7 +30,6 @@ datatype unboxed Either [ a_0 , b_0 ] = [forall a_0 b_0 . a_0 -> Either [ a_0 , 
       evaluate program "Right 1 : Either [(), I32]" `shouldReturn` "Right 1"
 
 
-
   describe "datatype Fun (with unbox)" $ do
 
     let program = [r|
@@ -57,7 +56,6 @@ id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 
 |]
 
     it "evaluates" $ evaluate program "(unbox_fun id_fun ()) 4"  `shouldReturn` "4"
-
 
 
   describe "datatype Unboxed (unboxed)" $ do
@@ -90,7 +88,6 @@ TODO
 |]
 
 
-
   describe "datatype List (non-rec fails)" $ do
 
     let program = [r|
@@ -100,7 +97,6 @@ datatype List a = Nil () | Cons (a, List a)
     it "type checks" $ check program `shouldReturn` trim [r|
 kind check error at 2:37: 'List' is not in scope
 |]
-
 
 
   describe "datatype List (rec, with map & sum)" $ do

@@ -38,7 +38,6 @@ TODO
       evaluate program "swap (\"abc\", 0)" `shouldReturn` "(0, \"abc\")"
 
 
-
   describe "polymorphic function with constraint (copy)" $ do
 
     let program = [r|

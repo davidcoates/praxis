@@ -34,7 +34,6 @@ datatype Foo [a, a] = Foo a
     it "does not parse" $ parse program `shouldReturn` "parse error at 1:14: type variables are not distinct"
 
 
-
   describe "type redeclaration" $ do
 
     let program = trim [r|
@@ -43,7 +42,6 @@ enum Foo = Bar | Baz
 |]
 
     it "does not check" $ check program `shouldReturn` "kind check error at 2:1: type 'Foo' redeclared"
-
 
 
   describe "constructor redeclaration" $ do
@@ -56,7 +54,6 @@ enum FooEnum = Foo | Bar
     it "does not check" $ check program `shouldReturn` "type check error at 2:1: constructor 'Foo' redeclared"
 
 
-
   describe "term redeclaration" $ do
 
     let program = trim [r|
@@ -65,7 +62,6 @@ x = 2
 |]
 
     it "does not check" $ check program `shouldReturn` "parse error at 1:1: multiple definitions for 'x'"
-
 
 
   describe "out of scope term" $ do
@@ -85,7 +81,6 @@ x () = x ()
 |]
 
     it "does not check" $ check program `shouldReturn` "type check error at 1:8: 'x' is not in scope"
-
 
 
   describe "shadowing" $ do

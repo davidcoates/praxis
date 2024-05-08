@@ -11,6 +11,44 @@ import           Util
 spec :: Spec
 spec = do
 
+  describe "assumption reduction" $ do
+
+    let program = [r|
+copy : forall a | Copy (a, a). a -> (a, a)
+copy x = (x, x)
+|]
+
+    it "type checks" $ check program `shouldReturn` trim [r|
+copy_0 : forall a_0 | Copy ( a_0 , a_0 ) . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
+|]
+
+
+  describe "redundant constraint" $ do
+
+    let program = [r|
+f : forall a | Copy I32. a -> a
+f x = x
+|]
+
+    it "does not type check" $ check program `shouldReturn` trim [r|
+type check error at 2:21: illegal constraint: Copy I32
+|]
+
+
+  describe "smuggled constraint" $ do
+
+    let program = [r|
+f : forall a. a -> (a, a)
+f x = g (x, ()) where
+  g : forall b | Copy a. (a, b) -> (a, a)
+  g (x, _) = (x, x)
+|]
+
+    it "does not type check" $ check program `shouldReturn` trim [r|
+type check error at 4:23: illegal constraint: Copy a_0
+|]
+
+
   describe "reference views" $ do
 
     describe "can be copied" $ do
@@ -23,6 +61,7 @@ f x = (x, x)
       it "type checks" $ check program `shouldReturn` trim [r|
 f_0 : forall & r_0 a_0 . & r_0 a_0 -> ( & r_0 a_0 , & r_0 a_0 ) = \ [& r_0 a_0] x_0 -> ( [& r_0 a_0] x_0 , [& r_0 a_0] x_0 )
 |]
+
 
   describe "generic views" $ do
 

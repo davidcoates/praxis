@@ -24,7 +24,8 @@ import qualified Data.Set    as Set
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
-  term <- solve kindCheck reduce term
+  requirements' <- use (kindCheck . requirements)
+  term <- solve (Set.toList requirements') reduce undefined term
   tryDefault term
 
 reduce :: Disambiguating (Reducer KindConstraint)

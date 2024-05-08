@@ -37,12 +37,9 @@ datatype Bar [?v, a] = Bar (Foo [?v, a])
 
       it "does not kind check" $ check program `shouldReturn` trim [r|
 kind check error: unable to satisfy: View ? ≤ View &
-  | derived from: ( View ? , ^k3 ) ≤ ( View & , ^k1 )
-  | primary cause: type application [( View & , ^k1 ) -> Type] Foo ($) [ [View ?] ? v_1 , [^k3] a_1 ] at 3:28
+  | derived from: ( View ? , ^k3 ) ≤ ( View & , Type )
+  | primary cause: type application [( View & , Type ) -> Type] Foo ($) [ [View ?] ? v_1 , [^k3] a_1 ] at 3:28
   | secondary causes:
-  | - data type Foo [ [View &] & v_0 , [^k1] a_0 ] at 1:1
-  | - type [( View & , ^k1 ) -> Type] Foo [ [View ?] ? v_1 , [^k3] a_1 ] at 3:24
+  | - data type Foo [ [View &] & v_0 , [Type] a_0 ] at 1:1
+  | - type application [View &] & v_0 ($) [Type] a_0 at 1:28
 |]
-
-
-

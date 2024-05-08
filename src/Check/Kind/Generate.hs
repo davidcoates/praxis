@@ -25,7 +25,7 @@ import qualified Data.Set        as Set
 
 
 require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
-require ((src, reason) :< con) = kindCheck . requirements %= (((src, Just reason) :< Requirement con):)
+require ((src, reason) :< con) = kindCheck . requirements %= Set.insert ((src, Just reason) :< Requirement con)
 
 kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
 kind = annotation . just
@@ -35,7 +35,7 @@ run term = do
   term <- generate term
   display term `ifFlag` debug
   requirements' <- use (kindCheck . requirements)
-  display (separate "\n\n" (nub . sort $ requirements')) `ifFlag` debug
+  display (separate "\n\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
   return term
 
 -- TODO since we ignore annotation of input, could adjust this...

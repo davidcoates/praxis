@@ -36,7 +36,6 @@ TODO
     it "evaluates" $ evaluate program "foo" `shouldReturn` "3"
 
 
-
   describe "tuple" $ do
 
     let program = "x = (1, True, \"abc\")"
@@ -51,7 +50,6 @@ x_0 = ( [I32] 1 , [Bool] True , [& 'l0 String] "abc" )
     it "translates" $ translate program `shouldReturn` trim [r|
 TODO
 |]
-
 
 
   describe "if then else (min)" $ do
@@ -74,7 +72,6 @@ TODO
       evaluate program "min (1, 2)" `shouldReturn` "1"
       evaluate program "min (2, 1)" `shouldReturn` "1"
       evaluate program "min (1, 1)" `shouldReturn` "1"
-
 
 
   describe "switch (sign)" $ do

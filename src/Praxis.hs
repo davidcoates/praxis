@@ -24,6 +24,7 @@ module Praxis
   , levels
   , prec
 
+  , warn
   , warnAt
   , throw
   , throwAt
@@ -229,10 +230,16 @@ withContext message src = do
       Just src -> " at " <> pretty (Style Bold (Value (show src)))
   return $ stageStr <> message <> srcStr
 
-warnAt :: Pretty a => Source -> a -> Praxis ()
-warnAt src x = (`ifFlag` debug) $ do
-  message <- pretty (Style Bold (Fg DullYellow ("warning" :: Colored String))) `withContext` (Just src)
+warn' :: Pretty a => Maybe Source -> a -> Praxis ()
+warn' src x = (`ifFlag` debug) $ do
+  message <- pretty (Style Bold (Fg DullYellow ("warning" :: Colored String))) `withContext` src
   displayBare (message <> ": " <> pretty x)
+
+warn :: Pretty a => a -> Praxis ()
+warn = warn' Nothing
+
+warnAt :: Pretty a => Source -> a -> Praxis ()
+warnAt src = warn' (Just src)
 
 throw' :: Pretty a => Maybe Source -> a -> Praxis b
 throw' src x = do
@@ -240,10 +247,10 @@ throw' src x = do
   abort $ message <> ": " <> pretty x
 
 throw :: Pretty a => a -> Praxis b
-throw x = throw' Nothing x
+throw = throw' Nothing
 
 throwAt :: Pretty a => Source -> a -> Praxis b
-throwAt src x = throw' (Just src) x
+throwAt src = throw' (Just src)
 
 display :: Pretty a => a -> Praxis ()
 display x = unlessSilent $ do

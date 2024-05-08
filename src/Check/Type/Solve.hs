@@ -6,7 +6,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Check.Type.Solve
-  ( run
+  ( assume
+  , run
   , normalise
   ) where
 
@@ -31,11 +32,54 @@ import           Data.Traversable    (forM)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
-  term <- solve tyCheck reduce term
+  requirements' <- use (tyCheck . requirements)
+  term <- solve (Set.toList requirements') reduce assumeLocal term
   tryDefault term
 
+assumeLocal :: TyConstraint -> Praxis a -> Praxis a
+assumeLocal constraint context = save (tyCheck . assumptions) $ do
+  assume (Set.singleton constraint)
+  context
+
+assume :: Set TyConstraint -> Praxis ()
+assume constraints = do
+  constraints <- mapM assume' (Set.toList constraints)
+  tyCheck . assumptions %= Set.union (Set.unions (map Set.fromList constraints))
+  where
+    assume' :: TyConstraint -> Praxis [TyConstraint]
+    assume' constraint = do
+      constraint <- (recurseTerm normalise) constraint
+      case constraint of
+        Instance (a0 :< inst) -> case inst of
+          TyApply (a1 :< TyCon cls) t -> case view value t of
+            -- TODO, what should we do for views?
+            -- TyApply tyView@(_ :< TyView (_ :< view)) t
+            TyPair t1 t2             -> assumeTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
+            TyFn t1 t2               -> assumeTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
+            TyUnit                   -> assumeTyConInstance cls "Unit" Nothing
+            TyApply (_ :< TyCon n) t -> assumeTyConInstance cls n (Just t)
+            TyCon n                  -> assumeTyConInstance cls n Nothing
+            TyVar _                  -> return [constraint]
+      where
+        assumeTyConInstance :: Name -> Name -> Maybe (Annotated Type) -> Praxis [TyConstraint]
+        assumeTyConInstance cls name arg = do
+          l <- use iEnv
+          let Just instances = Env.lookup name l
+          case Map.lookup cls instances of
+            Just resolver -> case resolver arg of
+              (_, IsInstance)          -> throw ("redundant constraint: " <> pretty (phantom constraint))
+              (_, IsInstanceOnlyIf cs) -> concat <$> mapM assume' cs
+            _ -> return [constraint] -- Note: The instance may be satisfied later (at the call site)
+
+checkAssumptions :: TyConstraint -> Praxis (Reduction TyConstraint) -> Praxis (Reduction TyConstraint)
+checkAssumptions constraint otherwise = do
+  assumptions' <- use (tyCheck . assumptions)
+  if constraint `Set.member` assumptions'
+    then return Tautology
+    else otherwise
+
 reduce :: Disambiguating (Reducer TyConstraint)
-reduce disambiguate = \case
+reduce disambiguate constraint = checkAssumptions constraint $ case constraint of
 
   TEq t1 t2 | t1 == t2 -> return Tautology
 

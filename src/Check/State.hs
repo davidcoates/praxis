@@ -15,13 +15,13 @@ import qualified Data.Set     as Set
 
 
 data State c = State
-  { _requirements :: [Annotated (Requirement c)]
+  { _requirements :: Set (Annotated (Requirement c))
   , _assumptions  :: Set c
   }
 
 emptyState :: State c
 emptyState = State
-  { _requirements = []
+  { _requirements = Set.empty
   , _assumptions  = Set.empty
   }
 

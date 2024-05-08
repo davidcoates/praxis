@@ -31,7 +31,6 @@ TODO
 |]
 
 
-
   describe "boxed references" $ do
 
     let program = trim [r|
@@ -77,7 +76,6 @@ do
     Box xs
     () -- Note, Box xs can't escape the read
 |] `shouldReturn` "[( )] let [List I32] xs_0 = [( I32 , List I32 ) -> List I32] Cons ( [I32] 1 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 2 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 3 , [( ) -> List I32] Nil [( )] ( ) ) ) ) in read xs_0 in [( )] [& 'l1 List I32 -> Box [ & 'l1 , List I32 ]] Box [& 'l1 List I32] xs_0 seq [( )] ( )"
-
 
 
   describe "read safety" $ do

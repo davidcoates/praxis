@@ -81,7 +81,6 @@ foo = do
     it "does not parse" $ check program `shouldReturn` "parse error at 3:3: do block must end in an expression"
 
 
-
   describe "mixfix operators" $ do
 
     let program = [r|

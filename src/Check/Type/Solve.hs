@@ -103,10 +103,11 @@ reduce disambiguate = \case
         case (isRef view, affine) of
           (No, _)         -> error "unnormalised"
           (_, No)         -> error "unnormalised"
+          (_, Unknown)    -> return Skip
+          (Unknown, _)    -> return Skip
           (Yes, Yes)      -> reduceTyConInstance cls "Ref" (Just t)
           (Yes, Variable) -> return $ Subgoals [ Subgoal instRef, copy t `Implies` instVal ]
           (Variable, _)   -> return $ Subgoals [ Subgoal instRef, Subgoal instVal ]
-          _               -> return Skip
       TyPair t1 t2             -> reduceTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
       TyFn t1 t2               -> reduceTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
       TyUnit                   -> reduceTyConInstance cls "Unit" Nothing

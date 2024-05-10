@@ -19,6 +19,7 @@ import           Introspect
 import           Parse                     (parse)
 import           Praxis
 import           Term                      hiding (Lit (..), Pair, Unit)
+import           Value
 
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import qualified Control.Monad.Trans.State as State (get)
@@ -33,7 +34,7 @@ initialState0 = set iEnv initialIEnv $ set kEnv initialKEnv $ emptyState
 
 -- Include inbuilts
 initialState1 :: PraxisState
-initialState1 = set tEnv initialTEnv $ initialState0
+initialState1 = set vEnv initialVEnv $ set tEnv initialTEnv $ initialState0
 
 -- TODO Make this importPrelude, a Monadic action?
 initialState :: PraxisState
@@ -50,81 +51,117 @@ poly s = runInternal initialState0 (parse s :: Praxis (Annotated QType))
 kind :: String -> Annotated Kind
 kind s = runInternal emptyState (parse s :: Praxis (Annotated Kind))
 
-inbuilts :: [(Name, Annotated QType)]
+inbuilts :: [(Name, Annotated QType, Value)]
 inbuilts =
   [ ("add"
     , poly "forall a | Integral a . (a, a) -> a" -- TODO should be Num, not Integral
+    , liftIII (+)
     )
   , ("subtract"
     , poly "forall a | Integral a . (a, a) -> a"
+    , liftIII (-)
     )
   , ("multiply"
     , poly "forall a | Integral a . (a, a) -> a"
+    , liftIII (*)
     )
   , ("negate"
     , poly "forall a | Integral a . a -> a"
+    , liftI $ \(con, decon) -> Fn (\x -> return (con (negate (decon x))))
     )
   , ("get_int"
     , poly "forall a | Integral a . () -> a"
+    , liftI $ \(con, decon) -> Fn (\Unit -> liftIOUnsafe (con <$> readLn))
     )
   , ("get_str"
     , poly "() -> String"
+    , Fn (\Unit -> Value.String <$> liftIOUnsafe getContents) -- TODO need to make many of these functions strict?
     )
   , ("put_int"
     , poly "forall a | Integral a. a -> ()"
+    , liftI $ \(_, decon) -> Fn (\i -> liftIOUnsafe (print (decon i) >> pure Unit))
     )
   , ("put_str"
     , poly "forall &r. &r String -> ()"
+    , Fn (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit)
     )
   , ("put_str_ln"
     , poly "forall &r. &r String -> ()"
+    , Fn (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit)
     )
   , ("compose"
     , poly "forall a b c. (b -> c, a -> b) -> a -> c"
+    , Fn (\(Pair (Fn f) (Fn g)) -> pure (Fn (\x -> g x >>= f)))
     )
   , ("print"
     , poly "forall &r a. &r a -> ()" -- TODO should have Show constraint
+    , Fn (\x -> liftIOUnsafe (print x >> pure Unit))
     )
   , ("new_array"
     , poly "forall a. (USize, () -> a) -> Array a"
+    , Fn (\(Pair (USize i) v) -> Value.newArray i v)
     )
   , ("at_array"
     , poly "forall &r a. (&r Array a, USize) -> &r a"
+    , Fn (\(Pair (Array a) (USize i)) -> Value.readArray a i)
     )
   , ("len_array"
     , poly "forall &r a. &r Array a -> USize"
+    , Fn (\(Array a) -> USize <$> Value.lenArray a)
     )
   , ("set_array"
     , poly "forall a. (Array a, USize, a) -> Array a"
+    , Fn (\(Pair (Array a) (Pair (USize i) e)) -> Value.writeArray a i e >> pure (Array a))
     )
   , ("not"
     , poly "Bool -> Bool"
+    , Fn (\(Bool a) -> pure (Bool (not a)))
     )
   , ("or"
     , poly "(Bool, Bool) -> Bool"
+    , liftBBB (||)
     )
   , ("and"
     , poly "(Bool, Bool) -> Bool"
+    , liftBBB (&&)
     )
   , ("eq"
     , poly "forall a | Integral a . (a, a) -> Bool" -- TODO should be Eq, not Integral
+    , liftIIB (==)
     )
   , ("neq"
     , poly "forall a | Integral a . (a, a) -> Bool"
+    , liftIIB (/=)
     )
   , ("lt"
     , poly "forall a | Integral a . (a, a) -> Bool" -- TODO should be Ord, not Integral
+    , liftIIB (<)
     )
   , ("gt"
     , poly "forall a | Integral a . (a, a) -> Bool"
+    , liftIIB (>)
     )
   , ("lte"
     , poly "forall a | Integral a . (a, a) -> Bool"
+    , liftIIB (<=)
     )
   , ("gte"
     , poly "forall a | Integral a . (a, a) -> Bool"
+    , liftIIB (>=)
     )
   ]
+  where
+    liftI :: ((Integer -> Value, Value -> Integer) -> Value) -> Value
+    liftI f = Polymorphic $ \[(_, _ :< TyCon ty)] -> f (integerToValue ty, valueToInteger)
+    liftII :: (forall a. Integral a => (a -> a)) -> Value
+    liftII f = liftI $ \(con, decon) -> Fn (\x -> return (con (f (decon x))))
+    liftIII :: (forall a. Integral a => (a -> a -> a)) -> Value
+    liftIII f = liftI $ \(con, decon) -> Fn (\(Pair x y) -> return (con (f (decon x) (decon y))))
+    liftIIB :: (forall a. Integral a => (a -> a -> Bool)) -> Value
+    liftIIB f = liftI $ \(con, decon) -> Fn (\(Pair x y) -> return (Bool (f (decon x) (decon y))))
+    liftBBB :: (Bool -> Bool -> Bool) -> Value
+    liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
+
 
 inbuiltKinds :: [(Name, Annotated Kind)]
 inbuiltKinds =
@@ -236,7 +273,10 @@ initialKEnv :: KEnv
 initialKEnv = Env.fromList inbuiltKinds
 
 initialTEnv :: TEnv
-initialTEnv = LEnv.fromList inbuilts
+initialTEnv = LEnv.fromList $ map (\(n, t, _) -> (n, t)) inbuilts
+
+initialVEnv :: VEnv
+initialVEnv = Env.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
 
 -- TODO interfaces
 prelude = [r|

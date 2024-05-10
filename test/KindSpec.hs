@@ -5,6 +5,7 @@ module KindSpec where
 import           Test.Hspec
 import           Text.RawString.QQ
 
+import           Introspect
 import           Util
 
 
@@ -21,7 +22,7 @@ datatype Foo [?v, a] = Foo ?v a
 datatype Bar [&v, a] = Bar (Foo [&v, a])
   |]
 
-      it "kind checks" $ check program `shouldReturn` trim [r|
+      it "kind checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 datatype unboxed Foo [ ? v_0 , a_0 ] = [forall ? v_0 a_0 . ? v_0 a_0 -> Foo [ ? v_0 , a_0 ]] Foo ? v_0 a_0
 datatype unboxed Bar [ & v_1 , a_1 ] = [forall & v_1 a_1 . Foo [ & v_1 , a_1 ] -> Bar [ & v_1 , a_1 ]] Bar Foo [ & v_1 , a_1 ]
 |]
@@ -35,7 +36,7 @@ datatype Foo [&v, a] = Foo &v a
 datatype Bar [?v, a] = Bar (Foo [?v, a])
   |]
 
-      it "does not kind check" $ check program `shouldReturn` trim [r|
+      it "does not kind check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 kind check error: unable to satisfy: View ? ≤ View &
   | derived from: ( View ? , ^k3 ) ≤ ( View & , Type )
   | primary cause: type application [( View & , Type ) -> Type] Foo ($) [ [View ?] ? v_1 , [^k3] a_1 ] at 3:28

@@ -4,14 +4,16 @@ import           Common
 import qualified Env.Env            as Env
 import qualified Env.LEnv           as LEnv
 import           Inbuilts           (initialState)
-import           Interpret
 import           Praxis
 import           Term
+import           Util               (evalExp, evalProgram)
+import           Value
 
 import           Control.Monad      (void, when)
 import           Data.List          (delete)
 import           System.Environment
 import           System.IO
+
 
 main :: IO ()
 main = hSetBuffering stdin LineBuffering >> do
@@ -20,7 +22,6 @@ main = hSetBuffering stdin LineBuffering >> do
 
 data Mode = Interactive (Maybe FilePath)
           | Interpret FilePath
-          | Compile FilePath
 
 -- TODO could use a State monad but doesn't play nicely with the Praxis monad
 parseFilename :: [String] -> Praxis ([String], Maybe FilePath)
@@ -44,49 +45,34 @@ parseInteractive args = if "-i" `elem` args
   then return (delete "-i" args, True)
   else return (args, False)
 
-parseCompile :: [String] -> Praxis ([String], Bool)
-parseCompile args = if "-c" `elem` args
-  then return (delete "-c" args, True)
-  else return (args, False)
-
 parseOpts :: [String] -> Praxis Mode
 parseOpts args = do
   (args, file) <- parseFilename args
   args <- parseHelp args
   args <- parseDebug args
   (args, interactive) <- parseInteractive args
-  (args, compile) <- parseCompile args
   when (not (null args)) $ throw (pretty "unknown option " <> quote (pretty (unwords args)))
-  case (interactive, compile) of
-    (True, True)   -> throw (pretty "at most one of -i and -c can be specified")
-    (False, True)  -> case file of
-      Just file -> return (Compile file)
-      Nothing   -> throw (pretty "missing file (compile mode)")
-    (True, False) -> return (Interactive file)
-    (False, False) -> case file of
+  if interactive
+    then return (Interactive file)
+    else case file of
       Just file -> return (Interpret file)
-      Nothing   -> throw (pretty "missing file (interpret mode)")
+      Nothing   -> throw (pretty "missing file")
 
 parse :: [String] -> Praxis ()
-parse xs = return () -- TODO
-{-
+parse xs = do
   mode <- parseOpts xs
   case mode of
     Interactive file -> do
       case file of
         Just file -> do
           text <- liftIO (readFile file)
-          interpretProgram text
+          evalProgram text
           repl
         Nothing   -> repl
     Interpret file -> do
       text <- liftIO (readFile file)
-      intepretProgram text
-    Compile file -> do
-      text <- liftIO (readFile file)
-      let outFile = dropExtension file
-      error "TODO" -- FIXME
--}
+      evalProgram text
+      runMain
 
 help :: Praxis a
 help = Praxis.abort helpStr where
@@ -96,6 +82,13 @@ help = Praxis.abort helpStr where
     , "-i interactive"
     , "-h help"
     , "-c compile" ]
+
+runMain :: Praxis ()
+runMain = do
+  requireMain
+  Just (Fn f) <- vEnv `uses` Env.lookup "main_0"
+  f Value.Unit
+  return ()
 
 forever :: Praxis a -> Praxis a
 forever p = try p >> forever p
@@ -108,5 +101,6 @@ repl = forever $ do
 eval :: String -> Praxis ()
 eval s = do
   -- TODO fix this so we can have declarations
-  v <- interpretExp s
+  v <- evalExp s
   liftIO $ print v
+

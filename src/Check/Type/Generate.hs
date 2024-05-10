@@ -94,7 +94,7 @@ closure src exp = do
   Env l1 <- use tEnv
   (t :< x) <- scope src exp
   Env l2 <- use tEnv
-  let captures = [ (name, view LEnv.value e1) | ((name, e1), (_, e2)) <- zip l1 l2, LEnv.touched e2 && not (LEnv.touched e1) ]
+  let captures = [ (name, view LEnv.value e1) | ((name, e1), (_, e2)) <- zip l1 l2, view LEnv.used e2 > view LEnv.used e1 || view LEnv.read e2 > view LEnv.read e1 ]
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, Captured name) :< capture t | (name, _ :< Forall vs _ t) <- captures, null vs ]
   return $ t :< Closure captures ((src, Just t) :< x)
@@ -106,7 +106,7 @@ scope src block = do
   Env l2 <- use tEnv
   let n = length l2 - length l1
       (newVars, oldVars) = splitAt n l2
-      unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, not (LEnv.touched e) ]
+      unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, view LEnv.used e == 0 && view LEnv.read e == 0 ]
   series $ [ throwAt src (Unused n) | (n, _) <- unusedVars, head n /= '_' ] -- hacky
   tEnv .= Env oldVars
   return x
@@ -120,10 +120,10 @@ readVar src name = do
   case Env.lookup name l of
     Just entry -> do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
-      when (view LEnv.used entry) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
+      when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
       -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
       when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> quote (pretty name)
-      tEnv %= LEnv.setRead name
+      tEnv %= LEnv.incRead name
       return $ (refName, phantom (TyApply (phantom (TyView r)) t))
     Nothing -> throwAt src (NotInScope name)
 
@@ -135,9 +135,9 @@ useVar src name = do
   case Env.lookup name l of
     Just entry -> do
       (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
-      tEnv %= LEnv.setUsed name
+      tEnv %= LEnv.incUsed name
       unless (isJust specialisation) $ do
-        requires [ (src, MultiUse name) :< copy t | view LEnv.used entry ]
+        requires [ (src, MultiUse name) :< copy t | view LEnv.used entry > 0 ]
       return (t, specialisation)
     Nothing -> throwAt src (NotInScope name)
 

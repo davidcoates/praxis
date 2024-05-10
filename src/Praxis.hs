@@ -15,6 +15,7 @@ module Praxis
   , IEnv(..)
   , KEnv(..)
   , TEnv(..)
+  , VEnv(..)
 
   -- | Operators
   , Fixity(..)
@@ -58,6 +59,7 @@ module Praxis
   , iEnv
   , kEnv
   , tEnv
+  , vEnv
   , rewriteMap
   , tySynonyms
   , tyCheck
@@ -87,6 +89,7 @@ import           Common
 import           Print
 import           Stage
 import           Term
+import           Value
 
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent
@@ -133,6 +136,8 @@ type KEnv = Env (Annotated Kind)
 
 type TEnv = LEnv (Annotated QType)
 
+type VEnv = Env Value
+
 data Fixity = Infix (Maybe Assoc)
             | Prefix
             | Postfix
@@ -150,19 +155,20 @@ data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name N
 makeLenses ''RewriteMap
 
 data PraxisState = PraxisState
-  { _flags       :: Flags               -- ^ Flags
-  , _fresh       :: Fresh
-  , _stage       :: Stage               -- ^ Current stage of compilation
-  , _opContext   :: OpContext
-  , _cEnv        :: CEnv                -- ^ Constructor environment
-  , _iEnv        :: IEnv                -- ^ Instance environment
-  , _kEnv        :: KEnv                -- ^ Kind environment
-  , _tEnv        :: TEnv                -- ^ Type environment
+  { _flags      :: Flags               -- ^ Flags
+  , _fresh      :: Fresh
+  , _stage      :: Stage               -- ^ Current stage of compilation
+  , _opContext  :: OpContext
+  , _cEnv       :: CEnv                -- ^ Constructor environment
+  , _iEnv       :: IEnv                -- ^ Instance environment
+  , _kEnv       :: KEnv                -- ^ Kind environment
+  , _tEnv       :: TEnv                -- ^ Type environment
+  , _vEnv       :: VEnv                -- ^ Value environment
   -- TODO encapsulate within desugarer?
-  , _tySynonyms  :: Map Name (Annotated Type) -- ^ Type synonyms
-  , _rewriteMap  :: RewriteMap
-  , _tyCheck     :: Check.State TyConstraint
-  , _kindCheck   :: Check.State KindConstraint
+  , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
+  , _rewriteMap :: RewriteMap
+  , _tyCheck    :: Check.State TyConstraint
+  , _kindCheck  :: Check.State KindConstraint
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -189,6 +195,7 @@ emptyState = PraxisState
   , _iEnv         = Env.empty
   , _kEnv         = Env.empty
   , _tEnv         = LEnv.empty
+  , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
   , _tyCheck      = Check.emptyState

@@ -47,10 +47,10 @@ parseInteractive args = if "-i" `elem` args
 
 parseOpts :: [String] -> Praxis Mode
 parseOpts args = do
-  (args, file) <- parseFilename args
   args <- parseHelp args
   args <- parseDebug args
   (args, interactive) <- parseInteractive args
+  (args, file) <- parseFilename args
   when (not (null args)) $ throw (pretty "unknown option " <> quote (pretty (unwords args)))
   if interactive
     then return (Interactive file)

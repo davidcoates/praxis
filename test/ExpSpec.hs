@@ -94,6 +94,6 @@ sign_0 : I32 -> I32 = \ [I32] n_0 -> [I32] switch
       runEvaluate program "sign -5"   `shouldReturn` "-1"
       runEvaluate program "sign - 5"  `shouldReturn` trim [r|
 type check error: unable to satisfy: Integral ( I32 -> I32 )
-  | primary cause: specialisation of 'subtract' at <?>
+  | primary cause: specialisation of 'subtract' at 1:6
   | secondary cause: application [( I32 -> I32 , I32 -> I32 ) -> I32 -> I32] subtract ($) ( [I32 -> I32] sign_0 , [^t15] 5 ) at 1:1
 |]  -- Note: Parses as "sign - 5" (binary subtract)

@@ -25,7 +25,7 @@ import qualified Data.Set        as Set
 
 
 require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
-require ((src, reason) :< con) = kindSystem . requirements %= (((src, Just reason) :< Requirement con):)
+require ((src, reason) :< con) = kindCheck . requirements %= Set.insert ((src, Just reason) :< Requirement con)
 
 kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
 kind = annotation . just
@@ -34,8 +34,8 @@ run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- generate term
   display term `ifFlag` debug
-  requirements' <- use (kindSystem . requirements)
-  display (separate "\n\n" (nub . sort $ requirements')) `ifFlag` debug
+  requirements' <- use (kindCheck . requirements)
+  display (separate "\n\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
   return term
 
 -- TODO since we ignore annotation of input, could adjust this...
@@ -95,7 +95,7 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
         _ -> do
           k1 <- freshKindUni
           k2 <- freshKindUni
-          require $ (src, KindReasonTyApply f x) :< (view kind f `KEq` phantom (KindFun k1 k2))
+          require $ (src, KindReasonTyApply f x) :< (view kind f `KEq` phantom (KindFn k1 k2))
           require $ (src, KindReasonTyApply f x) :< (view kind x `KSub` k1)
           return (k2 :< TyApply f x)
 
@@ -105,12 +105,20 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
         Just k  -> return (k :< TyCon con)
         Nothing -> throwAt src (NotInScope con)
 
-    TyFun ty1 ty2 -> do
+    TyFn ty1 ty2 -> do
       ty1 <- generateTy ty1
       ty2 <- generateTy ty2
       require $ (src, KindReasonType ty1) :< (view kind ty1 `KEq` phantom KindType)
       require $ (src, KindReasonType ty2) :< (view kind ty2 `KEq` phantom KindType)
-      return (phantom KindType :< TyFun ty1 ty2)
+      return (phantom KindType :< TyFn ty1 ty2)
+
+    TyPack ty1 ty2 -> do
+       ty1 <- generateTy ty1
+       ty2 <- generateTy ty2
+       return (phantom (KindPair (view kind ty1) (view kind ty2)) :< TyPack ty1 ty2)
+
+    TyUnit -> do
+      return (phantom KindType :< TyUnit)
 
     TyView v -> do
       v <- generateView v
@@ -122,14 +130,6 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
       require $ (src, KindReasonType ty1) :< (view kind ty1 `KEq` phantom KindType)
       require $ (src, KindReasonType ty2) :< (view kind ty2 `KEq` phantom KindType)
       return (phantom KindType :< TyPair ty1 ty2)
-
-    TyPack ty1 ty2 -> do
-      ty1 <- generateTy ty1
-      ty2 <- generateTy ty2
-      return (phantom (KindPair (view kind ty1) (view kind ty2)) :< TyPack ty1 ty2)
-
-    TyUnit -> do
-      return (phantom KindType :< TyUnit)
 
     TyVar var -> do
       entry <- kEnv `uses` Env.lookup var
@@ -156,9 +156,6 @@ generateTyPat (a@(src, _) :< tyPat) = (\(k :< t) -> (src, Just k) :< t) <$> case
     return (phantom (KindPair (view kind tyPat1) (view kind tyPat2)) :< TyPatPack tyPat1 tyPat2)
 
 
-fun :: Annotated Kind -> Annotated Kind -> Annotated Kind
-fun a b = phantom (KindFun a b)
-
 generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon (a@(src, _) :< DataCon name arg) = do
   arg <- generate arg
@@ -180,13 +177,13 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     unless (mode == DataRec) $ introKind src name k
     case arg of
       Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
-      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFun (view kind arg) (phantom KindType)))
+      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFn (view kind arg) (phantom KindType)))
 
     let
-      deduce :: (Annotated Type -> Annotated Type) -> Maybe (Annotated Type) -> Instance
+      deduce :: (Annotated Type -> TyConstraint) -> Maybe (Annotated Type) -> (InstanceOrigin, Instance)
       deduce mkConstraint arg' = case (arg, arg') of
-        (Nothing, Nothing)    -> IsInstanceOnlyIf [ mkConstraint conType | (_ :< DataCon _ conType) <- alts ]
-        (Just arg, Just arg') -> IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ] where
+        (Nothing, Nothing)    -> (Trivial, IsInstanceOnlyIf [ mkConstraint conType | (_ :< DataCon _ conType) <- alts ])
+        (Just arg, Just arg') -> (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
           f :: Annotated Type -> Maybe (Annotated Type)
           f (_ :< t) = case t of
             TyVar n                   -> n `lookup` specialisedVars
@@ -201,16 +198,13 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       instances = case mode of
         DataUnboxed -> Map.fromList
           [ ("Clone",          deduce clone)
-          , ("CloneTrivial",   deduce cloneTrivial)
           , ("Dispose",        deduce dispose)
-          , ("DisposeTrivial", deduce disposeTrivial)
           , ("Copy",           deduce copy)
+          , ("Capture",        deduce capture)
           ]
         _ -> Map.fromList
           [ ("Clone",          deduce clone)
-          , ("CloneTrivial",   deduce cloneTrivial)
           , ("Dispose",        deduce dispose)
-          , ("DisposeTrivial", deduce disposeTrivial)
           ]
 
     iEnv %= Env.intro name instances
@@ -221,11 +215,10 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     introKind src name k
     let
       instances = Map.fromList
-        [ ("Clone",          \Nothing -> IsInstance)
-        , ("CloneTrivial",   \Nothing -> IsInstance)
-        , ("Dispose",        \Nothing -> IsInstance)
-        , ("DisposeTrivial", \Nothing -> IsInstance)
-        , ("Copy",           \Nothing -> IsInstance)
+        [ ("Clone",   \Nothing -> (Trivial, IsInstance))
+        , ("Dispose", \Nothing -> (Trivial, IsInstance))
+        , ("Copy",    \Nothing -> (Trivial, IsInstance))
+        , ("Capture", \Nothing -> (Trivial, IsInstance))
         ]
     iEnv %= Env.intro name instances
     return $ (src, Just k) :< DeclTypeEnum name alts

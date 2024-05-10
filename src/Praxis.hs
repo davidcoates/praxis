@@ -10,12 +10,12 @@ module Praxis
 
   -- | State types
   , CEnv(..)
+  , InstanceOrigin(..)
   , Instance(..)
   , IEnv(..)
   , KEnv(..)
   , TEnv(..)
   , VEnv(..)
-  , System(..)
 
   -- | Operators
   , Fixity(..)
@@ -25,6 +25,7 @@ module Praxis
   , levels
   , prec
 
+  , warn
   , warnAt
   , throw
   , throwAt
@@ -45,9 +46,9 @@ module Praxis
   -- | Flag lenses
   , debug
 
-  -- | System lenses
-  , requirements
-  , assumptions
+  -- | Check state lenses
+  , Check.requirements
+  , Check.assumptions
 
   -- | Praxis lenses
   , flags
@@ -61,8 +62,8 @@ module Praxis
   , vEnv
   , rewriteMap
   , tySynonyms
-  , tySystem
-  , kindSystem
+  , tyCheck
+  , kindCheck
 
   -- | RewriteMap lenses
   , tyVarMap
@@ -83,10 +84,12 @@ module Praxis
   )
   where
 
+import qualified Check.State                  as Check
 import           Common
 import           Print
 import           Stage
 import           Term
+import           Value
 
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent
@@ -98,8 +101,6 @@ import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
-import           Data.Set                     (Set)
-import qualified Data.Set                     as Set
 import           Env.Env                      (Env)
 import qualified Env.Env                      as Env
 import           Env.LEnv                     (LEnv)
@@ -107,7 +108,6 @@ import qualified Env.LEnv                     as LEnv
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 import           System.IO.Unsafe             (unsafePerformIO)
-import           Value
 
 data Flags = Flags
   { _debug  :: Bool
@@ -125,9 +125,12 @@ data Fresh = Fresh
 
 type CEnv = Env (Annotated QType)
 
-data Instance = IsInstance | IsInstanceOnlyIf [Annotated Type]
+data InstanceOrigin = Inbuilt | Trivial | User
+  deriving Eq
 
-type IEnv = Env (Map Name (Maybe (Annotated Type) -> Instance))
+data Instance = IsInstance | IsInstanceOnlyIf [TyConstraint]
+
+type IEnv = Env (Map Name (Maybe (Annotated Type) -> (InstanceOrigin, Instance)))
 
 type KEnv = Env (Annotated Kind)
 
@@ -151,19 +154,6 @@ data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name N
 
 makeLenses ''RewriteMap
 
-data System c = System
-  { _requirements :: [Annotated (Requirement c)] -- TODO colored string?
-  , _assumptions  :: Set c
-  }
-
-emptySystem :: System c
-emptySystem = System
-  { _requirements = []
-  , _assumptions  = Set.empty
-  }
-
-makeLenses ''System
-
 data PraxisState = PraxisState
   { _flags      :: Flags               -- ^ Flags
   , _fresh      :: Fresh
@@ -173,12 +163,12 @@ data PraxisState = PraxisState
   , _iEnv       :: IEnv                -- ^ Instance environment
   , _kEnv       :: KEnv                -- ^ Kind environment
   , _tEnv       :: TEnv                -- ^ Type environment
-  , _vEnv       :: VEnv                -- ^ Value environment for interpreter
+  , _vEnv       :: VEnv                -- ^ Value environment
   -- TODO encapsulate within desugarer?
   , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
   , _rewriteMap :: RewriteMap
-  , _tySystem   :: System TyConstraint
-  , _kindSystem :: System KindConstraint
+  , _tyCheck    :: Check.State TyConstraint
+  , _kindCheck  :: Check.State KindConstraint
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -208,8 +198,8 @@ emptyState = PraxisState
   , _vEnv         = Env.empty
   , _tySynonyms   = Map.empty
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
-  , _tySystem     = emptySystem
-  , _kindSystem   = emptySystem
+  , _tyCheck      = Check.emptyState
+  , _kindCheck    = Check.emptyState
   }
 
 makeLenses ''Flags
@@ -240,10 +230,16 @@ withContext message src = do
       Just src -> " at " <> pretty (Style Bold (Value (show src)))
   return $ stageStr <> message <> srcStr
 
-warnAt :: Pretty a => Source -> a -> Praxis ()
-warnAt src x = (`ifFlag` debug) $ do
-  message <- pretty (Style Bold (Fg DullYellow ("warning" :: Colored String))) `withContext` (Just src)
+warn' :: Pretty a => Maybe Source -> a -> Praxis ()
+warn' src x = (`ifFlag` debug) $ do
+  message <- pretty (Style Bold (Fg DullYellow ("warning" :: Colored String))) `withContext` src
   displayBare (message <> ": " <> pretty x)
+
+warn :: Pretty a => a -> Praxis ()
+warn = warn' Nothing
+
+warnAt :: Pretty a => Source -> a -> Praxis ()
+warnAt src = warn' (Just src)
 
 throw' :: Pretty a => Maybe Source -> a -> Praxis b
 throw' src x = do
@@ -251,10 +247,10 @@ throw' src x = do
   abort $ message <> ": " <> pretty x
 
 throw :: Pretty a => a -> Praxis b
-throw x = throw' Nothing x
+throw = throw' Nothing
 
 throwAt :: Pretty a => Source -> a -> Praxis b
-throwAt src x = throw' (Just src) x
+throwAt src = throw' (Just src)
 
 display :: Pretty a => a -> Praxis ()
 display x = unlessSilent $ do
@@ -369,7 +365,7 @@ requireMain = do
   case ty of
     Nothing -> throw ("missing main function" :: String)
     Just ty
-      | (_ :< Forall [] [] (_ :< TyFun (_ :< TyUnit) (_ :< TyUnit))) <- ty
+      | (_ :< Forall [] [] (_ :< TyFn (_ :< TyUnit) (_ :< TyUnit))) <- ty
         -> return ()
       | otherwise
         -> throwAt (view source ty) $ "main function has bad type " <> quote (pretty ty) <> ", expected () -> ()"

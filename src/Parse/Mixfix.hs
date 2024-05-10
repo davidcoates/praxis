@@ -45,31 +45,31 @@ instance Alternative Parser where
   a <|> b = Parser $ \ts -> runParser a ts ++ runParser b ts
 
 run :: Source -> Parser (Annotated Exp) -> [Annotated Tok] -> Praxis (Annotated Exp)
-run s p ts = case runParser (p <* eof) ts of
-  []        -> throwAt s "no mixfix parse"
+run src exp ts = case runParser (exp <* eof) ts of
+  []        -> throwAt src "no mixfix parse"
   [(a, [])] -> return a
-  (a:b:_)   -> throwAt s "ambiguous mixfix parse" -- TODO provide more information here, say the first two parses?
+  (a:b:_)   -> throwAt src "ambiguous mixfix parse" -- TODO provide more information here, say the first two parses?
 
 -- The transitive closure of a precedence graph
 closure :: Graph -> Graph
 closure g = listArray (bounds g) (map (concatMap (reachable g)) (elems g))
 
 parse :: Source -> [Annotated Tok] -> Praxis (Annotated Exp)
-parse s ts = do
+parse src ts = do
   opLevels <- use (opContext . levels)
   opDefns <- use (opContext . defns)
   opPrec <- use (opContext . prec)
-  run s (mixfix opDefns opLevels (closure opPrec)) ts -- TODO skip the closure?
+  run src (mixfix opDefns opLevels (closure opPrec)) ts -- TODO skip the closure?
 
 anyExp :: Parser (Annotated Exp)
 anyExp = match f where
   f (_ :< TExp e) = Just e
   f _             = Nothing
 
-namedOp :: Name -> Parser Name
+namedOp :: Name -> Parser Source
 namedOp n = match f where
-  f (_ :< TOp m) = if m == n then Just n else Nothing
-  f _            = Nothing
+  f ((src, _) :< TOp m) = if m == n then Just src else Nothing
+  f _                   = Nothing
 
 mixfix :: OpDefns -> [[Op]] -> Graph -> Parser (Annotated Exp)
 mixfix defns levels prec = exp where
@@ -108,20 +108,20 @@ mixfix defns levels prec = exp where
   op n fixity = asum [ middle op | op <- levels !! n, fixity == snd (defns Map.! op) ]
 
   middle :: Op -> Parser ([Annotated Exp] -> Annotated Exp)
-  middle op@(Op ps) = let (name, fixity) = defns Map.! op in (<$> parts (trim fixity ps)) $ \ps -> case fixity of
-    Infix _ -> \[x,y] -> build name (x : ps ++ [y])
-    Prefix  -> \[y]   -> build name (ps ++ [y])
-    Postfix -> \[x]   -> build name (x : ps)
-    Closed  -> \[]    -> build name ps
+  middle op@(Op ps) = let (name, fixity) = defns Map.! op in (<$> parts (trim fixity ps)) $ \(src, ps) -> case fixity of
+    Infix _ -> \[x,y] -> build src name (x : ps ++ [y])
+    Prefix  -> \[y]   -> build src name (ps ++ [y])
+    Postfix -> \[x]   -> build src name (x : ps)
+    Closed  -> \[]    -> build src name ps
 
-  build :: Name -> [Annotated Exp] -> Annotated Exp
-  build n es = let es' = fold es in (view source es', Nothing) :< Apply (phantom $ Var n) es'
+  build :: Source -> Name -> [Annotated Exp] -> Annotated Exp
+  build src name es = let es' = fold src es in (view source es', Nothing) :< Apply ((src, Nothing) :< Var name) es'
 
-  fold :: [Annotated Exp] -> Annotated Exp
-  fold = \case
-    []     -> phantom Unit
+  fold :: Source -> [Annotated Exp] -> Annotated Exp
+  fold src = \case
+    []     -> (src, Nothing) :< Unit
     [e]    -> e
-    (e:es) -> let es' = fold es in (view source e <> view source es', Nothing) :< Pair e es'
+    (e:es) -> let es' = fold src es in (view source e <> view source es', Nothing) :< Pair e es'
 
   trim :: Fixity -> [Maybe Name] -> [Maybe Name]
   trim = \case
@@ -130,8 +130,8 @@ mixfix defns levels prec = exp where
     Postfix -> tail
     Closed  -> id
 
-  parts :: [Maybe Name] -> Parser [Annotated Exp]
+  parts :: [Maybe Name] -> Parser (Source, [Annotated Exp])
   parts = \case
-    []             -> pure []
-    (Just n  : ps) -> namedOp n *> parts ps
-    (Nothing : ps) -> (:) <$> anyExp <*> parts ps
+    []             -> pure (Phantom, [])
+    (Just n : ps)  -> (\s1 (s2, es) -> (s1 <> s2, es)) <$> namedOp n <*> parts ps
+    (Nothing : ps) -> (\e (s, es) -> (s, e:es)) <$> anyExp <*> parts ps

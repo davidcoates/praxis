@@ -50,6 +50,7 @@ data I a where
   IBind     :: I Bind
   IDataCon  :: I DataCon
   IDecl     :: I Decl
+  IDeclTerm :: I DeclTerm
   IDeclType :: I DeclType
   IExp      :: I Exp
   IPat      :: I Pat
@@ -85,6 +86,7 @@ switch a b eq neq = case (a, b) of
   (IBind, IBind)                       -> eq
   (IDataCon, IDataCon)                 -> eq
   (IDecl, IDecl)                       -> eq
+  (IDeclTerm, IDeclTerm)               -> eq
   (IDeclType, IDeclType)               -> eq
   (IExp, IExp)                         -> eq
   (IPat, IPat)                         -> eq
@@ -154,7 +156,7 @@ instance Term OpRules where
   recurseAnnotation = trivial
   recurseTerm f = \case
     OpRules a ps    -> OpRules <$> traverse f a <*> traverse f ps
-    OpMultiRules rs -> OpMultiRules <$> traverse (bitraverse f (traverse f)) rs
+    OpRulesSweet rs -> OpRulesSweet <$> traverse (bitraverse f (traverse f)) rs
 
 instance Term Prec where
   witness = IPrec
@@ -175,24 +177,30 @@ instance Term DataCon where
   recurseTerm f = \case
     DataCon n t -> DataCon n <$> f t
 
+instance Term Decl where
+  witness = IDecl
+  recurseAnnotation = trivial
+  recurseTerm f = \case
+    DeclOpSweet o d rs -> DeclOpSweet <$> f o <*> pure d <*> f rs
+    DeclSynSweet n t   -> DeclSynSweet n <$> f t
+    DeclType t         -> DeclType <$> f t
+    DeclTerm t         -> DeclTerm <$> f t
+
+instance Term DeclTerm where
+  witness = IDeclTerm
+  recurseAnnotation = trivial
+  recurseTerm f = \case
+    DeclTermRec ds          -> DeclTermRec <$> traverse f ds
+    DeclTermVar n t e       -> DeclTermVar n <$> traverse f t <*> f e
+    DeclTermDefSweet n ps e -> DeclTermDefSweet n <$> traverse f ps <*> f e
+    DeclTermSigSweet n t    -> DeclTermSigSweet n <$> f t
+
 instance Term DeclType where
   witness = IDeclType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
     DeclTypeData m n t as -> DeclTypeData m n <$> traverse f t <*> traverse f as
     DeclTypeEnum n as     -> pure (DeclTypeEnum n as)
-
-instance Term Decl where
-  witness = IDecl
-  recurseAnnotation = trivial
-  recurseTerm f = \case
-    DeclType t     -> DeclType <$> f t
-    DeclDef n ps e -> DeclDef n <$> traverse f ps <*> f e
-    DeclOp o d rs  -> DeclOp <$> f o <*> pure d <*> f rs
-    DeclRec ds     -> DeclRec <$> traverse f ds
-    DeclSig n t    -> DeclSig n <$> f t
-    DeclSyn n t    -> DeclSyn n <$> f t
-    DeclVar n t e  -> DeclVar n <$> traverse f t <*> f e
 
 
 pair :: (Term a, Term b) => Applicative f => TermAction f -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)
@@ -208,14 +216,15 @@ instance Term Exp where
     Apply a b       -> Apply <$> f a <*> f b
     Case a as       -> Case <$> f a <*> pairs f as
     Cases as        -> Cases <$> pairs f as
+    Closure vs e    -> Closure <$> traverse (second f) vs <*> f e
     Con n           -> pure (Con n)
     Defer a b       -> Defer <$> f a <*> f b
-    Do ss           -> Do <$> traverse f ss
+    DoSweet ss      -> DoSweet <$> traverse f ss
     If a b c        -> If <$> f a <*> f b <*> f c
     Lambda a b      -> Lambda <$> f a <*> f b
     Let a b         -> Let <$> f a <*> f b
     Lit l           -> pure (Lit l)
-    Mixfix ts       -> Mixfix <$> traverse f ts
+    MixfixSweet ts  -> MixfixSweet <$> traverse f ts
     Read n a        -> Read n <$> f a
     Pair a b        -> Pair <$> f a <*> f b
     Seq a b         -> Seq <$> f a <*> f b
@@ -224,7 +233,7 @@ instance Term Exp where
     Switch as       -> Switch <$> pairs f as
     Unit            -> pure Unit
     Var n           -> pure (Var n)
-    VarRef n        -> pure (VarRef n)
+    VarRefSweet n   -> pure (VarRefSweet n)
     Where a bs      -> Where <$> f a <*> traverse f bs
 
 instance Term Pat where
@@ -282,7 +291,7 @@ instance Term Type where
     TyUni n     -> pure (TyUni n)
     TyApply a b -> TyApply <$> f a <*> f b
     TyCon n     -> pure (TyCon n)
-    TyFun a b   -> TyFun <$> f a <*> f b
+    TyFn a b    -> TyFn <$> f a <*> f b
     TyView v    -> TyView <$> f v
     TyPack a b  -> TyPack <$> f a <*> f b
     TyPair a b  -> TyPair <$> f a <*> f b
@@ -293,13 +302,11 @@ instance Term TyConstraint where
   witness = ITyConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
-    HoldsInteger n t -> HoldsInteger n <$> f t
-    Instance t       -> Instance <$> f t
-    Not t            -> Not <$> f t
-    RefFree n t      -> RefFree n <$> f t
-    TEq a b          -> TEq <$> f a <*> f b
-    TOpEq a b        -> TOpEq <$> f a <*> f b
-    Trivial t        -> Trivial <$> f t
+    HoldsInteger n t  -> HoldsInteger n <$> f t
+    Instance t        -> Instance <$> f t
+    RefFree n t       -> RefFree n <$> f t
+    TEq a b           -> TEq <$> f a <*> f b
+    TOpEq a b         -> TOpEq <$> f a <*> f b
 
 instance Term QType where
   witness = IQType
@@ -320,7 +327,7 @@ instance Term Kind where
   recurseTerm f = \case
     KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
-    KindFun a b    -> KindFun <$> f a <*> f b
+    KindFn a b    -> KindFn <$> f a <*> f b
     KindView d     -> pure (KindView d)
     KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType

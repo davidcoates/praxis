@@ -49,8 +49,16 @@ irrefMapM f as bs = case as of
 evalDecl :: Annotated Decl -> Praxis ()
 evalDecl (_ :< decl) = case decl of
 
-  DeclRec decls -> do
-    let (names, exps) = unzip [ (name, exp) | (_ :< DeclVar name _ exp) <- decls ]
+  DeclTerm decl -> evalDeclTerm decl
+
+  DeclType _    -> return ()
+
+
+evalDeclTerm :: Annotated DeclTerm -> Praxis ()
+evalDeclTerm (_ :< decl) = case decl of
+
+  DeclTermRec decls -> do
+    let (names, exps) = unzip [ (name, exp) | (_ :< DeclTermVar name _ exp) <- decls ]
     -- To support mutual recursion, each function needs to see the evaluation of all other functions (including itself).
     -- Leverage mfix to find the fixpoint.
     mfix $ \values -> do
@@ -60,18 +68,23 @@ evalDecl (_ :< decl) = case decl of
       mapM evalExp exps
     return ()
 
-  DeclVar name _ exp -> do
+  DeclTermVar name _ exp -> do
     value <- evalExp exp
     vEnv %= Env.intro name value
 
-  _ -> return ()
 
+getValue :: Source -> Name -> Praxis Value
+getValue src name = do
+  entry <- vEnv `uses` Env.lookup name
+  case entry of
+     Just val -> return val
+     Nothing  -> throwAt src ("unknown variable: " <> quote (pretty name))
 
 evalExp :: Annotated Exp -> Praxis Value
 evalExp ((src, Just t) :< exp) = case exp of
 
   Apply f x -> do
-    Value.Fun f <- evalExp f
+    Value.Fn f <- evalExp f
     x <- evalExp x
     f x
 
@@ -79,13 +92,19 @@ evalExp ((src, Just t) :< exp) = case exp of
     val <- evalExp exp
     evalCase src val alts
 
-  Cases alts -> do
-    l <- use vEnv
-    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; evalCase src val alts }
+  Cases alts -> return $ Value.Fn $ \val -> evalCase src val alts
+
+  Closure captures exp -> do
+    let names = map fst captures
+    values <- mapM (getValue src) names
+    Value.Fn fn <- evalExp exp
+    return $ Value.Fn $ \val -> save vEnv $ do
+      vEnv .= Env.fromList (zip names values)
+      fn val
 
   Con name -> do
     case t of
-      (_ :< TyFun _ _) -> return $ Value.Fun (\val -> return $ Value.Data name val)
+      (_ :< TyFn _ _) -> return $ Value.Fn (\val -> return $ Value.Data name val)
       _                -> return $ Value.Enum name
 
   Defer exp1 exp2 -> do
@@ -97,9 +116,7 @@ evalExp ((src, Just t) :< exp) = case exp of
     Value.Bool cond <- evalExp condExp
     if cond then evalExp thenExp else evalExp elseExp
 
-  Lambda pat exp -> do
-    l <- use vEnv
-    return $ Value.Fun $ \val -> save vEnv $ do { vEnv .= l; forceMatch src val pat; evalExp exp }
+  Lambda pat exp -> return $ Value.Fn $ \val -> forceMatch src val pat >> evalExp exp
 
   Let bind exp -> save vEnv $ do
     evalBind bind
@@ -132,14 +149,10 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Term.Unit -> return Value.Unit
 
-  Var var -> do
-    entry <- vEnv `uses` Env.lookup var
-    case entry of
-       Just val -> return val
-       Nothing  -> throwAt src ("unknown variable " <> quote (pretty var))
+  Var var -> getValue src var
 
   Where exp decls -> save vEnv $ do
-    traverse evalDecl decls
+    traverse evalDeclTerm decls
     evalExp exp
 
 

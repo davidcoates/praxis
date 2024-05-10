@@ -6,14 +6,16 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Check.Type.Solve
-  ( run
+  ( assumeFromQType
+  , run
   , normalise
   ) where
 
 import           Check.Solve
-import           Check.Type.Instance
 import           Common
+import qualified Env.Env             as Env
 import qualified Env.LEnv            as LEnv
+import           Inbuilts            (copy)
 import           Introspect
 import           Praxis
 import           Stage               hiding (Unknown)
@@ -21,6 +23,7 @@ import           Term
 
 import           Control.Applicative (liftA2)
 import           Data.List           (foldl', nub, sort)
+import qualified Data.Map.Strict     as Map
 import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set)
 import qualified Data.Set            as Set
@@ -29,7 +32,7 @@ import           Data.Traversable    (forM)
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
-  term <- solve tySystem reduce term
+  term <- solve tyCheck reduce term
   tryDefault term
 
 reduce :: Disambiguating (Reducer TyConstraint)
@@ -42,25 +45,27 @@ reduce disambiguate = \case
   TEq t1 t2@(_ :< TyUni _) -> reduce disambiguate (t2 `TEq` t1) -- handle by the above case
 
   TEq (_ :< TyApply (_ :< TyCon n1) t1) (_ :< TyApply (_ :< TyCon n2) t2)
-    | n1 == n2 -> return $ Subgoals [ TEq t1 t2 ]
+    | n1 == n2 -> return $ Subgoals [ Subgoal (TEq t1 t2) ]
     | otherwise -> return Contradiction
 
-  TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> return $ Subgoals [ TEq s1 t1, TEq s2 t2 ]
+  TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> return $ Subgoals [ Subgoal (TEq s1 t1), Subgoal (TEq s2 t2) ]
 
-  TEq (_ :< TyPair s1 s2) (_ :< TyPair t1 t2) -> return $ Subgoals [ TEq s1 t1, TEq s2 t2 ]
+  TEq (_ :< TyPair s1 s2) (_ :< TyPair t1 t2) -> return $ Subgoals [ Subgoal (TEq s1 t1), Subgoal (TEq s2 t2) ]
 
-  TEq (_ :< TyFun t1 t2) (_ :< TyFun s1 s2) -> return $ Subgoals [ TEq t1 s1, TEq t2 s2 ]
+  TEq (_ :< TyFn t1 t2) (_ :< TyFn s1 s2) -> return $ Subgoals [ Subgoal (TEq t1 s1), Subgoal (TEq t2 s2) ]
 
-  TEq t1@(_ :< TyApply (_ :< TyView _) t1') t2 -> return $ Subgoals [ TEq (stripOuterViews t1') (stripOuterViews t2), TOpEq t1 t2 ]
+  TEq t1@(_ :< TyApply (_ :< TyView _) t1') t2 -> return $ Subgoals [ Subgoal (TEq (stripOuterViews t1') (stripOuterViews t2)), Subgoal (TOpEq t1 t2) ]
 
   TEq t1 t2@(_ :< TyApply (_:< TyView _) _) -> reduce disambiguate (t2 `TEq` t1) -- handled by the above case
 
   TOpEq t1 t2 | outerViews t1 == outerViews t2 -> return Tautology
 
   TOpEq t1 t2 -> do
-    r <- canCopy (stripOuterViews t1) -- stripOuterViews t1 == stripOuterViews t2
-    case r of
-      No -> do
+    affine <- isAffine (stripOuterViews t1) -- stripOuterViews t1 == stripOuterViews t2
+    case affine of
+      No -> return Skip
+      Unknown -> return Skip
+      _  -> do
         let (vs1, vs2) = let f = Set.toList . outerViews in (f t1, f t2)
         case (if vs1 < vs2 then (vs1, vs2) else (vs2, vs1)) of
           ([], []) -> return Tautology
@@ -71,12 +76,11 @@ reduce disambiguate = \case
           -- TODO do we need occurs checks here?
           ([_ :< v@(ViewUni _ _)], [_ :< ViewUni _ n])        -> solved (n `isView` v) -- Note: Ref < RefOrValue (i.e. restrain the more general one)
           ([_ :< ViewUni RefOrValue n], [_ :< v])             -> solved (n `isView` v)
-          ([_ :< ViewUni Ref n], [_ :< ViewValue])            -> return Contradiction
+          ([_ :< ViewUni Ref n], [_ :< ViewValue])            -> error "unnormalised"  -- Sanity check: This is unexpected since t1 and t2 should be normalised
           ([_ :< ViewUni Ref n], [_ :< ViewVar RefOrValue _]) -> return Contradiction
           ([_ :< ViewUni Ref n], [_ :< v@(ViewVar Ref _)])    -> solved (n `isView` v)
           ([_ :< ViewUni Ref n], [_ :< v@(ViewRef _)])        -> solved (n `isView` v)
           _ -> return Skip
-      _ -> return Skip
 
   RefFree refName t
     | refName `Set.member` viewRefs t
@@ -86,17 +90,32 @@ reduce disambiguate = \case
     | otherwise
       -> return Skip
 
-  Instance inst -> case view value inst of
+  Instance (a0 :< inst) -> case inst of
 
     TyApply (_ :< TyCon "Integral") t | disambiguate
-      -> return $ Subgoals [ TEq t (TyCon "I32" `as` phantom KindType) ]
+      -> return $ Subgoals [ Subgoal (TEq t (TyCon "I32" `as` phantom KindType)) ]
 
-    _ -> do
-      r <- isInstance inst
-      return $ case r of
-        Yes   -> Tautology
-        No    -> Contradiction
-        Maybe -> Skip
+    TyApply (a1 :< TyCon cls) t -> case view value t of
+      TyApply tyView@(_ :< TyView (_ :< view)) t -> do
+        let
+          instVal = Instance (a0 :< TyApply (a1 :< TyCon cls) t)
+          instRef = Instance (a0 :< TyApply (a1 :< TyCon cls) (phantom (TyApply (phantom (TyCon "Ref")) t)))
+        affine <- isAffine t
+        case (isRef view, affine) of
+          (No, _)         -> error "unnormalised"
+          (_, No)         -> error "unnormalised"
+          (_, Unknown)    -> return Skip
+          (Unknown, _)    -> return Skip
+          (Yes, Yes)      -> reduceTyConInstance cls "Ref" (Just t)
+          (Yes, Variable) -> return $ Subgoals [ Subgoal instRef, copy t `Implies` instVal ]
+          (Variable, _)   -> return $ Subgoals [ Subgoal instRef, Subgoal instVal ]
+      TyPair t1 t2             -> reduceTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
+      TyFn t1 t2               -> reduceTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
+      TyUnit                   -> reduceTyConInstance cls "Unit" Nothing
+      TyApply (_ :< TyCon n) t -> reduceTyConInstance cls n (Just t)
+      TyCon n                  -> reduceTyConInstance cls n Nothing
+      TyVar _                  -> return Contradiction
+      _                        -> return Skip
 
 
   HoldsInteger n (_ :< t) -> case t of
@@ -119,6 +138,16 @@ reduce disambiguate = \case
 
 
   where
+    reduceTyConInstance :: Name -> Name -> Maybe (Annotated Type) -> Praxis (Reduction TyConstraint)
+    reduceTyConInstance cls name arg = do
+      l <- use iEnv
+      let Just instances = Env.lookup name l
+      case Map.lookup cls instances of
+        Just resolver -> case resolver arg of
+          (_, IsInstance)          -> return Tautology
+          (_, IsInstanceOnlyIf cs) -> return (Subgoals (map Subgoal cs))
+        Nothing                    -> return Contradiction
+
     tyUnis :: forall a. Term a => Annotated a -> Set Name
     tyUnis = extract (embedMonoid f) where
       f = \case
@@ -174,50 +203,85 @@ stripOuterViews ty = case view value ty of
   TyApply (_ :< TyView _) ty -> stripOuterViews ty
   _                          -> ty
 
-simplifyOuterViews :: Annotated Type -> Annotated Type
-simplifyOuterViews = simplifyOuterViews' [] where
-
-  simplifyOuterViews' :: [View] -> Annotated Type -> Annotated Type
-  simplifyOuterViews' vs (a :< ty) = case ty of
-
-    TyApply f@(_ :< TyView (_ :< v)) innerTy -> case v of
-
-      ViewValue -> simplifyOuterViews' vs innerTy
-
-      _
-
-        | v `elem` vs -> simplifyOuterViews' vs innerTy
-
-        | otherwise   -> a :< TyApply f (simplifyOuterViews' (v:vs) innerTy)
-
-    _ -> a :< ty
-
-
 -- Term normaliser (after a substitution is applied)
 normalise :: Normaliser
 normalise (a :< x) = case typeof x of
 
   IType -> case x of
 
-    TyApply (_ :< TyView _) _ -> case simplifyOuterViews (a :< x) of
-
-      ty@(_ :< TyApply (_ :< TyView _) innerTy) -> do
-        -- The view can be safely stripped if the /* stripped */ type is copyable.
-        --
-        -- E.g. we can not strip &a from &a &b List Int (because List Int is not copyable)
-        -- But we can strip &a from &a &b Int, and then &b from &b Int.
-        canStripOps <- canCopy (stripOuterViews innerTy)
-        case canStripOps of
-          Yes -> normalise (stripOuterViews innerTy)
-          _   -> return ty
-
-      ty -> return ty
+    TyApply tyView@(_ :< TyView (_ :< view)) ty -> do
+      ty <- normalise ty
+      case view of
+        ViewValue -> return ty
+        _         -> do
+          affine <- isAffine ty
+          case affine of
+            No -> return $ ty
+            _  -> return $ (a :< TyApply tyView ty)
 
     _ -> continue
 
   _ -> continue
 
-  where continue = recurse normalise (a :< x)
+  where
+    continue = recurse normalise (a :< x)
+
+
+data Truth = Yes | No | Variable | Unknown
+
+isRef :: View -> Truth
+isRef = \case
+  ViewUni Ref _        -> Yes
+  ViewUni RefOrValue _ -> Unknown
+  ViewRef _            -> Yes
+  ViewVar Ref _        -> Yes
+  ViewVar RefOrValue _ -> Variable
+
+truthOr :: Truth -> Truth -> Truth
+truthOr Yes _      = Yes
+truthOr _ Yes      = Yes
+truthOr Unknown _  = Unknown
+truthOr _ Unknown  = Unknown
+truthOr _ Variable = Variable
+truthOr Variable _ = Variable
+truthOr No No      = No
+
+truthNot :: Truth -> Truth
+truthNot Yes      = No
+truthNot No       = Yes
+truthNot Unknown  = Unknown
+truthNot Variable = Variable
+
+truthAnd :: Truth -> Truth -> Truth
+truthAnd a b = truthNot (truthOr (truthNot a) (truthNot b))
+
+isAffine :: Annotated Type -> Praxis Truth
+isAffine t = do
+  assumptions' <- use (tyCheck . assumptions)
+  if copy t `Set.member` assumptions'
+    then return No
+    else isAffine' t
+  where
+    isAffine' :: Annotated Type -> Praxis Truth
+    isAffine' (a :< t) = case t of
+      TyPair t1 t2 -> isTyConAffine "Pair" (Just (phantom (TyPack t1 t2)))
+      TyFn t1 t2 -> isTyConAffine "Fn" (Just (phantom (TyPack t1 t2)))
+      TyUnit -> isTyConAffine "Unit" Nothing
+      TyCon n -> isTyConAffine n Nothing
+      TyApply (_ :< TyCon n) t -> isTyConAffine n (Just t)
+      TyApply (_ :< TyView (_ :< view)) t -> truthAnd (truthNot (isRef view)) <$> isAffine t
+      TyUni _ -> return Unknown
+      TyVar _ -> return Variable
+
+isTyConAffine :: Name -> Maybe (Annotated Type) -> Praxis Truth
+isTyConAffine name arg = do
+  l <- use iEnv
+  let Just instances = Env.lookup name l
+  case Map.lookup "Copy" instances of
+    Just resolver -> case resolver arg of
+      (_, IsInstance)                -> return No
+      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine t | (Instance (_ :< TyApply (_ :< TyCon "Copy") t)) <- subgoals ]
+    Nothing                          -> return Yes
 
 
 -- Check for undetermined unification variables, default them where possible
@@ -257,3 +321,62 @@ tryDefault term@((src, _) :< _) = do
         ViewUni _ n -> Set.singleton n
         _           -> Set.empty
 
+
+-- When we encounter a polymorphic function with constraints, we should add the constraints to the assumption set when type checking the body.
+-- However, since the solver acts globally, the best we can do is add the constraints to the global assumption set.
+-- We need to be extra careful about the constraints introduced (to avoid unsatisfiable constraints which cause bad global deductions),
+-- in particular we require all of the constraints to only include the bound type variables at their leaves.
+--
+-- We also "expand" the assumptions, e.g. if there is an instance C t => D t, the the assumption D t should also include C t.
+
+-- TODO handle views!
+assumeFromQType :: [Annotated QTyVar] -> [Annotated TyConstraint] -> Praxis ()
+assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
+
+  assumeConstraint :: Annotated TyConstraint -> Praxis ()
+  assumeConstraint constraint = do
+    constraint <- normalise constraint
+    checkConstraint constraint
+    constraints <- expandConstraint (view source constraint) (view value constraint)
+    tyCheck . assumptions %= Set.union (Set.fromList constraints)
+
+  expandConstraint :: Source -> TyConstraint -> Praxis [TyConstraint]
+  expandConstraint src constraint = ((constraint:) <$>) $ case constraint of
+    Instance (a0 :< inst) -> case inst of
+      TyApply (a1 :< TyCon cls) t -> case view value t of
+        TyPair t1 t2             -> expandTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
+        TyFn t1 t2               -> expandTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
+        TyUnit                   -> expandTyConInstance cls "Unit" Nothing
+        TyApply (_ :< TyCon n) t -> expandTyConInstance cls n (Just t)
+        TyCon n                  -> expandTyConInstance cls n Nothing
+        TyVar _                  -> return []
+    where
+      expandTyConInstance :: Name -> Name -> Maybe (Annotated Type) -> Praxis [TyConstraint]
+      expandTyConInstance cls name arg = do
+        l <- use iEnv
+        let Just instances = Env.lookup name l
+        case Map.lookup cls instances of
+          Just resolver -> case resolver arg of
+            (_, IsInstance)          -> throwAt src ("redundant constraint: " <> pretty (phantom constraint))
+            (_, IsInstanceOnlyIf cs) -> concat <$> mapM (expandConstraint src) cs
+          _ -> return [] -- Note: The instance may be satisfied later (at the call site)
+
+  boundVarNames = Set.fromList $ map (\boundVar -> case boundVar of { (_ :< QTyVar n) -> n; (_ :< QViewVar _ n) -> n }) boundVars
+
+  checkConstraint :: Annotated TyConstraint -> Praxis ()
+  checkConstraint constraint = case view value constraint of
+    Instance (_ :< TyApply _ ty) -> checkConstraintTy ty where
+      checkConstraintTy :: Annotated Type -> Praxis ()
+      checkConstraintTy ((src, _) :< ty) = case ty of
+        TyApply (_ :< TyCon _) t
+          -> checkConstraintTy t
+        TyPack t1 t2
+          -> checkConstraintTy t1 >> checkConstraintTy t2
+        TyPair t1 t2
+          -> checkConstraintTy t1 >> checkConstraintTy t2
+        TyFn t1 t2
+          -> checkConstraintTy t1 >> checkConstraintTy t2
+        TyVar n | n `elem` boundVarNames
+          -> return ()
+        _
+          -> throwAt src $ "illegal constraint: " <> pretty constraint

@@ -7,10 +7,9 @@ module Inbuilts
   ( initialState
   , integral
   , clone
-  , cloneTrivial
   , dispose
-  , disposeTrivial
   , copy
+  , capture
   ) where
 
 import           Common
@@ -41,7 +40,7 @@ initialState1 = set vEnv initialVEnv $ set tEnv initialTEnv $ initialState0
 initialState :: PraxisState
 initialState = fixup (runInternal initialState1 ((parse prelude :: Praxis (Annotated Program)) >> lift State.get)) where
   -- TODO a nicer way to do this. Undo all the things except the fields we care about.
-  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindSystem (view kindSystem emptyState) . set tySystem initialTySystem
+  fixup = set flags (view flags emptyState) . set fresh (view fresh emptyState) . set stage (view stage emptyState) . set kindCheck (view kindCheck emptyState) . set tyCheck (view tyCheck emptyState)
 
 mono :: String -> Annotated Type
 mono s = runInternal initialState0 (parse s :: Praxis (Annotated Type))
@@ -68,54 +67,55 @@ inbuilts =
     )
   , ("negate"
     , poly "forall a | Integral a . a -> a"
-    , liftI $ \(con, decon) -> Fun (\x -> return (con (negate (decon x))))
+    , liftI $ \(con, decon) -> Fn (\x -> return (con (negate (decon x))))
     )
   , ("get_int"
     , poly "forall a | Integral a . () -> a"
-    , liftI $ \(con, decon) -> Fun (\Unit -> liftIOUnsafe (con <$> readLn))
+    , liftI $ \(con, decon) -> Fn (\Unit -> liftIOUnsafe (con <$> readLn))
     )
   , ("get_str"
     , poly "() -> String"
-    , Fun (\Unit -> Value.String <$> liftIOUnsafe getContents)) -- TODO need to make many of these functions strict?
+    , Fn (\Unit -> Value.String <$> liftIOUnsafe getContents) -- TODO need to make many of these functions strict?
+    )
   , ("put_int"
     , poly "forall a | Integral a. a -> ()"
-    , liftI $ \(_, decon) -> Fun (\i -> liftIOUnsafe (print (decon i) >> pure Unit))
+    , liftI $ \(_, decon) -> Fn (\i -> liftIOUnsafe (print (decon i) >> pure Unit))
     )
   , ("put_str"
     , poly "forall &r. &r String -> ()"
-    , Fun (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit)
+    , Fn (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit)
     )
   , ("put_str_ln"
     , poly "forall &r. &r String -> ()"
-    , Fun (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit)
+    , Fn (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit)
     )
   , ("compose"
     , poly "forall a b c. (b -> c, a -> b) -> a -> c"
-    , Fun (\(Pair (Fun f) (Fun g)) -> pure (Fun (\x -> g x >>= f)))
+    , Fn (\(Pair (Fn f) (Fn g)) -> pure (Fn (\x -> g x >>= f)))
     )
   , ("print"
     , poly "forall &r a. &r a -> ()" -- TODO should have Show constraint
-    , Fun (\x -> liftIOUnsafe (print x >> pure Unit))
+    , Fn (\x -> liftIOUnsafe (print x >> pure Unit))
     )
   , ("new_array"
     , poly "forall a. (USize, () -> a) -> Array a"
-    , Fun (\(Pair (USize i) v) -> Value.newArray i v)
+    , Fn (\(Pair (USize i) v) -> Value.newArray i v)
     )
   , ("at_array"
     , poly "forall &r a. (&r Array a, USize) -> &r a"
-    , Fun (\(Pair (Array a) (USize i)) -> Value.readArray a i)
+    , Fn (\(Pair (Array a) (USize i)) -> Value.readArray a i)
     )
   , ("len_array"
     , poly "forall &r a. &r Array a -> USize"
-    , Fun (\(Array a) -> USize <$> Value.lenArray a)
+    , Fn (\(Array a) -> USize <$> Value.lenArray a)
     )
   , ("set_array"
     , poly "forall a. (Array a, USize, a) -> Array a"
-    , Fun (\(Pair (Array a) (Pair (USize i) e)) -> Value.writeArray a i e >> pure (Array a))
+    , Fn (\(Pair (Array a) (Pair (USize i) e)) -> Value.writeArray a i e >> pure (Array a))
     )
   , ("not"
     , poly "Bool -> Bool"
-    , Fun (\(Bool a) -> pure (Bool (not a)))
+    , Fn (\(Bool a) -> pure (Bool (not a)))
     )
   , ("or"
     , poly "(Bool, Bool) -> Bool"
@@ -123,7 +123,8 @@ inbuilts =
     )
   , ("and"
     , poly "(Bool, Bool) -> Bool"
-    , liftBBB (&&))
+    , liftBBB (&&)
+    )
   , ("eq"
     , poly "forall a | Integral a . (a, a) -> Bool" -- TODO should be Eq, not Integral
     , liftIIB (==)
@@ -153,13 +154,14 @@ inbuilts =
     liftI :: ((Integer -> Value, Value -> Integer) -> Value) -> Value
     liftI f = Polymorphic $ \[(_, _ :< TyCon ty)] -> f (integerToValue ty, valueToInteger)
     liftII :: (forall a. Integral a => (a -> a)) -> Value
-    liftII f = liftI $ \(con, decon) -> Fun (\x -> return (con (f (decon x))))
+    liftII f = liftI $ \(con, decon) -> Fn (\x -> return (con (f (decon x))))
     liftIII :: (forall a. Integral a => (a -> a -> a)) -> Value
-    liftIII f = liftI $ \(con, decon) -> Fun (\(Pair x y) -> return (con (f (decon x) (decon y))))
+    liftIII f = liftI $ \(con, decon) -> Fn (\(Pair x y) -> return (con (f (decon x) (decon y))))
     liftIIB :: (forall a. Integral a => (a -> a -> Bool)) -> Value
-    liftIIB f = liftI $ \(con, decon) -> Fun (\(Pair x y) -> return (Bool (f (decon x) (decon y))))
+    liftIIB f = liftI $ \(con, decon) -> Fn (\(Pair x y) -> return (Bool (f (decon x) (decon y))))
     liftBBB :: (Bool -> Bool -> Bool) -> Value
-    liftBBB f = Fun (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
+    liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
+
 
 inbuiltKinds :: [(Name, Annotated Kind)]
 inbuiltKinds =
@@ -168,95 +170,113 @@ inbuiltKinds =
     ("Array",    kind "Type -> Type")
   , ("Bool",     kind "Type")
   , ("Char",     kind "Type")
+  , ("Fn",       kind "(Type, Type) -> Type")
   , ("I8",       kind "Type")
   , ("I16",      kind "Type")
   , ("I32",      kind "Type")
   , ("I64",      kind "Type")
   , ("ISize",    kind "Type")
+  , ("Ref",      kind "Type -> Type")
   , ("String",   kind "Type")
   , ("U8",       kind "Type")
   , ("U16",      kind "Type")
   , ("U32",      kind "Type")
   , ("U64",      kind "Type")
   , ("USize",    kind "Type")
+  , ("Unit",     kind "Type")
+  , ("Pair",     kind "(Type, Type) -> Type")
   -- Constraints
   , ("Clone",          kind "Type -> Constraint")
-  , ("TrivialClone",   kind "Type -> Constraint")
   , ("Dispose",        kind "Type -> Constraint")
-  , ("TrivialDispose", kind "Type -> Constraint")
   , ("Copy",           kind "Type -> Constraint")
+  , ("Capture",        kind "Type -> Constraint")
   , ("Integral",       kind "Type -> Constraint")
   ]
 
--- TODO quite gross, should be replaced with instances in prelude
-integral :: Annotated Type -> Annotated Type
-integral t = TyApply (TyCon "Integral" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
 
-clone :: Annotated Type -> Annotated Type
-clone t = TyApply (TyCon "Clone" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+-- TODO do we actually need kinds here?
 
-cloneTrivial :: Annotated Type -> Annotated Type
-cloneTrivial t = TyApply (TyCon "CloneTrivial" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+-- TODO should be replaced with instances in prelude
 
-dispose :: Annotated Type -> Annotated Type
-dispose t = TyApply (TyCon "Dispose" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+integral :: Annotated Type -> TyConstraint
+integral t = Instance $ TyApply (TyCon "Integral" `as` kind "Type -> Constraint") t `as` kind "Type"
 
-disposeTrivial :: Annotated Type -> Annotated Type
-disposeTrivial t = TyApply (TyCon "DisposeTrivial" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+clone :: Annotated Type -> TyConstraint
+clone t = Instance $ TyApply (TyCon "Clone" `as` kind "Type -> Constraint") t `as` kind "Type"
 
-copy :: Annotated Type -> Annotated Type
-copy t = TyApply (TyCon "Copy" `as` phantom (KindFun (phantom KindType) (phantom KindConstraint))) t `as` phantom KindType
+dispose :: Annotated Type -> TyConstraint
+dispose t = Instance $ TyApply (TyCon "Dispose" `as` kind "Type -> Constraint") t `as` kind "Type"
+
+copy :: Annotated Type -> TyConstraint
+copy t = Instance $ TyApply (TyCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type"
+
+capture :: Annotated Type -> TyConstraint
+capture t = Instance $ TyApply (TyCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 initialIEnv :: IEnv
 initialIEnv = Env.fromList
   [ ("Array", Map.fromList
-    [ ("Clone",   \(Just t) -> IsInstanceOnlyIf [clone t])
-    , ("Dispose", \(Just t) -> IsInstanceOnlyIf [dispose t])
+    [ ("Clone",   \(Just t) -> (Inbuilt, IsInstanceOnlyIf [clone t]))
+    , ("Dispose", \(Just t) -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
     ]
     )
-  , ("Bool",  primitive)
-  , ("Char",  primitive)
-  , ("I8",    integral)
-  , ("I16",   integral)
-  , ("I32",   integral)
-  , ("I64",   integral)
+  , ("Bool", primitive)
+  , ("Char", primitive)
+  , ("Fn", Map.fromList
+    [ ("Clone",   \(Just _) -> (Inbuilt, IsInstance))
+    , ("Dispose", \(Just _) -> (Inbuilt, IsInstance))
+    , ("Copy",    \(Just _) -> (Inbuilt, IsInstance))
+    , ("Capture", \(Just _) -> (Inbuilt, IsInstance))
+    ]
+    )
+  , ("I8", integral)
+  , ("I16", integral)
+  , ("I32", integral)
+  , ("I64", integral)
   , ("ISize", integral)
-  , ("U8",    integral)
-  , ("U16",   integral)
-  , ("U32",   integral)
-  , ("U64",   integral)
-  , ("USize", integral)
-  , ("String", Map.fromList
-    [ ("Clone",   \Nothing -> IsInstance)
-    , ("Dispose", \Nothing -> IsInstance)
+  , ("Pair", Map.fromList
+    [ ("Clone",   \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
+    , ("Dispose", \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
+    , ("Copy",    \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
+    , ("Capture", \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
     ]
     )
+  , ("Ref", Map.fromList
+    [ ("Clone",   \(Just _) -> (Trivial, IsInstance))
+    , ("Dispose", \(Just _) -> (Trivial, IsInstance))
+    , ("Copy",    \(Just _) -> (Trivial, IsInstance))
+    ]
+    )
+  , ("String", Map.fromList
+    [ ("Clone",   \Nothing -> (Inbuilt, IsInstance))
+    , ("Dispose", \Nothing -> (Inbuilt, IsInstance))
+    ]
+    )
+  , ("U8", integral)
+  , ("U16", integral)
+  , ("U32", integral)
+  , ("U64", integral)
+  , ("USize", integral)
+  , ("Unit", primitive)
   ] where
     primitive = Map.fromList
-      [ ("Clone",          \Nothing -> IsInstance)
-      , ("CloneTrivial",   \Nothing -> IsInstance)
-      , ("Dispose",        \Nothing -> IsInstance)
-      , ("DisposeTrivial", \Nothing -> IsInstance)
-      , ("Copy",           \Nothing -> IsInstance)
+      [ ("Clone",   \Nothing -> (Trivial, IsInstance))
+      , ("Dispose", \Nothing -> (Trivial, IsInstance))
+      , ("Copy",    \Nothing -> (Trivial, IsInstance))
+      , ("Capture", \Nothing -> (Trivial, IsInstance))
       ]
     integral = primitive `Map.union` Map.fromList
-      [ ("Integral", \Nothing -> IsInstance)
+      [ ("Integral", \Nothing -> (Inbuilt, IsInstance))
       ]
 
 initialKEnv :: KEnv
 initialKEnv = Env.fromList inbuiltKinds
 
 initialTEnv :: TEnv
-initialTEnv = LEnv.fromList (map (\(n, t, _) -> (n, t)) inbuilts)
+initialTEnv = LEnv.fromList $ map (\(n, t, _) -> (n, t)) inbuilts
 
 initialVEnv :: VEnv
-initialVEnv = Env.fromList (map (\(n, _, v) -> (n, v)) inbuilts)
-
-initialTySystem :: System TyConstraint
-initialTySystem = System
-  { _requirements = []
-  , _assumptions = Set.empty
-  }
+initialVEnv = Env.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
 
 -- TODO interfaces
 prelude = [r|

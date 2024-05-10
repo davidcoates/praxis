@@ -75,6 +75,7 @@ hideLabel x = case typeof x of
   IExp -> case x of
     Pair _ _       -> True
     Apply _ _      -> True
+    Closure _ _    -> True
     Lambda _ _     -> True
     Read _ _       -> True
     Specialise _ _ -> True
@@ -118,8 +119,8 @@ instance Pretty TyReason where
     Captured n       -> "variable " <> quote (pretty n) <> " captured"
     CaseCongruence   -> "alternatives of case expression must have the same type"
     ConPattern n     -> "constructor pattern " <> quote (pretty n)
-    FunCongruence n  -> "function " <> quote (pretty n)
-    FunSignature n   -> "function signature for " <> quote (pretty n)
+    FnCongruence n  -> "function " <> quote (pretty n)
+    FnSignature n   -> "function signature for " <> quote (pretty n)
     IfCondition      -> "type of if condition must be Bool"
     IfCongruence     -> "branches of if expression must have the same type"
     InstanceOf n     -> "monomorphic usage of " <> quote (pretty n)
@@ -128,7 +129,6 @@ instance Pretty TyReason where
     Specialisation n -> "specialisation of " <> quote (pretty n)
     SwitchCondition  -> "type of switch condition must be Bool"
     SwitchCongruence -> "branches of switch expression must have the same type"
-    UnsafeRead n     -> "variable " <> quote (pretty n) <> " read after being used"
     UserSignature    -> "user-supplied signature"
 
 instance Pretty KindReason where

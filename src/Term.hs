@@ -18,9 +18,9 @@ module Term
   , DataCon(..)
   , DataMode(..)
   , Decl(..)
+  , DeclTerm(..)
   , DeclType(..)
   , Exp(..)
-  , expIsRecSafe
   , Lit(..)
   , Pat(..)
   , Program(..)
@@ -69,7 +69,7 @@ data Op = Op [Maybe Name] -- TDO qualification over this
   deriving (Eq, Ord)
 
 data OpRules = OpRules (Maybe (Annotated Assoc)) [Annotated Prec]
-             | OpMultiRules [Either (Annotated Assoc) [Annotated Prec]] -- ^Parsing only
+             | OpRulesSweet [Either (Annotated Assoc) [Annotated Prec]]
   deriving (Eq, Ord)
 
 data Prec = Prec Ordering Op
@@ -91,13 +91,16 @@ data DeclType = DeclTypeData DataMode Name (Maybe (Annotated TyPat)) [Annotated 
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
-data Decl = DeclDef Name [Annotated Pat] (Annotated Exp) -- ^ Parsing only
-          | DeclOp (Annotated Op) Name (Annotated OpRules) -- ^ Parsing only
-          | DeclRec [Annotated Decl]
-          | DeclSig Name (Annotated QType) -- ^ Parsing only
-          | DeclSyn Name (Annotated Type) -- ^ Parsing only
+data DeclTerm = DeclTermRec [Annotated DeclTerm]
+              | DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
+              | DeclTermDefSweet Name [Annotated Pat] (Annotated Exp)
+              | DeclTermSigSweet Name (Annotated QType)
+  deriving (Eq, Ord)
+
+data Decl = DeclOpSweet (Annotated Op) Name (Annotated OpRules)
+          | DeclSynSweet Name (Annotated Type)
           | DeclType (Annotated DeclType)
-          | DeclVar Name (Maybe (Annotated QType)) (Annotated Exp)
+          | DeclTerm (Annotated DeclTerm)
   deriving (Eq, Ord)
 
 -- TODO constraints
@@ -106,14 +109,15 @@ type Specialisation = [(Annotated QTyVar, Annotated Type)]
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
+         | Closure [(Name, Annotated QType)] (Annotated Exp)
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
-         | Do [Annotated Stmt] -- ^ Parsing only
+         | DoSweet [Annotated Stmt]
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
          | Let (Annotated Bind) (Annotated Exp)
          | Lit Lit
-         | Mixfix [Annotated Tok] -- ^ Parsing only
+         | MixfixSweet [Annotated Tok]
          | Read Name (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
@@ -122,15 +126,9 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name
-         | VarRef Name -- ^ Parsing only
-         | Where (Annotated Exp) [Annotated Decl]
+         | VarRefSweet Name
+         | Where (Annotated Exp) [Annotated DeclTerm]
   deriving (Eq, Ord)
-
-expIsRecSafe :: Annotated Exp -> Bool
-expIsRecSafe term = case view value term of
-  Lambda _ _ -> True
-  Cases _    -> True
-  _          -> False
 
 -- TODO: Array literals?
 data Lit = Bool Bool
@@ -164,7 +162,6 @@ data Stmt = StmtBind (Annotated Bind)
           | StmtExp (Annotated Exp)
   deriving (Eq, Ord)
 
--- |Parsing only
 data Tok = TExp (Annotated Exp)
          | TOp Name
   deriving (Eq, Ord)
@@ -186,7 +183,7 @@ data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
 data Type = TyUni Name -- Compares less than all other types
           | TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
-          | TyFun (Annotated Type) (Annotated Type)
+          | TyFn (Annotated Type) (Annotated Type)
           | TyView (Annotated View)
           | TyPack (Annotated Type) (Annotated Type)
           | TyPair (Annotated Type) (Annotated Type)
@@ -202,7 +199,7 @@ data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)
 
 data Kind = KindUni Name
           | KindConstraint
-          | KindFun (Annotated Kind) (Annotated Kind)
+          | KindFn (Annotated Kind) (Annotated Kind)
           | KindView ViewDomain
           | KindPair (Annotated Kind) (Annotated Kind)
           | KindType
@@ -210,11 +207,9 @@ data Kind = KindUni Name
 
 data TyConstraint = HoldsInteger Integer (Annotated Type)
                   | Instance (Annotated Type)
-                  | Not (Annotated TyConstraint) -- Note: Only Instance _ / Trivial _ are expected here.
                   | RefFree Name (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated Type) (Annotated Type)
-                  | Trivial (Annotated Type) -- Note: Only Clone _ / Dispose _ are expected here.
   deriving (Eq, Ord)
 
 infixl 8 `TEq`
@@ -268,8 +263,8 @@ data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
               | Captured Name
               | CaseCongruence
               | ConPattern Name
-              | FunCongruence Name
-              | FunSignature Name
+              | FnCongruence Name
+              | FnSignature Name
               | IfCondition
               | IfCongruence
               | InstanceOf Name
@@ -278,7 +273,6 @@ data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
               | Specialisation Name
               | SwitchCondition
               | SwitchCongruence
-              | UnsafeRead Name
               | UserSignature
   deriving (Eq, Ord)
 

@@ -24,7 +24,7 @@ data Value = Array Array
            | Char Char
            | Data Name Value
            | Enum Name
-           | Fun (Value -> Praxis Value)
+           | Fn (Value -> Praxis Value)
            | I8 I8
            | I16 I16
            | I32 I32
@@ -85,7 +85,7 @@ instance Show Value where
     Char c        -> show c
     Data n v      -> n ++ " " ++ show v
     Enum n        -> n
-    Fun f         -> "«function»"
+    Fn f          -> "«function»"
     Pair a b      -> "(" ++ show a ++ ", " ++ show b ++ ")"
     Polymorphic _ -> "«polymorphic»"
     String s      -> show s

@@ -11,7 +11,6 @@ module Env.LEnv
   , value
   , used
   , read
-  , captured
 
   , empty
   , intro
@@ -19,9 +18,8 @@ module Env.LEnv
   , adjust
   , fromList
 
-  , setUsed
-  , setRead
-  , setCaptured
+  , incUsed
+  , incRead
 
   , join
   )
@@ -35,18 +33,18 @@ import           Control.Lens (makeLenses)
 import           Prelude      hiding (lookup, read)
 import qualified Prelude      (lookup)
 
-data Entry a = Entry { _value :: a, _used :: Bool, _read :: Bool, _captured :: Bool }
+data Entry a = Entry { _value :: a, _used :: Int, _read :: Int }
 
 mkEntry :: a -> Entry a
-mkEntry x = Entry { _value = x, _used = False, _read = False, _captured = False }
+mkEntry x = Entry { _value = x, _used = 0, _read = 0 }
 
 makeLenses ''Entry
 
 instance Semigroup (Entry a) where
-  e1 <> e2 = Entry { _value = view value e1, _used = view used e1 || view used e2, _read = view read e1 || view read e2, _captured = view captured e1 || view captured e2 }
+  e1 <> e2 = Entry { _value = view value e1, _used = view used e1 + view used e2, _read = view read e1 + view read e2 }
 
 instance Pretty a => Pretty (Entry a) where
-  pretty Entry{ _value, _used, _read, _captured } = (<> pretty _value) $ ((if _used then "(u)" else "") <> (if _read then "(r)" else "") <> (if _captured then "(c)" else ""))
+  pretty Entry{ _value, _used, _read } = "[u" <> pretty (show _used) <> ",r" <> pretty (show _read) <> "] " <> pretty _value
 
 -- Linear environment
 type LEnv a = Env (Entry a)
@@ -68,14 +66,11 @@ fromList = \case
   []        -> empty
   ((k,v):l) -> intro k v (fromList l)
 
-setUsed :: Name -> LEnv a -> LEnv a
-setUsed k l = Env.adjust (\v -> v { _used = True} ) k l
+incUsed :: Name -> LEnv a -> LEnv a
+incUsed k l = Env.adjust (over used (+1)) k l
 
-setRead :: Name -> LEnv a -> LEnv a
-setRead k l = Env.adjust (\v -> v { _read = True} ) k l
-
-setCaptured :: LEnv a -> LEnv a
-setCaptured l = fmap (\v -> v { _captured = True }) l
+incRead :: Name -> LEnv a -> LEnv a
+incRead k l = Env.adjust (over read (+1)) k l
 
 join :: LEnv a -> LEnv a -> LEnv a
 join = Env.zipWith (<>)

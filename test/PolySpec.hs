@@ -5,6 +5,7 @@ module PolySpec where
 import           Test.Hspec
 import           Text.RawString.QQ
 
+import           Introspect
 import           Util
 
 
@@ -18,35 +19,20 @@ swap : forall a b. (a, b) -> (b, a)
 swap (a, b) = (b, a)
 |]
 
-    it "parses" $ parse program `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
 swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( a_0 , b_0 ) -> ( b_0 , a_0 )
 |]
 
-    it "type checks" $ check program `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b_0 ) -> ( [b_0] b_0 , [a_0] a_0 )
 |]
 
-    it "evaluates" $ do
-      interpret program "swap (0, 1)"      `shouldReturn` "(1, 0)"
-      interpret program "swap (True, 1)"   `shouldReturn` "(1, True)"
-      interpret program "swap (1, 2, 3)"   `shouldReturn` "((2, 3), 1)"
-      interpret program "swap ((2, 3), 1)" `shouldReturn` "(1, (2, 3))"
-      interpret program "swap (\"abc\", 0)" `shouldReturn` "(0, \"abc\")"
-
-    it "translates" $ translate program `shouldReturn` trim [r|
-/* 2:1 */
-auto swap_0 = []<typename a_0, typename b_0>(){
-  return std::function([&](std::pair<a_0, b_0> _temp_0){
-    auto _temp_1 = praxis::first(_temp_0);
-    auto _temp_2 = praxis::second(_temp_0);
-    auto a_0 = std::move(_temp_1);
-    auto b_0 = std::move(_temp_2);
-    return std::make_pair(std::move(b_0), std::move(a_0));
-    throw praxis::BindFail("3:6");
-  });
-};
-|]
-
+    it "evals" $ do
+      runEvaluate program "swap (0, 1)"      `shouldReturn` "(1, 0)"
+      runEvaluate program "swap (True, 1)"   `shouldReturn` "(1, True)"
+      runEvaluate program "swap (1, 2, 3)"   `shouldReturn` "((2, 3), 1)"
+      runEvaluate program "swap ((2, 3), 1)" `shouldReturn` "(1, (2, 3))"
+      runEvaluate program "swap (\"abc\", 0)" `shouldReturn` "(0, \"abc\")"
 
 
   describe "polymorphic function with constraint (copy)" $ do
@@ -56,14 +42,14 @@ copy : forall a | Copy a. a -> (a, a)
 copy x = (x, x)
 |]
 
-    it "parses" $ parse program `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
 copy_0 : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ x_0 -> ( x_0 , x_0 )
 |]
 
-    it "type checks" $ check program `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 copy_0 : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
 |]
 
-    it "evaluates" $ do
-      interpret program "copy 0"         `shouldReturn` "(0, 0)"
-      interpret program "copy (0, True)" `shouldReturn` "((0, True), (0, True))"
+    it "evals" $ do
+      runEvaluate program "copy 0"         `shouldReturn` "(0, 0)"
+      runEvaluate program "copy (0, True)" `shouldReturn` "((0, True), (0, True))"

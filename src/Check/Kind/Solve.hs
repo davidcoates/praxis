@@ -24,7 +24,7 @@ import qualified Data.Set    as Set
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
-  term <- solve kindSystem reduce term
+  term <- solve kindCheck reduce term
   tryDefault term
 
 reduce :: Disambiguating (Reducer KindConstraint)
@@ -36,9 +36,9 @@ reduce disambiguate = \case
 
   KEq k1 k2@(_ :< KindUni _) -> reduce disambiguate (k2 `KEq` k1) -- handled by the above case
 
-  KEq (_ :< KindFun k1 k2) (_ :< KindFun l1 l2) -> return $ Subgoals [ KEq k1 l1, KEq k2 l2 ]
+  KEq (_ :< KindFn k1 k2) (_ :< KindFn l1 l2) -> return $ Subgoals [ Subgoal (KEq k1 l1), Subgoal (KEq k2 l2) ]
 
-  KEq (_ :< KindPair k1 k2) (_ :< KindPair l1 l2) -> return $ Subgoals [ KEq k1 l1, KEq k2 l2 ]
+  KEq (_ :< KindPair k1 k2) (_ :< KindPair l1 l2) -> return $ Subgoals [ Subgoal (KEq k1 l1), Subgoal (KEq k2 l2) ]
 
   KSub k1 k2 | k1 == k2 -> return Tautology
 
@@ -46,7 +46,7 @@ reduce disambiguate = \case
 
   KSub (_ :< KindType) (_ :< KindUni x) -> solved (x `is` KindType)
 
-  KSub (_ :< KindPair k1 k2) (_ :< KindPair l1 l2) -> return $ Subgoals [ KSub k1 l1, KSub k2 l2 ]
+  KSub (_ :< KindPair k1 k2) (_ :< KindPair l1 l2) -> return $ Subgoals [ Subgoal (KSub k1 l1), Subgoal (KSub k2 l2) ]
 
   KSub (_ :< KindView d1) (_ :< KindView d2)
     | d1 <= d2  -> return Tautology

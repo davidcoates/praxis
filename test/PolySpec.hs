@@ -26,10 +26,6 @@ swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( a_0 , b_0 ) -> ( 
 swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b_0 ) -> ( [b_0] b_0 , [a_0] a_0 )
 |]
 
-    it "translates" $ translate program `shouldReturn` trim [r|
-TODO
-|]
-
     it "evaluates" $ do
       evaluate program "swap (0, 1)"      `shouldReturn` "(1, 0)"
       evaluate program "swap (True, 1)"   `shouldReturn` "(1, True)"

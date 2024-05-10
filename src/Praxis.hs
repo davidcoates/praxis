@@ -49,9 +49,6 @@ module Praxis
   , Check.requirements
   , Check.assumptions
 
-  -- | Translate state lenses
-  , Translate.llvmModule
-
   -- | Praxis lenses
   , flags
   , fresh
@@ -65,7 +62,6 @@ module Praxis
   , tySynonyms
   , tyCheck
   , kindCheck
-  , translation
 
   -- | RewriteMap lenses
   , tyVarMap
@@ -91,7 +87,6 @@ import           Common
 import           Print
 import           Stage
 import           Term
-import qualified Translate.State              as Translate
 
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent
@@ -168,7 +163,6 @@ data PraxisState = PraxisState
   , _rewriteMap  :: RewriteMap
   , _tyCheck     :: Check.State TyConstraint
   , _kindCheck   :: Check.State KindConstraint
-  , _translation :: Translate.State
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -199,7 +193,6 @@ emptyState = PraxisState
   , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
   , _tyCheck      = Check.emptyState
   , _kindCheck    = Check.emptyState
-  , _translation  = Translate.emptyState
   }
 
 makeLenses ''Flags

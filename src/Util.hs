@@ -8,7 +8,6 @@ module Util
   , check'
   , parse
   , parseAs
-  , translate
   , evaluate
 
   , trim
@@ -22,7 +21,6 @@ import qualified Parse
 import           Praxis
 import           Print
 import           Term
-import qualified Translate
 
 
 runShow :: Show a => Praxis a -> IO String
@@ -52,9 +50,6 @@ parse program = runPretty (Parse.parse program :: Praxis (Annotated Program))
 
 parseAs :: forall a. Term a => I a -> String -> IO String
 parseAs _ term = runPretty (Parse.parse term :: Praxis (Annotated a))
-
-translate :: String -> IO String
-translate program = runWith id $ (Parse.parse program >>= Check.check :: Praxis (Annotated Program)) >>= Translate.translate Translate.NoPrelude
 
 -- Helper for interperting a program followed by an expression and printing the resulting value
 evaluate :: String -> String -> IO String

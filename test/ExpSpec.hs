@@ -29,10 +29,6 @@ foo_0 = let x_0 = 1 in ( ) seq let y_0 = 2 in add ( x_0 , y_0 )
 foo_0 = [I32] let [I32] x_0 = [I32] 1 in [I32] [( )] ( ) seq [I32] let [I32] y_0 = [I32] 2 in [( I32 , I32 ) -> I32] add ( [I32] x_0 , [I32] y_0 )
 |]
 
-    it "translates" $ translate program `shouldReturn` trim [r|
-TODO
-|]
-
     it "evaluates" $ evaluate program "foo" `shouldReturn` "3"
 
 
@@ -47,10 +43,6 @@ x_0 = ( 1 , True , "abc" )
 x_0 = ( [I32] 1 , [Bool] True , [& 'l0 String] "abc" )
 |]
 
-    it "translates" $ translate program `shouldReturn` trim [r|
-TODO
-|]
-
 
   describe "if then else (min)" $ do
 
@@ -62,10 +54,6 @@ min_0 = \ ( x_0 , y_0 ) -> if lt ( x_0 , y_0 ) then x_0 else y_0
 
     it "type checks" $ check program `shouldReturn` trim [r|
 min_0 = \ ( [I32] x_0 , [I32] y_0 ) -> [I32] if [( I32 , I32 ) -> Bool] lt ( [I32] x_0 , [I32] y_0 ) then [I32] x_0 else [I32] y_0
-|]
-
-    it "translates" $ translate program `shouldReturn` trim [r|
-TODO
 |]
 
     it "evaluates" $ do
@@ -96,10 +84,6 @@ sign_0 : I32 -> I32 = \ [I32] n_0 -> [I32] switch
   [( I32 , I32 ) -> Bool] lt ( [I32] n_0 , [I32] 0 ) -> [I32] -1
   [( I32 , I32 ) -> Bool] eq ( [I32] n_0 , [I32] 0 ) -> [I32] 0
   [( I32 , I32 ) -> Bool] gt ( [I32] n_0 , [I32] 0 ) -> [I32] 1
-|]
-
-    it "translates" $ translate program `shouldReturn` trim [r|
-TODO
 |]
 
     it "evaluates" $ do

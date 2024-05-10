@@ -36,9 +36,5 @@ color_to_char_0 = \ [Color] color_0 -> [Char] case [Color] color_0 of
   [Color] Blue -> [Char] 'B'
 |]
 
-  it "translates" $ translate program `shouldReturn` trim [r|
-TODO
-|]
-
   it "evaluates" $ do
     evaluate program "color_to_char Blue" `shouldReturn` "'B'"

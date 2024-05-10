@@ -68,10 +68,6 @@ datatype unboxed Unboxed a = Unboxed a
 datatype unboxed Unboxed a_0 = [forall a_0 . a_0 -> Unboxed a_0] Unboxed a_0
 |]
 
-    it "translates" $ translate program `shouldReturn` trim [r|
-TODO
-|]
-
 
   describe "datatype Boxed (boxed)" $ do
 
@@ -81,10 +77,6 @@ datatype boxed Boxed a = Boxed a
 
     it "type checks" $ check program `shouldReturn` trim [r|
 datatype boxed Boxed a_0 = [forall a_0 . a_0 -> Boxed a_0] Boxed a_0
-|]
-
-    it "translates" $ translate program `shouldReturn` trim [r|
-TODO
 |]
 
 
@@ -139,10 +131,6 @@ rec
   sum_0 : forall & r_0 . & r_0 List I32 -> I32 = [& r_0 List I32 -> I32] cases
     [& r_0 List I32] Nil [( )] ( ) -> [I32] 0
     [& r_0 List I32] Cons ( [I32] x_1 , [& r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add ( [I32] x_1 , [& r_0 List I32 -> I32] sum_0 [& r_0 List I32] xs_1 )
-|]
-
-    it "translates" $ translate program `shouldReturn` trim [r|
-TODO
 |]
 
     it "evaluates" $ do

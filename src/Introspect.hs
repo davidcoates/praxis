@@ -183,8 +183,8 @@ instance Term Decl where
   recurseTerm f = \case
     DeclOpSweet o d rs -> DeclOpSweet <$> f o <*> pure d <*> f rs
     DeclSynSweet n t   -> DeclSynSweet n <$> f t
-    DeclType t         -> DeclType <$> f t
-    DeclTerm t         -> DeclTerm <$> f t
+    DeclType d         -> DeclType <$> f d
+    DeclTerm d         -> DeclTerm <$> f d
 
 instance Term DeclTerm where
   witness = IDeclTerm
@@ -216,7 +216,7 @@ instance Term Exp where
     Apply a b       -> Apply <$> f a <*> f b
     Case a as       -> Case <$> f a <*> pairs f as
     Cases as        -> Cases <$> pairs f as
-    Closure vs e    -> Closure <$> traverse (second f) vs <*> f e
+    Closure cs e    -> Closure <$> traverse (second f) cs <*> f e
     Con n           -> pure (Con n)
     Defer a b       -> Defer <$> f a <*> f b
     DoSweet ss      -> DoSweet <$> traverse f ss
@@ -313,6 +313,7 @@ instance Term QType where
   recurseAnnotation = trivial
   recurseTerm f = \case
     Forall vs cs t -> Forall <$> traverse f vs <*> traverse f cs <*> f t
+    Mono t         -> Mono <$> f t
 
 instance Term QTyVar where
   witness = IQTyVar

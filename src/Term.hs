@@ -195,6 +195,7 @@ data QTyVar = QTyVar Name | QViewVar ViewDomain Name
   deriving (Eq, Ord)
 
 data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)
+           | Mono (Annotated Type)
   deriving (Eq, Ord)
 
 data Kind = KindUni Name

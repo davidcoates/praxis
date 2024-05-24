@@ -12,6 +12,7 @@ module Check.Type.Solve
   ) where
 
 import           Check.Solve
+import           Check.State
 import           Common
 import qualified Env.Env             as Env
 import qualified Env.LEnv            as LEnv
@@ -27,12 +28,11 @@ import qualified Data.Map.Strict     as Map
 import           Data.Maybe          (fromMaybe)
 import           Data.Set            (Set)
 import qualified Data.Set            as Set
-import           Data.Traversable    (forM)
 
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
-  term <- solve tyCheck reduce term
+  term <- solve tyCheckState reduce term
   tryDefault term
 
 reduce :: Disambiguating (Reducer TyConstraint)
@@ -257,7 +257,7 @@ truthAnd a b = truthNot (truthOr (truthNot a) (truthNot b))
 
 isAffine :: Annotated Type -> Praxis Truth
 isAffine t = do
-  assumptions' <- use (tyCheck . assumptions)
+  assumptions' <- use (tyCheckState . assumptions)
   if copy t `Set.member` assumptions'
     then return No
     else isAffine' t
@@ -338,7 +338,7 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
     constraint <- normalise constraint
     checkConstraint constraint
     constraints <- expandConstraint (view source constraint) (view value constraint)
-    tyCheck . assumptions %= Set.union (Set.fromList constraints)
+    tyCheckState . assumptions %= Set.union (Set.fromList constraints)
 
   expandConstraint :: Source -> TyConstraint -> Praxis [TyConstraint]
   expandConstraint src constraint = ((constraint:) <$>) $ case constraint of
@@ -365,17 +365,17 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
 
   checkConstraint :: Annotated TyConstraint -> Praxis ()
   checkConstraint constraint = case view value constraint of
-    Instance (_ :< TyApply _ ty) -> checkConstraintTy ty where
-      checkConstraintTy :: Annotated Type -> Praxis ()
-      checkConstraintTy ((src, _) :< ty) = case ty of
+    Instance (_ :< TyApply _ ty) -> checkConstraintType ty where
+      checkConstraintType :: Annotated Type -> Praxis ()
+      checkConstraintType ((src, _) :< ty) = case ty of
         TyApply (_ :< TyCon _) t
-          -> checkConstraintTy t
+          -> checkConstraintType t
         TyPack t1 t2
-          -> checkConstraintTy t1 >> checkConstraintTy t2
+          -> checkConstraintType t1 >> checkConstraintType t2
         TyPair t1 t2
-          -> checkConstraintTy t1 >> checkConstraintTy t2
+          -> checkConstraintType t1 >> checkConstraintType t2
         TyFn t1 t2
-          -> checkConstraintTy t1 >> checkConstraintTy t2
+          -> checkConstraintType t1 >> checkConstraintType t2
         TyVar n | n `elem` boundVarNames
           -> return ()
         _

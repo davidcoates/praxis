@@ -81,7 +81,7 @@ help = Praxis.abort helpStr where
     [ "-d debug"
     , "-i interactive"
     , "-h help"
-    , "-c compile" ]
+    ]
 
 runMain :: Praxis ()
 runMain = do

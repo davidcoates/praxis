@@ -10,6 +10,7 @@ module Check.Kind.Generate
   ) where
 
 import           Check.Error
+import           Check.State
 import           Common
 import qualified Env.Env         as Env
 import           Inbuilts
@@ -25,16 +26,16 @@ import qualified Data.Set        as Set
 
 
 require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
-require ((src, reason) :< con) = kindCheck . requirements %= Set.insert ((src, Just reason) :< Requirement con)
+require ((src, reason) :< con) = kindCheckState . requirements %= Set.insert ((src, Just reason) :< Requirement con)
 
-kind :: (Term a, Functor f, Annotation a ~ Annotated Kind) => (Annotated Kind -> f (Annotated Kind)) -> Annotated a -> f (Annotated a)
-kind = annotation . just
+getKind :: (Term a, Annotation a ~ Annotated Kind) => Annotated a -> Annotated Kind
+getKind term = view (annotation . just) term
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- generate term
   display term `ifFlag` debug
-  requirements' <- use (kindCheck . requirements)
+  requirements' <- use (kindCheckState . requirements)
   display (separate "\n\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
   return term
 
@@ -42,7 +43,7 @@ run term = do
 generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case typeof (view value term) of
   IDecl    -> generateDecl
-  IType    -> generateTy
+  IType    -> generateType
   IView    -> generateView
   ITyPat   -> generateTyPat
   IQTyVar  -> generateQTyVar
@@ -82,21 +83,21 @@ generateView ((src, _) :< v) = case v of
 
 
 
-generateTy :: Annotated Type -> Praxis (Annotated Type)
-generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty of
+generateType :: Annotated Type -> Praxis (Annotated Type)
+generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty of
 
     TyApply f x -> do
-      f <- generateTy f
-      x <- generateTy x
-      case view kind f of
+      f <- generateType f
+      x <- generateType x
+      case getKind f of
         (_ :< KindView _) -> do
-          require $ (src, KindReasonTyApply f x) :< (view kind x `KEq` phantom KindType)
+          require $ (src, KindReasonTyApply f x) :< (getKind x `KEq` phantom KindType)
           return (phantom KindType :< TyApply f x)
         _ -> do
           k1 <- freshKindUni
           k2 <- freshKindUni
-          require $ (src, KindReasonTyApply f x) :< (view kind f `KEq` phantom (KindFn k1 k2))
-          require $ (src, KindReasonTyApply f x) :< (view kind x `KSub` k1)
+          require $ (src, KindReasonTyApply f x) :< (getKind f `KEq` phantom (KindFn k1 k2))
+          require $ (src, KindReasonTyApply f x) :< (getKind x `KSub` k1)
           return (k2 :< TyApply f x)
 
     TyCon con -> do
@@ -105,31 +106,31 @@ generateTy (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty 
         Just k  -> return (k :< TyCon con)
         Nothing -> throwAt src (NotInScope con)
 
-    TyFn ty1 ty2 -> do
-      ty1 <- generateTy ty1
-      ty2 <- generateTy ty2
-      require $ (src, KindReasonType ty1) :< (view kind ty1 `KEq` phantom KindType)
-      require $ (src, KindReasonType ty2) :< (view kind ty2 `KEq` phantom KindType)
-      return (phantom KindType :< TyFn ty1 ty2)
+    TyFn t1 t2 -> do
+      t1 <- generateType t1
+      t2 <- generateType t2
+      require $ (src, KindReasonType t1) :< (getKind t1 `KEq` phantom KindType)
+      require $ (src, KindReasonType t2) :< (getKind t2 `KEq` phantom KindType)
+      return (phantom KindType :< TyFn t1 t2)
 
-    TyPack ty1 ty2 -> do
-       ty1 <- generateTy ty1
-       ty2 <- generateTy ty2
-       return (phantom (KindPair (view kind ty1) (view kind ty2)) :< TyPack ty1 ty2)
+    TyPack t1 t2 -> do
+       t1 <- generateType t1
+       t2 <- generateType t2
+       return (phantom (KindPair (getKind t1) (getKind t2)) :< TyPack t1 t2)
 
     TyUnit -> do
       return (phantom KindType :< TyUnit)
 
-    TyView v -> do
-      v <- generateView v
-      return (view kind v :< TyView v)
+    TyView view -> do
+      view <- generateView view
+      return (getKind view :< TyView view)
 
-    TyPair ty1 ty2 -> do
-      ty1 <- generateTy ty1
-      ty2 <- generateTy ty2
-      require $ (src, KindReasonType ty1) :< (view kind ty1 `KEq` phantom KindType)
-      require $ (src, KindReasonType ty2) :< (view kind ty2 `KEq` phantom KindType)
-      return (phantom KindType :< TyPair ty1 ty2)
+    TyPair t1 t2 -> do
+      t1 <- generateType t1
+      t2 <- generateType t2
+      require $ (src, KindReasonType t1) :< (getKind t1 `KEq` phantom KindType)
+      require $ (src, KindReasonType t2) :< (getKind t2 `KEq` phantom KindType)
+      return (phantom KindType :< TyPair t1 t2)
 
     TyVar var -> do
       entry <- kEnv `uses` Env.lookup var
@@ -150,17 +151,17 @@ generateTyPat (a@(src, _) :< tyPat) = (\(k :< t) -> (src, Just k) :< t) <$> case
     introKind src var (phantom (KindView domain))
     return (phantom (KindView domain) :< TyPatViewVar domain var)
 
-  TyPatPack tyPat1 tyPat2 -> do
-    tyPat1 <- generateTyPat tyPat1
-    tyPat2 <- generateTyPat tyPat2
-    return (phantom (KindPair (view kind tyPat1) (view kind tyPat2)) :< TyPatPack tyPat1 tyPat2)
+  TyPatPack t1 t2 -> do
+    t1 <- generateTyPat t1
+    t2 <- generateTyPat t2
+    return (phantom (KindPair (getKind t1) (getKind t2)) :< TyPatPack t1 t2)
 
 
 generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon (a@(src, _) :< DataCon name arg) = do
   arg <- generate arg
   let dataCon = (a :< DataCon name arg)
-  require $ (src, KindReasonType arg) :< (view kind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
+  require $ (src, KindReasonType arg) :< (getKind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
   return dataCon
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
@@ -177,7 +178,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     unless (mode == DataRec) $ introKind src name k
     case arg of
       Nothing  -> require $ (src, KindReasonData name Nothing)    :< (k `KEq` phantom KindType)
-      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFn (view kind arg) (phantom KindType)))
+      Just arg -> require $ (src, KindReasonData name (Just arg)) :< (k `KEq` phantom (KindFn (getKind arg) (phantom KindType)))
 
     let
       deduce :: (Annotated Type -> TyConstraint) -> Maybe (Annotated Type) -> (InstanceOrigin, Instance)

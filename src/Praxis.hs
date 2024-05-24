@@ -46,10 +46,6 @@ module Praxis
   -- | Flag lenses
   , debug
 
-  -- | Check state lenses
-  , Check.requirements
-  , Check.assumptions
-
   -- | Praxis lenses
   , flags
   , fresh
@@ -62,8 +58,8 @@ module Praxis
   , vEnv
   , rewriteMap
   , tySynonyms
-  , tyCheck
-  , kindCheck
+  , tyCheckState
+  , kindCheckState
 
   -- | RewriteMap lenses
   , tyVarMap
@@ -155,20 +151,19 @@ data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name N
 makeLenses ''RewriteMap
 
 data PraxisState = PraxisState
-  { _flags      :: Flags               -- ^ Flags
-  , _fresh      :: Fresh
-  , _stage      :: Stage               -- ^ Current stage of compilation
-  , _opContext  :: OpContext
-  , _cEnv       :: CEnv                -- ^ Constructor environment
-  , _iEnv       :: IEnv                -- ^ Instance environment
-  , _kEnv       :: KEnv                -- ^ Kind environment
-  , _tEnv       :: TEnv                -- ^ Type environment
-  , _vEnv       :: VEnv                -- ^ Value environment
-  -- TODO encapsulate within desugarer?
-  , _tySynonyms :: Map Name (Annotated Type) -- ^ Type synonyms
-  , _rewriteMap :: RewriteMap
-  , _tyCheck    :: Check.State TyConstraint
-  , _kindCheck  :: Check.State KindConstraint
+  { _flags          :: Flags               -- ^ Flags
+  , _fresh          :: Fresh
+  , _stage          :: Stage               -- ^ Current stage of compilation
+  , _opContext      :: OpContext
+  , _cEnv           :: CEnv                -- ^ Constructor environment
+  , _iEnv           :: IEnv                -- ^ Instance environment
+  , _kEnv           :: KEnv                -- ^ Kind environment
+  , _tEnv           :: TEnv                -- ^ Type environment
+  , _vEnv           :: VEnv                -- ^ Value environment
+  , _tySynonyms     :: Map Name (Annotated Type) -- ^ Type synonyms
+  , _rewriteMap     :: RewriteMap
+  , _tyCheckState   :: Check.State TyConstraint
+  , _kindCheckState :: Check.State KindConstraint
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -187,19 +182,19 @@ defaultFresh = Fresh
 
 emptyState :: PraxisState
 emptyState = PraxisState
-  { _flags        = defaultFlags
-  , _fresh        = defaultFresh
-  , _stage        = Unknown
-  , _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
-  , _cEnv         = Env.empty
-  , _iEnv         = Env.empty
-  , _kEnv         = Env.empty
-  , _tEnv         = LEnv.empty
-  , _vEnv         = Env.empty
-  , _tySynonyms   = Map.empty
-  , _rewriteMap   = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
-  , _tyCheck      = Check.emptyState
-  , _kindCheck    = Check.emptyState
+  { _flags          = defaultFlags
+  , _fresh          = defaultFresh
+  , _stage          = Unknown
+  , _opContext      = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
+  , _cEnv           = Env.empty
+  , _iEnv           = Env.empty
+  , _kEnv           = Env.empty
+  , _tEnv           = LEnv.empty
+  , _vEnv           = Env.empty
+  , _tySynonyms     = Map.empty
+  , _rewriteMap     = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
+  , _tyCheckState   = Check.emptyState
+  , _kindCheckState = Check.emptyState
   }
 
 makeLenses ''Flags
@@ -365,7 +360,7 @@ requireMain = do
   case ty of
     Nothing -> throw ("missing main function" :: String)
     Just ty
-      | (_ :< Forall [] [] (_ :< TyFn (_ :< TyUnit) (_ :< TyUnit))) <- ty
+      | (_ :< Mono (_ :< TyFn (_ :< TyUnit) (_ :< TyUnit))) <- ty
         -> return ()
       | otherwise
         -> throwAt (view source ty) $ "main function has bad type " <> quote (pretty ty) <> ", expected () -> ()"

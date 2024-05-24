@@ -81,9 +81,11 @@ addRewriteFromTyPat tyPat = do
   addTyVarRewrites (view source tyPat) tyVars
 
 addRewriteFromQType :: Annotated QType -> Praxis ()
-addRewriteFromQType ((src, _) :< Forall vs _ _) = do
-  let tyVars = [ n | QTyVar n <- map (view value) vs ] ++ [ n | QViewVar _ n <- map (view value) vs ]
-  addTyVarRewrites src tyVars
+addRewriteFromQType ((src, _) :< qTy) = case qTy of
+  Forall vs _ _ -> do
+    let tyVars = [ n | QTyVar n <- map (view value) vs ] ++ [ n | QViewVar _ n <- map (view value) vs ]
+    addTyVarRewrites src tyVars
+  Mono _ -> return ()
 
 addRewriteFromPat :: Annotated Pat -> Praxis ()
 addRewriteFromPat pat = do

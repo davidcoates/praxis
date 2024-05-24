@@ -48,7 +48,7 @@ desugar term = ($ term) $ case typeof (view value term) of
   IOpRules  -> error "standalone IOpRules"
   IPat      -> desugarPat
   IProgram  -> desugarProgram
-  IType     -> desugarTy
+  IType     -> desugarType
   _         -> value (recurseTerm desugar)
 
 
@@ -279,8 +279,8 @@ desugarPat (a :< pat) = case pat of
   _               -> (a :<) <$> recurseTerm desugar pat
 
 
-desugarTy :: Annotated Type -> Praxis (Annotated Type)
-desugarTy (a :< ty) = case ty of
+desugarType :: Annotated Type -> Praxis (Annotated Type)
+desugarType (a :< ty) = case ty of
 
   -- TODO allow more generic type synonyms
   TyCon name -> do

@@ -275,11 +275,9 @@ kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> mark "kind
           mark "kind(0)"
 
 qTy :: Syntax f => f QType
-qTy = _Forall <$> (mono <|> reservedId "forall" *> poly) <|> mark "quantified type" where
-  mono :: Syntax f => f ([Annotated QTyVar], ([Annotated TyConstraint], Annotated Type))
-  mono = Prism (\t -> ([], ([], t))) (\(vs, (cs, t)) -> if null vs then Just t else Nothing) <$> annotated ty
-  poly :: Syntax f => f ([Annotated QTyVar], ([Annotated TyConstraint], Annotated Type))
-  poly = Prism id Just <$> some (annotated qTyVar) <*> tyConstraints <*> (dot *> annotated ty)
+qTy = poly <|> mono <|> mark "quantified type" where
+  poly = _Forall <$> reservedId "forall" *> some (annotated qTyVar) <*> tyConstraints <*> (dot *> annotated ty)
+  mono = _Mono <$> annotated ty
   tyConstraints :: Syntax f => f [Annotated TyConstraint]
   tyConstraints = _Cons <$> (contextualOp "|" *> annotated tyConstraint) <*> many (special ',' *> annotated tyConstraint) <|> _Nil <$> pure ()
 

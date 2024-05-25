@@ -20,7 +20,7 @@ view (x, y) = (y, x)
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-view_0 : forall ? v_0 a_0 b_0 . ? v_0 ( a_0 , b_0 ) -> ( ? v_0 b_0 , ? v_0 a_0 ) = \ ( x_0 , y_0 ) -> ( y_0 , x_0 )
+view : forall ? v a b . ? v ( a , b ) -> ( ? v b , ? v a ) = \ ( x , y ) -> ( y , x )
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
@@ -39,9 +39,9 @@ box = Box "x"
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype unboxed Box [ & v_0 , a_0 ] = Box & v_0 a_0
-datatype rec List a_1 = Nil ( ) | Cons ( a_1 , List a_1 )
-box_0 = Box "x"
+datatype unboxed Box [ & v , a ] = Box & v a
+datatype rec List a = Nil ( ) | Cons ( a , List a )
+box = Box "x"
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
@@ -87,9 +87,9 @@ y = read x in (1, x)
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype rec List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
-x_0 = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
-y_0 = read x_0 in ( 1 , x_0 )
+datatype rec List a = Nil ( ) | Cons ( a , List a )
+x = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
+y = read x in ( 1 , x )
 |]
 
     it "does not type check" $ runPretty (check IProgram program) `shouldReturn` trim [r|

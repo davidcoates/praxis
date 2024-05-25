@@ -50,7 +50,7 @@ runEvaluate program exp = runWith show (evalProgram program >> evalExp exp)
 
 runWith :: (a -> String) -> Praxis a -> IO String
 runWith show p = do
-  result <- runSilent initialState p
+  result <- runWithPrelude (flags . silent .= True >> p)
   case result of
     Left error   -> return error
     Right result -> return (show result)

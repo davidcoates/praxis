@@ -20,7 +20,7 @@ fst (x, y) = x
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> x_0
+fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> x
 |]
 
     it "does not type check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:5: 'y_0' is not used"
@@ -34,11 +34,11 @@ fst (x, _) = x
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , _ ) -> x_0
+fst : forall a b . ( a , b ) -> a = \ ( x , _ ) -> x
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _0 ) -> [a_0] x_0
+fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _hole_0 ) -> [a_0] x_0
 |]
 
 
@@ -50,10 +50,10 @@ fst (x, y) = read y in x
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x_0
+fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> read y in x
 |]
 
-    it "does not type checks" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:14: 'y_0' is not used"
+    it "does not type check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:14: 'y_0' is not used"
 
 
   describe "used read variable" $ do
@@ -64,9 +64,25 @@ fst (x, y) = read y in x defer y
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( x_0 , y_0 ) -> read y_0 in x_0 defer y_0
+fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> read y in x defer y
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] y_0 ) -> read y_0 in [a_0] [a_0] x_0 defer [& 'l0 b_0] y_0
+|]
+
+
+  describe "unused type variable" $ do
+
+    let ty = trim [r|
+forall a b. a
+|]
+
+    it "parses" $ runPretty (parse IQType ty) `shouldReturn` trim [r|
+forall a b . a
+|]
+
+    -- TODO should have a better error message here!
+    it "does not type check" $ runPretty (check IQType ty) `shouldReturn` trim [r|
+kind check error at 1:1: underdetermined kind: '^k0'
 |]

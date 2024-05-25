@@ -19,7 +19,7 @@ datatype Either [a, b] = Left a | Right b
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype unboxed Either [ a_0 , b_0 ] = Left a_0 | Right b_0
+datatype unboxed Either [ a , b ] = Left a | Right b
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
@@ -45,9 +45,9 @@ id_fun () = Fun (\x -> x)
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype unboxed Fun [ a_0 , b_0 ] = Fun ( a_0 -> b_0 )
-unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ Fun f_0 -> \ x_0 -> f_0 x_0
-id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ ( ) -> Fun ( \ x_1 -> x_1 )
+datatype unboxed Fun [ a , b ] = Fun ( a -> b )
+unbox_fun : forall a b . Fun [ a , b ] -> a -> b = \ Fun f -> \ x -> f x
+id_fun : forall a . ( ) -> Fun [ a , a ] = \ ( ) -> Fun ( \ x -> x )
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
@@ -88,7 +88,7 @@ datatype List a = Nil () | Cons (a, List a)
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-kind check error at 2:37: 'List' is not in scope
+kind check error at 2:37: type 'List' is not in scope
 |]
 
 
@@ -111,15 +111,15 @@ rec
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype rec List a_0 = Nil ( ) | Cons ( a_0 , List a_0 )
+datatype rec List a = Nil ( ) | Cons ( a , List a )
 rec
-  map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ f_0 -> cases
+  map : forall ? v a b . ( ? v a -> b ) -> ? v List a -> List b = \ f -> cases
     Nil ( ) -> Nil ( )
-    Cons ( x_0 , xs_0 ) -> Cons ( f_0 x_0 , ( map_0 f_0 ) xs_0 )
+    Cons ( x , xs ) -> Cons ( f x , ( map f ) xs )
 rec
-  sum_0 : forall & r_0 . & r_0 List I32 -> I32 = cases
+  sum : forall & r . & r List I32 -> I32 = cases
     Nil ( ) -> 0
-    Cons ( x_1 , xs_1 ) -> add ( x_1 , sum_0 xs_1 )
+    Cons ( x , xs ) -> add ( x , sum xs )
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
@@ -131,7 +131,7 @@ rec
 rec
   sum_0 : forall & r_0 . & r_0 List I32 -> I32 = [& r_0 List I32 -> I32] cases
     [& r_0 List I32] Nil [( )] ( ) -> [I32] 0
-    [& r_0 List I32] Cons ( [I32] x_1 , [& r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add ( [I32] x_1 , [& r_0 List I32 -> I32] sum_0 [& r_0 List I32] xs_1 )
+    [& r_0 List I32] Cons ( [I32] x_1 , [& r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add_0 ( [I32] x_1 , [& r_0 List I32 -> I32] sum_0 [& r_0 List I32] xs_1 )
 |]
 
     it "evals" $ do

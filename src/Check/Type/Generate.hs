@@ -12,7 +12,6 @@ module Check.Type.Generate
   ( run
   ) where
 
-import           Check.Error
 import           Check.State
 import           Check.Type.Solve (assumeFromQType)
 import           Common
@@ -62,13 +61,14 @@ specialiseQType src name (_ :< qTy) = case qTy of
   Forall vs cs t -> do
     -- Note: TyVar and TyView-Var names are disjoint (regardless of view domains)
     vs' <- mapM specialiseQTyVar vs
-    let tyRewrite :: Term a => Annotated a -> Annotated a
-        tyRewrite = sub (embedSub f)
-        f :: Annotated Type -> Maybe (Annotated Type)
-        f (_ :< t) = case t of
-          TyVar n                   -> n `lookup` vs'
-          TyView (_ :< ViewVar _ n) -> n `lookup` vs'
-          _                         -> Nothing
+    let
+      tyRewrite :: Term a => Annotated a -> Annotated a
+      tyRewrite = sub (embedSub f)
+      f :: Annotated Type -> Maybe (Annotated Type)
+      f (_ :< t) = case t of
+        TyVar n                   -> n `lookup` vs'
+        TyView (_ :< ViewVar _ n) -> n `lookup` vs'
+        _                         -> Nothing
     let specialisation = zip vs (map snd vs')
     requires [ (src, Specialisation name) :< view value (tyRewrite c) | c <- cs ]
     return (tyRewrite t, Just specialisation)
@@ -100,10 +100,11 @@ scope src block = do
   Env l1 <- use tEnv
   x <- block
   Env l2 <- use tEnv
-  let n = length l2 - length l1
-      (newVars, oldVars) = splitAt n l2
-      unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, view LEnv.used e == 0 && view LEnv.read e == 0 ]
-  series $ [ throwAt src (Unused n) | (n, _) <- unusedVars, head n /= '_' ] -- hacky
+  let
+    n = length l2 - length l1
+    (newVars, oldVars) = splitAt n l2
+    unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, view LEnv.used e == 0 && view LEnv.read e == 0 ]
+  series $ [ throwAt src (quote (pretty n) <> " is not used") | (n, _) <- unusedVars, head n /= '_' ] -- hacky
   tEnv .= Env oldVars
   return x
 
@@ -113,29 +114,25 @@ readVar :: Source -> Name -> Praxis (Name, Annotated Type)
 readVar src name = do
   l <- use tEnv
   r@(_ :< ViewRef refName) <- freshViewRef
-  case Env.lookup name l of
-    Just entry -> do
-      (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
-      when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
-      -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
-      when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> quote (pretty name)
-      tEnv %= LEnv.incRead name
-      return $ (refName, phantom (TyApply (phantom (TyView r)) t))
-    Nothing -> throwAt src (NotInScope name)
+  let Just entry = Env.lookup name l
+  (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
+  when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
+  -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
+  when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> quote (pretty name)
+  tEnv %= LEnv.incRead name
+  return $ (refName, phantom (TyApply (phantom (TyView r)) t))
 
 -- | Marks a variable as used, returning the type of the variable.
 -- A copy constraint will be generated if the variable has already been used or has been captured.
 useVar :: Source -> Name -> Praxis (Annotated Type, Maybe Specialisation)
 useVar src name = do
   l <- use tEnv
-  case Env.lookup name l of
-    Just entry -> do
-      (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
-      tEnv %= LEnv.incUsed name
-      unless (isJust specialisation) $ do
-        requires [ (src, MultiUse name) :< copy t | view LEnv.used entry > 0 ]
-      return (t, specialisation)
-    Nothing -> throwAt src (NotInScope name)
+  let Just entry = Env.lookup name l
+  (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
+  tEnv %= LEnv.incUsed name
+  unless (isJust specialisation) $ do
+    requires [ (src, MultiUse name) :< copy t | view LEnv.used entry > 0 ]
+  return (t, specialisation)
 
 introType :: Source -> Name -> Annotated QType -> Praxis ()
 introType src name qTy = do
@@ -156,7 +153,7 @@ getConType src name = do
   l <- use cEnv
   case Env.lookup name l of
     Just t  -> return t
-    Nothing -> throwAt src (NotInScope name)
+    Nothing -> throwAt src $ "constructor " <> quote (pretty name) <> " is not in scope"
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
@@ -464,7 +461,7 @@ generatePat op pat = snd <$> generatePat' pat where
 
     PatHole -> do
       -- Treat this is a variable for drop analysis
-      var <- freshVar ""
+      var <- freshVar "hole"
       t <- freshTyUni
       introType src var (mono (wrap t))
       return (t, wrap t :< PatVar var)

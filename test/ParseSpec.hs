@@ -66,8 +66,8 @@ spec = do
 
     forM_ types $ \t -> do
       it (show t ++ " is not valid") $ do
-        t' <- runPretty (parse IQType t)
-        t' `shouldBe` "parse error at 1:1: type variables are not distinct"
+        t' <- runPretty (check IQType t)
+        t' `shouldBe` "kind check error at 1:1: variables are not distinct"
 
 
   describe "do not ending in expression" $ do
@@ -103,9 +103,9 @@ operator (_ <?> _ <:> _) = ifthenelse where
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-implies_0 : ( Bool , Bool ) -> Bool = \ ( a_0 , b_0 ) -> or ( b_0 , not a_0 )
-iff_0 : ( Bool , Bool ) -> Bool = \ ( a_1 , b_1 ) -> or ( and ( a_1 , b_1 ) , and ( not a_1 , not b_1 ) )
-ifthenelse_0 : ( Bool , I32 , I32 ) -> I32 = \ ( c_0 , a_2 , b_2 ) -> if c_0 then a_2 else b_2
+implies : ( Bool , Bool ) -> Bool = \ ( a , b ) -> or ( b , not a )
+iff : ( Bool , Bool ) -> Bool = \ ( a , b ) -> or ( and ( a , b ) , and ( not a , not b ) )
+ifthenelse : ( Bool , I32 , I32 ) -> I32 = \ ( c , a , b ) -> if c then a else b
 |]
 
     it "evals" $ do

@@ -9,7 +9,6 @@ module Check.Kind.Generate
   ( run
   ) where
 
-import           Check.Error
 import           Check.State
 import           Common
 import qualified Env.Env         as Env
@@ -17,7 +16,6 @@ import           Inbuilts
 import           Introspect
 import           Praxis
 import           Print
-import           Stage
 import           Term
 
 import           Data.List       (nub, sort)
@@ -76,11 +74,8 @@ generateView :: Annotated View -> Praxis (Annotated View)
 generateView ((src, _) :< v) = case v of
 
   ViewVar _ var -> do
-    entry <- kEnv `uses` Env.lookup var
-    case entry of
-      Just k  -> return ((src, Just k) :< v)
-      Nothing -> throwAt src (NotInScope var)
-
+    Just k <- kEnv `uses` Env.lookup var
+    return ((src, Just k) :< v)
 
 
 generateType :: Annotated Type -> Praxis (Annotated Type)
@@ -104,7 +99,7 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       entry <- kEnv `uses` Env.lookup con
       case entry of
         Just k  -> return (k :< TyCon con)
-        Nothing -> throwAt src (NotInScope con)
+        Nothing -> throwAt src $ "type " <> quote (pretty con) <> " is not in scope"
 
     TyFn t1 t2 -> do
       t1 <- generateType t1
@@ -133,10 +128,8 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       return (phantom KindType :< TyPair t1 t2)
 
     TyVar var -> do
-      entry <- kEnv `uses` Env.lookup var
-      case entry of
-        Just k  -> return (k :< TyVar var)
-        Nothing -> throwAt src (NotInScope var)
+      Just k <- kEnv `uses` Env.lookup var
+      return (k :< TyVar var)
 
 
 generateTyPat :: Annotated TyPat -> Praxis (Annotated TyPat)

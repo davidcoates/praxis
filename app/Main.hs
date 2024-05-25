@@ -3,7 +3,7 @@ module Main where
 import           Common
 import qualified Env.Env            as Env
 import qualified Env.LEnv           as LEnv
-import           Inbuilts           (initialState)
+import           Inbuilts           (runWithPrelude)
 import           Praxis
 import           Term
 import           Util               (evalExp, evalProgram)
@@ -18,7 +18,7 @@ import           System.IO
 main :: IO ()
 main = hSetBuffering stdin LineBuffering >> do
   args <- getArgs
-  void $ runPraxis (parse args) initialState
+  void $ runWithPrelude (parse args)
 
 data Mode = Interactive (Maybe FilePath)
           | Interpret FilePath

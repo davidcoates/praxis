@@ -20,8 +20,8 @@ fst : forall a. (a, a) -> a
 fst (a, a) = a
 |]
 
-    it "does not parse" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-parse error at 2:5: variables are not distinct
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+type check error at 2:5: variables are not distinct
 |]
 
 
@@ -31,7 +31,7 @@ parse error at 2:5: variables are not distinct
 datatype Foo [a, a] = Foo a
 |]
 
-    it "does not parse" $ runPretty (parse IProgram program) `shouldReturn` "parse error at 1:14: type variables are not distinct"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:14: variables are not distinct"
 
 
   describe "type redeclaration" $ do
@@ -61,7 +61,7 @@ x = 1
 x = 2
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "parse error at 1:1: multiple definitions for 'x'"
+    it "does not parse" $ runPretty (parse IProgram program) `shouldReturn` "parse error at 1:1: multiple definitions for 'x'"
 
 
   describe "out of scope term" $ do
@@ -71,7 +71,7 @@ x = y where y = 1
 z = y
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:5: 'y' is not in scope"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:5: variable 'y' is not in scope"
 
 
   describe "out of scope non-recursive function" $ do
@@ -80,7 +80,7 @@ z = y
 x () = x ()
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 1:8: 'x' is not in scope"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 1:8: variable 'x' is not in scope"
 
 
   describe "shadowing" $ do
@@ -101,32 +101,18 @@ h x = f x where
     n -> f (n - 1) * n
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-f_0 = \ x_0 -> f_1 x_0 where
-  f_1 : I32 -> I32 = \ x_1 -> x_1
-g_0 = \ x_2 -> f_2 x_2 where
-  rec
-    f_2 = cases
-      0 -> 1
-      n_0 -> multiply ( f_2 subtract ( n_0 , 1 ) , n_0 )
-h_0 = \ x_3 -> f_3 x_3 where
-  f_3 = cases
-    0 -> 1
-    n_1 -> multiply ( f_0 subtract ( n_1 , 1 ) , n_1 )
-|]
-
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-f_0 = \ [I32] x_0 -> [I32] [I32 -> I32] f_1 [I32] x_0 where
-  f_1 : I32 -> I32 = \ [I32] x_1 -> [I32] x_1
+f_1 = \ [I32] x_0 -> [I32] [I32 -> I32] f_0 [I32] x_0 where
+  f_0 : I32 -> I32 = \ [I32] x_1 -> [I32] x_1
 g_0 = \ [I32] x_2 -> [I32] [I32 -> I32] f_2 [I32] x_2 where
   rec
     f_2 = [I32 -> I32] cases
       [I32] 0 -> [I32] 1
-      [I32] n_0 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_2 [( I32 , I32 ) -> I32] subtract ( [I32] n_0 , [I32] 1 ) , [I32] n_0 )
+      [I32] n_0 -> [( I32 , I32 ) -> I32] multiply_0 ( [I32 -> I32] f_2 [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_0 , [I32] 1 ) , [I32] n_0 )
 h_0 = \ [I32] x_3 -> [I32] [I32 -> I32] f_3 [I32] x_3 where
   f_3 = [I32 -> I32] cases
     [I32] 0 -> [I32] 1
-    [I32] n_1 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_0 [( I32 , I32 ) -> I32] subtract ( [I32] n_1 , [I32] 1 ) , [I32] n_1 )
+    [I32] n_1 -> [( I32 , I32 ) -> I32] multiply_0 ( [I32 -> I32] f_1 [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_1 , [I32] 1 ) , [I32] n_1 )
 |]
 
     it "evals" $ do

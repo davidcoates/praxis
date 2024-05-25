@@ -23,7 +23,7 @@ color_to_char color = case color of
 
   it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
 enum Color = Red | Green | Blue
-color_to_char_0 = \ color_0 -> case color_0 of
+color_to_char = \ color -> case color of
   Red -> 'R'
   Green -> 'G'
   Blue -> 'B'

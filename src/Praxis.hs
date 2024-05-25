@@ -6,7 +6,6 @@
 module Praxis
   ( Praxis
   , PraxisState
-  , emptyState
 
   -- | State types
   , CEnv(..)
@@ -35,9 +34,6 @@ module Praxis
   , try
 
   , runPraxis
-  , runDebug
-  , runSilent
-  , runInternal
 
   -- | Lift an IO computation to the Praxis monad
   , liftIO
@@ -45,6 +41,7 @@ module Praxis
 
   -- | Flag lenses
   , debug
+  , silent
 
   -- | Praxis lenses
   , flags
@@ -56,20 +53,14 @@ module Praxis
   , kEnv
   , tEnv
   , vEnv
-  , rewriteMap
   , tySynonyms
   , tyCheckState
   , kindCheckState
-
-  -- | RewriteMap lenses
-  , tyVarMap
-  , varMap
 
   , freshTyUni
   , freshKindUni
   , freshTyViewUni
   , freshViewRef
-  , freshTyVar
   , freshVar
 
   , clearTerm
@@ -103,7 +94,7 @@ import           Env.LEnv                     (LEnv)
 import qualified Env.LEnv                     as LEnv
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
-import           System.IO.Unsafe             (unsafePerformIO)
+
 
 data Flags = Flags
   { _debug  :: Bool
@@ -115,7 +106,6 @@ data Fresh = Fresh
   , _freshViewUnis :: [String]
   , _freshKindUnis :: [String]
   , _freshViewRefs :: [String]
-  , _freshTyVars   :: Map Name Int
   , _freshVars     :: Map Name Int
   }
 
@@ -146,10 +136,6 @@ data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Grap
 
 makeLenses ''OpContext
 
-data RewriteMap = RewriteMap { _tyVarMap :: Map Name Name, _varMap :: Map Name Name }
-
-makeLenses ''RewriteMap
-
 data PraxisState = PraxisState
   { _flags          :: Flags               -- ^ Flags
   , _fresh          :: Fresh
@@ -161,7 +147,6 @@ data PraxisState = PraxisState
   , _tEnv           :: TEnv                -- ^ Type environment
   , _vEnv           :: VEnv                -- ^ Value environment
   , _tySynonyms     :: Map Name (Annotated Type) -- ^ Type synonyms
-  , _rewriteMap     :: RewriteMap
   , _tyCheckState   :: Check.State TyConstraint
   , _kindCheckState :: Check.State KindConstraint
   }
@@ -176,7 +161,6 @@ defaultFresh = Fresh
   , _freshViewUnis = map (("^v"++) . show) [0..]
   , _freshKindUnis = map (("^k"++) . show) [0..]
   , _freshViewRefs = map (("'l"++) . show) [0..]
-  , _freshTyVars   = Map.empty
   , _freshVars     = Map.empty
   }
 
@@ -192,7 +176,6 @@ emptyState = PraxisState
   , _tEnv           = LEnv.empty
   , _vEnv           = Env.empty
   , _tySynonyms     = Map.empty
-  , _rewriteMap     = RewriteMap { _tyVarMap = Map.empty, _varMap = Map.empty }
   , _tyCheckState   = Check.emptyState
   , _kindCheckState = Check.emptyState
   }
@@ -277,25 +260,10 @@ save l c = do
 try :: Praxis a -> Praxis (Maybe a)
 try p = do
   s <- lift State.get
-  (x, t) <- liftIO $ runPraxis p s
+  (x, t) <- liftIO $ runPraxis' p s
   case x of
     Left e  -> lift (State.put s) >> return Nothing
     Right y -> lift (State.put t) >> return (Just y)
-
-runDebug :: PraxisState -> Praxis a -> IO (Either String a)
-runDebug s c = do
-  (x, _) <- runPraxis (flags . debug .= True >> c) s
-  return x
-
-runSilent :: PraxisState -> Praxis a -> IO (Either String a)
-runSilent s c = do
-  (x, _) <- runPraxis (flags . silent .= True >> c) s
-  return x
-
-runInternal :: PraxisState -> Praxis a -> a
-runInternal s c = case unsafePerformIO (runSilent s c) of
-  Left e  -> error ("internal computation failed: " ++ e)
-  Right x -> x
 
 unlessSilent :: Praxis () -> Praxis ()
 unlessSilent c = do
@@ -310,8 +278,11 @@ liftIO io = do
 liftIOUnsafe :: IO a -> Praxis a
 liftIOUnsafe io = lift (lift io)
 
-runPraxis :: Praxis a -> PraxisState -> IO (Either String a, PraxisState)
-runPraxis = runStateT . runExceptT
+runPraxis' :: Praxis a -> PraxisState -> IO (Either String a, PraxisState)
+runPraxis' = runStateT . runExceptT
+
+runPraxis :: Praxis a -> IO (Either String a)
+runPraxis c = fst <$> runPraxis' c emptyState
 
 ifFlag :: Praxis () -> Lens' Flags Bool -> Praxis ()
 ifFlag c f = use (flags . f) >>= (flip when) c
@@ -340,19 +311,12 @@ freshViewRef = do
   fresh . freshViewRefs .= ls
   return (ViewRef l `as` phantom (KindView Ref))
 
-freshTyVar :: Name -> Praxis Name
-freshTyVar var = do
-  m <- use (fresh . freshTyVars)
-  let i = Map.findWithDefault 0 var m
-  fresh . freshTyVars .= (Map.insert var (i+1) m)
-  return (var ++ "_" ++ show i)
-
 freshVar :: Name -> Praxis Name
 freshVar var = do
   m <- use (fresh . freshVars)
   let i = Map.findWithDefault 0 var m
   fresh . freshVars .= (Map.insert var (i+1) m)
-  return (var ++ "_" ++ show i)
+  return ("_" ++ var ++ "_" ++ show i)
 
 requireMain :: Praxis ()
 requireMain = do

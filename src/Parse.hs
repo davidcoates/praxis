@@ -13,7 +13,6 @@ import           Common
 import           Introspect
 import qualified Parse.Desugar  as Desugar
 import qualified Parse.Parse    as Parse
-import qualified Parse.Rewrite  as Rewrite
 import qualified Parse.Tokenise as Tokenise
 import           Praxis
 import           Stage
@@ -25,4 +24,4 @@ parse text = save stage $ do
   stage .= Parse
   let topLevel = case witness :: I a of { IProgram -> True; _ -> False }
   tokens <- Tokenise.run topLevel text
-  Parse.run tokens >>= Desugar.run >>= Rewrite.run
+  Parse.run tokens >>= Desugar.run

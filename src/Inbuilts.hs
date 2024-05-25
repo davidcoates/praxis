@@ -14,8 +14,9 @@ module Inbuilts
 
 import qualified Check.Type.Rename         as Rename
 import           Common
-import qualified Env.Env                   as Env
-import qualified Env.LEnv                  as LEnv
+import qualified Env.Lazy
+import qualified Env.Linear
+import qualified Env.Strict
 import           Introspect
 import           Parse                     (parse)
 import           Praxis
@@ -40,7 +41,7 @@ kind :: String -> Annotated Kind
 kind s = runInternal (parse s :: Praxis (Annotated Kind))
 
 initialKEnv :: KEnv
-initialKEnv = Env.fromList
+initialKEnv = Env.Strict.fromList
   [
   -- Types
     ("Array",    kind "Type -> Type")
@@ -90,7 +91,7 @@ capture :: Annotated Type -> TyConstraint
 capture t = Instance $ TyApply (TyCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 initialIEnv :: IEnv
-initialIEnv = Env.fromList
+initialIEnv = Env.Strict.fromList
   [ ("Array", Map.fromList
     [ ("Clone",   \(Just t) -> (Inbuilt, IsInstanceOnlyIf [clone t]))
     , ("Dispose", \(Just t) -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
@@ -270,9 +271,9 @@ runWithPrelude c = runPraxis (importPrelude >> c) where
     kEnv .= initialKEnv
     iEnv .= initialIEnv
     inbuilts <- mapM (\(n, t, v) -> (\n -> (n, t, v)) <$> Rename.intro n) inbuilts
-    let initialTEnv = LEnv.fromList $ map (\(n, t, _) -> (n, t)) inbuilts
+    let initialTEnv = Env.Linear.fromList $ map (\(n, t, _) -> (n, t)) inbuilts
     tEnv .= initialTEnv
-    let initialVEnv = Env.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
+    let initialVEnv = Env.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
     vEnv .= initialVEnv
     flags . silent .= True
     parse prelude :: Praxis (Annotated Program)

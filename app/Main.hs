@@ -1,8 +1,7 @@
 module Main where
 
 import           Common
-import qualified Env.Env            as Env
-import qualified Env.LEnv           as LEnv
+import qualified Env.Lazy           as Env
 import           Inbuilts           (runWithPrelude)
 import           Praxis
 import           Term

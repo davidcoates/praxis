@@ -14,8 +14,8 @@ module Check.Type.Solve
 import           Check.Solve
 import           Check.State
 import           Common
-import qualified Env.Env             as Env
-import qualified Env.LEnv            as LEnv
+import qualified Env.Linear          as LEnv
+import qualified Env.Strict          as Env
 import           Inbuilts            (copy)
 import           Introspect
 import           Praxis

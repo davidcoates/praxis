@@ -88,10 +88,9 @@ import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
-import           Env.Env                      (Env)
-import qualified Env.Env                      as Env
-import           Env.LEnv                     (LEnv)
-import qualified Env.LEnv                     as LEnv
+import qualified Env.Lazy
+import qualified Env.Linear
+import qualified Env.Strict
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 
@@ -109,20 +108,20 @@ data Fresh = Fresh
   , _freshVars     :: Map Name Int
   }
 
-type CEnv = Env (Annotated QType)
+type CEnv = Env.Strict.Env (Annotated QType)
 
 data InstanceOrigin = Inbuilt | Trivial | User
   deriving Eq
 
 data Instance = IsInstance | IsInstanceOnlyIf [TyConstraint]
 
-type IEnv = Env (Map Name (Maybe (Annotated Type) -> (InstanceOrigin, Instance)))
+type IEnv = Env.Strict.Env (Map Name (Maybe (Annotated Type) -> (InstanceOrigin, Instance)))
 
-type KEnv = Env (Annotated Kind)
+type KEnv = Env.Strict.Env (Annotated Kind)
 
-type TEnv = LEnv (Annotated QType)
+type TEnv = Env.Linear.Env (Annotated QType)
 
-type VEnv = Env Value
+type VEnv = Env.Lazy.Env Value
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix
@@ -170,11 +169,11 @@ emptyState = PraxisState
   , _fresh          = defaultFresh
   , _stage          = Unknown
   , _opContext      = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
-  , _cEnv           = Env.empty
-  , _iEnv           = Env.empty
-  , _kEnv           = Env.empty
-  , _tEnv           = LEnv.empty
-  , _vEnv           = Env.empty
+  , _cEnv           = Env.Strict.empty
+  , _iEnv           = Env.Strict.empty
+  , _kEnv           = Env.Strict.empty
+  , _tEnv           = Env.Linear.empty
+  , _vEnv           = Env.Lazy.empty
   , _tySynonyms     = Map.empty
   , _tyCheckState   = Check.emptyState
   , _kindCheckState = Check.emptyState
@@ -320,7 +319,7 @@ freshVar var = do
 
 requireMain :: Praxis ()
 requireMain = do
-  ty <- tEnv `uses` LEnv.lookup "main_0"
+  ty <- tEnv `uses` Env.Linear.lookup "main_0"
   case ty of
     Nothing -> throw ("missing main function" :: String)
     Just ty

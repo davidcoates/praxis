@@ -11,7 +11,7 @@ module Check.Kind.Generate
 
 import           Check.State
 import           Common
-import qualified Env.Env         as Env
+import qualified Env.Strict      as Env
 import           Inbuilts
 import           Introspect
 import           Praxis

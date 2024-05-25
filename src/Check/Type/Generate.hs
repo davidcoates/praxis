@@ -15,9 +15,8 @@ module Check.Type.Generate
 import           Check.State
 import           Check.Type.Solve (assumeFromQType)
 import           Common
-import           Env.Env          (Env (..))
-import qualified Env.Env          as Env
-import qualified Env.LEnv         as LEnv
+import qualified Env.Linear       as LEnv
+import qualified Env.Strict       as Env
 import           Inbuilts         (capture, copy, integral)
 import           Introspect
 import           Praxis
@@ -28,7 +27,6 @@ import           Term
 import           Control.Monad    (replicateM)
 import           Data.Foldable    (foldMap, foldlM)
 import           Data.List        (nub, partition, sort)
-import qualified Data.Map.Lazy    as Map
 import           Data.Maybe       (isJust, mapMaybe)
 import qualified Data.Set         as Set
 import           Prelude          hiding (log)

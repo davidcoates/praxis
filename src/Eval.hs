@@ -7,7 +7,7 @@ module Eval
   ) where
 
 import           Common
-import qualified Env.Env           as Env
+import qualified Env.Lazy          as Env
 import           Praxis
 import           Stage
 import           Term

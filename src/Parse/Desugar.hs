@@ -178,7 +178,7 @@ desugarDeclTerms (a@(src, _) :< decl : decls) = case decl of
     let decl = a :< DeclTermVar name Nothing (curry args exp)
         curry :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
         curry     [] e = e
-        curry (p:ps) e = (src, Nothing) :< Lambda p (curry ps e)
+        curry (p:ps) e = (view source p <> view source e, Nothing) :< Lambda p (curry ps e)
     desugarDeclTerms decls >>= \case
       [] -> return $ [decl]
       (_ :< DeclTermVar name' _ _) : _

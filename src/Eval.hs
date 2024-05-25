@@ -64,13 +64,13 @@ evalDeclTerm (_ :< decl) = case decl of
     mfix $ \values -> do
       -- Evaluate each of the functions in turn, with all of the evaluations in the environment
       -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
-      irrefMapM (\(name, value) -> vEnv %= Env.intro name value) names values
+      irrefMapM (\(name, value) -> vEnv %= Env.insert name value) names values
       mapM evalExp exps
     return ()
 
   DeclTermVar name _ exp -> do
     value <- evalExp exp
-    vEnv %= Env.intro name value
+    vEnv %= Env.insert name value
 
 
 getValue :: Source -> Name -> Praxis Value
@@ -187,7 +187,7 @@ tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
 tryMatch val ((_, Just t) :< pat) = case pat of
 
   PatAt name pat
-    -> (\doMatch -> do { vEnv %= Env.intro name val; doMatch }) <$> tryMatch val pat
+    -> (\doMatch -> do { vEnv %= Env.insert name val; doMatch }) <$> tryMatch val pat
 
   PatData name pat | Value.Data name' val <- val
     -> if name == name' then tryMatch val pat else Nothing
@@ -212,7 +212,7 @@ tryMatch val ((_, Just t) :< pat) = case pat of
     -> Just (return ())
 
   PatVar name
-    -> Just $ vEnv %= Env.intro name val
+    -> Just $ vEnv %= Env.insert name val
 
   _
     -> Nothing

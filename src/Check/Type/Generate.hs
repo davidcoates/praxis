@@ -28,6 +28,7 @@ import           Term
 import           Control.Monad    (replicateM)
 import           Data.Foldable    (foldMap, foldlM)
 import           Data.List        (nub, partition, sort)
+import qualified Data.Map.Lazy    as Map
 import           Data.Maybe       (isJust, mapMaybe)
 import qualified Data.Set         as Set
 import           Prelude          hiding (log)
@@ -76,45 +77,43 @@ specialiseQType src name (_ :< qTy) = case qTy of
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
 join src branch1 branch2 = do
-  l0 <- use tEnv
+  e0 <- use tEnv
   x <- branch1
-  l1 <- use tEnv
-  tEnv .= l0
+  e1 <- use tEnv
+  tEnv .= e0
   y <- branch2
-  l2 <- use tEnv
-  tEnv .= LEnv.join l1 l2
+  e2 <- use tEnv
+  tEnv .= LEnv.join e1 e2
   return (x, y)
 
 closure :: Source -> Praxis (Tag (Annotated Type) Exp) -> Praxis (Tag (Annotated Type) Exp)
 closure src exp = do
-  Env l1 <- use tEnv
+  e1 <- use tEnv
   (t :< x) <- scope src exp
-  Env l2 <- use tEnv
-  let captures = [ (name, view LEnv.value e1) | ((name, e1), (_, e2)) <- zip l1 l2, view LEnv.used e2 > view LEnv.used e1 || view LEnv.read e2 > view LEnv.read e1 ]
+  e2 <- use tEnv
+  let captures = Env.toList (LEnv.touched e1 e2)
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, Captured name) :< capture t | (name, _ :< Mono t) <- captures ]
   return $ t :< Closure captures ((src, Just t) :< x)
 
 scope :: Source -> Praxis a -> Praxis a
 scope src block = do
-  Env l1 <- use tEnv
+  e1 <- use tEnv
   x <- block
-  Env l2 <- use tEnv
+  e2 <- use tEnv
   let
-    n = length l2 - length l1
-    (newVars, oldVars) = splitAt n l2
-    unusedVars = [ (n, view LEnv.value e) | (n, e) <- newVars, view LEnv.used e == 0 && view LEnv.read e == 0 ]
+    scopedVars = e2 `LEnv.difference` e1
+    unusedVars = [ (n, view LEnv.value e) | (n, e) <- Env.toList scopedVars, view LEnv.used e == 0 && view LEnv.read e == 0 ]
   series $ [ throwAt src (quote (pretty n) <> " is not used") | (n, _) <- unusedVars, head n /= '_' ] -- hacky
-  tEnv .= Env oldVars
+  tEnv .= e2 `LEnv.difference` scopedVars
   return x
 
 -- | Marks a variable as read, returning the view-type of the variable and the view ref-name.
 -- A copy constraint will be generated if the variable has already been used or has been captured.
 readVar :: Source -> Name -> Praxis (Name, Annotated Type)
 readVar src name = do
-  l <- use tEnv
   r@(_ :< ViewRef refName) <- freshViewRef
-  let Just entry = Env.lookup name l
+  Just entry <- tEnv `uses` Env.lookup name
   (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
   when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
   -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
@@ -126,8 +125,7 @@ readVar src name = do
 -- A copy constraint will be generated if the variable has already been used or has been captured.
 useVar :: Source -> Name -> Praxis (Annotated Type, Maybe Specialisation)
 useVar src name = do
-  l <- use tEnv
-  let Just entry = Env.lookup name l
+  Just entry <- tEnv `uses` Env.lookup name
   (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
   tEnv %= LEnv.incUsed name
   unless (isJust specialisation) $ do
@@ -136,17 +134,17 @@ useVar src name = do
 
 introType :: Source -> Name -> Annotated QType -> Praxis ()
 introType src name qTy = do
-  l <- use tEnv
-  case Env.lookup name l of
+  entry <- tEnv `uses` Env.lookup name
+  case entry of
     Just _ -> throwAt src $ "variable " <> quote (pretty name) <> " redeclared"
-    _      -> tEnv %= LEnv.intro name qTy
+    _      -> tEnv %= LEnv.insert name qTy
 
 introConType :: Source -> Name -> Annotated QType -> Praxis ()
 introConType src name qTy = do
   l <- use cEnv
   case Env.lookup name l of
     Just _ -> throwAt src $ "constructor " <> quote (pretty name) <> " redeclared"
-    _      -> cEnv %= Env.intro name qTy
+    _      -> cEnv %= Env.insert name qTy
 
 getConType :: Source -> Name -> Praxis (Annotated QType)
 getConType src name = do
@@ -339,7 +337,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
   Lambda pat exp -> closure src $ do
     op <- freshTyViewUni RefOrValue
-    (pat, exp) <- generateAlt op (pat, exp)
+    pat <- generatePat op pat
+    exp <- generateExp exp
     let t = TyFn (getType pat) (getType exp) `as` phantom KindType
     return (t :< Lambda pat exp)
 
@@ -360,10 +359,14 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
       op <- freshTyViewUni RefOrValue
       return $ TyApply op (TyCon "String" `as` phantom KindType) `as` phantom KindType
 
-  Read var exp -> scope src $ do
+  Read var exp -> do
     (refName, refType) <- readVar src var
-    tEnv %= LEnv.intro var (mono refType)
+    Just entry <- tEnv `uses` Env.lookup var
+    tEnv %= Env.adjust (const (LEnv.mkEntry (mono refType))) var
     exp <- generateExp exp
+    Just entry' <- tEnv `uses` Env.lookup var
+    unless (view LEnv.used entry' > 0) $ throwAt src (quote (pretty var) <> " is not used in read")
+    tEnv %= Env.adjust (const entry) var
     let t = getType exp
     require $ (src, TyReasonRead var) :< RefFree refName t
     return (t :< Read var exp)

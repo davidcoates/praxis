@@ -7,52 +7,49 @@ module Env.Env
   ( Env(..)
 
   , empty
-  , intro
-  , elim
+  , insert
   , lookup
   , adjust
   , fromList
-
-  , zipWith
+  , toList
   )
 where
 
 import           Common
-import           Control.Lens (Traversal)
-import           Data.List    (intercalate)
-import           Prelude      hiding (lookup, zipWith)
-import qualified Prelude      (lookup, zipWith)
 
--- TODO Cosider putting source in Env
-newtype Env a = Env [(Name, a)]
+import           Control.Lens  (Traversal)
+import           Data.List     (intercalate)
+import           Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as Map
+import           Prelude       hiding (lookup)
+
+
+-- TODO Cosider putting source in Env?
+newtype Env a = Env (Map Name a)
 
 deriving instance Functor Env
 deriving instance Foldable Env
 deriving instance Traversable Env
 
 empty :: Env a
-empty = Env []
+empty = Env Map.empty
 
-intro :: Name -> a -> Env a -> Env a
-intro k v (Env l) = Env ((k, v):l)
-
-elim :: Env a -> Env a
-elim (Env (l:ls)) = Env ls
+insert :: Name -> a -> Env a -> Env a
+insert k v (Env e) = case Map.lookup k e of
+  Nothing -> Env (Map.insert k v e)
+  Just _  -> error ("double insert: " ++ k)
 
 lookup :: Name -> Env a -> Maybe a
-lookup a (Env l) = Prelude.lookup a l
-
-instance Pretty a => Pretty (Env a) where
-  pretty (Env l) = "[" <> separate ", " (map (\(k, v) -> pretty k <> " : " <> pretty v) l) <> " ]"
+lookup k (Env e) = Map.lookup k e
 
 adjust :: (a -> a) -> Name -> Env a -> Env a
-adjust f n (Env ((k, v):l)) | n == k    = Env ((k, f v):l)
-                            | otherwise = let Env l' = adjust f n (Env l) in Env ((k, v):l')
+adjust f k (Env e) = Env (Map.adjust f k e)
 
 fromList :: [(Name, a)] -> Env a
-fromList = \case
-  []        -> empty
-  ((k,v):l) -> intro k v (fromList l)
+fromList = Env . Map.fromList
 
-zipWith :: (a -> a -> a) -> Env a -> Env a -> Env a
-zipWith f (Env l1) (Env l2) = Env (Prelude.zipWith (\(k, v1) (_, v2) -> (k, f v1 v2)) l1 l2)
+toList :: Env a -> [(Name, a)]
+toList (Env e) = Map.toList e
+
+instance Pretty a => Pretty (Env a) where
+  pretty (Env e) = "[" <> separate ", " (map (\(k, v) -> pretty k <> " : " <> pretty v) (Map.toList e)) <> " ]"

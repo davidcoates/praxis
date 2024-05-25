@@ -49,11 +49,11 @@ generate term = ($ term) $ case typeof (view value term) of
   _        -> value (recurseTerm generate)
 
 introKind :: Source -> Name -> Annotated Kind -> Praxis ()
-introKind s n k = do
-  l <- use kEnv
-  case Env.lookup n l of
-    Just _ -> throwAt s $ "type " <> quote (pretty n) <> " redeclared"
-    _      -> kEnv %= Env.intro n k
+introKind src name kind = do
+  entry <- kEnv `uses` Env.lookup name
+  case entry of
+    Just _ -> throwAt src $ "type " <> quote (pretty name) <> " redeclared"
+    _      -> kEnv %= Env.insert name kind
 
 
 generateQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
@@ -201,7 +201,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
           , ("Dispose",        deduce dispose)
           ]
 
-    iEnv %= Env.intro name instances
+    iEnv %= Env.insert name instances
     return $ (src, Just k) :< DeclTypeData mode name arg alts
 
   DeclTypeEnum name alts -> do
@@ -214,7 +214,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
         , ("Copy",    \Nothing -> (Trivial, IsInstance))
         , ("Capture", \Nothing -> (Trivial, IsInstance))
         ]
-    iEnv %= Env.intro name instances
+    iEnv %= Env.insert name instances
     return $ (src, Just k) :< DeclTypeEnum name alts
 
 

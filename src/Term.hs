@@ -15,6 +15,7 @@ module Term
 
   -- | T0
   , Bind(..)
+  , Captures(..)
   , DataCon(..)
   , DataMode(..)
   , Decl(..)
@@ -60,6 +61,12 @@ import           Common
 
 import           Data.Set (Set)
 
+
+-- Most of the AST is commonn to all stages of the compiler, with the following exceptions:
+-- *Sugar  = Parse internal
+-- *Detail = Produced by Check/Type, consumed by Translate
+-- *Core   = Translate internal
+
 -- * OPERATORS *
 
 data Assoc = AssocLeft | AssocRight
@@ -69,7 +76,7 @@ data Op = Op [Maybe Name] -- TDO qualification over this
   deriving (Eq, Ord)
 
 data OpRules = OpRules (Maybe (Annotated Assoc)) [Annotated Prec]
-             | OpRulesSweet [Either (Annotated Assoc) [Annotated Prec]]
+             | OpRulesSugar [Either (Annotated Assoc) [Annotated Prec]]
   deriving (Eq, Ord)
 
 data Prec = Prec Ordering Op
@@ -81,6 +88,8 @@ data Prec = Prec Ordering Op
 data Bind = Bind (Annotated Pat) (Annotated Exp)
   deriving (Eq, Ord)
 
+type Captures = [(Name, Annotated Type)]
+
 data DataCon = DataCon Name (Annotated Type)
   deriving (Eq, Ord)
 
@@ -91,14 +100,15 @@ data DeclType = DeclTypeData DataMode Name (Maybe (Annotated TyPat)) [Annotated 
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
-data DeclTerm = DeclTermRec [Annotated DeclTerm]
+data DeclTerm = DeclTermFn Name Captures (Name, Annotated Type) (Annotated Exp)
+              | DeclTermRec [Annotated DeclTerm]
               | DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
-              | DeclTermDefSweet Name [Annotated Pat] (Annotated Exp)
-              | DeclTermSigSweet Name (Annotated QType)
+              | DeclTermDefSugar Name [Annotated Pat] (Annotated Exp)
+              | DeclTermSigSugar Name (Annotated QType)
   deriving (Eq, Ord)
 
-data Decl = DeclOpSweet (Annotated Op) Name (Annotated OpRules)
-          | DeclSynSweet Name (Annotated Type)
+data Decl = DeclOpSugar (Annotated Op) Name (Annotated OpRules)
+          | DeclSynSugar Name (Annotated Type)
           | DeclType (Annotated DeclType)
           | DeclTerm (Annotated DeclTerm)
   deriving (Eq, Ord)
@@ -107,26 +117,28 @@ data Decl = DeclOpSweet (Annotated Op) Name (Annotated OpRules)
 type Specialisation = [(Annotated QTyVar, Annotated Type)]
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
+         | ApplyFnCore Name Captures (Annotated Exp)
+         | CaptureDetail [(Name, Annotated QType)] (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
-         | Closure [(Name, Annotated QType)] (Annotated Exp)
+         | ClosureCore Captures (Annotated Exp)
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
-         | DoSweet [Annotated Stmt]
+         | DoSugar [Annotated Stmt]
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
          | Let (Annotated Bind) (Annotated Exp)
          | Lit Lit
-         | MixfixSweet [Annotated Tok]
+         | MixfixSugar [Annotated Tok]
          | Read Name (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
-         | Specialise (Annotated Exp) Specialisation
+         | SpecialiseDetail (Annotated Exp) Specialisation
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name
-         | VarRefSweet Name
+         | VarRefSugar Name
          | Where (Annotated Exp) [Annotated DeclTerm]
   deriving (Eq, Ord)
 

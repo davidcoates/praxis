@@ -88,19 +88,19 @@ evalExp ((src, Just t) :< exp) = case exp of
     x <- evalExp x
     f x
 
-  Case exp alts -> do
-    val <- evalExp exp
-    evalCase src val alts
-
-  Cases alts -> return $ Value.Fn $ \val -> evalCase src val alts
-
-  Closure captures exp -> do
+  CaptureDetail captures exp -> do
     let names = map fst captures
     values <- mapM (getValue src) names
     Value.Fn fn <- evalExp exp
     return $ Value.Fn $ \val -> save vEnv $ do
       vEnv .= Env.fromList (zip names values)
       fn val
+
+  Case exp alts -> do
+    val <- evalExp exp
+    evalCase src val alts
+
+  Cases alts -> return $ Value.Fn $ \val -> evalCase src val alts
 
   Con name -> do
     case t of
@@ -139,7 +139,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Sig exp _ -> evalExp exp
 
-  Specialise exp specialisation -> do
+  SpecialiseDetail exp specialisation -> do
     exp <- evalExp exp
     case exp of
       Value.Polymorphic polyFun -> return (polyFun specialisation)

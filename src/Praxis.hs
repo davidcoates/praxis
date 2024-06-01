@@ -56,6 +56,7 @@ module Praxis
   , tySynonyms
   , tyCheckState
   , kindCheckState
+  , translateState
 
   , freshTyUni
   , freshKindUni
@@ -76,6 +77,7 @@ import           Common
 import           Print
 import           Stage
 import           Term
+import qualified Translate.State              as Translate
 import           Value
 
 import           Control.Applicative          (empty, liftA2)
@@ -148,6 +150,7 @@ data PraxisState = PraxisState
   , _tySynonyms     :: Map Name (Annotated Type) -- ^ Type synonyms
   , _tyCheckState   :: Check.State TyConstraint
   , _kindCheckState :: Check.State KindConstraint
+  , _translateState :: Translate.State
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -177,6 +180,7 @@ emptyState = PraxisState
   , _tySynonyms     = Map.empty
   , _tyCheckState   = Check.emptyState
   , _kindCheckState = Check.emptyState
+  , _translateState = Translate.emptyState
   }
 
 makeLenses ''Flags

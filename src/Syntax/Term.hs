@@ -222,7 +222,7 @@ decl :: Syntax f => f Decl
 decl = declSyn <|> (_DeclType <$> annotated declType) <|> declOp <|> (_DeclTerm <$> annotated declTerm) -- TODO imports
 
 declSyn :: Syntax f => f Decl
-declSyn = _DeclSynSweet <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
+declSyn = _DeclSynSugar <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
 
 declType :: Syntax f => f DeclType
 declType = declTypeData <|> declTypeEnum
@@ -247,12 +247,16 @@ tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
            mark "type pattern(0)"
 
 declTerm :: Syntax f => f DeclTerm
-declTerm = declTermRec <|> declTerm' <|> mark "term declaration/definition" where
-  declTerm' = prefix varId (_DeclTermSigSweet, declTermSig) (_DeclTermDefSweet, declTermDef) <|> unparseable declTermVar <|> mark "non-rec term declaration/definition"
+declTerm = unparseable declTermFn <|> declTermRec <|> declTerm' <|> mark "term declaration/definition" where
+  declTerm' = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> unparseable declTermVar <|> mark "non-rec term declaration/definition"
   declTermSig = reservedSym ":" *> annotated qTy
   declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
   declTermRec = _DeclTermRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
+  declTermFn = _DeclTermFn <$> varId <*> captures <*> (varId <*> reservedSym ":" *> annotated ty <* reservedSym "=") <*> annotated exp
+
+captures :: Syntax f => f Captures
+captures = special '‹' *> many (varId <*> reservedSym ":" *> annotated ty) <* special '›'
 
 bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> mark "binding"
@@ -318,23 +322,25 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
   exp5 = rightWithSep (reservedId "defer") _Defer exp4 <|> mark "expression(5)"
   exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> mark "expression(4)"
   exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
-         _DoSweet <$> reservedId "do" *> block (annotated stmt) <|>
+         _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
+         unparseable (_ApplyFnCore <$> varId <*> special '@' *> captures <*> special '$' *> annotated exp) <|>
+         unparseable (_CaptureDetail <$> empty <*> annotated exp3) <|>
+         unparseable (_ClosureCore <$> captures <*> special '#' *> annotated exp) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedSym "\\" *> alt <|>
-         unparseable (_Closure <$> empty <*> annotated exp3) <|>
          _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
          _Switch <$> reservedId "switch" *> block switch <|>
          exp2 <|> mark "expression(3)"
   exp2 = mixfix <$> some (annotated (_TOp <$> varSym <|> _TExp <$> annotated exp1)) <|> unparseable exp1 <|> mark "expression(2)"
-  mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> MixfixSweet ts }) (\case { MixfixSweet ts -> Just ts; _ -> Nothing })
+  mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> MixfixSugar ts }) (\case { MixfixSugar ts -> Just ts; _ -> Nothing })
   exp1 = right _Apply exp0 <|> mark "expression(1)"
-  exp0 = _VarRefSweet <$> reservedSym "&" *> varId <|>
+  exp0 = _VarRefSugar <$> reservedSym "&" *> varId <|>
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
-         unparseable (_Specialise <$> annotated exp0 <*> empty) <|>
+         unparseable (_SpecialiseDetail <$> annotated exp0 <*> empty) <|>
          tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          mark "expression(0)"
 
@@ -349,14 +355,14 @@ alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedSym "->" *> annotated exp <|> mark "case alternative"
 
 declOp :: Syntax f => f Decl
-declOp = _DeclOpSweet <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
+declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
 
 op :: Syntax f => f Op
 op = _Op <$> special '(' *> atLeast 2 atom <* special ')' where
   atom = _Nothing <$> special '_' <|> _Just <$> varSym
 
 opRules :: Syntax f => f OpRules
-opRules = _OpRulesSweet <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
+opRules = _OpRulesSugar <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
           unparseable (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
           unparseable (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
 

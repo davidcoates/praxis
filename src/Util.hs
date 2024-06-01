@@ -24,6 +24,7 @@ import qualified Parse
 import           Praxis
 import           Print
 import           Term
+import qualified Translate
 import           Value
 
 
@@ -34,7 +35,11 @@ check :: forall a. Term a => I a -> String -> Praxis (Annotated a)
 check _ term = Parse.parse term >>= Check.check :: Praxis (Annotated a)
 
 evalProgram :: String -> Praxis ()
-evalProgram program = check IProgram program >>= Eval.runProgram
+evalProgram program = do
+  program <- check IProgram program
+  Translate.translate program -- FIXME remove
+  Eval.runProgram program
+
 
 evalExp :: String -> Praxis Value
 evalExp exp = check IExp exp >>= Eval.runExp

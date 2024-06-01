@@ -15,6 +15,7 @@ module Term
 
   -- | T0
   , Bind(..)
+  , Captures(..)
   , DataCon(..)
   , DataMode(..)
   , Decl(..)
@@ -58,6 +59,12 @@ import           Common
 
 import           Data.Set (Set)
 
+
+-- Most of the AST is commonn to all stages of the compiler, with the following exceptions:
+-- *Sugar  = Parse internal
+-- *Detail = Produced by Check/Type, consumed by Core
+-- *Core   = Core internal
+
 -- * OPERATORS *
 
 data Assoc = AssocLeft | AssocRight
@@ -79,6 +86,8 @@ data Prec = Prec Ordering Op
 data Bind = Bind (Annotated Pat) (Annotated Exp)
   deriving (Eq, Ord)
 
+type Captures = [(Name, Annotated Type)]
+
 data DataCon = DataCon Name (Annotated Type)
   deriving (Eq, Ord)
 
@@ -89,7 +98,8 @@ data DeclType = DeclTypeData DataMode Name [Annotated TypePat] [Annotated DataCo
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
-data DeclTerm = DeclTermRec [Annotated DeclTerm]
+data DeclTerm = DeclTermFnCore Name Captures (Name, Annotated Type) (Annotated Exp)
+              | DeclTermRec [Annotated DeclTerm]
               | DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
               | DeclTermDefSugar Name [Annotated Pat] (Annotated Exp)
               | DeclTermSigSugar Name (Annotated QType)
@@ -105,9 +115,10 @@ data Decl = DeclOpSugar (Annotated Op) Name (Annotated OpRules)
 type Specialisation = [(Annotated TypePat, Annotated Type)]
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
+         | CaptureDetail [(Name, Annotated QType)] (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
-         | Closure [(Name, Annotated QType)] (Annotated Exp)
+         | ClosureCore Captures Name
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
          | DoSugar [Annotated Stmt]
@@ -120,7 +131,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
-         | Specialise (Annotated Exp) Specialisation
+         | SpecialiseDetail (Annotated Exp) Specialisation
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name

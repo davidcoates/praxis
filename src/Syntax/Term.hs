@@ -284,12 +284,16 @@ typePat = _TypePatVar <$> flavoredVarId <|>
           expected "type variable"
 
 declTerm :: Syntax f => f DeclTerm
-declTerm = declTermRec <|> declTerm' <|> expected "term declaration/definition" where
+declTerm = internal declTermFn <|> declTermRec <|> declTerm' <|> expected "term declaration/definition" where
   declTerm' = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> expected "non-rec term declaration/definition"
   declTermSig = reservedSym ":" *> annotated qTy
   declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
   declTermRec = _DeclTermRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
+  declTermFn = _DeclTermFnCore <$> varId <*> captures <*> (varId <*> reservedSym ":" *> annotated ty <* reservedSym "=") <*> annotated exp
+
+captures :: Syntax f => f Captures
+captures = special '‹' *> many (varId <*> reservedSym ":" *> annotated ty) <* special '›'
 
 bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> expected "binding"
@@ -371,11 +375,12 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
   exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> expected "expression(4)"
   exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
          _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
+         internal (_CaptureDetail <$> empty <*> special '#' *> annotated exp3) <|>
+         internal (_ClosureCore <$> captures <*> special '#' *> varId) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedSym "\\" *> alt <|>
-         internal (_Closure <$> empty <*> annotated exp3) <|>
          _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
          _Switch <$> reservedId "switch" *> block switch <|>
          exp2 <|> expected "expression(3)"
@@ -386,7 +391,7 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
-         internal (_Specialise <$> annotated exp0 <*> empty) <|>
+         internal (_SpecialiseDetail <$> annotated exp0 <*> empty) <|>
          tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          expected "expression(0)"
 

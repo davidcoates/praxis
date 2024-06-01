@@ -7,6 +7,7 @@ data Stage = Unknown
            | KindCheck
            | TypeCheck
            | Evaluate
+           | Core
 
 instance Show Stage where
   show = \case
@@ -15,3 +16,4 @@ instance Show Stage where
     KindCheck   -> "kind check"
     TypeCheck   -> "type check"
     Evaluate    -> "evaluate"
+    Core        -> "core"

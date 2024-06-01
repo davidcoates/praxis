@@ -88,7 +88,7 @@ closure src exp = do
   let captures = Env.toList (LEnv.touched e1 e2)
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, TypeReasonCaptured name) :< capture t | (name, _ :< Mono t) <- captures ]
-  return $ t :< Closure captures ((src, Just t) :< x)
+  return $ t :< CaptureDetail captures ((src, Just t) :< x)
 
 scope :: Source -> Praxis a -> Praxis a
 scope src block = do
@@ -301,7 +301,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     qTy <- getConType src name
     (t, specialisation) <- specialiseQType src name qTy
     case specialisation of
-      Just specialisation -> return (t :< Specialise ((src, Just t) :< Con name) specialisation)
+      Just specialisation -> return (t :< SpecialiseDetail ((src, Just t) :< Con name) specialisation)
       Nothing             -> return (t :< Con name)
 
   Defer exp1 exp2 -> do
@@ -381,7 +381,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
   Var name -> do
     (t, specialisation) <- useVar src name
     case specialisation of
-      Just specialisation -> return (t :< Specialise ((src, Just t) :< Var name) specialisation)
+      Just specialisation -> return (t :< SpecialiseDetail ((src, Just t) :< Var name) specialisation)
       Nothing             -> return (t :< Var name)
 
   Where exp decls -> scope src $ do

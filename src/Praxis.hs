@@ -56,6 +56,7 @@ module Praxis
   , typeSynonyms
   , typeCheckState
   , kindCheckState
+  , coreState
 
   , freshKindUni
   , freshRef
@@ -72,6 +73,7 @@ module Praxis
 
 import qualified Check.State                  as Check
 import           Common
+import qualified Core.State                   as Core
 import           Print
 import           Stage
 import           Term
@@ -150,6 +152,7 @@ data PraxisState = PraxisState
   , _typeSynonyms   :: Map Name (Annotated Type) -- ^ Type synonyms
   , _typeCheckState :: Check.State TypeConstraint
   , _kindCheckState :: Check.State KindConstraint
+  , _coreState      :: Core.State
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -181,6 +184,7 @@ emptypeState = PraxisState
   , _typeSynonyms   = Map.empty
   , _typeCheckState = Check.emptypeState
   , _kindCheckState = Check.emptypeState
+  , _coreState      = Core.emptyState
   }
 
 makeLenses ''Flags

@@ -17,6 +17,7 @@ module Util
 
 import qualified Check
 import           Common
+import qualified Core
 import qualified Eval
 import           Inbuilts
 import           Introspect
@@ -34,11 +35,13 @@ check :: forall a. Term a => I a -> String -> Praxis (Annotated a)
 check _ term = Parse.parse term >>= Check.check :: Praxis (Annotated a)
 
 evalProgram :: String -> Praxis ()
-evalProgram program = check IProgram program >>= Eval.runProgram
+evalProgram program = do
+  program <- check IProgram program
+  Core.run program -- FIXME remove
+  Eval.runProgram program
 
 evalExp :: String -> Praxis Value
 evalExp exp = check IExp exp >>= Eval.runExp
-
 
 -- Helpers for tests
 

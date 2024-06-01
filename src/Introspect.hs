@@ -186,6 +186,7 @@ instance Term DeclTerm where
   witness = IDeclTerm
   recurseAnnotation = trivial
   recurseTerm f = \case
+    DeclTermFnCore n cs a e -> DeclTermFnCore n <$> traverse (second f) cs <*> second f a <*> f e
     DeclTermRec ds          -> DeclTermRec <$> traverse f ds
     DeclTermVar n t e       -> DeclTermVar n <$> traverse f t <*> f e
     DeclTermDefSugar n ps e -> DeclTermDefSugar n <$> traverse f ps <*> f e
@@ -209,28 +210,29 @@ instance Term Exp where
   witness = IExp
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    Apply a b       -> Apply <$> f a <*> f b
-    Case a as       -> Case <$> f a <*> pairs f as
-    Cases as        -> Cases <$> pairs f as
-    Closure cs e    -> Closure <$> traverse (second f) cs <*> f e
-    Con n           -> pure (Con n)
-    Defer a b       -> Defer <$> f a <*> f b
-    DoSugar ss      -> DoSugar <$> traverse f ss
-    If a b c        -> If <$> f a <*> f b <*> f c
-    Lambda a b      -> Lambda <$> f a <*> f b
-    Let a b         -> Let <$> f a <*> f b
-    Lit l           -> pure (Lit l)
-    MixfixSugar ts  -> MixfixSugar <$> traverse f ts
-    Read n a        -> Read n <$> f a
-    Pair a b        -> Pair <$> f a <*> f b
-    Seq a b         -> Seq <$> f a <*> f b
-    Sig e t         -> Sig <$> f e <*> f t
-    Specialise e xs -> Specialise <$> f e <*> pairs f xs
-    Switch as       -> Switch <$> pairs f as
-    Unit            -> pure Unit
-    Var n           -> pure (Var n)
-    VarRefSugar n   -> pure (VarRefSugar n)
-    Where a bs      -> Where <$> f a <*> traverse f bs
+    Apply a b             -> Apply <$> f a <*> f b
+    CaptureDetail cs e    -> CaptureDetail <$> traverse (second f) cs <*> f e
+    Case a as             -> Case <$> f a <*> pairs f as
+    Cases as              -> Cases <$> pairs f as
+    ClosureCore cs n      -> ClosureCore <$> traverse (second f) cs <*> pure n
+    Con n                 -> pure (Con n)
+    Defer a b             -> Defer <$> f a <*> f b
+    DoSugar ss            -> DoSugar <$> traverse f ss
+    If a b c              -> If <$> f a <*> f b <*> f c
+    Lambda a b            -> Lambda <$> f a <*> f b
+    Let a b               -> Let <$> f a <*> f b
+    Lit l                 -> pure (Lit l)
+    MixfixSugar ts        -> MixfixSugar <$> traverse f ts
+    Read n a              -> Read n <$> f a
+    Pair a b              -> Pair <$> f a <*> f b
+    Seq a b               -> Seq <$> f a <*> f b
+    Sig e t               -> Sig <$> f e <*> f t
+    SpecialiseDetail e xs -> SpecialiseDetail <$> f e <*> pairs f xs
+    Switch as             -> Switch <$> pairs f as
+    Unit                  -> pure Unit
+    Var n                 -> pure (Var n)
+    VarRefSugar n         -> pure (VarRefSugar n)
+    Where a bs            -> Where <$> f a <*> traverse f bs
 
 instance Term Pat where
   witness = IPat

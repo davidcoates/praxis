@@ -312,29 +312,29 @@ view' = unparseable (_ViewUni <$> viewDomain <*> uni) <|>
         mark "view"
 
 exp :: Syntax f => f Exp
-exp = exp5 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" where
-  exp5 = optWhere <$> annotated exp4 <*> blockLike (reservedId "where") (annotated declTerm) <|> unparseable exp4 <|> mark "expression(5)"
+exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" where
+  exp6 = optWhere <$> annotated exp5 <*> blockLike (reservedId "where") (annotated declTerm) <|> unparseable exp5 <|> mark "expression(6)"
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
-  exp4 = rightWithSep (reservedId "defer") _Defer exp3 <|> mark "expression(4)"
-  exp3 = mixfix <$> some (annotated (_TOp <$> varSym <|> _TExp <$> annotated exp2)) <|> unparseable exp2 <|> mark "expression(3)" -- FIXME unparseable is a hack here
-  mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> MixfixSweet ts }) (\case { MixfixSweet ts -> Just ts; _ -> Nothing })
-  exp2 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
+  exp5 = rightWithSep (reservedId "defer") _Defer exp4 <|> mark "expression(5)"
+  exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> mark "expression(4)"
+  exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
          _DoSweet <$> reservedId "do" *> block (annotated stmt) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedSym "\\" *> alt <|>
-         unparseable (_Closure <$> empty <*> annotated exp) <|>
+         unparseable (_Closure <$> empty <*> annotated exp3) <|>
          _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
-         unparseable (_Seq <$> annotated exp <*> reservedId "seq" *> annotated exp) <|>
          _Switch <$> reservedId "switch" *> block switch <|>
-         exp1 <|> mark "expression(2)"
+         exp2 <|> mark "expression(3)"
+  exp2 = mixfix <$> some (annotated (_TOp <$> varSym <|> _TExp <$> annotated exp1)) <|> unparseable exp1 <|> mark "expression(2)"
+  mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> MixfixSweet ts }) (\case { MixfixSweet ts -> Just ts; _ -> Nothing })
   exp1 = right _Apply exp0 <|> mark "expression(1)"
   exp0 = _VarRefSweet <$> reservedSym "&" *> varId <|>
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
-         unparseable (_Specialise <$> annotated exp <*> empty) <|>
+         unparseable (_Specialise <$> annotated exp0 <*> empty) <|>
          tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          mark "expression(0)"
 

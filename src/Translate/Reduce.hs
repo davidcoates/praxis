@@ -23,7 +23,7 @@ import qualified Data.Set        as Set
 {-|
   Reduction converts terms to a "reduced" intermediate representation:
   - All polymorphic terms and types are specialised, so that the reduced tree is completely monomorphic with no type variables.
-  - All function definitions (Lambda & Cases) are replaced by top-level defintions (DeclTermFn)
+  - All function definitions (Lambda & Cases) are replaced by top-level defintions (DeclTermFnCore)
 
   The following constructs are eliminated:
   - Cases
@@ -32,7 +32,7 @@ import qualified Data.Set        as Set
   - SpecialiseDetail
   - DeclTermRec
   And the following are introduced:
-  - DeclTermFn
+  - DeclTermFnCore
   - ApplyFnCore
   - ClosureCore
 -}
@@ -134,17 +134,20 @@ reduceDeclTermFn captures decl = case view value decl of
     translateState . polyDeclsByName %= Map.insert name (phantom (DeclTerm decl))
 
   DeclTermVar name _ (_ :< CaptureDetail _ fn) -> do
-    arg <- freshVar "_arg"
-    fn <- reduceExp fn
-    let
-      Just (_ :< TyFn t1 t2) = view annotation fn
-      exp = case view value fn of
-        Lambda pat exp -> Let (phantom (Bind pat (Var arg `as` t1))) exp `as` t2
-        Cases cs       -> Case (Var arg `as` t1) cs `as` t2
-    let decl = phantom (DeclTerm (phantom (DeclTermFn name captures (arg, t1) exp)))
-    translateState . monoDeclsSeq %= (|> decl)
-    translateState . monoDeclsSet %= Set.insert name
+    promoteFn name captures fn
 
+promoteFn :: Name -> Captures -> Annotated Exp -> Praxis ()
+promoteFn name captures fn = do
+  arg <- freshVar "_arg"
+  fn <- reduceExp fn
+  let
+    Just (_ :< TyFn t1 t2) = view annotation fn
+    exp = case view value fn of
+      Lambda pat exp -> Let (phantom (Bind pat (Var arg `as` t1))) exp `as` t2
+      Cases cs       -> Case (Var arg `as` t1) cs `as` t2
+  let decl = phantom (DeclTerm (phantom (DeclTermFnCore name captures (arg, t1) exp)))
+  translateState . monoDeclsSeq %= (|> decl)
+  translateState . monoDeclsSet %= Set.insert name
 
 reduceDecl :: Annotated Decl -> Praxis [Annotated Decl]
 reduceDecl decl = do
@@ -179,11 +182,28 @@ reduceProgram (a :< Program decls) = do
 reduceExp :: Annotated Exp -> Praxis (Annotated Exp)
 reduceExp (a :< exp) = case exp of
 
+  -- SpecialiseDetail -- TODO
+  --
+  Var name -> do
+    -- TODO lookup the name to see
+
+ 
+  CaptureDetail captures fn -> do
+    name <- freshVar "_anon"
+    captures <- resolveCaptures captures
+    promoteFn name captures fn
+    return (a :< ClosureCore captures name)
+
+  Apply (_ :< CaptureDetail captures fn) exp -> do
+    name <- freshVar "_anon"
+    captures <- resolveCaptures captures
+    promoteFn name captures fn
+    exp <- reduceExp exp
+    return (a :< ApplyFnCore name captures exp)
+
   Where exp decls -> do
     decls <- concat . (map toList) <$> mapM reduceDeclTerm decls
     exp <- reduceExp exp
     return (a :< Where exp decls)
-
-  -- TODO specialise, lambda, etc
 
   _ -> recurse reduce (a :< exp) -- TODO

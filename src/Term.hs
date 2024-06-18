@@ -100,7 +100,7 @@ data DeclType = DeclTypeData DataMode Name (Maybe (Annotated TyPat)) [Annotated 
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
-data DeclTerm = DeclTermFn Name Captures (Name, Annotated Type) (Annotated Exp)
+data DeclTerm = DeclTermFnCore Name Captures (Name, Annotated Type) (Annotated Exp)
               | DeclTermRec [Annotated DeclTerm]
               | DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
               | DeclTermDefSugar Name [Annotated Pat] (Annotated Exp)
@@ -121,7 +121,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | CaptureDetail [(Name, Annotated QType)] (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
-         | ClosureCore Captures (Annotated Exp)
+         | ClosureCore Captures Name
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
          | DoSugar [Annotated Stmt]

@@ -190,7 +190,7 @@ instance Term DeclTerm where
   witness = IDeclTerm
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclTermFn n cs a e     -> DeclTermFn n <$> traverse (second f) cs <*> second f a <*> f e
+    DeclTermFnCore n cs a e -> DeclTermFnCore n <$> traverse (second f) cs <*> second f a <*> f e
     DeclTermRec ds          -> DeclTermRec <$> traverse f ds
     DeclTermVar n t e       -> DeclTermVar n <$> traverse f t <*> f e
     DeclTermDefSugar n ps e -> DeclTermDefSugar n <$> traverse f ps <*> f e

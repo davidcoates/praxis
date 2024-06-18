@@ -253,7 +253,7 @@ declTerm = unparseable declTermFn <|> declTermRec <|> declTerm' <|> mark "term d
   declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
   declTermRec = _DeclTermRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
-  declTermFn = _DeclTermFn <$> varId <*> captures <*> (varId <*> reservedSym ":" *> annotated ty <* reservedSym "=") <*> annotated exp
+  declTermFn = _DeclTermFnCore <$> varId <*> captures <*> (varId <*> reservedSym ":" *> annotated ty <* reservedSym "=") <*> annotated exp
 
 captures :: Syntax f => f Captures
 captures = special '‹' *> many (varId <*> reservedSym ":" *> annotated ty) <* special '›'
@@ -325,7 +325,7 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
          unparseable (_ApplyFnCore <$> varId <*> special '@' *> captures <*> special '$' *> annotated exp) <|>
          unparseable (_CaptureDetail <$> empty <*> annotated exp3) <|>
-         unparseable (_ClosureCore <$> captures <*> special '#' *> annotated exp) <|>
+         unparseable (_ClosureCore <$> captures <*> special '#' *> varId) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>

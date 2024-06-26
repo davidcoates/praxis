@@ -117,7 +117,6 @@ data Decl = DeclOpSugar (Annotated Op) Name (Annotated OpRules)
 type Specialisation = [(Annotated QTyVar, Annotated Type)]
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
-         | ApplyFnCore Name Captures (Annotated Exp)
          | CaptureDetail [(Name, Annotated QType)] (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]

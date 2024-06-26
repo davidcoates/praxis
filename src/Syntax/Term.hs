@@ -323,8 +323,7 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
   exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> mark "expression(4)"
   exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
          _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
-         unparseable (_ApplyFnCore <$> varId <*> special '@' *> captures <*> special '$' *> annotated exp) <|>
-         unparseable (_CaptureDetail <$> empty <*> annotated exp3) <|>
+         unparseable (_CaptureDetail <$> empty <*> special '#' *> annotated exp3) <|>
          unparseable (_ClosureCore <$> captures <*> special '#' *> varId) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>

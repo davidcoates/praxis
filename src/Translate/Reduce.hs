@@ -33,7 +33,6 @@ import qualified Data.Set        as Set
   - DeclTermRec
   And the following are introduced:
   - DeclTermFnCore
-  - ApplyFnCore
   - ClosureCore
 -}
 
@@ -182,24 +181,16 @@ reduceProgram (a :< Program decls) = do
 reduceExp :: Annotated Exp -> Praxis (Annotated Exp)
 reduceExp (a :< exp) = case exp of
 
-  -- SpecialiseDetail -- TODO
-  --
-  Var name -> do
-    -- TODO lookup the name to see
-
+  SpecialiseDetail exp specialisation -> do
+    -- TODO generate var/con specialisation if it doesn't yet exist
+    -- TODO differentiate between Var and Con?
+    return exp
  
   CaptureDetail captures fn -> do
     name <- freshVar "_anon"
     captures <- resolveCaptures captures
     promoteFn name captures fn
     return (a :< ClosureCore captures name)
-
-  Apply (_ :< CaptureDetail captures fn) exp -> do
-    name <- freshVar "_anon"
-    captures <- resolveCaptures captures
-    promoteFn name captures fn
-    exp <- reduceExp exp
-    return (a :< ApplyFnCore name captures exp)
 
   Where exp decls -> do
     decls <- concat . (map toList) <$> mapM reduceDeclTerm decls

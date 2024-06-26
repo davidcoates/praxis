@@ -215,7 +215,6 @@ instance Term Exp where
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
     Apply a b             -> Apply <$> f a <*> f b
-    ApplyFnCore n cs e    -> ApplyFnCore n <$> traverse (second f) cs <*> f e
     CaptureDetail cs e    -> CaptureDetail <$> traverse (second f) cs <*> f e
     Case a as             -> Case <$> f a <*> pairs f as
     Cases as              -> Cases <$> pairs f as

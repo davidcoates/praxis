@@ -189,12 +189,7 @@ right :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
 right = rightWithSep (pure ())
 
 rightWithSep :: (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
-rightWithSep s _P p = Prism f g <$> annotated p <*> (s *> (_Just <$> annotated (rightWithSep s _P p)) <|> _Nothing <$> pure ()) <|> unparseable p where
-  f (p, Just q)  = construct _P (p, q)
-  f (p, Nothing) = view value p
-  g x = case destruct _P x of
-    Just (x, y) -> Just (x, Just y)
-    Nothing     -> Nothing
+rightWithSep s _P p = join p (_P, s *> annotated (rightWithSep s _P p))
 
 integer :: Syntax f => f Integer
 integer = match f (Token.Lit . Integer) where

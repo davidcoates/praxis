@@ -185,11 +185,33 @@ join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p wher
     Just (x, y) -> Just (x, Just y)
     Nothing     -> Nothing
 
+foldRight :: Prism a (Annotated a, Annotated a) -> Prism a [Annotated a]
+foldRight _P = Prism (view value . fold) (Just . unfold . phantom) where
+  fold [x]    = x
+  fold (x:xs) = let y = fold xs in (view source x <> view source y, Nothing) :< construct _P (x, y)
+  unfold x = case destruct _P (view value x) of
+    Just (x, y) -> x : unfold y
+    Nothing     -> [x]
+
+foldLeft :: Prism a (Annotated a, Annotated a) -> Prism a [Annotated a]
+foldLeft _P = Prism (view value . fold) (Just . unfold . phantom) where
+  fold [x]      = x
+  fold (x:y:ys) = fold ((view source x <> view source y, Nothing) :< construct _P (x, y) : ys)
+  unfold x = case destruct _P (view value x) of
+    Just (x, y) -> unfold x ++ [y]
+    Nothing     -> [x]
+
 right :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
 right = rightWithSep (pure ())
 
 rightWithSep :: (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
-rightWithSep s _P p = join p (_P, s *> annotated (rightWithSep s _P p))
+rightWithSep s _P p = foldRight _P <$> (_Cons <$> annotated p <*> many (s *> annotated p))
+
+left :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+left = leftWithSep (pure ())
+
+leftWithSep :: (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
+leftWithSep s _P p = foldLeft _P <$> (_Cons <$> annotated p <*> many (s *> annotated p))
 
 integer :: Syntax f => f Integer
 integer = match f (Token.Lit . Integer) where

@@ -42,14 +42,13 @@ intro = Check.intro kindCheckState
 introMany :: Source -> [Name] -> Praxis [Name]
 introMany = Check.introMany kindCheckState
 
-introFromTyPat :: Annotated TyPat -> Praxis ()
-introFromTyPat tyPat = do
-  let tyVars = extract (embedMonoid f) tyPat
-      f = \case
-        TyPatVar n       -> [n]
-        TyPatViewVar _ n -> [n]
-        _                -> []
-  introMany (view source tyPat) tyVars
+introFromTyPats :: Source -> [Annotated TyPat] -> Praxis ()
+introFromTyPats src tyPats = do
+  let tyVar (_ :< tyPat) = case tyPat of
+        TyPatVar n       -> n
+        TyPatViewVar _ n -> n
+      tyVars = map tyVar tyPats
+  introMany src tyVars
   return ()
 
 introFromQType :: Annotated QType -> Praxis ()
@@ -72,11 +71,9 @@ renameDeclTerm (a@(src, _) :< decl) = (a :<) <$> case decl of
 
 
 renameDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
-renameDeclType (a :< decl) = (a :< ) <$> case decl of
+renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 
-  DeclTypeData _ _ tyPat _ -> case tyPat of
-    Nothing    -> recurseTerm rename decl
-    Just tyPat -> save (kindCheckState . scopes) $ introFromTyPat tyPat >> recurseTerm rename decl
+  DeclTypeData _ _ tyPats _ -> save (kindCheckState . scopes) $ introFromTyPats src tyPats >> recurseTerm rename decl
 
   _ -> recurseTerm rename decl
 
@@ -95,8 +92,6 @@ renameTyPat (a@(src, _) :< tyPat) = (a :<) <$> case tyPat of
   TyPatVar n       -> TyPatVar <$> disambiguate src n
 
   TyPatViewVar d n -> TyPatViewVar d <$> disambiguate src n
-
-  _                -> recurseTerm rename tyPat
 
 
 renameView  :: Annotated View -> Praxis (Annotated View)

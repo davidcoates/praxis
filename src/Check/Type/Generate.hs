@@ -188,32 +188,29 @@ tyPatToType = over value tyPatToType' where
   tyPatToType' = \case
     TyPatVar n       -> TyVar n
     TyPatViewVar d n -> TyView (phantom (ViewVar d n))
-    TyPatPack a b    -> TyPack (tyPatToType a) (tyPatToType b)
 
-tyPatToQTyVars :: Annotated TyPat -> [Annotated QTyVar]
-tyPatToQTyVars = extract (embedMonoid f) where
-  f = \case
-    TyPatVar n       -> [ phantom $ QTyVar n ]
-    TyPatViewVar d n -> [ phantom $ QViewVar d n ]
-    _                -> []
+tyPatToQTyVar :: Annotated TyPat -> Annotated QTyVar
+tyPatToQTyVar = over value tyPatToQTyVar' where
+  tyPatToQTyVar' = \case
+    TyPatVar n       -> QTyVar n
+    TyPatViewVar d n -> QViewVar d n
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of
 
-  DeclTypeData mode name tyPat alts -> do
+  DeclTypeData mode name tyPats alts -> do
     let
       -- The return type of the constructors
       retTy :: Annotated Type
-      retTy = case tyPat of
-        Nothing
-          -> TyCon name `as` k
-        Just tyPat | KindFn k1 k2 <- view value k
-          -> TyApply (TyCon name `as` k) (tyPatToType tyPat) `as` k2
+      retTy = retTy' (TyCon name `as` k) tyPats where
+        retTy' ty = \case
+          [] -> ty
+          (tyPat:tyPats) | Just (_ :< KindFn k1 k2) <- view annotation ty -> retTy' (TyApply ty (tyPatToType tyPat) `as` k2) tyPats
 
       buildConType :: Annotated Type -> Annotated QType
-      buildConType argTy = case tyPat of
-        Nothing    -> phantom $ Mono (TyFn argTy retTy `as` phantom KindType)
-        Just tyPat -> phantom $ Forall (tyPatToQTyVars tyPat) [] (TyFn argTy retTy `as` phantom KindType)
+      buildConType argTy = case tyPats of
+        [] -> phantom $ Mono (TyFn argTy retTy `as` phantom KindType)
+        _  -> phantom $ Forall (map tyPatToQTyVar tyPats) [] (TyFn argTy retTy `as` phantom KindType)
 
       generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
       generateDataCon ((src, Nothing) :< DataCon name argTy) = do
@@ -222,7 +219,7 @@ generateDeclType (a@(src, Just k) :< ty) = case ty of
         return ((src, Just qTy) :< DataCon name argTy)
 
     alts <- traverse generateDataCon alts
-    return $ (a :< DeclTypeData mode name tyPat alts)
+    return $ (a :< DeclTypeData mode name tyPats alts)
 
   DeclTypeEnum name alts -> do
     let qTy = phantom $ Mono (TyCon name `as` k)

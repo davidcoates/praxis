@@ -84,16 +84,9 @@ hideLabel x = case typeof x of
   IPat -> case x of
     PatPair _ _ -> True -- Note: Not trivial due to views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
     _           -> False
-  ITyPat -> case x of
-    TyPatPack _ _ -> True
-    _             -> False
   IType -> case x of
     TyApply _ _ -> True
-    TyPack _ _  -> True
     _           -> False
-  IKind -> case x of
-    KindPair _ _ -> True
-    _            -> False
   _ -> False
 
 label :: Term a => Annotated a -> Printable String
@@ -135,5 +128,5 @@ instance Pretty KindReason where
   pretty = \case
     KindReasonTyApply f x -> "type application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
     KindReasonDataCon c   -> "data constructor " <> pretty c
-    KindReasonData n a    -> "data type " <> pretty n <> (case a of { Just a -> " " <> pretty a; _ -> blank })
+    KindReasonData n args -> "data type " <> pretty n <> mconcat (map (\arg -> " " <> pretty arg) args)
     KindReasonType t      -> "type " <> pretty t

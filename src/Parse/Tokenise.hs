@@ -34,7 +34,7 @@ while p t = (p *> ((:) <$> t <*> while p t)) <|> pure []
 char :: Char -> Tokeniser Char
 char c = match (== c)
 
-isSymbol = (`elem` "!#$%&*+./<=>?@\\^|-~:[]")
+isSymbol = (`elem` "!#$%&*+/<=>?@\\^|-~:[].")
 isLower = (`elem` ['a'..'z'])
 isUpper = (`elem` ['A'..'Z'])
 isDigit = (`elem` ['0'..'9'])
@@ -43,7 +43,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> semiSpecial <|> literal <|> conId <|> varId <|> varSym)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> literal <|> conId <|> varId <|> varSym)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment where
@@ -56,11 +56,6 @@ layout = Layout <$> match (`elem` "{};")
 
 special :: Tokeniser Token
 special = Special <$> match (`elem` "(),`_")
-
--- AKA contextually reserved operators.
--- We want to treat them like special symbols for lexing (so e.g. "[&" lexes as two tokens, not one)
-semiSpecial :: Tokeniser Token
-semiSpecial = (VarSym . (:[])) <$> match (`elem` "[].")
 
 literal :: Tokeniser Token
 literal = intLiteral <|> charLiteral <|> stringLiteral

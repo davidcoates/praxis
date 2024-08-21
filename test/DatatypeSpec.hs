@@ -15,45 +15,45 @@ spec = do
   describe "datatype Either" $ do
 
     let program = [r|
-datatype Either [a, b] = Left a | Right b
+datatype Either a b = Left a | Right b
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype unboxed Either [ a , b ] = Left a | Right b
+datatype unboxed Either a b = Left a | Right b
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-datatype unboxed Either [ a_0 , b_0 ] = [forall a_0 b_0 . a_0 -> Either [ a_0 , b_0 ]] Left a_0 | [forall a_0 b_0 . b_0 -> Either [ a_0 , b_0 ]] Right b_0
+datatype unboxed Either a_0 b_0 = [forall a_0 b_0 . a_0 -> Either a_0 b_0] Left a_0 | [forall a_0 b_0 . b_0 -> Either a_0 b_0] Right b_0
 |]
 
     it "evals" $ do
-      runEvaluate program "Left 0 : Either [I32, ()]"  `shouldReturn` "Left 0"
-      runEvaluate program "Right 1 : Either [(), I32]" `shouldReturn` "Right 1"
+      runEvaluate program "Left 0 : Either I32 ()"  `shouldReturn` "Left 0"
+      runEvaluate program "Right 1 : Either () I32" `shouldReturn` "Right 1"
 
 
   describe "datatype Fun (with unbox)" $ do
 
     let program = [r|
-datatype Fun [a, b] = Fun (a -> b)
+datatype Fun a b = Fun (a -> b)
 
-unbox_fun : forall a b. Fun [a, b] -> a -> b
+unbox_fun : forall a b. Fun a b -> a -> b
 unbox_fun (Fun f) x = f x
 
 -- FIXME unit shouldn't be required here since Fun [a, a] is shareable
-id_fun : forall a. () -> Fun [a, a]
+id_fun : forall a. () -> Fun a a
 id_fun () = Fun (\x -> x)
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype unboxed Fun [ a , b ] = Fun ( a -> b )
-unbox_fun : forall a b . Fun [ a , b ] -> a -> b = \ Fun f -> \ x -> f x
-id_fun : forall a . ( ) -> Fun [ a , a ] = \ ( ) -> Fun ( \ x -> x )
+datatype unboxed Fun a b = Fun ( a -> b )
+unbox_fun : forall a b . Fun a b -> a -> b = \ Fun f -> \ x -> f x
+id_fun : forall a . ( ) -> Fun a a = \ ( ) -> Fun ( \ x -> x )
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-datatype unboxed Fun [ a_0 , b_0 ] = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun [ a_0 , b_0 ]] Fun ( a_0 -> b_0 )
-unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , b_1 ]] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
-id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
+datatype unboxed Fun a_0 b_0 = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun a_0 b_0] Fun ( a_0 -> b_0 )
+unbox_fun_0 : forall a_1 b_1 . Fun a_1 b_1 -> a_1 -> b_1 = \ [Fun a_1 b_1] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
+id_fun_0 : forall a_2 . ( ) -> Fun a_2 a_2 = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun a_2 a_2] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
 
     it "evals" $ runEvaluate program "unbox_fun (id_fun ()) 4"  `shouldReturn` "4"

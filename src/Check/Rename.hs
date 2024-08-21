@@ -32,7 +32,6 @@ intro state name = do
   state . scopes %= Map.insert name count
   return $ name ++ "_" ++ show count
 
-
 introMany :: Lens' PraxisState (State c) -> Source -> [Name] -> Praxis [Name]
 introMany state src names = do
   when (not (isUnique names)) $ throwAt src ("variables are not distinct" :: String)

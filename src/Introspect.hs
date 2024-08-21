@@ -282,7 +282,6 @@ instance Term TyPat where
   recurseTerm f = \case
     TyPatVar n       -> pure (TyPatVar n)
     TyPatViewVar d n -> pure (TyPatViewVar d n)
-    TyPatPack a b    -> TyPatPack <$> f a <*> f b
 
 instance Term Type where
   witness = IType
@@ -293,7 +292,6 @@ instance Term Type where
     TyCon n     -> pure (TyCon n)
     TyFn a b    -> TyFn <$> f a <*> f b
     TyView v    -> TyView <$> f v
-    TyPack a b  -> TyPack <$> f a <*> f b
     TyPair a b  -> TyPair <$> f a <*> f b
     TyUnit      -> pure TyUnit
     TyVar n     -> pure (TyVar n)
@@ -330,7 +328,6 @@ instance Term Kind where
     KindConstraint -> pure KindConstraint
     KindFn a b    -> KindFn <$> f a <*> f b
     KindView d     -> pure (KindView d)
-    KindPair a b   -> KindPair <$> f a <*> f b
     KindType       -> pure KindType
 
 instance Term KindConstraint where

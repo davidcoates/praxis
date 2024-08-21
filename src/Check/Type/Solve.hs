@@ -35,6 +35,14 @@ run term = do
   term <- solve tyCheckState reduce term
   tryDefault term
 
+unapplyTyCon :: Annotated Type -> Maybe (Name, [Annotated Type])
+unapplyTyCon (_ :< ty) = case ty of
+  TyCon n -> Just (n, [])
+  TyApply t1 t2 -> case unapplyTyCon t1 of
+    Just (n, ts) -> Just (n, ts ++ [t2])
+    Nothing      -> Nothing
+  _ -> Nothing
+
 reduce :: Disambiguating (Reducer TyConstraint)
 reduce disambiguate = \case
 
@@ -44,11 +52,11 @@ reduce disambiguate = \case
 
   TEq t1 t2@(_ :< TyUni _) -> reduce disambiguate (t2 `TEq` t1) -- handle by the above case
 
-  TEq (_ :< TyApply (_ :< TyCon n1) t1) (_ :< TyApply (_ :< TyCon n2) t2)
-    | n1 == n2 -> return $ Subgoals [ Subgoal (TEq t1 t2) ]
-    | otherwise -> return Contradiction
-
-  TEq (_ :< TyPack s1 s2) (_ :< TyPack t1 t2) -> return $ Subgoals [ Subgoal (TEq s1 t1), Subgoal (TEq s2 t2) ]
+  TEq t1 t2
+    | (Just (n1, t1s), Just (n2, t2s)) <- (unapplyTyCon t1, unapplyTyCon t2) ->
+      if n1 == n2
+        then return $ Subgoals (zipWith (\t1 t2 -> Subgoal (TEq t1 t2)) t1s t2s)
+        else return Contradiction
 
   TEq (_ :< TyPair s1 s2) (_ :< TyPair t1 t2) -> return $ Subgoals [ Subgoal (TEq s1 t1), Subgoal (TEq s2 t2) ]
 
@@ -106,16 +114,15 @@ reduce disambiguate = \case
           (_, No)         -> error "unnormalised"
           (_, Unknown)    -> return Skip
           (Unknown, _)    -> return Skip
-          (Yes, Yes)      -> reduceTyConInstance cls "Ref" (Just t)
+          (Yes, Yes)      -> reduceTyConInstance cls "Ref" [t]
           (Yes, Variable) -> return $ Subgoals [ Subgoal instRef, copy t `Implies` instVal ]
           (Variable, _)   -> return $ Subgoals [ Subgoal instRef, Subgoal instVal ]
-      TyPair t1 t2             -> reduceTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
-      TyFn t1 t2               -> reduceTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
-      TyUnit                   -> reduceTyConInstance cls "Unit" Nothing
-      TyApply (_ :< TyCon n) t -> reduceTyConInstance cls n (Just t)
-      TyCon n                  -> reduceTyConInstance cls n Nothing
-      TyVar _                  -> return Contradiction
-      _                        -> return Skip
+      TyPair t1 t2 -> reduceTyConInstance cls "Pair" [t1, t2]
+      TyFn t1 t2 -> reduceTyConInstance cls "Fn" [t1, t2]
+      TyUnit -> reduceTyConInstance cls "Unit" []
+      TyVar _ -> return Contradiction
+      _ | Just (n, ts) <- unapplyTyCon t -> reduceTyConInstance cls n ts
+      _ -> return Skip
 
 
   HoldsInteger n (_ :< t) -> case t of
@@ -138,12 +145,12 @@ reduce disambiguate = \case
 
 
   where
-    reduceTyConInstance :: Name -> Name -> Maybe (Annotated Type) -> Praxis (Reduction TyConstraint)
-    reduceTyConInstance cls name arg = do
+    reduceTyConInstance :: Name -> Name -> [Annotated Type] -> Praxis (Reduction TyConstraint)
+    reduceTyConInstance cls name args = do
       l <- use iEnv
       let Just instances = Env.lookup name l
       case Map.lookup cls instances of
-        Just resolver -> case resolver arg of
+        Just resolver -> case resolver args of
           (_, IsInstance)          -> return Tautology
           (_, IsInstanceOnlyIf cs) -> return (Subgoals (map Subgoal cs))
         Nothing                    -> return Contradiction
@@ -264,21 +271,20 @@ isAffine t = do
   where
     isAffine' :: Annotated Type -> Praxis Truth
     isAffine' (a :< t) = case t of
-      TyPair t1 t2 -> isTyConAffine "Pair" (Just (phantom (TyPack t1 t2)))
-      TyFn t1 t2 -> isTyConAffine "Fn" (Just (phantom (TyPack t1 t2)))
-      TyUnit -> isTyConAffine "Unit" Nothing
-      TyCon n -> isTyConAffine n Nothing
-      TyApply (_ :< TyCon n) t -> isTyConAffine n (Just t)
+      TyPair t1 t2 -> isTyConAffine "Pair" [t1, t2]
+      TyFn t1 t2 -> isTyConAffine "Fn" [t1, t2]
+      TyUnit -> isTyConAffine "Unit" []
       TyApply (_ :< TyView (_ :< view)) t -> truthAnd (truthNot (isRef view)) <$> isAffine t
       TyUni _ -> return Unknown
       TyVar _ -> return Variable
+      _ | Just (n, ts) <- unapplyTyCon (a :< t) -> isTyConAffine n ts
 
-isTyConAffine :: Name -> Maybe (Annotated Type) -> Praxis Truth
-isTyConAffine name arg = do
+isTyConAffine :: Name -> [Annotated Type] -> Praxis Truth
+isTyConAffine name args = do
   l <- use iEnv
   let Just instances = Env.lookup name l
   case Map.lookup "Copy" instances of
-    Just resolver -> case resolver arg of
+    Just resolver -> case resolver args of
       (_, IsInstance)                -> return No
       (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine t | (Instance (_ :< TyApply (_ :< TyCon "Copy") t)) <- subgoals ]
     Nothing                          -> return Yes
@@ -344,19 +350,18 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
   expandConstraint src constraint = ((constraint:) <$>) $ case constraint of
     Instance (a0 :< inst) -> case inst of
       TyApply (a1 :< TyCon cls) t -> case view value t of
-        TyPair t1 t2             -> expandTyConInstance cls "Pair" (Just (phantom (TyPack t1 t2)))
-        TyFn t1 t2               -> expandTyConInstance cls "Fn" (Just (phantom (TyPack t1 t2)))
-        TyUnit                   -> expandTyConInstance cls "Unit" Nothing
-        TyApply (_ :< TyCon n) t -> expandTyConInstance cls n (Just t)
-        TyCon n                  -> expandTyConInstance cls n Nothing
-        TyVar _                  -> return []
+        TyPair t1 t2 -> expandTyConInstance cls "Pair" [t1, t2]
+        TyFn t1 t2 -> expandTyConInstance cls "Fn" [t1, t2]
+        TyUnit -> expandTyConInstance cls "Unit" []
+        TyVar _ -> return []
+        _ | Just (n, ts) <- unapplyTyCon t -> expandTyConInstance cls n ts
     where
-      expandTyConInstance :: Name -> Name -> Maybe (Annotated Type) -> Praxis [TyConstraint]
-      expandTyConInstance cls name arg = do
+      expandTyConInstance :: Name -> Name -> [Annotated Type] -> Praxis [TyConstraint]
+      expandTyConInstance cls name args = do
         l <- use iEnv
         let Just instances = Env.lookup name l
         case Map.lookup cls instances of
-          Just resolver -> case resolver arg of
+          Just resolver -> case resolver args of
             (_, IsInstance)          -> throwAt src ("redundant constraint: " <> pretty (phantom constraint))
             (_, IsInstanceOnlyIf cs) -> concat <$> mapM (expandConstraint src) cs
           _ -> return [] -- Note: The instance may be satisfied later (at the call site)
@@ -367,16 +372,14 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
   checkConstraint constraint = case view value constraint of
     Instance (_ :< TyApply _ ty) -> checkConstraintType ty where
       checkConstraintType :: Annotated Type -> Praxis ()
-      checkConstraintType ((src, _) :< ty) = case ty of
-        TyApply (_ :< TyCon _) t
-          -> checkConstraintType t
-        TyPack t1 t2
-          -> checkConstraintType t1 >> checkConstraintType t2
+      checkConstraintType (a@(src, _) :< ty) = case ty of
         TyPair t1 t2
           -> checkConstraintType t1 >> checkConstraintType t2
         TyFn t1 t2
           -> checkConstraintType t1 >> checkConstraintType t2
         TyVar n | n `elem` boundVarNames
           -> return ()
+        _ | Just (n, ts@(_:_)) <- unapplyTyCon (a :< ty)
+          -> mapM_ checkConstraintType ts
         _
           -> throwAt src $ "illegal constraint: " <> pretty constraint

@@ -47,7 +47,7 @@ initialKEnv = Env.Strict.fromList
     ("Array",    kind "Type -> Type")
   , ("Bool",     kind "Type")
   , ("Char",     kind "Type")
-  , ("Fn",       kind "(Type, Type) -> Type")
+  , ("Fn",       kind "Type -> Type -> Type")
   , ("I8",       kind "Type")
   , ("I16",      kind "Type")
   , ("I32",      kind "Type")
@@ -61,7 +61,7 @@ initialKEnv = Env.Strict.fromList
   , ("U64",      kind "Type")
   , ("USize",    kind "Type")
   , ("Unit",     kind "Type")
-  , ("Pair",     kind "(Type, Type) -> Type")
+  , ("Pair",     kind "Type -> Type -> Type")
   -- Constraints
   , ("Clone",          kind "Type -> Constraint")
   , ("Dispose",        kind "Type -> Constraint")
@@ -93,17 +93,17 @@ capture t = Instance $ TyApply (TyCon "Capture" `as` kind "Type -> Constraint") 
 initialIEnv :: IEnv
 initialIEnv = Env.Strict.fromList
   [ ("Array", Map.fromList
-    [ ("Clone",   \(Just t) -> (Inbuilt, IsInstanceOnlyIf [clone t]))
-    , ("Dispose", \(Just t) -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
+    [ ("Clone",   \[t] -> (Inbuilt, IsInstanceOnlyIf [clone t]))
+    , ("Dispose", \[t] -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
     ]
     )
   , ("Bool", primitive)
   , ("Char", primitive)
   , ("Fn", Map.fromList
-    [ ("Clone",   \(Just _) -> (Inbuilt, IsInstance))
-    , ("Dispose", \(Just _) -> (Inbuilt, IsInstance))
-    , ("Copy",    \(Just _) -> (Inbuilt, IsInstance))
-    , ("Capture", \(Just _) -> (Inbuilt, IsInstance))
+    [ ("Clone",   \_ -> (Inbuilt, IsInstance))
+    , ("Dispose", \_ -> (Inbuilt, IsInstance))
+    , ("Copy",    \_ -> (Inbuilt, IsInstance))
+    , ("Capture", \_ -> (Inbuilt, IsInstance))
     ]
     )
   , ("I8", integral)
@@ -112,21 +112,21 @@ initialIEnv = Env.Strict.fromList
   , ("I64", integral)
   , ("ISize", integral)
   , ("Pair", Map.fromList
-    [ ("Clone",   \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
-    , ("Dispose", \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
-    , ("Copy",    \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
-    , ("Capture", \(Just (_ :< TyPack a b)) -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
+    [ ("Clone",   \[a, b] -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
+    , ("Dispose", \[a, b] -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
+    , ("Copy",    \[a, b] -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
+    , ("Capture", \[a, b] -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
     ]
     )
   , ("Ref", Map.fromList
-    [ ("Clone",   \(Just _) -> (Trivial, IsInstance))
-    , ("Dispose", \(Just _) -> (Trivial, IsInstance))
-    , ("Copy",    \(Just _) -> (Trivial, IsInstance))
+    [ ("Clone",   \_ -> (Trivial, IsInstance))
+    , ("Dispose", \_ -> (Trivial, IsInstance))
+    , ("Copy",    \_ -> (Trivial, IsInstance))
     ]
     )
   , ("String", Map.fromList
-    [ ("Clone",   \Nothing -> (Inbuilt, IsInstance))
-    , ("Dispose", \Nothing -> (Inbuilt, IsInstance))
+    [ ("Clone",   \_ -> (Inbuilt, IsInstance))
+    , ("Dispose", \_ -> (Inbuilt, IsInstance))
     ]
     )
   , ("U8", integral)
@@ -137,36 +137,36 @@ initialIEnv = Env.Strict.fromList
   , ("Unit", primitive)
   ] where
     primitive = Map.fromList
-      [ ("Clone",   \Nothing -> (Trivial, IsInstance))
-      , ("Dispose", \Nothing -> (Trivial, IsInstance))
-      , ("Copy",    \Nothing -> (Trivial, IsInstance))
-      , ("Capture", \Nothing -> (Trivial, IsInstance))
+      [ ("Clone",   \_ -> (Trivial, IsInstance))
+      , ("Dispose", \_ -> (Trivial, IsInstance))
+      , ("Copy",    \_ -> (Trivial, IsInstance))
+      , ("Capture", \_ -> (Trivial, IsInstance))
       ]
     integral = primitive `Map.union` Map.fromList
-      [ ("Integral", \Nothing -> (Inbuilt, IsInstance))
+      [ ("Integral", \_ -> (Inbuilt, IsInstance))
       ]
 
 
 inbuilts :: [(Name, Annotated QType, Value)]
 inbuilts =
   [ ("add"
-    , poly "forall a | Integral a . (a, a) -> a" -- TODO should be Num, not Integral
+    , poly "forall a | Integral a. (a, a) -> a" -- TODO should be Num, not Integral
     , liftIII (+)
     )
   , ("subtract"
-    , poly "forall a | Integral a . (a, a) -> a"
+    , poly "forall a | Integral a. (a, a) -> a"
     , liftIII (-)
     )
   , ("multiply"
-    , poly "forall a | Integral a . (a, a) -> a"
+    , poly "forall a | Integral a. (a, a) -> a"
     , liftIII (*)
     )
   , ("negate"
-    , poly "forall a | Integral a . a -> a"
+    , poly "forall a | Integral a. a -> a"
     , liftI $ \(con, decon) -> Fn (\x -> return (con (negate (decon x))))
     )
   , ("get_int"
-    , poly "forall a | Integral a . () -> a"
+    , poly "forall a | Integral a. () -> a"
     , liftI $ \(con, decon) -> Fn (\Unit -> liftIOUnsafe (con <$> readLn))
     )
   , ("get_str"
@@ -222,27 +222,27 @@ inbuilts =
     , liftBBB (&&)
     )
   , ("eq"
-    , poly "forall a | Integral a . (a, a) -> Bool" -- TODO should be Eq, not Integral
+    , poly "forall a | Integral a. (a, a) -> Bool" -- TODO should be Eq, not Integral
     , liftIIB (==)
     )
   , ("neq"
-    , poly "forall a | Integral a . (a, a) -> Bool"
+    , poly "forall a | Integral a. (a, a) -> Bool"
     , liftIIB (/=)
     )
   , ("lt"
-    , poly "forall a | Integral a . (a, a) -> Bool" -- TODO should be Ord, not Integral
+    , poly "forall a | Integral a. (a, a) -> Bool" -- TODO should be Ord, not Integral
     , liftIIB (<)
     )
   , ("gt"
-    , poly "forall a | Integral a . (a, a) -> Bool"
+    , poly "forall a | Integral a. (a, a) -> Bool"
     , liftIIB (>)
     )
   , ("lte"
-    , poly "forall a | Integral a . (a, a) -> Bool"
+    , poly "forall a | Integral a. (a, a) -> Bool"
     , liftIIB (<=)
     )
   , ("gte"
-    , poly "forall a | Integral a . (a, a) -> Bool"
+    , poly "forall a | Integral a. (a, a) -> Bool"
     , liftIIB (>=)
     )
   ]

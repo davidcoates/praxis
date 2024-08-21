@@ -87,7 +87,7 @@ data DataCon = DataCon Name (Annotated Type)
 data DataMode = DataUnboxed | DataBoxed | DataRec
   deriving (Eq, Ord)
 
-data DeclType = DeclTypeData DataMode Name (Maybe (Annotated TyPat)) [Annotated DataCon]
+data DeclType = DeclTypeData DataMode Name [Annotated TyPat] [Annotated DataCon]
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
@@ -175,8 +175,7 @@ data View = ViewUni ViewDomain Name
           | ViewVar ViewDomain Name
   deriving (Eq, Ord)
 
-data TyPat = TyPatPack (Annotated TyPat) (Annotated TyPat)
-           | TyPatVar Name
+data TyPat = TyPatVar Name
            | TyPatViewVar ViewDomain Name
   deriving (Eq, Ord)
 
@@ -185,7 +184,6 @@ data Type = TyUni Name -- Compares less than all other types
           | TyCon Name
           | TyFn (Annotated Type) (Annotated Type)
           | TyView (Annotated View)
-          | TyPack (Annotated Type) (Annotated Type)
           | TyPair (Annotated Type) (Annotated Type)
           | TyUnit
           | TyVar Name
@@ -202,7 +200,6 @@ data Kind = KindUni Name
           | KindConstraint
           | KindFn (Annotated Kind) (Annotated Kind)
           | KindView ViewDomain
-          | KindPair (Annotated Kind) (Annotated Kind)
           | KindType
   deriving (Eq, Ord)
 
@@ -279,7 +276,7 @@ data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
 
 data KindReason = KindReasonTyApply (Annotated Type) (Annotated Type)
                 | KindReasonDataCon (Annotated DataCon)
-                | KindReasonData Name (Maybe (Annotated TyPat))
+                | KindReasonData Name [Annotated TyPat]
                 | KindReasonType (Annotated Type)
   deriving (Eq, Ord)
 

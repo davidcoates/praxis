@@ -115,7 +115,7 @@ data InstanceOrigin = Inbuilt | Trivial | User
 
 data Instance = IsInstance | IsInstanceOnlyIf [TyConstraint]
 
-type IEnv = Env.Strict.Env (Map Name (Maybe (Annotated Type) -> (InstanceOrigin, Instance)))
+type IEnv = Env.Strict.Env (Map Name ([Annotated Type] -> (InstanceOrigin, Instance)))
 
 type KEnv = Env.Strict.Env (Annotated Kind)
 

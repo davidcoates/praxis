@@ -45,9 +45,6 @@ contextualOp op = token (VarSym op) <|> unparseable (reservedSym op) <|> mark ("
 contextualId :: Syntax f => Name -> f ()
 contextualId id = token (VarId id) <|> unparseable (reservedId id) <|> mark ("contextual keyword '" ++ id ++ "'")
 
-dot :: Syntax f => f ()
-dot = contextualOp "."
-
 block :: Syntax f => f a -> f [a]
 block p = layout '{' *> _Cons <$> p <*> (layout ';' *> p) `until` layout '}'
 
@@ -170,13 +167,6 @@ tuple :: (Syntax f, Term a) => Prism a () -> Prism a (Annotated a, Annotated a) 
 tuple unit pair p = special '(' *> tuple' where
   tuple' = unit <$> special ')' *> pure () <|> rightWithSep (special ',') pair p <* special ')'
 
-tuple1 :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
-tuple1 pair p = special '(' *> rightWithSep (special ',') pair p <* special ')'
-
--- at least 2 elements
-pack :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
-pack pair p = pair <$> (contextualOp "[" *> annotated p <* special ',') <*> (annotated (rightWithSep (special ',') pair p) <* contextualOp "]")
-
 join :: (Syntax f, Term a) => f a -> (Prism a (Annotated a, b), f b) -> f a
 join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> unparseable p where
   f (_ :< p, Nothing) = p
@@ -245,7 +235,7 @@ declType :: Syntax f => f DeclType
 declType = declTypeData <|> declTypeEnum
 
 declTypeData :: Syntax f => f DeclType
-declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> optional (annotated tyPat) <*> reservedSym "=" *> dataCons where
+declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated tyPat) <*> reservedSym "=" *> dataCons where
   dataCons = _Cons <$> annotated dataCon <*> many (contextualOp "|" *> annotated dataCon)
   dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataRec <$> reservedId "rec") <|> (_DataUnboxed <$> (reservedId "unboxed" <|> pure ()))
 
@@ -257,11 +247,9 @@ dataCon :: Syntax f => f DataCon
 dataCon = _DataCon <$> conId <*> annotated ty1
 
 tyPat :: Syntax f => f TyPat
-tyPat = tyPat0 <|> pack _TyPatPack tyPat0 <|> mark "type pattern" where
-  tyPat0 = _TyPatVar <$> varId <|>
-           _TyPatViewVar <$> viewDomain <*> varId <|>
-           unparseable (pack _TyPatPack tyPat) <|>
-           mark "type pattern(0)"
+tyPat = _TyPatVar <$> varId <|>
+        _TyPatViewVar <$> viewDomain <*> varId <|>
+        mark "type pattern"
 
 declTerm :: Syntax f => f DeclTerm
 declTerm = declTermRec <|> declTerm' <|> mark "term declaration/definition" where
@@ -288,12 +276,11 @@ kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> mark "kind
           _KindType <$> reservedCon "Type" <|>
           unparseable (_KindUni <$> uni) <|>
           _KindConstraint <$> reservedCon "Constraint" <|>
-          tuple1 _KindPair kind <|>
           mark "kind(0)"
 
 qTy :: Syntax f => f QType
 qTy = poly <|> mono <|> mark "quantified type" where
-  poly = _Forall <$> reservedId "forall" *> some (annotated qTyVar) <*> tyConstraints <*> (dot *> annotated ty)
+  poly = _Forall <$> reservedId "forall" *> some (annotated qTyVar) <*> tyConstraints <*> (contextualOp "." *> annotated ty)
   mono = _Mono <$> annotated ty
   tyConstraints :: Syntax f => f [Annotated TyConstraint]
   tyConstraints = _Cons <$> (contextualOp "|" *> annotated tyConstraint) <*> many (special ',' *> annotated tyConstraint) <|> _Nil <$> pure ()
@@ -317,7 +304,6 @@ ty1 = left _TyApply ty0 <|> mark "type(1)" where
         _TyVar <$> varId <|>
         _TyCon <$> conId <|>
         unparseable (_TyUni <$> uni) <|>
-        pack _TyPack ty <|>
         tuple _TyUnit _TyPair ty <|>
         mark "type(0)"
 

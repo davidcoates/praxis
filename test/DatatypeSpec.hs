@@ -56,7 +56,7 @@ unbox_fun_0 : forall a_1 b_1 . Fun [ a_1 , b_1 ] -> a_1 -> b_1 = \ [Fun [ a_1 , 
 id_fun_0 : forall a_2 . ( ) -> Fun [ a_2 , a_2 ] = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun [ a_2 , a_2 ]] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
 |]
 
-    it "evals" $ runEvaluate program "(unbox_fun id_fun ()) 4"  `shouldReturn` "4"
+    it "evals" $ runEvaluate program "unbox_fun (id_fun ()) 4"  `shouldReturn` "4"
 
 
   describe "datatype Unboxed (unboxed)" $ do
@@ -98,13 +98,13 @@ kind check error at 2:37: type 'List' is not in scope
 datatype rec List a = Nil () | Cons (a, List a)
 
 rec
-  map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
+  map : forall ?v a b. (?v a -> b) -> ?v (List a) -> List b
   map f = cases
     Nil ()       -> Nil ()
-    Cons (x, xs) -> Cons (f x, (map f) xs)
+    Cons (x, xs) -> Cons (f x, map f xs)
 
 rec
-  sum : forall &r. &r List I32 -> I32
+  sum : forall &r. &r (List I32) -> I32
   sum = cases
     Nil ()       -> 0
     Cons (x, xs) -> x + sum xs
@@ -113,11 +113,11 @@ rec
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
 datatype rec List a = Nil ( ) | Cons ( a , List a )
 rec
-  map : forall ? v a b . ( ? v a -> b ) -> ? v List a -> List b = \ f -> cases
+  map : forall ? v a b . ( ? v a -> b ) -> ? v ( List a ) -> List b = \ f -> cases
     Nil ( ) -> Nil ( )
-    Cons ( x , xs ) -> Cons ( f x , ( map f ) xs )
+    Cons ( x , xs ) -> Cons ( f x , map f xs )
 rec
-  sum : forall & r . & r List I32 -> I32 = cases
+  sum : forall & r . & r ( List I32 ) -> I32 = cases
     Nil ( ) -> 0
     Cons ( x , xs ) -> add ( x , sum xs )
 |]
@@ -125,13 +125,13 @@ rec
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 datatype rec List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
-  map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 List a_1 -> List b_0] cases
-    [? v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
-    [? v_0 List a_1] Cons ( [? v_0 a_1] x_0 , [? v_0 List a_1] xs_0 ) -> [( b_0 , List b_0 ) -> List b_0] Cons ( [? v_0 a_1 -> b_0] f_0 [? v_0 a_1] x_0 , ( [( ? v_0 a_1 -> b_0 ) -> ? v_0 List a_1 -> List b_0] map_0 [? v_0 a_1 -> b_0] f_0 ) [? v_0 List a_1] xs_0 )
+  map_0 : forall ? v_0 a_1 b_0 . ( ? v_0 a_1 -> b_0 ) -> ? v_0 ( List a_1 ) -> List b_0 = \ [? v_0 a_1 -> b_0] f_0 -> [? v_0 ( List a_1 ) -> List b_0] cases
+    [? v_0 ( List a_1 )] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
+    [? v_0 ( List a_1 )] Cons ( [? v_0 a_1] x_0 , [? v_0 ( List a_1 )] xs_0 ) -> [( b_0 , List b_0 ) -> List b_0] Cons ( [? v_0 a_1 -> b_0] f_0 [? v_0 a_1] x_0 , [( ? v_0 a_1 -> b_0 ) -> ? v_0 ( List a_1 ) -> List b_0] map_0 [? v_0 a_1 -> b_0] f_0 [? v_0 ( List a_1 )] xs_0 )
 rec
-  sum_0 : forall & r_0 . & r_0 List I32 -> I32 = [& r_0 List I32 -> I32] cases
-    [& r_0 List I32] Nil [( )] ( ) -> [I32] 0
-    [& r_0 List I32] Cons ( [I32] x_1 , [& r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add_0 ( [I32] x_1 , [& r_0 List I32 -> I32] sum_0 [& r_0 List I32] xs_1 )
+  sum_0 : forall & r_0 . & r_0 ( List I32 ) -> I32 = [& r_0 ( List I32 ) -> I32] cases
+    [& r_0 ( List I32 )] Nil [( )] ( ) -> [I32] 0
+    [& r_0 ( List I32 )] Cons ( [I32] x_1 , [& r_0 ( List I32 )] xs_1 ) -> [( I32 , I32 ) -> I32] add_0 ( [I32] x_1 , [& r_0 ( List I32 ) -> I32] sum_0 [& r_0 ( List I32 )] xs_1 )
 |]
 
     it "evals" $ do
@@ -145,6 +145,6 @@ do
       runEvaluate program [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
-  let ys = (map (\x -> x * 2)) &xs
+  let ys = map (\x -> x * 2) &xs
   sum &ys
 |] `shouldReturn` "12"

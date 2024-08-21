@@ -25,14 +25,14 @@ rec
 rec
   fac = cases
     0 -> 1 : I64
-    n -> multiply ( n , fac subtract ( n , 1 ) )
+    n -> multiply ( n , fac ( subtract ( n , 1 ) ) )
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 rec
   fac_0 = [I64 -> I64] cases
     [I64] 0 -> [I64] 1 : I64
-    [I64] n_0 -> [( I64 , I64 ) -> I64] multiply_0 ( [I64] n_0 , [I64 -> I64] fac_0 [( I64 , I64 ) -> I64] subtract_0 ( [I64] n_0 , [I64] 1 ) )
+    [I64] n_0 -> [( I64 , I64 ) -> I64] multiply_0 ( [I64] n_0 , [I64 -> I64] fac_0 ( [( I64 , I64 ) -> I64] subtract_0 ( [I64] n_0 , [I64] 1 ) ) )
 |]
 
     it "evals" $ do
@@ -58,20 +58,20 @@ rec
 rec
   is_even = cases
     0 -> True
-    n -> is_odd subtract ( n , 1 )
+    n -> is_odd ( subtract ( n , 1 ) )
   is_odd = cases
     0 -> False
-    n -> is_even subtract ( n , 1 )
+    n -> is_even ( subtract ( n , 1 ) )
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 rec
   is_even_0 = [I32 -> Bool] cases
     [I32] 0 -> [Bool] True
-    [I32] n_0 -> [I32 -> Bool] is_odd_0 [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_0 , [I32] 1 )
+    [I32] n_0 -> [I32 -> Bool] is_odd_0 ( [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_0 , [I32] 1 ) )
   is_odd_0 = [I32 -> Bool] cases
     [I32] 0 -> [Bool] False
-    [I32] n_1 -> [I32 -> Bool] is_even_0 [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_1 , [I32] 1 )
+    [I32] n_1 -> [I32 -> Bool] is_even_0 ( [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_1 , [I32] 1 ) )
 |]
 
     it "evals" $ do

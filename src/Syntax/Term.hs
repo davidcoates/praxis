@@ -312,7 +312,7 @@ viewDomain = _Ref <$> reservedSym "&" <|>
              mark "view domain"
 
 ty1 :: Syntax f => f Type
-ty1 = right _TyApply ty0 <|> mark "type(1)" where
+ty1 = left _TyApply ty0 <|> mark "type(1)" where
   ty0 = _TyView  <$> annotated view' <|>
         _TyVar <$> varId <|>
         _TyCon <$> conId <|>
@@ -346,7 +346,7 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          exp2 <|> mark "expression(3)"
   exp2 = mixfix <$> some (annotated (_TOp <$> varSym <|> _TExp <$> annotated exp1)) <|> unparseable exp1 <|> mark "expression(2)"
   mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> MixfixSweet ts }) (\case { MixfixSweet ts -> Just ts; _ -> Nothing })
-  exp1 = right _Apply exp0 <|> mark "expression(1)"
+  exp1 = left _Apply exp0 <|> mark "expression(1)"
   exp0 = _VarRefSweet <$> reservedSym "&" *> varId <|>
          _Var <$> varId <|>
          _Con <$> conId <|>

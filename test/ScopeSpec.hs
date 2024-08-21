@@ -108,11 +108,11 @@ g_0 = \ [I32] x_2 -> [I32] [I32 -> I32] f_2 [I32] x_2 where
   rec
     f_2 = [I32 -> I32] cases
       [I32] 0 -> [I32] 1
-      [I32] n_0 -> [( I32 , I32 ) -> I32] multiply_0 ( [I32 -> I32] f_2 [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_0 , [I32] 1 ) , [I32] n_0 )
+      [I32] n_0 -> [( I32 , I32 ) -> I32] multiply_0 ( [I32 -> I32] f_2 ( [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_0 , [I32] 1 ) ) , [I32] n_0 )
 h_0 = \ [I32] x_3 -> [I32] [I32 -> I32] f_3 [I32] x_3 where
   f_3 = [I32 -> I32] cases
     [I32] 0 -> [I32] 1
-    [I32] n_1 -> [( I32 , I32 ) -> I32] multiply_0 ( [I32 -> I32] f_1 [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_1 , [I32] 1 ) , [I32] n_1 )
+    [I32] n_1 -> [( I32 , I32 ) -> I32] multiply_0 ( [I32 -> I32] f_1 ( [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_1 , [I32] 1 ) ) , [I32] n_1 )
 |]
 
     it "evals" $ do

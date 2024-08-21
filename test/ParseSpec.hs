@@ -21,7 +21,7 @@ spec = do
           , ("1 + 2 * 3", "1 + (2 * 3)")
           , ("1 - 2 - 3", "(1 - 2) - 3")
           , ("1 - - 2", "1 - (- 2)")
-          , ("f x 1 + g y * z", "(f (x 1)) + ((g y) * z)")
+          , ("f x 1 + g y * z", "((f x) 1) + ((g y) * z)")
           , ("f x + f y + f z", "((f x) + (f y)) + (f z)")
           , ("(x, y, z)", "(x, (y, z))")
           , ("- 1 - - -1", "(- 1) - (- (-1))")
@@ -43,8 +43,8 @@ spec = do
 
     let types =
           [ ("I32 -> I32 -> I32", "I32 -> (I32 -> I32)")
-          , ("A B C", "A (B C)")
-          , ("Maybe Maybe a -> Maybe b", "(Maybe (Maybe a)) -> (Maybe b)")
+          , ("A B C", "(A B) C")
+          , ("Maybe (Maybe a) -> Maybe b", "(Maybe (Maybe a)) -> (Maybe b)")
           , ("forall a b. (a, b)", "forall a b . ( a, b )")
           , ("forall &r. &r Array I32 -> ()", "forall &r . &r Array I32 -> ()")
           , ("forall ?r. ?r Array I32 -> ()", "forall ?r . ?r Array I32 -> ()")

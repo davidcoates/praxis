@@ -84,5 +84,5 @@ forall a b . a
 
     -- TODO should have a better error message here!
     it "does not type check" $ runPretty (check IQType ty) `shouldReturn` trim [r|
-kind check error at 1:1: underdetermined kind: '^k0'
+kind check error: unsolved constraints: ^k1 plain
 |]

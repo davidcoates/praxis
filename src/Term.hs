@@ -214,6 +214,7 @@ infixl 8 `TEq`
 infixl 8 `TOpEq`
 
 data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
+                    | KPlain (Annotated Kind)
                     | KSub (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
@@ -278,5 +279,8 @@ data KindReason = KindReasonTyApply (Annotated Type) (Annotated Type)
                 | KindReasonDataCon (Annotated DataCon)
                 | KindReasonData Name [Annotated TyPat]
                 | KindReasonType (Annotated Type)
+                | KindReasonTyPat (Annotated TyPat)
+                | KindReasonQType (Annotated QType)
+                | KindReasonQTyVar (Annotated QTyVar)
   deriving (Eq, Ord)
 

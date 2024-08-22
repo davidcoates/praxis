@@ -212,13 +212,14 @@ integer = match f (Token.Lit . Integer) where
 tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = unparseable (_HoldsInteger <$> integer <*> reservedSym "∈" *> annotated ty) <|>
                _Instance <$> annotated ty <|>
-               unparseable (_RefFree <$> varId <*> reservedId "ref-free" *> annotated ty) <|>
+               unparseable (_RefFree <$> varId <*> reservedSym "∉" *> annotated ty) <|>
                unparseable (_TEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
                unparseable (_TOpEq <$> annotated ty <*> reservedSym "?=" *> annotated ty) <|>
                mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
 kindConstraint = unparseable (_KEq <$> annotated kind <*> reservedSym "=" *> annotated kind) <|>
+                 unparseable (_KPlain <$> annotated kind <* reservedId "plain") <|>
                  unparseable (_KSub <$> annotated kind <*> reservedSym "≤" *> annotated kind) <|>
                  mark "kind constraint"
 

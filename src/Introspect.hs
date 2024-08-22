@@ -334,8 +334,9 @@ instance Term KindConstraint where
   witness = IKindConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
-    KEq a b  -> KEq <$> f a <*> f b
-    KSub a b -> KSub <$> f a <*> f b
+    KEq k l  -> KEq <$> f k <*> f l
+    KPlain k -> KPlain <$> f k
+    KSub k l -> KSub <$> f k <*> f l
 
 -- | Solver
 
@@ -357,5 +358,8 @@ instance Term KindRequirement where
     KindReasonDataCon c   -> KindReasonDataCon <$> f c
     KindReasonData n a    -> KindReasonData n <$> traverse f a
     KindReasonType t      -> KindReasonType <$> f t
+    KindReasonTyPat t     -> KindReasonTyPat <$> f t
+    KindReasonQType t     -> KindReasonQType <$> f t
+    KindReasonQTyVar t    -> KindReasonQTyVar <$> f t
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c

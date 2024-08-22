@@ -128,5 +128,9 @@ instance Pretty KindReason where
   pretty = \case
     KindReasonTyApply f x -> "type application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
     KindReasonDataCon c   -> "data constructor " <> pretty c
-    KindReasonData n args -> "data type " <> pretty n <> mconcat (map (\arg -> " " <> pretty arg) args)
+    KindReasonData n args -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
     KindReasonType t      -> "type " <> pretty t
+    KindReasonTyPat t     -> "type pattern " <> pretty t
+    KindReasonQType t     -> "qualified type variable " <> pretty t
+    KindReasonQType t     -> "qualified type " <> pretty t
+    KindReasonQTyVar t    -> "type variable " <> pretty t

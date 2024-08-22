@@ -93,6 +93,6 @@ y = read x in ( 1 , x )
 |]
 
     it "does not type check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-type check error: unable to satisfy: 'l0 ref-free ( ^t11 , & 'l0 ^t0 )
+type check error: unable to satisfy: 'l0 ∉ ( ^t11 , & 'l0 ^t0 )
   | primary cause: read of x_0 at 5:5
 |]

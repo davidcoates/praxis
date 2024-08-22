@@ -126,7 +126,7 @@ solve state reduce term = do
             solve' False (term, goals)
 
         TreeSkip
-          | disambiguate -> throw $ "failed to solve constraints: " <> separate ", " goals
+          | disambiguate -> throw $ "unsolved constraints: " <> separate ", " goals
           | otherwise    -> solve' True (term, goals)
 
 

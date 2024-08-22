@@ -38,6 +38,11 @@ reduce disambiguate = \case
 
   KEq (_ :< KindFn k1 k2) (_ :< KindFn l1 l2) -> return $ Subgoals [ Subgoal (KEq k1 l1), Subgoal (KEq k2 l2) ]
 
+  KPlain (_ :< k) -> case k of
+    KindUni _  -> return Skip
+    KindView _ -> return Contradiction
+    _          -> return Tautology -- What about Constraint?
+
   KSub k1 k2 | k1 == k2 -> return Tautology
 
   KSub (_ :< KindUni x) (_ :< KindType) -> solved (x `is` KindType)

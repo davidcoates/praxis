@@ -44,7 +44,6 @@ generate term = ($ term) $ case typeof (view value term) of
   IType    -> generateType
   IView    -> generateView
   ITyPat   -> generateTyPat
-  IQType   -> generateQType
   IQTyVar  -> generateQTyVar
   IDataCon -> generateDataCon
   _        -> value (recurseTerm generate)
@@ -55,14 +54,6 @@ introKind src name kind = do
   case entry of
     Just _ -> throwAt src $ "type " <> quote (pretty name) <> " redeclared"
     _      -> kEnv %= Env.insert name kind
-
-
-generateQType :: Annotated QType -> Praxis (Annotated QType)
-generateQType (a@(src, _) :< qTy) = do
-  qTy <- recurseTerm generate qTy
-  let k = case qTy of { Mono t -> getKind t; Forall _ _ t -> getKind t }
-  require $ (src, KindReasonQType (a :< qTy)) :< (k `KEq` phantom KindType)
-  return (a :< qTy)
 
 
 generateQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)

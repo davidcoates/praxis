@@ -58,6 +58,7 @@ _Cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})
 _Nil :: Prism [a] ()
 _Nil = Prism (const []) (\case { [] -> Just (); _ -> Nothing })
 
+
 definePrisms ''Maybe
 
 many :: Syntax f => f a -> f [a]

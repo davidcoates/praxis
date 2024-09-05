@@ -57,11 +57,12 @@ module Praxis
   , tyCheckState
   , kindCheckState
 
-  , freshTyUni
   , freshKindUni
-  , freshTyViewUni
-  , freshViewRef
+  , freshRefLabel
+  , freshRefUni
+  , freshTyUni
   , freshVar
+  , freshViewUni
 
   , clearTerm
   , ifFlag
@@ -101,11 +102,12 @@ data Flags = Flags
   } deriving (Show)
 
 data Fresh = Fresh
-  { _freshTyUnis   :: [String]
-  , _freshViewUnis :: [String]
-  , _freshKindUnis :: [String]
-  , _freshViewRefs :: [String]
-  , _freshVars     :: Map Name Int
+  { _freshKindUnis  :: [String]
+  , _freshRefLabels :: [String]
+  , _freshRefUnis   :: [String]
+  , _freshTyUnis    :: [String]
+  , _freshVars      :: Map Name Int
+  , _freshViewUnis  :: [String]
   }
 
 type CEnv = Env.Strict.Env (Annotated QType)
@@ -156,11 +158,12 @@ defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _silent = False }
 
 defaultFresh = Fresh
-  { _freshTyUnis   = map (("^t"++) . show) [0..]
-  , _freshViewUnis = map (("^v"++) . show) [0..]
-  , _freshKindUnis = map (("^k"++) . show) [0..]
-  , _freshViewRefs = map (("'l"++) . show) [0..]
-  , _freshVars     = Map.empty
+  { _freshKindUnis  = map (("^k"++) . show) [0..]
+  , _freshRefLabels = map (("'l"++) . show) [0..]
+  , _freshRefUnis   = map (("^r"++) . show) [0..]
+  , _freshTyUnis    = map (("^t"++) . show) [0..]
+  , _freshVars      = Map.empty
+  , _freshViewUnis  = map (("^v"++) . show) [0..]
   }
 
 emptyState :: PraxisState
@@ -286,29 +289,29 @@ runPraxis c = fst <$> runPraxis' c emptyState
 ifFlag :: Praxis () -> Lens' Flags Bool -> Praxis ()
 ifFlag c f = use (flags . f) >>= (flip when) c
 
-freshTyUni :: Praxis (Annotated Type)
-freshTyUni = do
-  (x:xs) <- use (fresh . freshTyUnis)
-  fresh . freshTyUnis .= xs
-  return (TyUni x `as` phantom KindType)
-
-freshTyViewUni :: ViewDomain -> Praxis (Annotated Type)
-freshTyViewUni domain = do
-  (o:os) <- use (fresh . freshViewUnis)
-  fresh . freshViewUnis .= os
-  return (TyView (ViewUni domain o `as` phantom (KindView domain)) `as` phantom (KindView domain))
-
 freshKindUni :: Praxis (Annotated Kind)
 freshKindUni = do
   (k:ks) <- use (fresh . freshKindUnis)
   fresh . freshKindUnis .= ks
   return (phantom (KindUni k))
 
-freshViewRef :: Praxis (Annotated View)
-freshViewRef = do
-  (l:ls) <- use (fresh . freshViewRefs)
-  fresh . freshViewRefs .= ls
-  return (ViewRef l `as` phantom (KindView Ref))
+freshRefLabel :: Praxis (Annotated TyOp)
+freshRefLabel = do
+  (l:ls) <- use (fresh . freshRefLabels)
+  fresh . freshRefLabels .= ls
+  return (RefLabel l `as` phantom KindType)
+
+freshRefUni ::Praxis (Annotated Type)
+freshRefUni = do
+  (o:os) <- use (fresh . freshRefUnis)
+  fresh . freshRefUnis .= os
+  return (TyOp (phantom (RefUni o)) `as` phantom KindRef)
+
+freshTyUni :: Praxis (Annotated Type)
+freshTyUni = do
+  (x:xs) <- use (fresh . freshTyUnis)
+  fresh . freshTyUnis .= xs
+  return (TyUni x `as` phantom KindType)
 
 freshVar :: Name -> Praxis Name
 freshVar var = do
@@ -316,6 +319,12 @@ freshVar var = do
   let i = Map.findWithDefault 0 var m
   fresh . freshVars .= (Map.insert var (i+1) m)
   return ("_" ++ var ++ "_" ++ show i)
+
+freshViewUni :: Praxis (Annotated Type)
+freshViewUni = do
+  (o:os) <- use (fresh . freshViewUnis)
+  fresh . freshViewUnis .= os
+  return (TyOp (phantom (ViewUni o)) `as` phantom KindView)
 
 requireMain :: Praxis ()
 requireMain = do

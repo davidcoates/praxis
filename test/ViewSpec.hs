@@ -55,12 +55,12 @@ box_0 = [& 'l0 String -> Box & 'l0 String] Box [& 'l0 String] "x"
 
       it "does not type check" $ do
         runPretty (check IProgram program >> check IExp "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs") `shouldReturn` trim [r|
-type check error: unable to satisfy: & ^v3 ( List ^t4 ) ?= List ^t4
-  | derived from: ( ^t4 , List ^t4 ) -> List ^t4 = ( ^t4 , List ^t4 ) -> & ^v3 ( List ^t4 )
-  | primary cause: application [( ^t4 , List ^t4 ) -> List ^t4] Cons ($) ( [^t4] 1 , [( ^t6 , List ^t6 ) -> List ^t6] Cons ( [^t7] 2 , [( ^t9 , List ^t9 ) -> List ^t9] Cons ( [^t10] 3 , [( ) -> List ^t12] Nil [( )] ( ) ) ) ) at 1:10
+type check error: unable to satisfy: Ref !
+  | derived from: List ^t4 = List ^t4
+  | primary cause: binding [List ^t4] xs_0 (<-) [( ^t4 , List ^t4 ) -> List ^t4] Cons ( [^t4] 1 , [( ^t4 , List ^t4 ) -> List ^t4] Cons ( [^t4] 2 , [( ^t4 , List ^t4 ) -> List ^t4] Cons ( [^t4] 3 , [( ) -> List ^t4] Nil [( )] ( ) ) ) ) at 1:5
   | secondary causes:
-  | - binding [& ^v3 ( List ^t4 )] xs_0 (<-) [( ^t4 , List ^t4 ) -> List ^t4] Cons ( [^t4] 1 , [( ^t6 , List ^t6 ) -> List ^t6] Cons ( [^t7] 2 , [( ^t9 , List ^t9 ) -> List ^t9] Cons ( [^t10] 3 , [( ) -> List ^t12] Nil [( )] ( ) ) ) ) at 1:5
-  | - application [& ^v3 ( List ^t4 ) -> Box & ^v3 ( List ^t4 )] Box ($) [& ^v3 ( List ^t4 )] xs_0 at 1:50
+  | - application [List ^t4 -> Box ! ( List ^t4 )] Box ($) [List ^t4] xs_0 at 1:50
+  | - application [( ^t4 , List ^t4 ) -> List ^t4] Cons ($) ( [^t4] 1 , [( ^t4 , List ^t4 ) -> List ^t4] Cons ( [^t4] 2 , [( ^t4 , List ^t4 ) -> List ^t4] Cons ( [^t4] 3 , [( ) -> List ^t4] Nil [( )] ( ) ) ) ) at 1:10
 |]
 
     describe "construct with reference" $
@@ -72,7 +72,7 @@ do
   read xs in do
     Box xs
     () -- Note, Box xs can't escape the read
-|]) `shouldReturn` "[( )] let [List I32] xs_0 = [( I32 , List I32 ) -> List I32] Cons ( [I32] 1 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 2 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 3 , [( ) -> List I32] Nil [( )] ( ) ) ) ) in read xs_0 in [( )] [& 'l1 ( List I32 ) -> Box & 'l1 ( List I32 )] Box [& 'l1 ( List I32 )] xs_0 seq [( )] ( )"
+|]) `shouldReturn` "[( )] let [List I32] xs_0 = [( I32 , List I32 ) -> List I32] Cons ( [I32] 1 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 2 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 3 , [( ) -> List I32] Nil [( )] ( ) ) ) ) in read xs_0 in [( )] [& 'l1 List I32 -> Box & 'l1 ( List I32 )] Box [& 'l1 List I32] xs_0 seq [( )] ( )"
 
 
   describe "read safety" $ do
@@ -93,6 +93,10 @@ y = read x in ( 1 , x )
 |]
 
     it "does not type check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-type check error: unable to satisfy: 'l0 ∉ ( ^t11 , & 'l0 ^t0 )
+type check error: unable to satisfy: 'l0 ∉ ( I32 , & 'l0 List I32 )
   | primary cause: read of x_0 at 5:5
+  | secondary causes:
+  | - application [( I32 , List I32 ) -> List I32] Cons ($) ( [I32] 1 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 2 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 3 , [( ) -> List I32] Nil [( )] ( ) ) ) ) at 3:5
+  | - integer literal 1 at 5:16
+  | - integer literal 1 at 3:11
 |]

@@ -263,10 +263,9 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
 coalesceDeclTerms :: [Annotated Decl] -> ([Annotated DeclTerm], [Annotated Decl])
 coalesceDeclTerms [] = ([], [])
-coalesceDeclTerms (decl:decls) = let (terms, decls') = coalesceDeclTerms decls in
-  case view value decl of
-    DeclTerm term -> (term : terms, decls')
-    _             -> (terms, decl : decls')
+coalesceDeclTerms (decl:decls) = case view value decl of
+  DeclTerm term -> let (terms, decls') = coalesceDeclTerms decls in (term : terms, decls')
+  _             -> ([], decl:decls)
 
 -- TODO check for overlapping patterns?
 desugarPat :: Annotated Pat -> Praxis (Annotated Pat)

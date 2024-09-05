@@ -52,8 +52,11 @@ match p = Parser $ \case
   []     -> Result (Left Skip) [] False
   (t:ts) -> if p t then Result (Right t) ts True else Result (Left Skip) (t:ts) False
 
-mark :: String -> Parser t a
-mark s = Parser $ \ts -> Result (Left (Error ("expected " <> pure s))) ts False
+mark :: Pretty t => String -> Parser t a
+mark s = Parser $ \ts -> Result (Left (Error ("expected " <> pure s <> " but found " <> found ts))) ts False where
+  found :: Pretty t => [t] -> Colored String
+  found []    = "end of file"
+  found (t:_) = runPrintable (quote (pretty t)) Plain
 
 run :: Parser t a -> [t] -> (Either Error a, [t])
 run p ts = let r = runParser p ts in (view result r, view remaining r)

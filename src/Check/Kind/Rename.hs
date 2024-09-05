@@ -26,10 +26,9 @@ rename term = ($ term) $ case typeof (view value term) of
   IDeclTerm -> renameDeclTerm
   IDeclType -> renameDeclType
   IType     -> renameType
-  ITyPat    -> renameTyPat
+  ITyVar    -> renameTyVar
   IQType    -> renameQType
-  IQTyVar   -> renameQTyVar
-  IView     -> renameView
+  ITyOp     -> renameTyOp
   _         -> value (recurseTerm rename)
 
 
@@ -42,20 +41,10 @@ intro = Check.intro kindCheckState
 introMany :: Source -> [Name] -> Praxis [Name]
 introMany = Check.introMany kindCheckState
 
-introFromTyPats :: Source -> [Annotated TyPat] -> Praxis ()
-introFromTyPats src tyPats = do
-  let tyVar (_ :< tyPat) = case tyPat of
-        TyPatVar n       -> n
-        TyPatViewVar _ n -> n
-      tyVars = map tyVar tyPats
-  introMany src tyVars
-  return ()
-
 introFromQType :: Annotated QType -> Praxis ()
 introFromQType ((src, _) :< qTy) = case qTy of
   Forall vs _ _ -> do
-    let tyVars = [ n | QTyVar n <- map (view value) vs ] ++ [ n | QViewVar _ n <- map (view value) vs ]
-    introMany src tyVars
+    introMany src (map tyVarName vs)
     return ()
   Mono _ -> return ()
 
@@ -73,7 +62,7 @@ renameDeclTerm (a@(src, _) :< decl) = (a :<) <$> case decl of
 renameDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 
-  DeclTypeData _ _ tyPats _ -> save (kindCheckState . scopes) $ introFromTyPats src tyPats >> recurseTerm rename decl
+  DeclTypeData _ _ tyVars _ -> save (kindCheckState . scopes) $ introMany src (map tyVarName tyVars) >> recurseTerm rename decl
 
   _ -> recurseTerm rename decl
 
@@ -86,28 +75,25 @@ renameType (a@(src, _) :< ty) = (a :<) <$> case ty of
   _       -> recurseTerm rename ty
 
 
-renameTyPat :: Annotated TyPat -> Praxis (Annotated TyPat)
-renameTyPat (a@(src, _) :< tyPat) = (a :<) <$> case tyPat of
+renameTyVar :: Annotated TyVar -> Praxis (Annotated TyVar)
+renameTyVar (a@(src, _) :< tyVar) = (a :<) <$> case tyVar of
 
-  TyPatVar n       -> TyPatVar <$> disambiguate src n
+  TyVarPlain n -> TyVarPlain <$> disambiguate src n
 
-  TyPatViewVar d n -> TyPatViewVar d <$> disambiguate src n
+  TyVarRef n   -> TyVarRef <$> disambiguate src n
+
+  TyVarView n  -> TyVarView <$> disambiguate src n
 
 
-renameView  :: Annotated View -> Praxis (Annotated View)
-renameView (a@(src, _) :< v) = (a :<) <$> case v of
+renameTyOp :: Annotated TyOp -> Praxis (Annotated TyOp)
+renameTyOp (a@(src, _) :< op) = (a :<) <$> case op of
 
-  ViewVar d n -> ViewVar d <$> disambiguate src n
+  RefVar n  -> RefVar <$> disambiguate src n
 
-  _           -> recurseTerm rename v
+  ViewVar n -> ViewVar <$> disambiguate src n
+
+  _         -> recurseTerm rename op
 
 
 renameQType :: Annotated QType -> Praxis (Annotated QType)
 renameQType qTy = save (kindCheckState . scopes) $ introFromQType qTy >> recurse rename qTy
-
-renameQTyVar :: Annotated QTyVar -> Praxis (Annotated QTyVar)
-renameQTyVar (a@(src, _) :< qTyVar) = (a :<) <$> case qTyVar of
-
-  QTyVar n     -> QTyVar <$> disambiguate src n
-
-  QViewVar d n -> QViewVar d <$> disambiguate src n

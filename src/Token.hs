@@ -1,10 +1,12 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module Token
   ( Token(..)
   ) where
 
 import           Common
 import qualified Data.Monoid.Colorful as Color
-import           Term                 (Lit (..), ViewDomain (..))
+import           Term                 (Lit (..))
 
 data Token = Annotation (Printable String)
            | ConId Name
@@ -43,3 +45,6 @@ instance Pretty Token where
     Uni s         -> Fg Magenta $ Value s
     VarId s       -> Value $ s
     VarSym s      -> Value $ s
+
+instance Pretty (Sourced Token) where
+  pretty (_ :< x) = pretty x

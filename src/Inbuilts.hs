@@ -305,11 +305,8 @@ operator (_ [ _ ]) = at_array
 
 operator (_ [ _ ] <- _) = set_array
 
-operator (! _) = not
-
 operator (_ && _) = and where
   left associative
-  precedence below (! _)
 
 operator (_ || _) = or where
   left associative

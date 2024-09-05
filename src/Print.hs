@@ -82,7 +82,7 @@ hideLabel x = case typeof x of
     Sig _ _        -> True
     _              -> False
   IPat -> case x of
-    PatPair _ _ -> True -- Note: Not trivial due to views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
+    PatPair _ _ -> True -- Note: Not trivial due to references/views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
     _           -> False
   IType -> case x of
     TyApply _ _ -> True
@@ -95,7 +95,7 @@ label ((s, a) :< x) = case a of
     IExp             -> prettyIf Types a
     IPat             -> prettyIf Types a
     IDataCon         -> prettyIf Types a
-    ITyPat           -> prettyIf Kinds a
+    ITyVar           -> prettyIf Kinds a
     IType            -> prettyIf Kinds a
     ITyRequirement   -> pretty a
     IKindRequirement -> pretty a
@@ -130,7 +130,5 @@ instance Pretty KindReason where
     KindReasonDataCon c   -> "data constructor " <> pretty c
     KindReasonData n args -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
     KindReasonType t      -> "type " <> pretty t
-    KindReasonTyPat t     -> "type pattern " <> pretty t
-    KindReasonQType t     -> "qualified type variable " <> pretty t
+    KindReasonTyVar t     -> "type pattern " <> pretty t
     KindReasonQType t     -> "qualified type " <> pretty t
-    KindReasonQTyVar t    -> "type variable " <> pretty t

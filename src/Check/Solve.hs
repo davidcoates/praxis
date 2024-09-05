@@ -20,6 +20,12 @@ module Check.Solve
   , Reduction(..)
   , Reducer(..)
   , solve
+
+  , contradiction
+  , skip
+  , solution
+  , subgoals
+  , tautology
   ) where
 
 import           Check.State
@@ -43,7 +49,20 @@ type Solution = (Resolver, Normaliser)
 
 data Subgoal c = Subgoal c | Implies c c
 
-data Reduction c = Contradiction | Skip | Solved Solution | Subgoals [Subgoal c] | Tautology
+data Reduction c = Contradiction | Progress (Maybe Solution) [Subgoal c] | Skip
+
+contradiction = Contradiction
+
+skip = Skip
+
+solution :: Solution -> Reduction c
+solution x = Progress (Just x) []
+
+subgoals :: [Subgoal c] -> Reduction c
+subgoals x = Progress Nothing x
+
+tautology :: Reduction c
+tautology = Progress Nothing []
 
 type Reducer c = c -> Praxis (Reduction c)
 
@@ -198,14 +217,18 @@ reduceTree state reduce tree = case tree of
           -- leaf case (the constraint has not yet been reduced)
           r1 <- reduce constraint
           case r1 of
-            Contradiction     -> return (Just tree, TreeContradiction [constraint])
-            Skip              -> return (Just tree, TreeSkip)
-            Solved solution   -> return (Nothing, TreeSolved solution undefined)
-            Subgoals subgoals -> do
-              (tree, r2) <- reduceTree state reduce (Branch constraint (map subgoalToTree subgoals))
-              return (tree, noskip r2)
-            Tautology         -> return (Nothing, TreeProgress)
+            Contradiction -> return (Just tree, TreeContradiction [constraint])
+            Progress (Just solution) subgoals -> case subgoals of
+              [] -> return (Nothing, TreeSolved solution undefined)
+              _  -> return (Just (subgoalsToTree subgoals), TreeSolved solution undefined)
+            Progress Nothing subgoals -> case subgoals of
+              [] -> return (Nothing, TreeProgress)
+              _ -> do
+                (tree, r2) <- reduceTree state reduce (subgoalsToTree subgoals)
+                return (tree, noskip r2)
+            Skip -> return (Just tree, TreeSkip)
           where
+            subgoalsToTree subgoals = Branch constraint (map subgoalToTree subgoals)
             subgoalToTree = \case
               Subgoal c     -> Branch c []
               Implies c1 c2 -> Assume c1 (Branch c2 [])

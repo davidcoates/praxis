@@ -58,12 +58,11 @@ data I a where
   IStmt     :: I Stmt
   ITok      :: I Tok
   -- | T1
-  IView         :: I View
-  ITyPat        :: I TyPat
-  IType         :: I Type
-  ITyConstraint :: I TyConstraint
   IQType        :: I QType
-  IQTyVar       :: I QTyVar
+  ITyConstraint :: I TyConstraint
+  ITyOp         :: I TyOp
+  IType         :: I Type
+  ITyVar        :: I TyVar
   -- | T2
   IKind           :: I Kind
   IKindConstraint :: I KindConstraint
@@ -94,12 +93,11 @@ switch a b eq neq = case (a, b) of
   (IStmt, IStmt)                       -> eq
   (ITok, ITok)                         -> eq
   -- | T1
-  (IView, IView)                       -> eq
-  (ITyPat, ITyPat)                     -> eq
-  (IType, IType)                       -> eq
-  (ITyConstraint, ITyConstraint)       -> eq
   (IQType, IQType)                     -> eq
-  (IQTyVar, IQTyVar)                   -> eq
+  (ITyConstraint, ITyConstraint)       -> eq
+  (ITyOp, ITyOp)                       -> eq
+  (IType, IType)                       -> eq
+  (ITyVar, ITyVar)                     -> eq
   -- | T2
   (IKind, IKind)                       -> eq
   (IKindConstraint, IKindConstraint)   -> eq
@@ -271,41 +269,6 @@ instance Term Tok where
 
 -- | T1
 
-instance Term View where
-  witness = IView
-  recurseAnnotation _ f x = f x
-  recurseTerm _ = pure
-
-instance Term TyPat where
-  witness = ITyPat
-  recurseAnnotation _ f x = f x
-  recurseTerm f = \case
-    TyPatVar n       -> pure (TyPatVar n)
-    TyPatViewVar d n -> pure (TyPatViewVar d n)
-
-instance Term Type where
-  witness = IType
-  recurseAnnotation _ f x = f x
-  recurseTerm f = \case
-    TyUni n     -> pure (TyUni n)
-    TyApply a b -> TyApply <$> f a <*> f b
-    TyCon n     -> pure (TyCon n)
-    TyFn a b    -> TyFn <$> f a <*> f b
-    TyView v    -> TyView <$> f v
-    TyPair a b  -> TyPair <$> f a <*> f b
-    TyUnit      -> pure TyUnit
-    TyVar n     -> pure (TyVar n)
-
-instance Term TyConstraint where
-  witness = ITyConstraint
-  recurseAnnotation = trivial
-  recurseTerm f = \case
-    HoldsInteger n t  -> HoldsInteger n <$> f t
-    Instance t        -> Instance <$> f t
-    RefFree n t       -> RefFree n <$> f t
-    TEq a b           -> TEq <$> f a <*> f b
-    TOpEq a b         -> TOpEq <$> f a <*> f b
-
 instance Term QType where
   witness = IQType
   recurseAnnotation = trivial
@@ -313,10 +276,47 @@ instance Term QType where
     Forall vs cs t -> Forall <$> traverse f vs <*> traverse f cs <*> f t
     Mono t         -> Mono <$> f t
 
-instance Term QTyVar where
-  witness = IQTyVar
+instance Term TyConstraint where
+  witness = ITyConstraint
+  recurseAnnotation = trivial
+  recurseTerm f = \case
+    HoldsInteger n t    -> HoldsInteger n <$> f t
+    Instance t          -> Instance <$> f t
+    Ref t               -> Ref <$> f t
+    RefFree n t         -> RefFree n <$> f t
+    TEq a b             -> TEq <$> f a <*> f b
+    TOpEq a b           -> TOpEq <$> f a <*> f b
+    TOpEqIfAffine a b t -> TOpEqIfAffine <$> f a <*> f b <*> f t
+
+instance Term TyOp where
+  witness = ITyOp
   recurseAnnotation _ f x = f x
-  recurseTerm _ = pure
+  recurseTerm f = \case
+    Multi os   -> Multi . Set.fromList <$> traverse f (Set.toList os)
+    RefLabel n -> pure (RefLabel n)
+    RefUni n   -> pure (RefUni n)
+    RefVar n   -> pure (RefVar n)
+    ViewUni n  -> pure (ViewUni n)
+    ViewValue  -> pure ViewValue
+    ViewVar n  -> pure (ViewVar n)
+
+instance Term Type where
+  witness = IType
+  recurseAnnotation _ f x = f x
+  recurseTerm f = \case
+    TyApply a b -> TyApply <$> f a <*> f b
+    TyCon n     -> pure (TyCon n)
+    TyFn a b    -> TyFn <$> f a <*> f b
+    TyOp o      -> TyOp <$> f o
+    TyPair a b  -> TyPair <$> f a <*> f b
+    TyUni n     -> pure (TyUni n)
+    TyUnit      -> pure TyUnit
+    TyVar n     -> pure (TyVar n)
+
+instance Term TyVar where
+  witness = ITyVar
+  recurseAnnotation _ f x = f x
+  recurseTerm f = pure
 
 -- | T2
 
@@ -324,11 +324,12 @@ instance Term Kind where
   witness = IKind
   recurseAnnotation = trivial
   recurseTerm f = \case
-    KindUni n      -> pure (KindUni n)
     KindConstraint -> pure KindConstraint
-    KindFn a b    -> KindFn <$> f a <*> f b
-    KindView d     -> pure (KindView d)
+    KindFn a b     -> KindFn <$> f a <*> f b
+    KindRef        -> pure KindRef
     KindType       -> pure KindType
+    KindUni n      -> pure (KindUni n)
+    KindView       -> pure KindView
 
 instance Term KindConstraint where
   witness = IKindConstraint
@@ -344,8 +345,8 @@ instance Term TyRequirement where
   witness = ITyRequirement
   recurseAnnotation _ f x = case x of
     TyReasonApply a b -> TyReasonApply <$> f a <*> f b
-    TyReasonRead n    -> pure (TyReasonRead n)
     TyReasonBind p e  -> TyReasonBind <$> f p <*> f e
+    TyReasonRead n    -> pure (TyReasonRead n)
     -- TODO
     _                 -> pure x
   recurseTerm f = \case
@@ -354,12 +355,11 @@ instance Term TyRequirement where
 instance Term KindRequirement where
   witness = IKindRequirement
   recurseAnnotation _ f x = case x of
-    KindReasonTyApply a b -> KindReasonTyApply <$> f a <*> f b
-    KindReasonDataCon c   -> KindReasonDataCon <$> f c
     KindReasonData n a    -> KindReasonData n <$> traverse f a
-    KindReasonType t      -> KindReasonType <$> f t
-    KindReasonTyPat t     -> KindReasonTyPat <$> f t
+    KindReasonDataCon c   -> KindReasonDataCon <$> f c
     KindReasonQType t     -> KindReasonQType <$> f t
-    KindReasonQTyVar t    -> KindReasonQTyVar <$> f t
+    KindReasonTyApply a b -> KindReasonTyApply <$> f a <*> f b
+    KindReasonType t      -> KindReasonType <$> f t
+    KindReasonTyVar t     -> KindReasonTyVar <$> f t
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c

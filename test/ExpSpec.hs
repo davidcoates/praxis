@@ -41,7 +41,7 @@ x = ( 1 , True , "abc" )
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-x_0 = ( [I32] 1 , [Bool] True , [& 'l0 String] "abc" )
+x_0 = ( [I32] 1 , [Bool] True , [String] "abc" )
 |]
 
 

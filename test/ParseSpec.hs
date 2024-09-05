@@ -46,8 +46,8 @@ spec = do
           , ("A B C", "(A B) C")
           , ("Maybe (Maybe a) -> Maybe b", "(Maybe (Maybe a)) -> (Maybe b)")
           , ("forall a b. (a, b)", "forall a b . ( a, b )")
-          , ("forall &r. &r Array I32 -> ()", "forall &r . &r Array I32 -> ()")
-          , ("forall ?r. ?r Array I32 -> ()", "forall ?r . ?r Array I32 -> ()")
+          , ("forall &r. &r Array I32 -> ()", "forall &r . &r (Array I32) -> ()")
+          , ("forall ?r. ?r Array I32 -> ()", "forall ?r . ?r (Array I32) -> ()")
           ]
 
     forM_ types $ \(a, b) -> do
@@ -86,12 +86,12 @@ foo = do
 
     let program = [r|
 implies : (Bool, Bool) -> Bool
-implies (a, b) = b || !a
+implies (a, b) = b || not a
 
 operator (_ --> _) = implies
 
 iff : (Bool, Bool) -> Bool
-iff (a, b) = (a && b) || (!a && !b)
+iff (a, b) = (a && b) || (not a && not b)
 
 operator (_ <-> _) = iff where
   precedence below (_ --> _)

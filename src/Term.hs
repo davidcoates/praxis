@@ -29,13 +29,12 @@ module Term
   , Tok(..)
 
   -- | T1
-  , ViewDomain(..)
-  , View(..)
-  , TyPat(..)
-  , Type(..)
-  , TyConstraint(..)
-  , QTyVar(..)
   , QType(..)
+  , TyConstraint(..)
+  , TyOp(..)
+  , Type(..)
+  , TyVar(..)
+  , tyVarName
 
   -- | T2
   , Kind(..)
@@ -87,7 +86,7 @@ data DataCon = DataCon Name (Annotated Type)
 data DataMode = DataUnboxed | DataBoxed | DataRec
   deriving (Eq, Ord)
 
-data DeclType = DeclTypeData DataMode Name [Annotated TyPat] [Annotated DataCon]
+data DeclType = DeclTypeData DataMode Name [Annotated TyVar] [Annotated DataCon]
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
@@ -104,7 +103,7 @@ data Decl = DeclOpSweet (Annotated Op) Name (Annotated OpRules)
   deriving (Eq, Ord)
 
 -- TODO constraints
-type Specialisation = [(Annotated QTyVar, Annotated Type)]
+type Specialisation = [(Annotated TyVar, Annotated Type)]
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
@@ -166,48 +165,56 @@ data Tok = TExp (Annotated Exp)
          | TOp Name
   deriving (Eq, Ord)
 
-data ViewDomain = Ref | RefOrValue -- Note: The order here matters for the solvers
-  deriving (Eq, Ord)
-
-data View = ViewUni ViewDomain Name
+data TyOp = Multi (Set (Annotated TyOp))
+          | RefLabel Name
+          | RefUni Name
+          | RefVar Name
+          | ViewUni Name
           | ViewValue
-          | ViewRef Name
-          | ViewVar ViewDomain Name
+          | ViewVar Name
   deriving (Eq, Ord)
 
-data TyPat = TyPatVar Name
-           | TyPatViewVar ViewDomain Name
+data TyVar = TyVarPlain Name
+           | TyVarRef Name
+           | TyVarView Name
   deriving (Eq, Ord)
 
-data Type = TyUni Name -- Compares less than all other types
-          | TyApply (Annotated Type) (Annotated Type)
+-- TODO this is a good hint that name should be factored out
+tyVarName :: Annotated TyVar -> Name
+tyVarName tyVar = case view value tyVar of
+  TyVarPlain n -> n
+  TyVarRef n   -> n
+  TyVarView n  -> n
+
+data Type = TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
           | TyFn (Annotated Type) (Annotated Type)
-          | TyView (Annotated View)
+          | TyOp (Annotated TyOp)
           | TyPair (Annotated Type) (Annotated Type)
+          | TyUni Name
           | TyUnit
           | TyVar Name
   deriving (Eq, Ord)
 
-data QTyVar = QTyVar Name | QViewVar ViewDomain Name
-  deriving (Eq, Ord)
-
-data QType = Forall [Annotated QTyVar] [Annotated TyConstraint] (Annotated Type)
+data QType = Forall [Annotated TyVar] [Annotated TyConstraint] (Annotated Type)
            | Mono (Annotated Type)
   deriving (Eq, Ord)
 
 data Kind = KindUni Name
           | KindConstraint
           | KindFn (Annotated Kind) (Annotated Kind)
-          | KindView ViewDomain
+          | KindRef
           | KindType
+          | KindView
   deriving (Eq, Ord)
 
 data TyConstraint = HoldsInteger Integer (Annotated Type)
                   | Instance (Annotated Type)
                   | RefFree Name (Annotated Type)
+                  | Ref (Annotated TyOp)
                   | TEq (Annotated Type) (Annotated Type)
-                  | TOpEq (Annotated Type) (Annotated Type)
+                  | TOpEq (Annotated TyOp) (Annotated TyOp)
+                  | TOpEqIfAffine (Annotated TyOp) (Annotated TyOp) (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`
@@ -230,10 +237,9 @@ type KindRequirement = Requirement KindConstraint
 type family Annotation a where
   Annotation Exp      = Annotated Type
   Annotation Pat      = Annotated Type
-  Annotation TyPat    = Annotated Kind
+  Annotation TyOp     = Annotated Kind
   Annotation Type     = Annotated Kind
-  Annotation QTyVar   = Annotated Kind
-  Annotation View     = Annotated Kind
+  Annotation TyVar    = Annotated Kind
   Annotation DataCon  = Annotated QType
   Annotation DeclType = Annotated Kind
   Annotation TyRequirement   = TyReason
@@ -275,12 +281,11 @@ data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
               | UserSignature
   deriving (Eq, Ord)
 
-data KindReason = KindReasonTyApply (Annotated Type) (Annotated Type)
+data KindReason = KindReasonData Name [Annotated TyVar]
                 | KindReasonDataCon (Annotated DataCon)
-                | KindReasonData Name [Annotated TyPat]
-                | KindReasonType (Annotated Type)
-                | KindReasonTyPat (Annotated TyPat)
                 | KindReasonQType (Annotated QType)
-                | KindReasonQTyVar (Annotated QTyVar)
+                | KindReasonTyApply (Annotated Type) (Annotated Type)
+                | KindReasonType (Annotated Type)
+                | KindReasonTyVar (Annotated TyVar)
   deriving (Eq, Ord)
 

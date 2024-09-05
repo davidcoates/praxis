@@ -7,7 +7,7 @@ import           Parse.Tokenise.Tokeniser hiding (run)
 import qualified Parse.Tokenise.Tokeniser as Tokeniser (run)
 import           Parse.Tokenise.Unlayout
 import           Praxis                   hiding (throw)
-import           Term                     (Lit (..), ViewDomain (..))
+import           Term                     (Lit (..))
 import           Token
 
 import           Control.Applicative      (Alternative (..), Applicative (..))
@@ -43,7 +43,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (layout <|> special <|> literal <|> conId <|> varId <|> varSym)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> conId <|> varId <|> varSym)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment where
@@ -51,11 +51,8 @@ whitespace = newline <|> space <|> comment where
   space = match isSpace *> pure ()
   comment = satisfies 3 (\[a, b, c] -> a == '-' && b == '-' && not (isSymbol c)) *> until newline consume *> pure ()
 
-layout :: Tokeniser Token
-layout = Layout <$> match (`elem` "{};")
-
 special :: Tokeniser Token
-special = Special <$> match (`elem` "(),`_")
+special = Special <$> match (`elem` "{}(),`_")
 
 literal :: Tokeniser Token
 literal = intLiteral <|> charLiteral <|> stringLiteral
@@ -99,8 +96,8 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unt
   inner = concat <$> while (satisfy (/= '"')) (escape stringEscapeSeqs <|> ((:[]) <$> consume))
 
 reservedIds = ["read", "in", "if", "then", "else", "using", "datatype", "enum", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec", "boxed", "unboxed", "defer", "seq"]
-reservedCons = ["Type", "Constraint", "View", "Unit", "Pair", "Fn"]
-reservedSyms = [":", "=", "\\", "->", "@", "&", "?"] -- TODO should more of these be "contextual" ?
+reservedCons = ["Type", "Constraint", "Ref", "View", "Unit", "Pair", "Fn"]
+reservedSyms = [":", "=", "\\", "->", "@", "&", "?", "!"] -- TODO should more of these be "contextual" ?
 
 varId :: Tokeniser Token
 varId = (\id -> if id `elem` reservedIds then ReservedId id else VarId id) <$> (satisfy isLower *> while (satisfy isLetter) consume)

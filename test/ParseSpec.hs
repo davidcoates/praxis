@@ -91,7 +91,7 @@ implies (a, b) = b || not a
 operator (_ --> _) = implies
 
 iff : (Bool, Bool) -> Bool
-iff (a, b) = (a && b) || (not a && not b)
+iff (a, b) = (a && b) || (! a && ! b)
 
 operator (_ <-> _) = iff where
   precedence below (_ --> _)

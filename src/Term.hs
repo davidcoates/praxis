@@ -170,7 +170,7 @@ data TyOp = Multi (Set (Annotated TyOp))
           | RefUni Name
           | RefVar Name
           | ViewUni Name
-          | ViewValue
+          | ViewIdentity
           | ViewVar Name
   deriving (Eq, Ord)
 

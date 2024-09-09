@@ -108,15 +108,15 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
 
   TOpEq op1 op2@(_ :< RefUni _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
 
-  TOpEq op1@(_ :< ViewValue) op2 -> do
+  TOpEq op1@(_ :< ViewIdentity) op2 -> do
     case isRef (view value op2) of
       Yes -> return contradiction
       Variable -> return contradiction
       _ -> do
-        let viewUnis = [ (x, ViewValue) | (_ :< ViewUni x) <- Set.toList (expandTyOps op2) ]
+        let viewUnis = [ (x, ViewIdentity) | (_ :< ViewUni x) <- Set.toList (expandTyOps op2) ]
         solved (areTyOps viewUnis)
 
-  TOpEq op1 op2@(_ :< ViewValue) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
+  TOpEq op1 op2@(_ :< ViewIdentity) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
 
   TOpEq op1 op2 -> return skip
 
@@ -249,17 +249,17 @@ is n t = embedSub f where
 splitTyOp :: Annotated Type -> (Annotated TyOp, Annotated Type)
 splitTyOp ty = case view value ty of
   TyApply (_ :< TyOp op) ty -> (op, ty)
-  _                         -> (phantom ViewValue, ty)
+  _                         -> (phantom ViewIdentity, ty)
 
 expandTyOps :: Annotated TyOp -> Set (Annotated TyOp)
 expandTyOps op = case view value op of
-  Multi ops -> ops
-  ViewValue -> Set.empty
-  _         -> Set.singleton op
+  Multi ops    -> ops
+  ViewIdentity -> Set.empty
+  _            -> Set.singleton op
 
 contractTyOps :: Set (Annotated TyOp) -> Annotated TyOp
 contractTyOps ops = case Set.toList ops of
-  []   -> phantom ViewValue
+  []   -> phantom ViewIdentity
   [op] -> op
   _    -> phantom (Multi ops)
 
@@ -271,7 +271,7 @@ normalise (a :< x) = case typeof x of
 
     Multi ops -> do
       ops <- mapM normalise (Set.toList ops)
-      return $ (contractTyOps . Set.delete (phantom ViewValue) . Set.unions . map expandTyOps) ops
+      return $ (contractTyOps . Set.delete (phantom ViewIdentity) . Set.unions . map expandTyOps) ops
 
     _ -> continue
 
@@ -286,7 +286,7 @@ normalise (a :< x) = case typeof x of
       tyOp@(_ :< TyOp op) <- normalise tyOp
       ty <- normalise ty
       case view value op of
-        ViewValue -> return ty
+        ViewIdentity -> return ty
         _         -> do
           affine <- isAffine ty
           case affine of
@@ -306,13 +306,13 @@ data Truth = Yes | No | Variable | Unknown
 
 isRef :: TyOp -> Truth
 isRef = \case
-  RefUni _   -> Yes
-  RefLabel _ -> Yes
-  RefVar _   -> Yes
-  ViewUni _  -> Unknown
-  ViewValue  -> No
-  ViewVar _  -> Variable
-  Multi ops  -> Set.fold (\(_ :< op) -> truthOr (isRef op)) No ops
+  RefUni _     -> Yes
+  RefLabel _   -> Yes
+  RefVar _     -> Yes
+  ViewUni _    -> Unknown
+  ViewIdentity -> No
+  ViewVar _    -> Variable
+  Multi ops    -> Set.fold (\(_ :< op) -> truthOr (isRef op)) No ops
 
 truthOr :: Truth -> Truth -> Truth
 truthOr Yes _      = Yes
@@ -375,8 +375,8 @@ tryDefault term@((src, _) :< _) = do
       return (name, view value ref)
 
     defaultView name = do
-      warnAt src $ "underdetermined view " <> quote (pretty name) <> ", defaulting to " <> quote (pretty (phantom ViewValue))
-      return (name, ViewValue)
+      warnAt src $ "underdetermined view " <> quote (pretty name) <> ", defaulting to " <> quote (pretty (phantom ViewIdentity))
+      return (name, ViewIdentity)
 
   defaultViews <- mapM defaultView (Set.toList (deepViewUnis term))
   defaultRefs <- mapM defaultRef (Set.toList (deepRefUnis term))

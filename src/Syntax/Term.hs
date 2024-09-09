@@ -338,7 +338,7 @@ ty1 = foldTy <$> some (annotated ty0) <|> mark "type(1)" where
 
 tyOp :: Syntax f => f TyOp
 tyOp = _RefVar <$> varIdRef <|>
-       _ViewValue <$> reservedSym "@" <|>
+       _ViewIdentity <$> reservedSym "@" <|>
        _ViewVar <$> varIdView <|>
        internal (_RefLabel <$> varIdRef) <|>
        internal (_RefUni <$> uniRef) <|>

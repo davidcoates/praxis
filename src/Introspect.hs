@@ -297,7 +297,7 @@ instance Term TyOp where
     RefUni n   -> pure (RefUni n)
     RefVar n   -> pure (RefVar n)
     ViewUni n  -> pure (ViewUni n)
-    ViewValue  -> pure ViewValue
+    ViewIdentity  -> pure ViewIdentity
     ViewVar n  -> pure (ViewVar n)
 
 instance Term Type where

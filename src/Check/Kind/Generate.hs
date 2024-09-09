@@ -67,7 +67,7 @@ generateTyOp ((src, _) :< op) = case op of
     Just k <- kEnv `uses` Env.lookup var
     return ((src, Just k) :< op)
 
-  ViewValue -> return ((src, Just (phantom KindView)) :< op)
+  ViewIdentity -> return ((src, Just (phantom KindView)) :< op)
 
   Multi ops -> do
     ops <- mapM generateTyOp (Set.toList ops)

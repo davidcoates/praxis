@@ -43,7 +43,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> conId <|> varId <|> varSym)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> conId <|> varId <|> varIdRef <|> varIdView <|> varSym)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment where
@@ -97,10 +97,16 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> throw "unt
 
 reservedIds = ["read", "in", "if", "then", "else", "using", "datatype", "enum", "interface", "instance", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec", "boxed", "unboxed", "defer", "seq"]
 reservedCons = ["Type", "Constraint", "Ref", "View", "Unit", "Pair", "Fn"]
-reservedSyms = [":", "=", "\\", "->", "@", "&", "?", "!"] -- TODO should more of these be "contextual" ?
+reservedSyms = [":", "=", "\\", "->", "@"] -- TODO should more of these be "contextual" ?
 
 varId :: Tokeniser Token
 varId = (\id -> if id `elem` reservedIds then ReservedId id else VarId id) <$> (satisfy isLower *> while (satisfy isLetter) consume)
+
+varIdRef :: Tokeniser Token
+varIdRef = satisfies 2 (\[a, b] -> a == '&' && isLower b) *> consume *> (VarIdRef <$> while (satisfy isLetter) consume)
+
+varIdView :: Tokeniser Token
+varIdView = satisfies 2 (\[a, b] -> a == '?' && isLower b) *> consume *> (VarIdView <$> while (satisfy isLetter) consume)
 
 varSym :: Tokeniser Token
 varSym = (\sym -> if sym `elem` reservedSyms then ReservedSym sym else VarSym sym) <$> (satisfy isSymbol *> while (satisfy isSymbol) consume)

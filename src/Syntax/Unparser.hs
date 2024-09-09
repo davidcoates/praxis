@@ -37,7 +37,7 @@ instance Unparser f => Syntax (T f) where
   pure = const (T empty)
   match _ f = T $ (Just . f) >$< token
   mark = T . mark
-  unparseable = id
+  internal = id
   annotated (T p) = T (annotated p)
 
 unparse :: forall a f. (Term a, Unparser f) => f (Annotated a)

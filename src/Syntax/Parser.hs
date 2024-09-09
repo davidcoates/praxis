@@ -33,7 +33,7 @@ instance Parser f => Syntax (T f) where
   pure = T . pure
   match f _ = T $ fromJust . f <$> match (isJust . f)
   mark = T . mark
-  unparseable = const (T empty)
+  internal = const (T empty)
   annotated (T p) = T $ (\(s :< p) -> (s, Nothing) :< p) <$> sourced p
 
 parse :: forall a f. (Term a, Parser f) => f (Annotated a)

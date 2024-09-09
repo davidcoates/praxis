@@ -35,8 +35,9 @@ instance Unparser Printer where
     Just xs -> Just xs
   token = Printer $ \x -> Just [x]
   mark s = Printer (error s)
-  annotated f = Printer g where
-    g x = Just $ Annotation (label x) : force f (view value x)
+  annotated (Printer f) = Printer $ \x -> case f (view value x) of
+    Nothing -> Nothing
+    Just xs -> Just $ Annotation (label x) : xs
 
 indent :: Int -> String
 indent n = replicate (2*n) ' '

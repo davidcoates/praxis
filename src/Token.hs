@@ -16,8 +16,10 @@ data Token = Annotation (Printable String)
            | ReservedSym Name
            | ReservedId Name
            | Special Char
-           | Uni Name -- ^ A unification variable
+           | Uni Token
            | VarId Name
+           | VarIdRef Name
+           | VarIdView Name
            | VarSym Name
   deriving Eq
 
@@ -34,16 +36,18 @@ highlight = RGB 216 213 199
 
 instance Pretty Token where
   pretty (Annotation (Printable p)) = Printable (\opt -> let s = p opt in if null s then Nil else Fg Black (Bg highlight (Value "[" <> unstyle s <> Value "]")))
+  pretty (Uni t)                    = Printable (\opt -> let s = runPrintable (pretty t) opt in if null s then Nil else Style Underline (unstyle s))
   pretty x = pretty $ case x of
     ConId s       -> Value $ s
-    Layout c      -> Fg DullRed $ Value [c]
+    Layout c      -> Fg Red $ Value [c]
     Lit l         -> Fg Blue $ Value $ show l
     ReservedCon s -> Value s
     ReservedSym s -> Fg Green $ Value s
     ReservedId s  -> Style Bold $ Value s
     Special c     -> Fg Black $ Value [c]
-    Uni s         -> Fg Magenta $ Value s
     VarId s       -> Value $ s
+    VarIdRef s    -> Fg Yellow $ Value ('&':s)
+    VarIdView s   -> Fg Magenta $ Value ('?':s)
     VarSym s      -> Value $ s
 
 instance Pretty (Sourced Token) where

@@ -60,7 +60,7 @@ f x = (x, x)
 |]
 
       it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-f_0 : forall & r_0 a_0 . & r_0 a_0 -> ( & r_0 a_0 , & r_0 a_0 ) = \ [& r_0 a_0] x_0 -> ( [& r_0 a_0] x_0 , [& r_0 a_0] x_0 )
+f_0 : forall &r_0 a_0 . &r_0 a_0 -> ( &r_0 a_0 , &r_0 a_0 ) = \ [&r_0 a_0] x_0 -> ( [&r_0 a_0] x_0 , [&r_0 a_0] x_0 )
 |]
 
 
@@ -74,7 +74,7 @@ f x = (x, x)
 |]
 
       it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-f_0 : forall ? r_0 a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
+f_0 : forall ?r_0 a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
 |]
 
     describe "can not be copied if the underlying type can not be copied" $ do
@@ -86,7 +86,7 @@ f x = (x, x)
 
       it "does not type check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 type check error: unable to satisfy: Copy a_0
-  | derived from: Copy ( ? r_0 a_0 )
+  | derived from: Copy ( ?r_0 a_0 )
   | primary cause: variable 'x_0' used more than once at 3:11
   | secondary cause: function signature for 'f_0' at 2:1
 |]

@@ -50,7 +50,7 @@ class Syntax f where
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   mark :: String -> f a
   annotated :: Term a => f a -> f (Annotated a)
-  unparseable :: f a -> f a -- Allows printing but not parsing (for internal constructs, like unification variables)
+  internal :: f a -> f a -- for internal constructs, supports printing but not parsing
 
 _Cons :: Prism [a] (a, [a])
 _Cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})

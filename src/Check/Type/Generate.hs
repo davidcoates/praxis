@@ -52,9 +52,10 @@ expIsFunction (_ :< exp) = case exp of
 
 specialiseTyVar :: Annotated TyVar -> Praxis (Name, Annotated Type)
 specialiseTyVar (a :< tyVar) = case tyVar of
-  TyVarPlain n -> (\t -> (n, a :< view value t)) <$> freshTyUni
-  TyVarRef n   -> (\t -> (n, a :< view value t)) <$> freshRefUni
-  TyVarView n  -> (\t -> (n, a :< view value t)) <$> freshViewUni
+  TyVarVarPlain n -> (\t -> (n, a :< view value t)) <$> freshTyUniPlain
+  TyVarVarRef n   -> (\t -> (n, a :< view value t)) <$> freshTyUniRef
+  TyVarVarValue n -> (\t -> (n, a :< view value t)) <$> freshTyUniValue
+  TyVarVarView n  -> (\t -> (n, a :< view value t)) <$> freshTyUniView
 
 specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Maybe Specialisation)
 specialiseQType src name (_ :< qTy) = case qTy of
@@ -66,12 +67,13 @@ specialiseQType src name (_ :< qTy) = case qTy of
       f :: forall a. Term a => Annotated a -> Maybe (Annotated a)
       f (_ :< t) = case typeof t of
         IType -> case t of
-          TyVar n -> n `lookup` vs'
-          _       -> Nothing
+          TyVarPlain n -> n `lookup` vs'
+          TyVarValue n -> n `lookup` vs'
+          _            -> Nothing
         ITyOp -> case t of
-          RefVar n  -> case n `lookup` vs' of { Just (_ :< TyOp op) -> Just op; Nothing -> Nothing }
-          ViewVar n -> case n `lookup` vs' of { Just (_ :< TyOp op) -> Just op; Nothing -> Nothing }
-          _         -> Nothing
+          TyOpVarRef  n -> case n `lookup` vs' of { Just (_ :< TyOp op) -> Just op; Nothing -> Nothing }
+          TyOpVarView n -> case n `lookup` vs' of { Just (_ :< TyOp op) -> Just op; Nothing -> Nothing }
+          _             -> Nothing
         _ -> Nothing
     let specialisation = zip vs (map snd vs')
     requires [ (src, Specialisation name) :< view value (tyRewrite c) | c <- cs ]
@@ -115,7 +117,7 @@ scope src block = do
 -- A copy constraint will be generated if the variable has already been used or has been captured.
 readVar :: Source -> Name -> Praxis (Name, Annotated Type)
 readVar src name = do
-  r@(_ :< RefLabel refName) <- freshRefLabel
+  r@(_ :< TyOpRef refName) <- freshRef
   Just entry <- tEnv `uses` Env.lookup name
   (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
   when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
@@ -191,9 +193,10 @@ parallel src (x:xs) = do
 tyVarToType :: Annotated TyVar -> Annotated Type
 tyVarToType = over value tyVarToType' where
   tyVarToType' = \case
-    TyVarPlain n -> TyVar n
-    TyVarRef n   -> TyOp (phantom (RefVar n))
-    TyVarView n  -> TyOp (phantom (ViewVar n))
+    TyVarVarPlain n -> TyVarPlain n
+    TyVarVarValue n -> TyVarValue n
+    TyVarVarRef n   -> TyOp (phantom (TyOpVarRef n))
+    TyVarVarView n  -> TyOp (phantom (TyOpVarView n))
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of
@@ -239,7 +242,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
     return $ DeclTermRec decls
     where
       getTyFromSig = \case
-        Nothing -> mono <$> freshTyUni
+        Nothing -> mono <$> freshTyUniPlain
         Just ty -> pure ty
       preDeclare decl = case decl of
         ((src, _) :< DeclTermVar name sig exp)
@@ -276,7 +279,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
 
 generateInteger :: Source -> Integer -> Praxis (Annotated Type)
 generateInteger src n = do
-  t <- freshTyUni
+  t <- freshTyUniValue
   require $ (src, TyReasonIntegerLiteral n) :< integral t
   require $ (src, TyReasonIntegerLiteral n) :< HoldsInteger n t
   return $ t
@@ -285,7 +288,7 @@ generateExp :: Annotated Exp -> Praxis (Annotated Exp)
 generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp of
 
   Apply f x -> do
-    rTy <- freshTyUni
+    rTy <- freshTyUniPlain
     f <- generateExp f
     x <- generateExp x
     let fTy = getType f
@@ -348,7 +351,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     Char _
       -> return $ TyCon "Char" `as` phantom KindType
     String _ -> do
-      op <- freshViewUni
+      op <- freshTyUniView
       return $ TyApply op (TyCon "String" `as` phantom KindType) `as` phantom KindType
 
   Read var exp -> do
@@ -432,7 +435,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
   PatData name pat -> do
     qTy <- getConType src name
     (t, _) <- specialiseQType src name qTy
-    op <- freshViewUni
+    op <- freshTyUniView
     let wrap' t = TyApply op t `as`phantom KindType
     case view value t of
       TyFn argTy retTy -> do
@@ -453,7 +456,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
   PatHole -> do
     -- Treat this is a variable for drop analysis
     var <- freshVar "hole"
-    t <- freshTyUni
+    t <- freshTyUniPlain
     introType src var (mono (wrap t))
     return (t, wrap t :< PatVar var)
 
@@ -465,7 +468,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
     String _  -> return $ TyCon "String" `as` phantom KindType
 
   PatPair pat1 pat2 -> do
-    op <- freshViewUni
+    op <- freshTyUniView
     let wrap' t = TyApply op t `as`phantom KindType
     (t1, pat1) <- generatePat' (wrap . wrap') pat1
     (t2, pat2) <- generatePat' (wrap . wrap') pat2
@@ -477,7 +480,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
     return (t, t :< PatUnit)
 
   PatVar var -> do
-    t <- freshTyUni
+    t <- freshTyUniPlain
     introType src var (mono (wrap t))
     return (t, wrap t :< PatVar var)
 

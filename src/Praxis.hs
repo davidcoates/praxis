@@ -58,11 +58,12 @@ module Praxis
   , kindCheckState
 
   , freshKindUni
-  , freshRefLabel
-  , freshRefUni
-  , freshTyUni
+  , freshRef
+  , freshTyUniPlain
+  , freshTyUniRef
+  , freshTyUniValue
+  , freshTyUniView
   , freshVar
-  , freshViewUni
 
   , clearTerm
   , ifFlag
@@ -89,6 +90,7 @@ import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
+import qualified Data.Monoid.Colorful         as Colored
 import qualified Env.Lazy
 import qualified Env.Linear
 import qualified Env.Strict
@@ -102,12 +104,13 @@ data Flags = Flags
   } deriving (Show)
 
 data Fresh = Fresh
-  { _freshKindUnis  :: [String]
-  , _freshRefLabels :: [String]
-  , _freshRefUnis   :: [String]
-  , _freshTyUnis    :: [String]
-  , _freshVars      :: Map Name Int
-  , _freshViewUnis  :: [String]
+  { _freshKindUnis    :: [String]
+  , _freshRefs        :: [String]
+  , _freshTyUniPlains :: [String]
+  , _freshTyUniRefs   :: [String]
+  , _freshTyUniValues :: [String]
+  , _freshTyUniViews  :: [String]
+  , _freshVars        :: Map Name Int
   }
 
 type CEnv = Env.Strict.Env (Annotated QType)
@@ -158,12 +161,13 @@ defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _silent = False }
 
 defaultFresh = Fresh
-  { _freshKindUnis  = map (("^k"++) . show) [0..]
-  , _freshRefLabels = map (("'l"++) . show) [0..]
-  , _freshRefUnis   = map (("^r"++) . show) [0..]
-  , _freshTyUnis    = map (("^t"++) . show) [0..]
-  , _freshVars      = Map.empty
-  , _freshViewUnis  = map (("^v"++) . show) [0..]
+  { _freshKindUnis    = map (("^k"++) . show) [0..]
+  , _freshRefs        = map (("'l"++) . show) [0..]
+  , _freshTyUniPlains = map (("^t"++) . show) [0..]
+  , _freshTyUniRefs   = map (("^r"++) . show) [0..]
+  , _freshTyUniValues = map (("^p"++) . show) [0..]
+  , _freshTyUniViews  = map (("^v"++) . show) [0..]
+  , _freshVars        = Map.empty
   }
 
 emptyState :: PraxisState
@@ -204,15 +208,15 @@ withContext message src = do
   let
     stageStr = case stage' of
       Unknown -> blank
-      _       -> pretty (Value (show stage')) <> " "
+      _       -> pretty (Colored.Value (show stage')) <> " "
     srcStr = case src of
       Nothing  -> blank
-      Just src -> " at " <> pretty (Style Bold (Value (show src)))
+      Just src -> " at " <> pretty (Colored.Style Bold (Colored.Value (show src)))
   return $ stageStr <> message <> srcStr
 
 warn' :: Pretty a => Maybe Source -> a -> Praxis ()
 warn' src x = (`ifFlag` debug) $ do
-  message <- pretty (Style Bold (Fg DullYellow ("warning" :: Colored String))) `withContext` src
+  message <- pretty (Colored.Style Bold (Colored.Fg DullYellow ("warning" :: Colored String))) `withContext` src
   displayBare (message <> ": " <> pretty x)
 
 warn :: Pretty a => a -> Praxis ()
@@ -223,7 +227,7 @@ warnAt src = warn' (Just src)
 
 throw' :: Pretty a => Maybe Source -> a -> Praxis b
 throw' src x = do
-  message <- pretty (Style Bold (Fg DullRed ("error" :: Colored String))) `withContext` src
+  message <- pretty (Colored.Style Bold (Colored.Fg DullRed ("error" :: Colored String))) `withContext` src
   abort $ message <> ": " <> pretty x
 
 throw :: Pretty a => a -> Praxis b
@@ -236,7 +240,7 @@ display :: Pretty a => a -> Praxis ()
 display x = unlessSilent $ do
   t <- liftIO $ getTerm
   s <- use stage
-  liftIO $ printColoredS t $ "\n{- " <> Style Italic (Value (show s)) <> " -}\n\n"
+  liftIO $ printColoredS t $ "\n{- " <> Colored.Style Italic (Colored.Value (show s)) <> " -}\n\n"
   displayBare x
 
 displayBare :: Pretty a => a -> Praxis ()
@@ -295,23 +299,35 @@ freshKindUni = do
   fresh . freshKindUnis .= ks
   return (phantom (KindUni k))
 
-freshRefLabel :: Praxis (Annotated TyOp)
-freshRefLabel = do
-  (l:ls) <- use (fresh . freshRefLabels)
-  fresh . freshRefLabels .= ls
-  return (RefLabel l `as` phantom KindType)
+freshRef :: Praxis (Annotated TyOp)
+freshRef = do
+  (l:ls) <- use (fresh . freshRefs)
+  fresh . freshRefs .= ls
+  return (TyOpRef l `as` phantom KindType)
 
-freshRefUni ::Praxis (Annotated Type)
-freshRefUni = do
-  (o:os) <- use (fresh . freshRefUnis)
-  fresh . freshRefUnis .= os
-  return (TyOp (phantom (RefUni o)) `as` phantom KindRef)
+freshTyUniPlain :: Praxis (Annotated Type)
+freshTyUniPlain = do
+  (x:xs) <- use (fresh . freshTyUniPlains)
+  fresh . freshTyUniPlains .= xs
+  return (TyUniPlain x `as` phantom KindType)
 
-freshTyUni :: Praxis (Annotated Type)
-freshTyUni = do
-  (x:xs) <- use (fresh . freshTyUnis)
-  fresh . freshTyUnis .= xs
-  return (TyUni x `as` phantom KindType)
+freshTyUniRef ::Praxis (Annotated Type)
+freshTyUniRef = do
+  (o:os) <- use (fresh . freshTyUniRefs)
+  fresh . freshTyUniRefs .= os
+  return (TyOp (phantom (TyOpUniRef o)) `as` phantom KindRef)
+
+freshTyUniValue :: Praxis (Annotated Type)
+freshTyUniValue = do
+  (x:xs) <- use (fresh . freshTyUniValues)
+  fresh . freshTyUniValues .= xs
+  return (TyUniValue x `as` phantom KindType)
+
+freshTyUniView ::Praxis (Annotated Type)
+freshTyUniView = do
+  (o:os) <- use (fresh . freshTyUniViews)
+  fresh . freshTyUniViews .= os
+  return (TyOp (phantom (TyOpUniView o)) `as` phantom KindView)
 
 freshVar :: Name -> Praxis Name
 freshVar var = do
@@ -319,12 +335,6 @@ freshVar var = do
   let i = Map.findWithDefault 0 var m
   fresh . freshVars .= (Map.insert var (i+1) m)
   return ("_" ++ var ++ "_" ++ show i)
-
-freshViewUni :: Praxis (Annotated Type)
-freshViewUni = do
-  (o:os) <- use (fresh . freshViewUnis)
-  fresh . freshViewUnis .= os
-  return (TyOp (phantom (ViewUni o)) `as` phantom KindView)
 
 requireMain :: Praxis ()
 requireMain = do

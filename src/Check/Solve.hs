@@ -38,6 +38,7 @@ import           Term
 import           Control.Monad (foldM)
 import           Data.Maybe    (isJust)
 import           Data.Monoid   (Any (..))
+import qualified Data.Monoid.Colorful as Colored
 import qualified Data.Set      as Set
 
 
@@ -189,7 +190,7 @@ reduceGoals state reduce = \case
         derived = if null cs then blank else "\n  | derived from: " <> pretty c
       printCrumbs :: Crumbs c -> Printable String
       printCrumbs (crumb:crumbs) = primary <> printCrumb crumb <> (if null crumbs then blank else secondary <> separate "\n  | - " (map printCrumb crumbs)) where
-        primary = "\n  | " <> pretty (Style Bold ("primary cause: " :: Colored String))
+        primary = "\n  | " <> pretty (Colored.Style Bold ("primary cause: " :: Colored String))
         secondary = "\n  | " <> (if length crumbs > 1 then "secondary causes:\n  | - " else "secondary cause: ")
       printCrumb :: Crumb c -> Printable String
       printCrumb (src, reason) = pretty reason <> " at " <> pretty (show src)

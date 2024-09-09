@@ -62,11 +62,17 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
 
   TEq t1 t2 | t1 == t2 -> return tautology
 
-  TEq (_ :< TyUni x) t
+  TEq (_ :< TyUniValue x) t
+    | x `Set.member` tyUnis t -> return contradiction
+    | otherwise               -> solvedWithSubgoals (x `is` view value t) [ Subgoal (Value t) ]
+
+  TEq t1 t2@(_ :< TyUniValue x) -> reduce disambiguate (TEq t2 t1) -- handled by the above case
+
+  TEq (_ :< TyUniPlain x) t
     | x `Set.member` tyUnis t -> return contradiction
     | otherwise               -> solved (x `is` view value t)
 
-  TEq t1 t2@(_ :< TyUni x) -> reduce disambiguate (TEq t2 t1) -- handled by the above case
+  TEq t1 t2@(_ :< TyUniPlain x) -> reduce disambiguate (TEq t2 t1) -- handled by the above case
 
   TEq t1 t2
     | (Just (n1, t1s), Just (n2, t2s)) <- (unapplyTyCon t1, unapplyTyCon t2) ->
@@ -82,8 +88,14 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
     let
       (op1, t1) = splitTyOp t1'
       (op2, t2) = splitTyOp t2'
-    -- FIXME seems dodgy to do this when t1 and/or t2 are TyUni, can it cause issues?
-    return $ subgoals [ Subgoal (TEq t1 t2), Subgoal (TOpEqIfAffine op1 op2 t1) ]
+    let
+      split = subgoals [ Subgoal (TEq t1 t2), Subgoal (TOpEqIfAffine op1 op2 t1) ]
+    if disambiguate
+      then return split
+      else case (view value t1, view value t2) of
+        (TyUniPlain _, _) -> return skip
+        (_, TyUniPlain _) -> return skip
+        _                 -> return split
 
   TEq t1 t2@(_ :< TyApply (_ :< TyOp _) _) -> reduce disambiguate (TEq t2 t1) -- handled by the above case
 
@@ -96,27 +108,27 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
 
   TOpEq op1 op2 | op1 == op2 -> return tautology
 
-  TOpEq op1@(_ :< ViewUni x) op2 -> do
+  TOpEq op1@(_ :< TyOpUniView x) op2 -> do
     op2' <- normalise $ contractTyOps $ Set.delete op1 (expandTyOps op2)
     solved (x `isTyOp` view value op2')
 
-  TOpEq op1 op2@(_ :< ViewUni _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
+  TOpEq op1 op2@(_ :< TyOpUniView _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
 
-  TOpEq op1@(_ :< RefUni x) op2 -> do
+  TOpEq op1@(_ :< TyOpUniRef x) op2 -> do
     op2' <- normalise $ contractTyOps $ Set.delete op1 (expandTyOps op2)
     solvedWithSubgoals (x `isTyOp` (view value op2')) [ Subgoal (Ref op1) ]
 
-  TOpEq op1 op2@(_ :< RefUni _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
+  TOpEq op1 op2@(_ :< TyOpUniRef _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
 
-  TOpEq op1@(_ :< ViewIdentity) op2 -> do
+  TOpEq op1@(_ :< TyOpIdentity) op2 -> do
     case isRef (view value op2) of
       Yes -> return contradiction
       Variable -> return contradiction
       _ -> do
-        let viewUnis = [ (x, ViewIdentity) | (_ :< ViewUni x) <- Set.toList (expandTyOps op2) ]
+        let viewUnis = [ (x, TyOpIdentity) | (_ :< TyOpUniView x) <- Set.toList (expandTyOps op2) ]
         solved (areTyOps viewUnis)
 
-  TOpEq op1 op2@(_ :< ViewIdentity) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
+  TOpEq op1 op2@(_ :< TyOpIdentity) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
 
   TOpEq op1 op2 -> return skip
 
@@ -126,8 +138,19 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
       Unknown -> return skip
       _       -> return contradiction
 
+  Value (_ :< t) -> case t of
+    TyApply (_ :< TyOp op) t -> do
+      affine <- isAffine t
+      case affine of
+        Unknown  -> return skip
+        No       -> error "unnormalised"
+        _        -> return $ subgoals [ Subgoal (TOpEq op (phantom TyOpIdentity)), Subgoal (Value t) ]
+    TyVarPlain _             -> return contradiction
+    TyUniPlain _             -> return skip
+    _                        -> return tautology
+
   RefFree refLabel t
-    | Set.null (tyUnis t) && Set.null (refUnis t) && Set.null (viewUnis t)
+    | Set.null (tyUnis t)
       -> if refLabel `Set.member` refLabels t then return contradiction else return tautology
     | otherwise
       -> return skip
@@ -154,7 +177,8 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
       TyPair t1 t2 -> reduceTyConInstance cls "Pair" [t1, t2]
       TyFn t1 t2 -> reduceTyConInstance cls "Fn" [t1, t2]
       TyUnit -> reduceTyConInstance cls "Unit" []
-      TyVar _ -> return contradiction
+      TyVarPlain _ -> return contradiction
+      TyVarValue _ -> return contradiction
       _ | Just (n, ts) <- unapplyTyCon t -> reduceTyConInstance cls n ts
       _ -> return skip
 
@@ -191,28 +215,24 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
         Nothing                    -> return contradiction
 
     tyUnis :: forall a. Term a => Annotated a -> Set Name
-    tyUnis = extract (embedMonoid f) where
-      f = \case
-        TyUni n -> Set.singleton n
-        _       -> Set.empty
-
-    viewUnis :: forall a. Term a => Annotated a -> Set Name
-    viewUnis = extract (embedMonoid f) where
-      f = \case
-        ViewUni n -> Set.singleton n
-        _         -> Set.empty
-
-    refUnis :: forall a. Term a => Annotated a -> Set Name
-    refUnis = extract (embedMonoid f) where
-      f = \case
-        RefUni n -> Set.singleton n
-        _        -> Set.empty
+    tyUnis = extract f where
+      f :: forall a. Term a => a -> Set Name
+      f x = case typeof x of
+        IType -> case x of
+          TyUniPlain n -> Set.singleton n
+          TyUniValue n -> Set.singleton n
+          _            -> Set.empty
+        ITyOp -> case x of
+          TyOpUniRef n  -> Set.singleton n
+          TyOpUniView n -> Set.singleton n
+          _             -> Set.empty
+        _ -> Set.empty
 
     refLabels :: forall a. Term a => Annotated a -> Set Name
     refLabels = extract (embedMonoid f) where
       f = \case
-        RefLabel n -> Set.singleton n
-        _          -> Set.empty
+        TyOpRef n -> Set.singleton n
+        _         -> Set.empty
 
 
 -- Rewrite helpers
@@ -228,40 +248,41 @@ solvedWithSubgoals resolve subgoals = do
 isTyOp :: Name -> TyOp -> Resolver
 isTyOp n op = embedSub f where
   f (a :< x) = case x of
-    RefUni n'  -> if n == n' then Just (a :< op) else Nothing
-    ViewUni n' -> if n == n' then Just (a :< op) else Nothing
-    _          -> Nothing
+    TyOpUniRef n'  -> if n == n' then Just (a :< op) else Nothing
+    TyOpUniView n' -> if n == n' then Just (a :< op) else Nothing
+    _              -> Nothing
 
 areTyOps :: [(Name, TyOp)] -> Resolver
 areTyOps ops = embedSub f where
   f (a :< x) = case x of
-    RefUni n  -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
-    ViewUni n -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
-    _         -> Nothing
+    TyOpUniRef n  -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
+    TyOpUniView n -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
+    _             -> Nothing
 
 is :: Name -> Type -> Resolver
 is n t = embedSub f where
   f (a :< x) = case x of
-    TyUni n' -> if n == n' then Just (a :< t) else Nothing
-    _        -> Nothing
+    TyUniPlain n' -> if n == n' then Just (a :< t) else Nothing
+    TyUniValue n' -> if n == n' then Just (a :< t) else Nothing
+    _             -> Nothing
 
 -- TyOp helpers
 splitTyOp :: Annotated Type -> (Annotated TyOp, Annotated Type)
 splitTyOp ty = case view value ty of
   TyApply (_ :< TyOp op) ty -> (op, ty)
-  _                         -> (phantom ViewIdentity, ty)
+  _                         -> (phantom TyOpIdentity, ty)
 
 expandTyOps :: Annotated TyOp -> Set (Annotated TyOp)
 expandTyOps op = case view value op of
-  Multi ops    -> ops
-  ViewIdentity -> Set.empty
-  _            -> Set.singleton op
+  TyOpMulti ops -> ops
+  TyOpIdentity  -> Set.empty
+  _             -> Set.singleton op
 
 contractTyOps :: Set (Annotated TyOp) -> Annotated TyOp
 contractTyOps ops = case Set.toList ops of
-  []   -> phantom ViewIdentity
+  []   -> phantom TyOpIdentity
   [op] -> op
-  _    -> phantom (Multi ops)
+  _    -> phantom (TyOpMulti ops)
 
 -- Term normaliser (after a substitution is applied)
 normalise :: Normaliser
@@ -269,16 +290,16 @@ normalise (a :< x) = case typeof x of
 
   ITyOp -> case x of
 
-    Multi ops -> do
+    TyOpMulti ops -> do
       ops <- mapM normalise (Set.toList ops)
-      return $ (contractTyOps . Set.delete (phantom ViewIdentity) . Set.unions . map expandTyOps) ops
+      return $ (contractTyOps . Set.delete (phantom TyOpIdentity) . Set.unions . map expandTyOps) ops
 
     _ -> continue
 
   IType -> case x of
 
     TyApply tyOp1@(_ :< TyOp op1) (_ :< TyApply tyOp2@(_ :< TyOp op2) ty) -> do
-      let op = (view source op1 <> view source op2, Nothing) :< Multi (Set.fromList [op1, op2])
+      let op = (view source op1 <> view source op2, Nothing) :< TyOpMulti (Set.fromList [op1, op2])
       let tyOp = (view source tyOp1 <> view source tyOp2, Nothing) :< TyOp op
       normalise (a :< TyApply tyOp ty)
 
@@ -286,7 +307,7 @@ normalise (a :< x) = case typeof x of
       tyOp@(_ :< TyOp op) <- normalise tyOp
       ty <- normalise ty
       case view value op of
-        ViewIdentity -> return ty
+        TyOpIdentity -> return ty
         _         -> do
           affine <- isAffine ty
           case affine of
@@ -306,13 +327,13 @@ data Truth = Yes | No | Variable | Unknown
 
 isRef :: TyOp -> Truth
 isRef = \case
-  RefUni _     -> Yes
-  RefLabel _   -> Yes
-  RefVar _     -> Yes
-  ViewUni _    -> Unknown
-  ViewIdentity -> No
-  ViewVar _    -> Variable
-  Multi ops    -> Set.fold (\(_ :< op) -> truthOr (isRef op)) No ops
+  TyOpIdentity  -> No
+  TyOpMulti ops -> Set.fold (\(_ :< op) -> truthOr (isRef op)) No ops
+  TyOpRef _     -> Yes
+  TyOpUniRef _  -> Yes
+  TyOpUniView _ -> Unknown
+  TyOpVarRef _  -> Yes
+  TyOpVarView _ -> Variable
 
 truthOr :: Truth -> Truth -> Truth
 truthOr Yes _      = Yes
@@ -345,8 +366,10 @@ isAffine t = do
       TyFn t1 t2 -> isTyConAffine "Fn" [t1, t2]
       TyUnit -> isTyConAffine "Unit" []
       TyApply (_ :< TyOp (_ :< op)) t -> truthAnd (truthNot (isRef op)) <$> isAffine t
-      TyUni _ -> return Unknown
-      TyVar _ -> return Variable
+      TyUniPlain _ -> return Unknown
+      TyUniValue _ -> return Unknown
+      TyVarPlain _ -> return Variable
+      TyVarValue _ -> return Variable
       _ | Just (n, ts) <- unapplyTyCon (a :< t) -> isTyConAffine n ts
 
 isTyConAffine :: Name -> [Annotated Type] -> Praxis Truth
@@ -370,13 +393,13 @@ tryDefault term@((src, _) :< _) = do
 
   let
     defaultRef name = do
-      ref <- freshRefLabel
+      ref <- freshRef
       warnAt src $ "underdetermined reference " <> quote (pretty name) <> ", defaulting to " <> quote (pretty ref)
       return (name, view value ref)
 
     defaultView name = do
-      warnAt src $ "underdetermined view " <> quote (pretty name) <> ", defaulting to " <> quote (pretty (phantom ViewIdentity))
-      return (name, ViewIdentity)
+      warnAt src $ "underdetermined view " <> quote (pretty name) <> ", defaulting to " <> quote (pretty (phantom TyOpIdentity))
+      return (name, TyOpIdentity)
 
   defaultViews <- mapM defaultView (Set.toList (deepViewUnis term))
   defaultRefs <- mapM defaultRef (Set.toList (deepRefUnis term))
@@ -393,20 +416,21 @@ tryDefault term@((src, _) :< _) = do
     deepTyUnis :: forall a. Term a => Annotated a -> Set Name
     deepTyUnis = deepExtract (embedMonoid f) where
       f = \case
-        TyUni n -> Set.singleton n
-        _       -> Set.empty
+        TyUniPlain n -> Set.singleton n
+        TyUniValue n -> Set.singleton n
+        _            -> Set.empty
 
     deepRefUnis :: forall a. Term a => Annotated a -> Set Name
     deepRefUnis = deepExtract (embedMonoid f) where
       f = \case
-        RefUni n -> Set.singleton n
-        _        -> Set.empty
+        TyOpUniRef n -> Set.singleton n
+        _            -> Set.empty
 
     deepViewUnis :: forall a. Term a => Annotated a -> Set Name
     deepViewUnis = deepExtract (embedMonoid f) where
       f = \case
-        ViewUni n -> Set.singleton n
-        _         -> Set.empty
+        TyOpUniView n -> Set.singleton n
+        _             -> Set.empty
 
 
 -- When we encounter a polymorphic function with constraints, we should add the constraints to the assumption set when type checking the body.
@@ -434,7 +458,8 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
         TyPair t1 t2 -> expandTyConInstance cls "Pair" [t1, t2]
         TyFn t1 t2 -> expandTyConInstance cls "Fn" [t1, t2]
         TyUnit -> expandTyConInstance cls "Unit" []
-        TyVar _ -> return []
+        TyVarPlain _ -> return []
+        TyVarValue _ -> return []
         _ | Just (n, ts) <- unapplyTyCon t -> expandTyConInstance cls n ts
     where
       expandTyConInstance :: Name -> Name -> [Annotated Type] -> Praxis [TyConstraint]
@@ -456,7 +481,9 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
           -> checkConstraintType t1 >> checkConstraintType t2
         TyFn t1 t2
           -> checkConstraintType t1 >> checkConstraintType t2
-        TyVar n | n `elem` Set.fromList (map tyVarName boundVars)
+        TyVarPlain n | n `elem` Set.fromList (map tyVarName boundVars)
+          -> return ()
+        TyVarValue n | n `elem` Set.fromList (map tyVarName boundVars)
           -> return ()
         _ | Just (n, ts@(_:_)) <- unapplyTyCon (a :< ty)
           -> mapM_ checkConstraintType ts

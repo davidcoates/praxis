@@ -12,7 +12,8 @@ module Common.Pretty
   ) where
 
 import           Control.Applicative  (liftA2)
-import           Data.Monoid.Colorful hiding (Pair, Term)
+import           Data.Monoid.Colorful (Colored, Style(..), Color(..), printColoredS, getTerm)
+import qualified Data.Monoid.Colorful as Color
 import           Data.String          (IsString (..))
 
 data Option = Plain | Types | Kinds deriving Eq
@@ -25,7 +26,7 @@ instance Eq a => Eq (Printable a) where
 instance IsString (Printable String) where
   fromString = pure
 
-blank = Printable (const Nil)
+blank = Printable (const Color.Nil)
 
 instance Semigroup (Printable a) where
   Printable p <> Printable q = Printable (\o -> p o <> q o)
@@ -37,13 +38,13 @@ instance Functor Printable where
   fmap f (Printable p) =  Printable (\o -> f <$> p o)
 
 instance Applicative Printable where
-  pure = Printable . const . Value
+  pure = Printable . const . Color.Value
   liftA2 f (Printable p) (Printable q) = Printable $ \o -> liftA2 f (p o) (q o)
 
 class Pretty a where
   pretty :: a -> Printable String
   prettyIf :: Option -> a -> Printable String
-  prettyIf s x = Printable (\t -> if s == t then runPrintable (pretty x) t else Nil)
+  prettyIf s x = Printable (\t -> if s == t then runPrintable (pretty x) t else Color.Nil)
 
 instance Pretty String where
   pretty = pure

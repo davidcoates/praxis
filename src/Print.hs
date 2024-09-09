@@ -11,11 +11,11 @@ module Print
 
 import           Common
 import           Data.Foldable        (toList)
-import qualified Data.Monoid.Colorful as Colorful
+import qualified Data.Monoid.Colorful as Colored
 import           Introspect
 import           Syntax.Unparser
-import           Term
 import           Token
+import           Term hiding (Value)
 
 newtype Printer a = Printer { runPrinter :: a -> Maybe [Token] }
 
@@ -43,7 +43,7 @@ indent :: Int -> String
 indent n = replicate (2*n) ' '
 
 layout :: [Token] -> Option -> Colored String
-layout ts o = layout' (-1) Nil ts where
+layout ts o = layout' (-1) Colored.Nil ts where
 
   layout' :: Int -> Colored String -> [Token] -> Colored String
   layout' depth prefix ts = case ts of
@@ -53,7 +53,7 @@ layout ts o = layout' (-1) Nil ts where
         depth' = case t of { '{' -> depth + 1 ; ';' -> depth ; '}' -> depth - 1 }
       in
         -- Note: Here we suppress newline for the top-level block start (the first token for programs)
-        layout' depth' ((if depth == (-1) then "" else "\n") <> Value (indent depth')) ts
+        layout' depth' ((if depth == (-1) then "" else "\n") <> Colored.Value (indent depth')) ts
 
     t : ts ->
       let
@@ -61,9 +61,9 @@ layout ts o = layout' (-1) Nil ts where
       in
         if null cs
           then layout' depth prefix ts
-          else prefix <> cs <> layout' depth (Value " ") ts
+          else prefix <> cs <> layout' depth (Colored.Value " ") ts
 
-    [] -> Nil
+    [] -> Colored.Nil
 
 
 instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
@@ -105,9 +105,9 @@ label ((s, a) :< x) = case a of
 
 instance Pretty TyReason where
   pretty = \case
-    TyReasonApply f x        -> "application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
+    TyReasonApply f x        -> "application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
     TyReasonRead n           -> "read of " <> pretty n
-    TyReasonBind p e         -> "binding " <> pretty p <> pretty (Fg Red (" (<-) " :: Colored String)) <> pretty e
+    TyReasonBind p e         -> "binding " <> pretty p <> pretty (Colored.Fg Red (" (<-) " :: Colored String)) <> pretty e
     TyReasonIntegerLiteral i -> "integer literal " <> pretty (show i)
     -- TODO
     Captured n       -> "variable " <> quote (pretty n) <> " captured"
@@ -127,7 +127,7 @@ instance Pretty TyReason where
 
 instance Pretty KindReason where
   pretty = \case
-    KindReasonTyApply f x -> "type application " <> pretty f <> pretty (Fg Red (" ($) " :: Colored String)) <> pretty x
+    KindReasonTyApply f x -> "type application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
     KindReasonDataCon c   -> "data constructor " <> pretty c
     KindReasonData n args -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
     KindReasonType t      -> "type " <> pretty t

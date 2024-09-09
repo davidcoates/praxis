@@ -43,7 +43,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> conId <|> varId <|> varIdRef <|> varIdView <|> varSym)) <|> throw "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> conId <|> varId <|> varIdRef <|> varIdValue <|> varIdView <|> varSym)) <|> throw "illegal character"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment where
@@ -104,6 +104,9 @@ varId = (\id -> if id `elem` reservedIds then ReservedId id else VarId id) <$> (
 
 varIdRef :: Tokeniser Token
 varIdRef = satisfies 2 (\[a, b] -> a == '&' && isLower b) *> consume *> (VarIdRef <$> while (satisfy isLetter) consume)
+
+varIdValue :: Tokeniser Token
+varIdValue = satisfies 2 (\[a, b] -> a == '!' && isLower b) *> consume *> (VarIdValue <$> while (satisfy isLetter) consume)
 
 varIdView :: Tokeniser Token
 varIdView = satisfies 2 (\[a, b] -> a == '?' && isLower b) *> consume *> (VarIdView <$> while (satisfy isLetter) consume)

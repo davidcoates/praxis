@@ -287,31 +287,34 @@ instance Term TyConstraint where
     TEq a b             -> TEq <$> f a <*> f b
     TOpEq a b           -> TOpEq <$> f a <*> f b
     TOpEqIfAffine a b t -> TOpEqIfAffine <$> f a <*> f b <*> f t
+    Value t             -> Value <$> f t
 
 instance Term TyOp where
   witness = ITyOp
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    Multi os   -> Multi . Set.fromList <$> traverse f (Set.toList os)
-    RefLabel n -> pure (RefLabel n)
-    RefUni n   -> pure (RefUni n)
-    RefVar n   -> pure (RefVar n)
-    ViewUni n  -> pure (ViewUni n)
-    ViewIdentity  -> pure ViewIdentity
-    ViewVar n  -> pure (ViewVar n)
+    TyOpIdentity  -> pure TyOpIdentity
+    TyOpMulti os  -> TyOpMulti . Set.fromList <$> traverse f (Set.toList os)
+    TyOpRef n     -> pure (TyOpRef n)
+    TyOpUniRef n  -> pure (TyOpUniRef n)
+    TyOpUniView n -> pure (TyOpUniView n)
+    TyOpVarRef n  -> pure (TyOpVarRef n)
+    TyOpVarView n -> pure (TyOpVarView n)
 
 instance Term Type where
   witness = IType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    TyApply a b -> TyApply <$> f a <*> f b
-    TyCon n     -> pure (TyCon n)
-    TyFn a b    -> TyFn <$> f a <*> f b
-    TyOp o      -> TyOp <$> f o
-    TyPair a b  -> TyPair <$> f a <*> f b
-    TyUni n     -> pure (TyUni n)
-    TyUnit      -> pure TyUnit
-    TyVar n     -> pure (TyVar n)
+    TyApply a b  -> TyApply <$> f a <*> f b
+    TyCon n      -> pure (TyCon n)
+    TyFn a b     -> TyFn <$> f a <*> f b
+    TyOp o       -> TyOp <$> f o
+    TyPair a b   -> TyPair <$> f a <*> f b
+    TyUniPlain n -> pure (TyUniPlain n)
+    TyUniValue n -> pure (TyUniValue n)
+    TyUnit       -> pure TyUnit
+    TyVarPlain n -> pure (TyVarPlain n)
+    TyVarValue n -> pure (TyVarValue n)
 
 instance Term TyVar where
   witness = ITyVar

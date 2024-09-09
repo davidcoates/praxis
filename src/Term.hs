@@ -165,35 +165,39 @@ data Tok = TokExp (Annotated Exp)
          | TokOp Name
   deriving (Eq, Ord)
 
-data TyOp = Multi (Set (Annotated TyOp))
-          | RefLabel Name
-          | RefUni Name
-          | RefVar Name
-          | ViewUni Name
-          | ViewIdentity
-          | ViewVar Name
+data TyOp = TyOpIdentity
+          | TyOpMulti (Set (Annotated TyOp))
+          | TyOpRef Name
+          | TyOpUniRef Name
+          | TyOpUniView Name
+          | TyOpVarRef Name
+          | TyOpVarView Name
   deriving (Eq, Ord)
 
-data TyVar = TyVarPlain Name
-           | TyVarRef Name
-           | TyVarView Name
+data TyVar = TyVarVarPlain Name
+           | TyVarVarRef Name
+           | TyVarVarValue Name
+           | TyVarVarView Name
   deriving (Eq, Ord)
 
 -- TODO this is a good hint that name should be factored out
 tyVarName :: Annotated TyVar -> Name
 tyVarName tyVar = case view value tyVar of
-  TyVarPlain n -> n
-  TyVarRef n   -> n
-  TyVarView n  -> n
+  TyVarVarPlain n -> n
+  TyVarVarRef   n -> n
+  TyVarVarValue n -> n
+  TyVarVarView  n -> n
 
 data Type = TyApply (Annotated Type) (Annotated Type)
           | TyCon Name
           | TyFn (Annotated Type) (Annotated Type)
           | TyOp (Annotated TyOp)
           | TyPair (Annotated Type) (Annotated Type)
-          | TyUni Name
+          | TyUniPlain Name
+          | TyUniValue Name
           | TyUnit
-          | TyVar Name
+          | TyVarPlain Name
+          | TyVarValue Name
   deriving (Eq, Ord)
 
 data QType = Forall [Annotated TyVar] [Annotated TyConstraint] (Annotated Type)
@@ -215,6 +219,7 @@ data TyConstraint = HoldsInteger Integer (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
                   | TOpEq (Annotated TyOp) (Annotated TyOp)
                   | TOpEqIfAffine (Annotated TyOp) (Annotated TyOp) (Annotated Type)
+                  | Value (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`

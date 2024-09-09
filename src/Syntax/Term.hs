@@ -75,6 +75,12 @@ varIdRef = match f VarIdRef where
     VarIdRef n -> Just n
     _          -> Nothing
 
+varIdValue :: Syntax f => f Name
+varIdValue = match f VarIdValue where
+  f = \case
+    VarIdValue n -> Just n
+    _            -> Nothing
+
 varIdView :: Syntax f => f Name
 varIdView = match f VarIdView where
   f = \case
@@ -92,6 +98,9 @@ uni = match (const Nothing) (Uni . VarId)
 
 uniRef :: Syntax f => f Name
 uniRef = match (const Nothing) (Uni . VarIdRef)
+
+uniValue :: Syntax f => f Name
+uniValue = match (const Nothing) (Uni . VarIdValue)
 
 uniView :: Syntax f => f Name
 uniView = match (const Nothing) (Uni . VarIdView)
@@ -233,6 +242,7 @@ tyConstraint = internal (_HoldsInteger <$> integer <*> reservedSym "∈" *> anno
                internal (_TEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
                internal (_TOpEq <$> annotated tyOp <*> reservedSym "=" *> annotated tyOp) <|>
                internal (_TOpEqIfAffine <$> annotated tyOp <*> reservedSym "=" *> annotated tyOp <*> reservedSym "|" *> annotated ty) <|>
+               internal (_Value <$> reservedCon "Value" *> annotated ty) <|>
                mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
@@ -266,9 +276,10 @@ dataCon :: Syntax f => f DataCon
 dataCon = _DataCon <$> conId <*> annotated ty1
 
 tyVar :: Syntax f => f TyVar
-tyVar = _TyVarPlain <$> varId <|>
-        _TyVarRef <$> varIdRef <|>
-        _TyVarView <$> varIdView <|>
+tyVar = _TyVarVarPlain <$> varId <|>
+        _TyVarVarRef <$> varIdRef <|>
+        _TyVarVarValue <$> varIdValue <|>
+        _TyVarVarView <$> varIdView <|>
         mark "type variable"
 
 declTerm :: Syntax f => f DeclTerm
@@ -330,20 +341,22 @@ foldTy = Prism (view value . fold) (Just . unfold . phantom) where
 ty1 :: Syntax f => f Type
 ty1 = foldTy <$> some (annotated ty0) <|> mark "type(1)" where
   ty0 = _TyOp <$> annotated tyOp <|>
-        _TyVar <$> varId <|>
+        _TyVarPlain <$> varId <|>
+        _TyVarValue <$> varIdValue <|>
         _TyCon <$> conId <|>
-        internal (_TyUni <$> uni) <|>
+        internal (_TyUniPlain <$> uni) <|>
+        internal (_TyUniValue <$> uniValue) <|>
         tuple _TyUnit _TyPair ty <|>
         mark "type(0)"
 
 tyOp :: Syntax f => f TyOp
-tyOp = _RefVar <$> varIdRef <|>
-       _ViewIdentity <$> reservedSym "@" <|>
-       _ViewVar <$> varIdView <|>
-       internal (_RefLabel <$> varIdRef) <|>
-       internal (_RefUni <$> uniRef) <|>
-       internal (_ViewUni <$> uniView) <|>
-       _Multi <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated tyOp <*> some (special ',' *> annotated tyOp)) <* special '}')) <|>
+tyOp = _TyOpIdentity <$> reservedSym "@" <|>
+       _TyOpMulti <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated tyOp <*> some (special ',' *> annotated tyOp)) <* special '}')) <|>
+       _TyOpVarRef <$> varIdRef <|>
+       _TyOpVarView <$> varIdView <|>
+       internal (_TyOpRef <$> varIdRef) <|>
+       internal (_TyOpUniRef <$> uniRef) <|>
+       internal (_TyOpUniView <$> uniView) <|>
        mark "type operator"
 
 tok :: Syntax f => f Tok

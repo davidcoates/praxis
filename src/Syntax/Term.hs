@@ -347,7 +347,7 @@ tyOp = _RefVar <$> varIdRef <|>
        mark "type operator"
 
 tok :: Syntax f => f Tok
-tok = internal (_TOp <$> varSym <|> _TExp <$> annotated exp) <|> mark "token"
+tok = internal (_TokOp <$> varSym <|> _TokExp <$> annotated exp) <|> mark "token"
 
 exp :: Syntax f => f Exp
 exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" where
@@ -365,8 +365,8 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
          _Switch <$> reservedId "switch" *> block switch <|>
          exp2 <|> mark "expression(3)"
-  exp2 = mixfix <$> some (annotated (_TOp <$> varSym <|> _TExp <$> annotated exp1)) <|> internal exp1 <|> mark "expression(2)"
-  mixfix = Prism (\ts -> case ts of { [_ :< TExp e] -> view value e; _ -> MixfixSweet ts }) (\case { MixfixSweet ts -> Just ts; _ -> Nothing })
+  exp2 = mixfix <$> some (annotated (_TokOp <$> varSym <|> _TokExp <$> annotated exp1)) <|> internal exp1 <|> mark "expression(2)"
+  mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> MixfixSweet ts }) (\case { MixfixSweet ts -> Just ts; _ -> Nothing })
   exp1 = left _Apply exp0 <|> mark "expression(1)"
   exp0 = _VarRefSweet <$> varIdRef <|>
          _Var <$> varId <|>

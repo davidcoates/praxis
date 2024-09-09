@@ -161,8 +161,8 @@ data Stmt = StmtBind (Annotated Bind)
           | StmtExp (Annotated Exp)
   deriving (Eq, Ord)
 
-data Tok = TExp (Annotated Exp)
-         | TOp Name
+data Tok = TokExp (Annotated Exp)
+         | TokOp Name
   deriving (Eq, Ord)
 
 data TyOp = Multi (Set (Annotated TyOp))

@@ -63,13 +63,13 @@ parse src ts = do
 
 anyExp :: Parser (Annotated Exp)
 anyExp = match f where
-  f (_ :< TExp e) = Just e
-  f _             = Nothing
+  f (_ :< TokExp e) = Just e
+  f _               = Nothing
 
 namedOp :: Name -> Parser Source
 namedOp n = match f where
-  f ((src, _) :< TOp m) = if m == n then Just src else Nothing
-  f _                   = Nothing
+  f ((src, _) :< TokOp m) = if m == n then Just src else Nothing
+  f _                     = Nothing
 
 mixfix :: OpDefns -> [[Op]] -> Graph -> Parser (Annotated Exp)
 mixfix defns levels prec = exp where

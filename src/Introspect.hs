@@ -264,8 +264,8 @@ instance Term Tok where
   witness = ITok
   recurseAnnotation = trivial
   recurseTerm f = \case
-    TExp e -> TExp <$> f e
-    TOp o  -> pure (TOp o)
+    TokExp e -> TokExp <$> f e
+    TokOp o  -> pure (TokOp o)
 
 -- | T1
 

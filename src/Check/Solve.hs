@@ -35,11 +35,11 @@ import           Praxis
 import           Print
 import           Term
 
-import           Control.Monad (foldM)
-import           Data.Maybe    (isJust)
-import           Data.Monoid   (Any (..))
+import           Control.Monad        (foldM)
+import           Data.Maybe           (isJust)
+import           Data.Monoid          (Any (..))
 import qualified Data.Monoid.Colorful as Colored
-import qualified Data.Set      as Set
+import qualified Data.Set             as Set
 
 
 type Resolver = forall a. Term a => Annotated a -> Maybe (Annotated a)

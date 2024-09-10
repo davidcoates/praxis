@@ -12,7 +12,8 @@ module Common.Pretty
   ) where
 
 import           Control.Applicative  (liftA2)
-import           Data.Monoid.Colorful (Colored, Style(..), Color(..), printColoredS, getTerm)
+import           Data.Monoid.Colorful (Color (..), Colored, Style (..), getTerm,
+                                       printColoredS)
 import qualified Data.Monoid.Colorful as Color
 import           Data.String          (IsString (..))
 

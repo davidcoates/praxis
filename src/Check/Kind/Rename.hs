@@ -74,7 +74,7 @@ renameType (a@(src, _) :< ty) = (a :<) <$> case ty of
 
   TyVarValue n -> TyVarValue <$> disambiguate src n
 
-  _       -> recurseTerm rename ty
+  _            -> recurseTerm rename ty
 
 
 renameTyVar :: Annotated TyVar -> Praxis (Annotated TyVar)
@@ -84,7 +84,7 @@ renameTyVar (a@(src, _) :< tyVar) = (a :<) <$> case tyVar of
 
   TyVarVarRef n   -> TyVarVarRef <$> disambiguate src n
 
-  TyVarVarValue n  -> TyVarVarValue <$> disambiguate src n
+  TyVarVarValue n -> TyVarVarValue <$> disambiguate src n
 
   TyVarVarView n  -> TyVarVarView <$> disambiguate src n
 
@@ -96,7 +96,7 @@ renameTyOp (a@(src, _) :< op) = (a :<) <$> case op of
 
   TyOpVarView n -> TyOpVarView <$> disambiguate src n
 
-  _         -> recurseTerm rename op
+  _             -> recurseTerm rename op
 
 
 renameQType :: Annotated QType -> Praxis (Annotated QType)

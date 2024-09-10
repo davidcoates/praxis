@@ -14,8 +14,8 @@ import           Data.Foldable        (toList)
 import qualified Data.Monoid.Colorful as Colored
 import           Introspect
 import           Syntax.Unparser
+import           Term                 hiding (Value)
 import           Token
-import           Term hiding (Value)
 
 newtype Printer a = Printer { runPrinter :: a -> Maybe [Token] }
 

@@ -114,11 +114,11 @@ solve state reduce term = do
         TreeProgress
           -> solve' False (term, goals)
 
-        TreeSolved (resolve, normalise) crumbs2
+        TreeSolved (resolve, normalize) crumbs2
           -> do
             let
               rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
-              rewrite = normalise . sub resolve
+              rewrite = normalize . sub resolve
 
               rewriteCrumbs :: Crumbs c -> Praxis (Crumbs c)
               rewriteCrumbs = mapM (\(src, reason) -> (src,) <$> (recurseAnnotation (witness :: I (Requirement c)) rewrite reason))

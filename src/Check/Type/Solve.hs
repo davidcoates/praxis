@@ -8,7 +8,7 @@
 module Check.Type.Solve
   ( assumeFromQType
   , run
-  , normalise
+  , normalize
   ) where
 
 import           Check.Solve
@@ -33,10 +33,10 @@ import qualified Data.Set            as Set
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   -- TODO pretty ugly to do this here
-  tEnv %%= traverse (LEnv.value normalise)
-  tyCheckState . requirements %%= (\set -> Set.fromList <$> traverse normalise (Set.toList set))
-  tyCheckState . assumptions %%= (\set -> Set.fromList <$> traverse (\c -> view value <$> normalise (phantom c)) (Set.toList set))
-  term <- normalise term
+  tEnv %%= traverse (LEnv.value normalize)
+  tyCheckState . requirements %%= (\set -> Set.fromList <$> traverse normalize (Set.toList set))
+  tyCheckState . assumptions %%= (\set -> Set.fromList <$> traverse (\c -> view value <$> normalize (phantom c)) (Set.toList set))
+  term <- normalize term
   term <- solve tyCheckState reduce term
   term <- tryDefault term
   return term
@@ -51,7 +51,7 @@ unapplyTyCon (_ :< ty) = case ty of
 
 assertNormalised :: (Eq a, Term a) => Annotated a -> Praxis ()
 assertNormalised term = do
-  term' <- normalise term
+  term' <- normalize term
   let str1 = fold (runPrintable (pretty term) Plain)
   let str2 = fold (runPrintable (pretty term') Plain)
   when (term /= term') $ throw ("unnormalized: " <> pretty term <> " vs " <> pretty term')
@@ -109,13 +109,13 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
   TOpEq op1 op2 | op1 == op2 -> return tautology
 
   TOpEq op1@(_ :< TyOpUniView x) op2 -> do
-    op2' <- normalise $ contractTyOps $ Set.delete op1 (expandTyOps op2)
+    op2' <- normalize $ contractTyOps $ Set.delete op1 (expandTyOps op2)
     solved (x `isTyOp` view value op2')
 
   TOpEq op1 op2@(_ :< TyOpUniView _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
 
   TOpEq op1@(_ :< TyOpUniRef x) op2 -> do
-    op2' <- normalise $ contractTyOps $ Set.delete op1 (expandTyOps op2)
+    op2' <- normalize $ contractTyOps $ Set.delete op1 (expandTyOps op2)
     solvedWithSubgoals (x `isTyOp` (view value op2')) [ Subgoal (Ref op1) ]
 
   TOpEq op1 op2@(_ :< TyOpUniRef _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
@@ -143,7 +143,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
       affine <- isAffine t
       case affine of
         Unknown  -> return skip
-        No       -> error "unnormalised"
+        No       -> error "unnormalized"
         _        -> return $ subgoals [ Subgoal (TOpEq op (phantom TyOpIdentity)), Subgoal (Value t) ]
     TyVarPlain _             -> return contradiction
     TyUniPlain _             -> return skip
@@ -167,8 +167,8 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
           instRef = Instance (a0 :< TyApply (a1 :< TyCon cls) (phantom (TyApply (phantom (TyCon "Ref")) t)))
         affine <- isAffine t
         case (isRef op, affine) of
-          (No, _)         -> error "unnormalised"
-          (_, No)         -> error "unnormalised"
+          (No, _)         -> error "unnormalized"
+          (_, No)         -> error "unnormalized"
           (_, Unknown)    -> return skip
           (Unknown, _)    -> return skip
           (Yes, Yes)      -> reduceTyConInstance cls "Ref" [t]
@@ -210,7 +210,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
         Just resolver -> case resolver args of
           (_, IsInstance)          -> return tautology
           (_, IsInstanceOnlyIf cs) -> do
-            cs <- mapM (\c -> view value <$> normalise (phantom c)) cs
+            cs <- mapM (\c -> view value <$> normalize (phantom c)) cs
             return (subgoals (map Subgoal cs))
         Nothing                    -> return contradiction
 
@@ -242,8 +242,8 @@ solved resolve = solvedWithSubgoals resolve []
 -- note: assumption is the subgoals are not affected by the solution
 solvedWithSubgoals :: Resolver -> [Subgoal TyConstraint] -> Praxis (Reduction TyConstraint)
 solvedWithSubgoals resolve subgoals = do
-  tEnv %%= traverse (LEnv.value (normalise . sub resolve))
-  return (Progress (Just (resolve, normalise)) subgoals)
+  tEnv %%= traverse (LEnv.value (normalize . sub resolve))
+  return (Progress (Just (resolve, normalize)) subgoals)
 
 isTyOp :: Name -> TyOp -> Resolver
 isTyOp n op = embedSub f where
@@ -284,14 +284,14 @@ contractTyOps ops = case Set.toList ops of
   [op] -> op
   _    -> phantom (TyOpMulti ops)
 
--- Term normaliser (after a substitution is applied)
-normalise :: Normaliser
-normalise (a :< x) = case typeof x of
+-- Term normalizer (after a substitution is applied)
+normalize :: Normaliser
+normalize (a :< x) = case typeof x of
 
   ITyOp -> case x of
 
     TyOpMulti ops -> do
-      ops <- mapM normalise (Set.toList ops)
+      ops <- mapM normalize (Set.toList ops)
       return $ (contractTyOps . Set.delete (phantom TyOpIdentity) . Set.unions . map expandTyOps) ops
 
     _ -> continue
@@ -301,11 +301,11 @@ normalise (a :< x) = case typeof x of
     TyApplyOp tyOp1@(_ :< TyOp op1) (_ :< TyApply tyOp2@(_ :< TyOp op2) ty) -> do
       let op = (view source op1 <> view source op2, Nothing) :< TyOpMulti (Set.fromList [op1, op2])
       let tyOp = (view source tyOp1 <> view source tyOp2, Nothing) :< TyOp op
-      normalise (a :< TyApplyOp tyOp ty)
+      normalize (a :< TyApplyOp tyOp ty)
 
     TyApplyOp tyOp@(_ :< TyOp op) ty -> do
-      tyOp@(_ :< TyOp op) <- normalise tyOp
-      ty <- normalise ty
+      tyOp@(_ :< TyOp op) <- normalize tyOp
+      ty <- normalize ty
       case view value op of
         TyOpIdentity -> return ty
         _         -> do
@@ -319,7 +319,7 @@ normalise (a :< x) = case typeof x of
   _ -> continue
 
   where
-    continue = recurse normalise (a :< x)
+    continue = recurse normalize (a :< x)
 
 
 data Truth = Yes | No | Variable | Unknown
@@ -410,8 +410,8 @@ tryDefault term@((src, _) :< _) = do
   case defaultTyOps of
     [] -> return term
     _  -> do
-      Progress (Just (resolve, normalise)) _ <- solved (areTyOps defaultTyOps)
-      (normalise . sub resolve) term
+      Progress (Just (resolve, normalize)) _ <- solved (areTyOps defaultTyOps)
+      (normalize . sub resolve) term
 
   where
     deepTyUnis :: forall a. Term a => Annotated a -> Set Name
@@ -447,7 +447,7 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
 
   assumeConstraint :: Annotated TyConstraint -> Praxis ()
   assumeConstraint constraint = do
-    constraint <- normalise constraint
+    constraint <- normalize constraint
     checkConstraint constraint
     constraints <- expandConstraint (view source constraint) (view value constraint)
     tyCheckState . assumptions %= Set.union (Set.fromList constraints)

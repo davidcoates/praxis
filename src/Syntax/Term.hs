@@ -145,7 +145,6 @@ definePrisms ''Stmt
 definePrisms ''Tok
 
 definePrisms ''QType
-definePrisms ''TyOp
 definePrisms ''Type
 definePrisms ''TyVar
 
@@ -177,7 +176,6 @@ syntax = \case
   -- | T1
   IQType          -> qTy
   ITyConstraint   -> tyConstraint
-  ITyOp           -> tyOp
   IType           -> ty
   ITyVar          -> tyVar
   -- | T2
@@ -237,11 +235,10 @@ integer = match f (Token.Lit . Integer) where
 tyConstraint :: Syntax f => f TyConstraint
 tyConstraint = internal (_HoldsInteger <$> integer <*> reservedSym "∈" *> annotated ty) <|>
                _Instance <$> annotated ty <|>
-               internal (_Ref <$> reservedCon "Ref" *> annotated tyOp) <|>
+               internal (_Ref <$> reservedCon "Ref" *> annotated ty) <|>
                internal (_RefFree <$> varId <*> reservedSym "∉" *> annotated ty) <|>
                internal (_TEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
-               internal (_TOpEq <$> annotated tyOp <*> reservedSym "=" *> annotated tyOp) <|>
-               internal (_TOpEqIfAffine <$> annotated tyOp <*> reservedSym "=" *> annotated tyOp <*> reservedSym "|" *> annotated ty) <|>
+               internal (_TEqIfAffine <$> annotated ty <*> reservedSym "=" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
                internal (_Value <$> reservedCon "Value" *> annotated ty) <|>
                mark "type constraint"
 
@@ -325,9 +322,9 @@ ty = ty1 `join` (_TyFn, reservedSym "->" *> annotated ty) <|> mark "type"
 foldTy :: Prism Type [Annotated Type]
 foldTy = Prism (view value . fold) (Just . unfold . phantom) where
   fold [x] = x
-  fold (x:xs) = case view value x of
-    TyOp _ -> let y = fold xs in (view source x <> view source y, Nothing) :< TyApplyOp x y
-    _      -> foldLeft (x:xs)
+  fold (x:xs)
+    | isTyOp x  = let y = fold xs in (view source x <> view source y, Nothing) :< TyApplyOp x y
+    | otherwise = foldLeft (x:xs)
   foldLeft [x] = x
   foldLeft (x:y:ys) = fold ((view source x <> view source y, Nothing) :< TyApply x y : ys)
   unfold x = case view value x of
@@ -337,27 +334,33 @@ foldTy = Prism (view value . fold) (Just . unfold . phantom) where
   unfoldLeft x = case view value x of
     TyApply x y -> unfoldLeft x ++ [y]
     _           -> [x]
+  isTyOp :: Annotated Type -> Bool
+  isTyOp t = case view value t of
+    TyOpIdentity  -> True
+    TyOpMulti _   -> True
+    TyOpRef _     -> True
+    TyOpUniRef _  -> True
+    TyOpUniView _ -> True
+    TyOpVarRef _  -> True
+    TyOpVarView _ -> True
+    _             -> False
 
 ty1 :: Syntax f => f Type
 ty1 = foldTy <$> some (annotated ty0) <|> mark "type(1)" where
-  ty0 = _TyOp <$> annotated tyOp <|>
+  ty0 = _TyCon <$> conId <|>
         _TyVarPlain <$> varId <|>
         _TyVarValue <$> varIdValue <|>
-        _TyCon <$> conId <|>
+        _TyOpIdentity <$> reservedSym "@" <|>
+        _TyOpMulti <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
+        _TyOpVarRef <$> varIdRef <|>
+        _TyOpVarView <$> varIdView <|>
+        internal (_TyOpRef <$> varIdRef) <|>
+        internal (_TyOpUniRef <$> uniRef) <|>
+        internal (_TyOpUniView <$> uniView) <|>
         internal (_TyUniPlain <$> uni) <|>
         internal (_TyUniValue <$> uniValue) <|>
         tuple _TyUnit _TyPair ty <|>
         mark "type(0)"
-
-tyOp :: Syntax f => f TyOp
-tyOp = _TyOpIdentity <$> reservedSym "@" <|>
-       _TyOpMulti <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated tyOp <*> some (special ',' *> annotated tyOp)) <* special '}')) <|>
-       _TyOpVarRef <$> varIdRef <|>
-       _TyOpVarView <$> varIdView <|>
-       internal (_TyOpRef <$> varIdRef) <|>
-       internal (_TyOpUniRef <$> uniRef) <|>
-       internal (_TyOpUniView <$> uniView) <|>
-       mark "type operator"
 
 tok :: Syntax f => f Tok
 tok = internal (_TokOp <$> varSym <|> _TokExp <$> annotated exp) <|> mark "token"

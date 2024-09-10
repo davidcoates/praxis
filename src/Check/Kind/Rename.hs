@@ -28,7 +28,6 @@ rename term = ($ term) $ case typeof (view value term) of
   IType     -> renameType
   ITyVar    -> renameTyVar
   IQType    -> renameQType
-  ITyOp     -> renameTyOp
   _         -> value (recurseTerm rename)
 
 
@@ -70,11 +69,15 @@ renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 renameType :: Annotated Type -> Praxis (Annotated Type)
 renameType (a@(src, _) :< ty) = (a :<) <$> case ty of
 
-  TyVarPlain n -> TyVarPlain <$> disambiguate src n
+  TyVarPlain n  -> TyVarPlain <$> disambiguate src n
 
-  TyVarValue n -> TyVarValue <$> disambiguate src n
+  TyVarValue n  -> TyVarValue <$> disambiguate src n
 
-  _            -> recurseTerm rename ty
+  TyOpVarRef n  -> TyOpVarRef <$> disambiguate src n
+
+  TyOpVarView n -> TyOpVarView <$> disambiguate src n
+
+  _             -> recurseTerm rename ty
 
 
 renameTyVar :: Annotated TyVar -> Praxis (Annotated TyVar)
@@ -87,16 +90,6 @@ renameTyVar (a@(src, _) :< tyVar) = (a :<) <$> case tyVar of
   TyVarVarValue n -> TyVarVarValue <$> disambiguate src n
 
   TyVarVarView n  -> TyVarVarView <$> disambiguate src n
-
-
-renameTyOp :: Annotated TyOp -> Praxis (Annotated TyOp)
-renameTyOp (a@(src, _) :< op) = (a :<) <$> case op of
-
-  TyOpVarRef n  -> TyOpVarRef <$> disambiguate src n
-
-  TyOpVarView n -> TyOpVarView <$> disambiguate src n
-
-  _             -> recurseTerm rename op
 
 
 renameQType :: Annotated QType -> Praxis (Annotated QType)

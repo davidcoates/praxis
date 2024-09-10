@@ -43,7 +43,6 @@ generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case typeof (view value term) of
   IDecl    -> generateDecl
   IType    -> generateType
-  ITyOp    -> generateTyOp
   ITyVar   -> generateTyVar
   IDataCon -> generateDataCon
   _        -> value (recurseTerm generate)
@@ -54,26 +53,6 @@ introKind src name kind = do
   case entry of
     Just _ -> throwAt src $ "type " <> quote (pretty name) <> " redeclared"
     _      -> kEnv %= Env.insert name kind
-
-
-generateTyOp :: Annotated TyOp -> Praxis (Annotated TyOp)
-generateTyOp ((src, _) :< op) = case op of
-
-  TyOpIdentity -> return ((src, Just (phantom KindView)) :< op)
-
-  TyOpMulti ops -> do
-    ops <- mapM generateTyOp (Set.toList ops)
-    let isRef = all (\op -> case view value (getKind op) of { KindRef -> True; _ -> False }) ops
-    let k = if isRef then phantom KindRef else phantom KindView
-    return ((src, Just k) :< TyOpMulti (Set.fromList ops))
-
-  TyOpVarRef var -> do
-    Just k <- kEnv `uses` Env.lookup var
-    return ((src, Just k) :< op)
-
-  TyOpVarView var -> do
-    Just k <- kEnv `uses` Env.lookup var
-    return ((src, Just k) :< op)
 
 
 generateType :: Annotated Type -> Praxis (Annotated Type)
@@ -110,9 +89,28 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
     TyUnit -> do
       return (phantom KindType :< TyUnit)
 
-    TyOp op -> do
-      op <- generateTyOp op
-      return (getKind op :< TyOp op)
+    TyOpIdentity -> return (phantom KindView :< TyOpIdentity)
+
+    TyOpMulti tys -> do
+      tys <- mapM generateType (Set.toList tys)
+      let
+        checkRefOrView :: Annotated Type -> Praxis ()
+        checkRefOrView ty = case view value (getKind ty) of
+          KindRef  -> return ()
+          KindView -> return ()
+          _        -> throwAt src $ "type " <> quote (pretty ty) <> " is in a type operator set but is not a type operator"
+      mapM_ checkRefOrView tys
+      let
+        isRef = all (\op -> case view value (getKind op) of { KindRef -> True; KindView -> False }) tys
+      return (phantom (if isRef then KindRef else KindView) :< TyOpMulti (Set.fromList tys))
+
+    TyOpVarRef var -> do
+      Just k <- kEnv `uses` Env.lookup var
+      return (k :< TyOpVarRef var)
+
+    TyOpVarView var -> do
+      Just k <- kEnv `uses` Env.lookup var
+      return (k :< TyOpVarView var)
 
     TyPair t1 t2 -> do
       t1 <- generateType t1
@@ -180,22 +178,13 @@ generateDeclType (a@(src, _) :< ty) = case ty of
     require $ (src, KindReasonData name args) :< (k `KEq` mkKind args)
     let
       deduce :: (Annotated Type -> TyConstraint) -> [Annotated Type] -> (InstanceOrigin, Instance)
-      deduce mkConstraint args' = (Trivial, IsInstanceOnlyIf [ mkConstraint (sub f conType) | (_ :< DataCon _ conType) <- alts ]) where
-        f :: forall a. Term a => Annotated a -> Maybe (Annotated a)
-        f (_ :< t) = case typeof t of
-          IType -> case t of
-            TyVarPlain n -> n `lookup` specialisedVars
-            TyVarValue n -> n `lookup` specialisedVars
-            _            -> Nothing
-          ITyOp -> case t of
-            TyOpVarRef n  -> case n `lookup` specialisedVars of
-              Just (_ :< TyOp op) -> Just op
-              Nothing             -> Nothing
-            TyOpVarView n -> case n `lookup` specialisedVars of
-              Just (_ :< TyOp op) -> Just op
-              Nothing             -> Nothing
-            _         -> Nothing
-          _  -> Nothing
+      deduce mkConstraint args' = (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
+        f (_ :< t) = case t of
+          TyVarPlain  n -> n `lookup` specialisedVars
+          TyVarValue  n -> n `lookup` specialisedVars
+          TyOpVarRef  n -> n `lookup` specialisedVars
+          TyOpVarView n -> n `lookup` specialisedVars
+          _             -> Nothing
         specialisedVars = zip (map tyVarName args) args'
 
       instances = case mode of

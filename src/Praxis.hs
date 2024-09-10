@@ -299,7 +299,7 @@ freshKindUni = do
   fresh . freshKindUnis .= ks
   return (phantom (KindUni k))
 
-freshRef :: Praxis (Annotated TyOp)
+freshRef :: Praxis (Annotated Type)
 freshRef = do
   (l:ls) <- use (fresh . freshRefs)
   fresh . freshRefs .= ls
@@ -315,7 +315,7 @@ freshTyUniRef ::Praxis (Annotated Type)
 freshTyUniRef = do
   (o:os) <- use (fresh . freshTyUniRefs)
   fresh . freshTyUniRefs .= os
-  return (TyOp (phantom (TyOpUniRef o)) `as` phantom KindRef)
+  return (TyOpUniRef o `as` phantom KindRef)
 
 freshTyUniValue :: Praxis (Annotated Type)
 freshTyUniValue = do
@@ -327,7 +327,7 @@ freshTyUniView ::Praxis (Annotated Type)
 freshTyUniView = do
   (o:os) <- use (fresh . freshTyUniViews)
   fresh . freshTyUniViews .= os
-  return (TyOp (phantom (TyOpUniView o)) `as` phantom KindView)
+  return (TyOpUniView o `as` phantom KindView)
 
 freshVar :: Name -> Praxis Name
 freshVar var = do

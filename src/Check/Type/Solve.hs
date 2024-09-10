@@ -89,7 +89,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
       (op1, t1) = splitTyOp t1'
       (op2, t2) = splitTyOp t2'
     let
-      split = subgoals [ Subgoal (TEq t1 t2), Subgoal (TOpEqIfAffine op1 op2 t1) ]
+      split = subgoals [ Subgoal (TEq t1 t2), Subgoal (TEqIfAffine op1 op2 t1) ]
     if disambiguate
       then return split
       else case (view value t1, view value t2) of
@@ -99,52 +99,48 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
 
   TEq t1 t2@(_ :< TyApplyOp _ _) -> reduce disambiguate (TEq t2 t1) -- handled by the above case
 
-  TOpEqIfAffine op1 op2 t -> do
+  TEqIfAffine op1 op2 t -> do
     affine <- isAffine t
     case affine of
       No      -> return tautology
       Unknown -> return skip
-      _       -> return $ subgoals [ Subgoal (TOpEq op1 op2) ]
+      _       -> return $ subgoals [ Subgoal (TEq op1 op2) ]
 
-  TOpEq op1 op2 | op1 == op2 -> return tautology
-
-  TOpEq op1@(_ :< TyOpUniView x) op2 -> do
+  TEq op1@(_ :< TyOpUniView x) op2 -> do
     op2' <- normalize $ contractTyOps $ Set.delete op1 (expandTyOps op2)
-    solved (x `isTyOp` view value op2')
+    solved (x `is` view value op2')
 
-  TOpEq op1 op2@(_ :< TyOpUniView _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
+  TEq op1 op2@(_ :< TyOpUniView _) -> return $ subgoals [ Subgoal (TEq op2 op1) ] -- handled by the above case
 
-  TOpEq op1@(_ :< TyOpUniRef x) op2 -> do
+  TEq op1@(_ :< TyOpUniRef x) op2 -> do
     op2' <- normalize $ contractTyOps $ Set.delete op1 (expandTyOps op2)
-    solvedWithSubgoals (x `isTyOp` (view value op2')) [ Subgoal (Ref op1) ]
+    solvedWithSubgoals (x `is` (view value op2')) [ Subgoal (Ref op1) ]
 
-  TOpEq op1 op2@(_ :< TyOpUniRef _) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
+  TEq op1 op2@(_ :< TyOpUniRef _) -> return $ subgoals [ Subgoal (TEq op2 op1) ] -- handled by the above case
 
-  TOpEq op1@(_ :< TyOpIdentity) op2 -> do
-    case isRef (view value op2) of
+  TEq op1@(_ :< TyOpIdentity) op2 -> do
+    case isRef op2 of
       Yes -> return contradiction
       Variable -> return contradiction
       _ -> do
         let viewUnis = [ (x, TyOpIdentity) | (_ :< TyOpUniView x) <- Set.toList (expandTyOps op2) ]
-        solved (areTyOps viewUnis)
+        solved (are viewUnis)
 
-  TOpEq op1 op2@(_ :< TyOpIdentity) -> return $ subgoals [ Subgoal (TOpEq op2 op1) ] -- handled by the above case
+  TEq op1 op2@(_ :< TyOpIdentity) -> return $ subgoals [ Subgoal (TEq op2 op1) ] -- handled by the above case
 
-  TOpEq op1 op2 -> return skip
-
-  Ref (_ :< op) -> do
+  Ref op -> do
     case isRef op of
       Yes     -> return tautology
       Unknown -> return skip
       _       -> return contradiction
 
   Value (_ :< t) -> case t of
-    TyApplyOp (_ :< TyOp op) t -> do
+    TyApplyOp op t -> do
       affine <- isAffine t
       case affine of
         Unknown  -> return skip
         No       -> error "unnormalized"
-        _        -> return $ subgoals [ Subgoal (TOpEq op (phantom TyOpIdentity)), Subgoal (Value t) ]
+        _        -> return $ subgoals [ Subgoal (TEq op (phantom TyOpIdentity)), Subgoal (Value t) ]
     TyVarPlain _             -> return contradiction
     TyUniPlain _             -> return skip
     _                        -> return tautology
@@ -161,7 +157,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
       -> return $ subgoals [ Subgoal (TEq t (TyCon "I32" `as` phantom KindType)) ]
 
     TyApply (a1 :< TyCon cls) t -> case view value t of
-      TyApplyOp tyOp@(_ :< TyOp (_ :< op)) t -> do
+      TyApplyOp op t -> do
         let
           instVal = Instance (a0 :< TyApply (a1 :< TyCon cls) t)
           instRef = Instance (a0 :< TyApply (a1 :< TyCon cls) (phantom (TyApply (phantom (TyCon "Ref")) t)))
@@ -215,18 +211,13 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
         Nothing                    -> return contradiction
 
     tyUnis :: forall a. Term a => Annotated a -> Set Name
-    tyUnis = extract f where
-      f :: forall a. Term a => a -> Set Name
-      f x = case typeof x of
-        IType -> case x of
-          TyUniPlain n -> Set.singleton n
-          TyUniValue n -> Set.singleton n
-          _            -> Set.empty
-        ITyOp -> case x of
-          TyOpUniRef n  -> Set.singleton n
-          TyOpUniView n -> Set.singleton n
-          _             -> Set.empty
-        _ -> Set.empty
+    tyUnis = extract (embedMonoid f) where
+      f x = case x of
+        TyUniPlain n  -> Set.singleton n
+        TyUniValue n  -> Set.singleton n
+        TyOpUniRef n  -> Set.singleton n
+        TyOpUniView n -> Set.singleton n
+        _             -> Set.empty
 
     refLabels :: forall a. Term a => Annotated a -> Set Name
     refLabels = extract (embedMonoid f) where
@@ -245,16 +236,11 @@ solvedWithSubgoals resolve subgoals = do
   tEnv %%= traverse (LEnv.value (normalize . sub resolve))
   return (Progress (Just (resolve, normalize)) subgoals)
 
-isTyOp :: Name -> TyOp -> Resolver
-isTyOp n op = embedSub f where
+are :: [(Name, Type)] -> Resolver
+are ops = embedSub f where
   f (a :< x) = case x of
-    TyOpUniRef n'  -> if n == n' then Just (a :< op) else Nothing
-    TyOpUniView n' -> if n == n' then Just (a :< op) else Nothing
-    _              -> Nothing
-
-areTyOps :: [(Name, TyOp)] -> Resolver
-areTyOps ops = embedSub f where
-  f (a :< x) = case x of
+    TyUniPlain n  -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
+    TyUniValue n  -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
     TyOpUniRef n  -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
     TyOpUniView n -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
     _             -> Nothing
@@ -262,23 +248,25 @@ areTyOps ops = embedSub f where
 is :: Name -> Type -> Resolver
 is n t = embedSub f where
   f (a :< x) = case x of
-    TyUniPlain n' -> if n == n' then Just (a :< t) else Nothing
-    TyUniValue n' -> if n == n' then Just (a :< t) else Nothing
-    _             -> Nothing
+    TyUniPlain n'  -> if n == n' then Just (a :< t) else Nothing
+    TyUniValue n'  -> if n == n' then Just (a :< t) else Nothing
+    TyOpUniRef n'  -> if n == n' then Just (a :< t) else Nothing
+    TyOpUniView n' -> if n == n' then Just (a :< t) else Nothing
+    _              -> Nothing
 
 -- TyOp helpers
-splitTyOp :: Annotated Type -> (Annotated TyOp, Annotated Type)
+splitTyOp :: Annotated Type -> (Annotated Type, Annotated Type)
 splitTyOp ty = case view value ty of
-  TyApplyOp (_ :< TyOp op) ty -> (op, ty)
-  _                           -> (phantom TyOpIdentity, ty)
+  TyApplyOp op ty -> (op, ty)
+  _               -> (phantom TyOpIdentity, ty)
 
-expandTyOps :: Annotated TyOp -> Set (Annotated TyOp)
+expandTyOps :: Annotated Type -> Set (Annotated Type)
 expandTyOps op = case view value op of
   TyOpMulti ops -> ops
   TyOpIdentity  -> Set.empty
   _             -> Set.singleton op
 
-contractTyOps :: Set (Annotated TyOp) -> Annotated TyOp
+contractTyOps :: Set (Annotated Type) -> Annotated Type
 contractTyOps ops = case Set.toList ops of
   []   -> phantom TyOpIdentity
   [op] -> op
@@ -288,31 +276,26 @@ contractTyOps ops = case Set.toList ops of
 normalize :: Normaliser
 normalize (a :< x) = case typeof x of
 
-  ITyOp -> case x of
+  IType -> case x of
+
+    TyApplyOp op1 (_ :< TyApplyOp op2 ty) -> do
+      let op = (view source op1 <> view source op2, Nothing) :< TyOpMulti (Set.fromList [op1, op2])
+      normalize (a :< TyApplyOp op ty)
+
+    TyApplyOp op ty -> do
+      op <- normalize op
+      ty <- normalize ty
+      case view value op of
+        TyOpIdentity -> return ty
+        _            -> do
+          affine <- isAffine ty
+          case affine of
+            No -> return $ ty
+            _  -> return $ (a :< TyApplyOp op ty)
 
     TyOpMulti ops -> do
       ops <- mapM normalize (Set.toList ops)
       return $ (contractTyOps . Set.delete (phantom TyOpIdentity) . Set.unions . map expandTyOps) ops
-
-    _ -> continue
-
-  IType -> case x of
-
-    TyApplyOp tyOp1@(_ :< TyOp op1) (_ :< TyApply tyOp2@(_ :< TyOp op2) ty) -> do
-      let op = (view source op1 <> view source op2, Nothing) :< TyOpMulti (Set.fromList [op1, op2])
-      let tyOp = (view source tyOp1 <> view source tyOp2, Nothing) :< TyOp op
-      normalize (a :< TyApplyOp tyOp ty)
-
-    TyApplyOp tyOp@(_ :< TyOp op) ty -> do
-      tyOp@(_ :< TyOp op) <- normalize tyOp
-      ty <- normalize ty
-      case view value op of
-        TyOpIdentity -> return ty
-        _         -> do
-          affine <- isAffine ty
-          case affine of
-            No -> return $ ty
-            _  -> return $ (a :< TyApplyOp tyOp ty)
 
     _ -> continue
 
@@ -325,10 +308,10 @@ normalize (a :< x) = case typeof x of
 data Truth = Yes | No | Variable | Unknown
   deriving Show
 
-isRef :: TyOp -> Truth
-isRef = \case
+isRef :: Annotated Type -> Truth
+isRef op = case view value op of
   TyOpIdentity  -> No
-  TyOpMulti ops -> Set.fold (\(_ :< op) -> truthOr (isRef op)) No ops
+  TyOpMulti ops -> Set.fold (\op -> truthOr (isRef op)) No ops
   TyOpRef _     -> Yes
   TyOpUniRef _  -> Yes
   TyOpUniView _ -> Unknown
@@ -365,7 +348,7 @@ isAffine t = do
       TyPair t1 t2 -> isTyConAffine "Pair" [t1, t2]
       TyFn t1 t2 -> isTyConAffine "Fn" [t1, t2]
       TyUnit -> isTyConAffine "Unit" []
-      TyApplyOp (_ :< TyOp (_ :< op)) t -> truthAnd (truthNot (isRef op)) <$> isAffine t
+      TyApplyOp op t -> truthAnd (truthNot (isRef op)) <$> isAffine t
       TyUniPlain _ -> return Unknown
       TyUniValue _ -> return Unknown
       TyVarPlain _ -> return Variable
@@ -410,7 +393,7 @@ tryDefault term@((src, _) :< _) = do
   case defaultTyOps of
     [] -> return term
     _  -> do
-      Progress (Just (resolve, normalize)) _ <- solved (areTyOps defaultTyOps)
+      Progress (Just (resolve, normalize)) _ <- solved (are defaultTyOps)
       (normalize . sub resolve) term
 
   where

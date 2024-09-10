@@ -31,7 +31,6 @@ module Term
   -- | T1
   , QType(..)
   , TyConstraint(..)
-  , TyOp(..)
   , Type(..)
   , TyVar(..)
   , tyVarName
@@ -165,15 +164,6 @@ data Tok = TokExp (Annotated Exp)
          | TokOp Name
   deriving (Eq, Ord)
 
-data TyOp = TyOpIdentity
-          | TyOpMulti (Set (Annotated TyOp))
-          | TyOpRef Name
-          | TyOpUniRef Name
-          | TyOpUniView Name
-          | TyOpVarRef Name
-          | TyOpVarView Name
-  deriving (Eq, Ord)
-
 data TyVar = TyVarVarPlain Name
            | TyVarVarRef Name
            | TyVarVarValue Name
@@ -192,7 +182,13 @@ data Type = TyApply (Annotated Type) (Annotated Type)
           | TyApplyOp (Annotated Type) (Annotated Type)
           | TyCon Name
           | TyFn (Annotated Type) (Annotated Type)
-          | TyOp (Annotated TyOp)
+          | TyOpIdentity
+          | TyOpMulti (Set (Annotated Type))
+          | TyOpRef Name
+          | TyOpUniRef Name
+          | TyOpUniView Name
+          | TyOpVarRef Name
+          | TyOpVarView Name
           | TyPair (Annotated Type) (Annotated Type)
           | TyUniPlain Name
           | TyUniValue Name
@@ -216,15 +212,13 @@ data Kind = KindUni Name
 data TyConstraint = HoldsInteger Integer (Annotated Type)
                   | Instance (Annotated Type)
                   | RefFree Name (Annotated Type)
-                  | Ref (Annotated TyOp)
+                  | Ref (Annotated Type)
                   | TEq (Annotated Type) (Annotated Type)
-                  | TOpEq (Annotated TyOp) (Annotated TyOp)
-                  | TOpEqIfAffine (Annotated TyOp) (Annotated TyOp) (Annotated Type)
+                  | TEqIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
                   | Value (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`
-infixl 8 `TOpEq`
 
 data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
                     | KPlain (Annotated Kind)
@@ -243,7 +237,6 @@ type KindRequirement = Requirement KindConstraint
 type family Annotation a where
   Annotation Exp      = Annotated Type
   Annotation Pat      = Annotated Type
-  Annotation TyOp     = Annotated Kind
   Annotation Type     = Annotated Kind
   Annotation TyVar    = Annotated Kind
   Annotation DataCon  = Annotated QType

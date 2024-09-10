@@ -63,18 +63,14 @@ specialiseQType src name (_ :< qTy) = case qTy of
     vs' <- mapM specialiseTyVar vs
     let
       tyRewrite :: Term a => Annotated a -> Annotated a
-      tyRewrite = sub f
-      f :: forall a. Term a => Annotated a -> Maybe (Annotated a)
-      f (_ :< t) = case typeof t of
-        IType -> case t of
-          TyVarPlain n -> n `lookup` vs'
-          TyVarValue n -> n `lookup` vs'
-          _            -> Nothing
-        ITyOp -> case t of
-          TyOpVarRef  n -> case n `lookup` vs' of { Just (_ :< TyOp op) -> Just op; Nothing -> Nothing }
-          TyOpVarView n -> case n `lookup` vs' of { Just (_ :< TyOp op) -> Just op; Nothing -> Nothing }
-          _             -> Nothing
-        _ -> Nothing
+      tyRewrite = sub (embedSub f)
+      f :: Annotated Type -> Maybe (Annotated Type)
+      f (_ :< t) = case t of
+        TyVarPlain  n -> n `lookup` vs'
+        TyVarValue  n -> n `lookup` vs'
+        TyOpVarRef  n -> n `lookup` vs'
+        TyOpVarView n -> n `lookup` vs'
+        _             -> Nothing
     let specialisation = zip vs (map snd vs')
     requires [ (src, Specialisation name) :< view value (tyRewrite c) | c <- cs ]
     return (tyRewrite t, Just specialisation)
@@ -124,7 +120,7 @@ readVar src name = do
   -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
   when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> quote (pretty name)
   tEnv %= LEnv.incRead name
-  return $ (refName, phantom (TyApplyOp (phantom (TyOp r)) t))
+  return $ (refName, phantom (TyApplyOp r t))
 
 -- | Marks a variable as used, returning the type of the variable.
 -- A copy constraint will be generated if the variable has already been used or has been captured.
@@ -195,8 +191,8 @@ tyVarToType = over value tyVarToType' where
   tyVarToType' = \case
     TyVarVarPlain n -> TyVarPlain n
     TyVarVarValue n -> TyVarValue n
-    TyVarVarRef n   -> TyOp (phantom (TyOpVarRef n))
-    TyVarVarView n  -> TyOp (phantom (TyOpVarView n))
+    TyVarVarRef n   -> TyOpVarRef n
+    TyVarVarView n  -> TyOpVarView n
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of

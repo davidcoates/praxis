@@ -60,7 +60,6 @@ data I a where
   -- | T1
   IQType        :: I QType
   ITyConstraint :: I TyConstraint
-  ITyOp         :: I TyOp
   IType         :: I Type
   ITyVar        :: I TyVar
   -- | T2
@@ -95,7 +94,6 @@ switch a b eq neq = case (a, b) of
   -- | T1
   (IQType, IQType)                     -> eq
   (ITyConstraint, ITyConstraint)       -> eq
-  (ITyOp, ITyOp)                       -> eq
   (IType, IType)                       -> eq
   (ITyVar, ITyVar)                     -> eq
   -- | T2
@@ -280,26 +278,13 @@ instance Term TyConstraint where
   witness = ITyConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
-    HoldsInteger n t    -> HoldsInteger n <$> f t
-    Instance t          -> Instance <$> f t
-    Ref t               -> Ref <$> f t
-    RefFree n t         -> RefFree n <$> f t
-    TEq a b             -> TEq <$> f a <*> f b
-    TOpEq a b           -> TOpEq <$> f a <*> f b
-    TOpEqIfAffine a b t -> TOpEqIfAffine <$> f a <*> f b <*> f t
-    Value t             -> Value <$> f t
-
-instance Term TyOp where
-  witness = ITyOp
-  recurseAnnotation _ f x = f x
-  recurseTerm f = \case
-    TyOpIdentity  -> pure TyOpIdentity
-    TyOpMulti os  -> TyOpMulti . Set.fromList <$> traverse f (Set.toList os)
-    TyOpRef n     -> pure (TyOpRef n)
-    TyOpUniRef n  -> pure (TyOpUniRef n)
-    TyOpUniView n -> pure (TyOpUniView n)
-    TyOpVarRef n  -> pure (TyOpVarRef n)
-    TyOpVarView n -> pure (TyOpVarView n)
+    HoldsInteger n t  -> HoldsInteger n <$> f t
+    Instance t        -> Instance <$> f t
+    Ref t             -> Ref <$> f t
+    RefFree n t       -> RefFree n <$> f t
+    TEq a b           -> TEq <$> f a <*> f b
+    TEqIfAffine a b t -> TEqIfAffine <$> f a <*> f b <*> f t
+    Value t           -> Value <$> f t
 
 instance Term Type where
   witness = IType
@@ -309,7 +294,13 @@ instance Term Type where
     TyApplyOp a b -> TyApplyOp <$> f a <*> f b
     TyCon n       -> pure (TyCon n)
     TyFn a b      -> TyFn <$> f a <*> f b
-    TyOp o        -> TyOp <$> f o
+    TyOpIdentity  -> pure TyOpIdentity
+    TyOpMulti os  -> TyOpMulti . Set.fromList <$> traverse f (Set.toList os)
+    TyOpRef n     -> pure (TyOpRef n)
+    TyOpUniRef n  -> pure (TyOpUniRef n)
+    TyOpUniView n -> pure (TyOpUniView n)
+    TyOpVarRef n  -> pure (TyOpVarRef n)
+    TyOpVarView n -> pure (TyOpVarView n)
     TyPair a b    -> TyPair <$> f a <*> f b
     TyUniPlain n  -> pure (TyUniPlain n)
     TyUniValue n  -> pure (TyUniValue n)

@@ -326,14 +326,14 @@ foldTy :: Prism Type [Annotated Type]
 foldTy = Prism (view value . fold) (Just . unfold . phantom) where
   fold [x] = x
   fold (x:xs) = case view value x of
-    TyOp _ -> let y = fold xs in (view source x <> view source y, Nothing) :< TyApply x y
+    TyOp _ -> let y = fold xs in (view source x <> view source y, Nothing) :< TyApplyOp x y
     _      -> foldLeft (x:xs)
   foldLeft [x] = x
   foldLeft (x:y:ys) = fold ((view source x <> view source y, Nothing) :< TyApply x y : ys)
   unfold x = case view value x of
-    TyApply x@(_ :< TyOp _) y -> x : unfold y
-    TyApply _               _ -> unfoldLeft x
-    _                         -> [x]
+    TyApplyOp x y -> x : unfold y
+    TyApply _   _ -> unfoldLeft x
+    _             -> [x]
   unfoldLeft x = case view value x of
     TyApply x y -> unfoldLeft x ++ [y]
     _           -> [x]

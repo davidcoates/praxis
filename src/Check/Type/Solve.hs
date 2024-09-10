@@ -84,7 +84,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
 
   TEq (_ :< TyFn t1 t2) (_ :< TyFn s1 s2) -> return $ subgoals [ Subgoal (TEq t1 s1), Subgoal (TEq t2 s2) ]
 
-  TEq t1'@(_ :< TyApply (_ :< TyOp _) _) t2' -> do
+  TEq t1'@(_ :< TyApplyOp _ _) t2' -> do
     let
       (op1, t1) = splitTyOp t1'
       (op2, t2) = splitTyOp t2'
@@ -97,7 +97,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
         (_, TyUniPlain _) -> return skip
         _                 -> return split
 
-  TEq t1 t2@(_ :< TyApply (_ :< TyOp _) _) -> reduce disambiguate (TEq t2 t1) -- handled by the above case
+  TEq t1 t2@(_ :< TyApplyOp _ _) -> reduce disambiguate (TEq t2 t1) -- handled by the above case
 
   TOpEqIfAffine op1 op2 t -> do
     affine <- isAffine t
@@ -139,7 +139,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
       _       -> return contradiction
 
   Value (_ :< t) -> case t of
-    TyApply (_ :< TyOp op) t -> do
+    TyApplyOp (_ :< TyOp op) t -> do
       affine <- isAffine t
       case affine of
         Unknown  -> return skip
@@ -161,7 +161,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
       -> return $ subgoals [ Subgoal (TEq t (TyCon "I32" `as` phantom KindType)) ]
 
     TyApply (a1 :< TyCon cls) t -> case view value t of
-      TyApply tyOp@(_ :< TyOp (_ :< op)) t -> do
+      TyApplyOp tyOp@(_ :< TyOp (_ :< op)) t -> do
         let
           instVal = Instance (a0 :< TyApply (a1 :< TyCon cls) t)
           instRef = Instance (a0 :< TyApply (a1 :< TyCon cls) (phantom (TyApply (phantom (TyCon "Ref")) t)))
@@ -269,8 +269,8 @@ is n t = embedSub f where
 -- TyOp helpers
 splitTyOp :: Annotated Type -> (Annotated TyOp, Annotated Type)
 splitTyOp ty = case view value ty of
-  TyApply (_ :< TyOp op) ty -> (op, ty)
-  _                         -> (phantom TyOpIdentity, ty)
+  TyApplyOp (_ :< TyOp op) ty -> (op, ty)
+  _                           -> (phantom TyOpIdentity, ty)
 
 expandTyOps :: Annotated TyOp -> Set (Annotated TyOp)
 expandTyOps op = case view value op of
@@ -298,12 +298,12 @@ normalise (a :< x) = case typeof x of
 
   IType -> case x of
 
-    TyApply tyOp1@(_ :< TyOp op1) (_ :< TyApply tyOp2@(_ :< TyOp op2) ty) -> do
+    TyApplyOp tyOp1@(_ :< TyOp op1) (_ :< TyApply tyOp2@(_ :< TyOp op2) ty) -> do
       let op = (view source op1 <> view source op2, Nothing) :< TyOpMulti (Set.fromList [op1, op2])
       let tyOp = (view source tyOp1 <> view source tyOp2, Nothing) :< TyOp op
-      normalise (a :< TyApply tyOp ty)
+      normalise (a :< TyApplyOp tyOp ty)
 
-    TyApply tyOp@(_ :< TyOp op) ty -> do
+    TyApplyOp tyOp@(_ :< TyOp op) ty -> do
       tyOp@(_ :< TyOp op) <- normalise tyOp
       ty <- normalise ty
       case view value op of
@@ -312,7 +312,7 @@ normalise (a :< x) = case typeof x of
           affine <- isAffine ty
           case affine of
             No -> return $ ty
-            _  -> return $ (a :< TyApply tyOp ty)
+            _  -> return $ (a :< TyApplyOp tyOp ty)
 
     _ -> continue
 
@@ -365,12 +365,13 @@ isAffine t = do
       TyPair t1 t2 -> isTyConAffine "Pair" [t1, t2]
       TyFn t1 t2 -> isTyConAffine "Fn" [t1, t2]
       TyUnit -> isTyConAffine "Unit" []
-      TyApply (_ :< TyOp (_ :< op)) t -> truthAnd (truthNot (isRef op)) <$> isAffine t
+      TyApplyOp (_ :< TyOp (_ :< op)) t -> truthAnd (truthNot (isRef op)) <$> isAffine t
       TyUniPlain _ -> return Unknown
       TyUniValue _ -> return Unknown
       TyVarPlain _ -> return Variable
       TyVarValue _ -> return Variable
       _ | Just (n, ts) <- unapplyTyCon (a :< t) -> isTyConAffine n ts
+      _ -> throw (a :< t)
 
 isTyConAffine :: Name -> [Annotated Type] -> Praxis Truth
 isTyConAffine name args = do

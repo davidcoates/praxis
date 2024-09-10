@@ -86,8 +86,9 @@ hideLabel x = case typeof x of
     PatPair _ _ -> True -- Note: Not trivial due to references/views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
     _           -> False
   IType -> case x of
-    TyApply _ _ -> True
-    _           -> False
+    TyApply _ _   -> True
+    TyApplyOp _ _ -> True
+    _             -> False
   _ -> False
 
 label :: Term a => Annotated a -> Printable String
@@ -127,9 +128,10 @@ instance Pretty TyReason where
 
 instance Pretty KindReason where
   pretty = \case
-    KindReasonTyApply f x -> "type application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
-    KindReasonDataCon c   -> "data constructor " <> pretty c
-    KindReasonData n args -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
-    KindReasonType t      -> "type " <> pretty t
-    KindReasonTyVar t     -> "type pattern " <> pretty t
-    KindReasonQType t     -> "qualified type " <> pretty t
+    KindReasonTyApply f x   -> "type application " <> pretty f <> pretty (Colored.Fg Red (" $ " :: Colored String)) <> pretty x
+    KindReasonTyApplyOp f x -> "type operator application " <> pretty f <> pretty (Colored.Fg Red (" ★ " :: Colored String)) <> pretty x
+    KindReasonDataCon c     -> "data constructor " <> pretty c
+    KindReasonData n args   -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
+    KindReasonType t        -> "type " <> pretty t
+    KindReasonTyVar t       -> "type pattern " <> pretty t
+    KindReasonQType t       -> "qualified type " <> pretty t

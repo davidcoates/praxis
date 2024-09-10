@@ -189,6 +189,7 @@ tyVarName tyVar = case view value tyVar of
   TyVarVarView  n -> n
 
 data Type = TyApply (Annotated Type) (Annotated Type)
+          | TyApplyOp (Annotated Type) (Annotated Type)
           | TyCon Name
           | TyFn (Annotated Type) (Annotated Type)
           | TyOp (Annotated TyOp)
@@ -290,6 +291,7 @@ data KindReason = KindReasonData Name [Annotated TyVar]
                 | KindReasonDataCon (Annotated DataCon)
                 | KindReasonQType (Annotated QType)
                 | KindReasonTyApply (Annotated Type) (Annotated Type)
+                | KindReasonTyApplyOp (Annotated Type) (Annotated Type)
                 | KindReasonType (Annotated Type)
                 | KindReasonTyVar (Annotated TyVar)
   deriving (Eq, Ord)

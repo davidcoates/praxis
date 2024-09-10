@@ -124,7 +124,7 @@ readVar src name = do
   -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
   when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> quote (pretty name)
   tEnv %= LEnv.incRead name
-  return $ (refName, phantom (TyApply (phantom (TyOp r)) t))
+  return $ (refName, phantom (TyApplyOp (phantom (TyOp r)) t))
 
 -- | Marks a variable as used, returning the type of the variable.
 -- A copy constraint will be generated if the variable has already been used or has been captured.
@@ -352,7 +352,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
       -> return $ TyCon "Char" `as` phantom KindType
     String _ -> do
       op <- freshTyUniView
-      return $ TyApply op (TyCon "String" `as` phantom KindType) `as` phantom KindType
+      return $ TyApplyOp op (TyCon "String" `as` phantom KindType) `as` phantom KindType
 
   Read var exp -> do
     (refName, refType) <- readVar src var
@@ -436,7 +436,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
     qTy <- getConType src name
     (t, _) <- specialiseQType src name qTy
     op <- freshTyUniView
-    let wrap' t = TyApply op t `as`phantom KindType
+    let wrap' t = TyApplyOp op t `as`phantom KindType
     case view value t of
       TyFn argTy retTy -> do
         (patArgType, pat) <- generatePat' (wrap . wrap') pat
@@ -469,7 +469,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
 
   PatPair pat1 pat2 -> do
     op <- freshTyUniView
-    let wrap' t = TyApply op t `as`phantom KindType
+    let wrap' t = TyApplyOp op t `as`phantom KindType
     (t1, pat1) <- generatePat' (wrap . wrap') pat1
     (t2, pat2) <- generatePat' (wrap . wrap') pat2
     let t = wrap' (TyPair t1 t2 `as` phantom KindType)

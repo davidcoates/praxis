@@ -305,16 +305,17 @@ instance Term Type where
   witness = IType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    TyApply a b  -> TyApply <$> f a <*> f b
-    TyCon n      -> pure (TyCon n)
-    TyFn a b     -> TyFn <$> f a <*> f b
-    TyOp o       -> TyOp <$> f o
-    TyPair a b   -> TyPair <$> f a <*> f b
-    TyUniPlain n -> pure (TyUniPlain n)
-    TyUniValue n -> pure (TyUniValue n)
-    TyUnit       -> pure TyUnit
-    TyVarPlain n -> pure (TyVarPlain n)
-    TyVarValue n -> pure (TyVarValue n)
+    TyApply a b   -> TyApply <$> f a <*> f b
+    TyApplyOp a b -> TyApplyOp <$> f a <*> f b
+    TyCon n       -> pure (TyCon n)
+    TyFn a b      -> TyFn <$> f a <*> f b
+    TyOp o        -> TyOp <$> f o
+    TyPair a b    -> TyPair <$> f a <*> f b
+    TyUniPlain n  -> pure (TyUniPlain n)
+    TyUniValue n  -> pure (TyUniValue n)
+    TyUnit        -> pure TyUnit
+    TyVarPlain n  -> pure (TyVarPlain n)
+    TyVarValue n  -> pure (TyVarValue n)
 
 instance Term TyVar where
   witness = ITyVar
@@ -358,11 +359,12 @@ instance Term TyRequirement where
 instance Term KindRequirement where
   witness = IKindRequirement
   recurseAnnotation _ f x = case x of
-    KindReasonData n a    -> KindReasonData n <$> traverse f a
-    KindReasonDataCon c   -> KindReasonDataCon <$> f c
-    KindReasonQType t     -> KindReasonQType <$> f t
-    KindReasonTyApply a b -> KindReasonTyApply <$> f a <*> f b
-    KindReasonType t      -> KindReasonType <$> f t
-    KindReasonTyVar t     -> KindReasonTyVar <$> f t
+    KindReasonData n a      -> KindReasonData n <$> traverse f a
+    KindReasonDataCon c     -> KindReasonDataCon <$> f c
+    KindReasonQType t       -> KindReasonQType <$> f t
+    KindReasonTyApply a b   -> KindReasonTyApply <$> f a <*> f b
+    KindReasonTyApplyOp a b -> KindReasonTyApplyOp <$> f a <*> f b
+    KindReasonType t        -> KindReasonType <$> f t
+    KindReasonTyVar t       -> KindReasonTyVar <$> f t
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c

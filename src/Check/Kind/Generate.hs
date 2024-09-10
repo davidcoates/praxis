@@ -82,16 +82,17 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
     TyApply f x -> do
       f <- generateType f
       x <- generateType x
-      case view value f of
-        TyOp _ -> do
-          require $ (src, KindReasonTyApply f x) :< (getKind x `KEq` phantom KindType)
-          return (phantom KindType :< TyApply f x)
-        _ -> do
-          k1 <- freshKindUni
-          k2 <- freshKindUni
-          require $ (src, KindReasonTyApply f x) :< (getKind f `KEq` phantom (KindFn k1 k2))
-          require $ (src, KindReasonTyApply f x) :< (getKind x `KSub` k1)
-          return (k2 :< TyApply f x)
+      k1 <- freshKindUni
+      k2 <- freshKindUni
+      require $ (src, KindReasonTyApply f x) :< (getKind f `KEq` phantom (KindFn k1 k2))
+      require $ (src, KindReasonTyApply f x) :< (getKind x `KSub` k1)
+      return (k2 :< TyApply f x)
+
+    TyApplyOp f x -> do
+      f <- generateType f
+      x <- generateType x
+      require $ (src, KindReasonTyApplyOp f x) :< (getKind x `KEq` phantom KindType)
+      return (phantom KindType :< TyApplyOp f x)
 
     TyCon con -> do
       entry <- kEnv `uses` Env.lookup con

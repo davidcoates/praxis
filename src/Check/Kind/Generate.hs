@@ -33,9 +33,9 @@ getKind term = view (annotation . just) term
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- generate term
-  display term `ifFlag` debug
+  display "annotated term" term `ifFlag` debug
   requirements' <- use (kindCheckState . requirements)
-  display (separate "\n\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
+  display "requirements" (separate "\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
   return term
 
 -- TODO since we ignore annotation of input, could adjust this...

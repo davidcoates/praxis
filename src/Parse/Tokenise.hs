@@ -19,9 +19,9 @@ import           Prelude                  hiding (until)
 run :: Bool -> String -> Praxis [Sourced Token]
 run topLevel text = do
   tokens <- Tokeniser.run token text
-  display (separate " " (map (view value) tokens)) `ifFlag` debug
+  display "tokens" (separate " " (map (view value) tokens)) `ifFlag` debug
   let tokens' = unlayout topLevel tokens
-  display (separate " " (map (view value) tokens')) `ifFlag` debug
+  display "tokens with layout" (separate " " (map (view value) tokens')) `ifFlag` debug
   return tokens'
 
 -- Helper functions

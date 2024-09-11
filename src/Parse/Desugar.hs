@@ -36,7 +36,7 @@ import           Prelude             hiding (exp)
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- desugar term
-  display term `ifFlag` debug
+  display "desugared term" term `ifFlag` debug
   return term
 
 desugar :: Term a => Annotated a -> Praxis (Annotated a)

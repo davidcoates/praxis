@@ -212,8 +212,8 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
     typeUnis :: forall a. Term a => Annotated a -> Set Name
     typeUnis = extract (embedMonoid f) where
       f x = case x of
-        TypeUni _ n  -> Set.singleton n
-        _            -> Set.empty
+        TypeUni _ n -> Set.singleton n
+        _           -> Set.empty
 
     refLabels :: forall a. Term a => Annotated a -> Set Name
     refLabels = extract (embedMonoid f) where
@@ -241,8 +241,8 @@ are ops = embedSub f where
 is :: Name -> Type -> Resolver
 is n t = embedSub f where
   f (a :< x) = case x of
-    TypeUni _ n'  -> if n == n' then Just (a :< t) else Nothing
-    _             -> Nothing
+    TypeUni _ n' -> if n == n' then Just (a :< t) else Nothing
+    _            -> Nothing
 
 -- TypeOp helpers
 splitTypeOp :: Annotated Type -> (Annotated Type, Annotated Type)
@@ -300,13 +300,13 @@ data Truth = Yes | No | Variable | Unknown
 
 isRef :: Annotated Type -> Truth
 isRef op = case view value op of
-  TypeIdentityOp  -> No
-  TypeRef _       -> Yes
-  TypeSetOp ops   -> Set.fold (\op -> truthOr (isRef op)) No ops
-  TypeUni Ref _   -> Yes
-  TypeUni View _  -> Unknown
-  TypeVar Ref _   -> Yes
-  TypeVar View _  -> Variable
+  TypeIdentityOp -> No
+  TypeRef _      -> Yes
+  TypeSetOp ops  -> Set.fold (\op -> truthOr (isRef op)) No ops
+  TypeUni Ref _  -> Yes
+  TypeUni View _ -> Unknown
+  TypeVar Ref _  -> Yes
+  TypeVar View _ -> Variable
 
 truthOr :: Truth -> Truth -> Truth
 truthOr Yes _      = Yes

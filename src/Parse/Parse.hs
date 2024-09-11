@@ -14,5 +14,5 @@ import           Token
 run :: Term a => [Sourced Token] -> Praxis (Annotated a)
 run tokens = do
   term <- Parser.run parse tokens
-  display term `ifFlag` debug
+  display "parsed term" term `ifFlag` debug
   return term

@@ -15,5 +15,5 @@ check :: Term a => Annotated a -> Praxis (Annotated a)
 check term = save stage $ do
   stage .= TypeCheck
   term <- Rename.run term >>= Generate.run >>= Solve.run
-  display term `ifFlag` debug
+  display "checked term" term `ifFlag` debug
   return term

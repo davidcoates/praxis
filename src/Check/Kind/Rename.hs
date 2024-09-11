@@ -18,7 +18,7 @@ import           Term
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- rename term
-  display term `ifFlag` debug
+  display "renamed term" term `ifFlag` debug
   return term
 
 rename :: Term a => Annotated a -> Praxis (Annotated a)
@@ -72,9 +72,9 @@ renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 renameType :: Annotated Type -> Praxis (Annotated Type)
 renameType (a@(src, _) :< ty) = (a :<) <$> case ty of
 
-  TypeVar f n  -> TypeVar f <$> disambiguate src n
+  TypeVar f n -> TypeVar f <$> disambiguate src n
 
-  _               -> recurseTerm rename ty
+  _           -> recurseTerm rename ty
 
 
 renameTypeVar :: Annotated TypeVar -> Praxis (Annotated TypeVar)

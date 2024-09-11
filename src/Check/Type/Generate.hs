@@ -150,12 +150,12 @@ getConType src name = do
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- generate term
-  display term `ifFlag` debug
+  display "annotated term" term `ifFlag` debug
   requirements' <- use (typeCheckState . requirements)
   (`ifFlag` debug) $ do
-    display (separate "\n\n" (nub . sort $ Set.toList requirements'))
-    use tEnv >>= display
-    use cEnv >>= display
+    display "requirements" (separate "\n" (nub . sort $ Set.toList requirements'))
+    use tEnv >>= display "environment"
+    use cEnv >>= display "constructor environment"
   return term
 
 generate :: Term a => Annotated a -> Praxis (Annotated a)

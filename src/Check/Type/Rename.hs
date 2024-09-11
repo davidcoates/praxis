@@ -19,7 +19,7 @@ import           Term
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- rename term
-  display term `ifFlag` debug
+  display "renamed term" term `ifFlag` debug
   return term
 
 rename :: Term a => Annotated a -> Praxis (Annotated a)

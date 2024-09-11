@@ -213,7 +213,7 @@ withContext message src = do
 
 warn' :: Pretty a => Maybe Source -> a -> Praxis ()
 warn' src x = (`ifFlag` debug) $ do
-  message <- pretty (Colored.Style Bold (Colored.Fg DullYellow ("warning" :: Colored String))) `withContext` src
+  message <- pretty (Colored.Style Bold (Colored.Fg Yellow ("warning" :: Colored String))) `withContext` src
   displayBare (message <> ": " <> pretty x)
 
 warn :: Pretty a => a -> Praxis ()
@@ -224,7 +224,7 @@ warnAt src = warn' (Just src)
 
 throw' :: Pretty a => Maybe Source -> a -> Praxis b
 throw' src x = do
-  message <- pretty (Colored.Style Bold (Colored.Fg DullRed ("error" :: Colored String))) `withContext` src
+  message <- pretty (Colored.Style Bold (Colored.Fg Red ("error" :: Colored String))) `withContext` src
   abort $ message <> ": " <> pretty x
 
 throw :: Pretty a => a -> Praxis b
@@ -233,11 +233,11 @@ throw = throw' Nothing
 throwAt :: Pretty a => Source -> a -> Praxis b
 throwAt src = throw' (Just src)
 
-display :: Pretty a => a -> Praxis ()
-display x = unlessSilent $ do
+display :: Pretty a => String -> a -> Praxis ()
+display info x = unlessSilent $ do
   t <- liftIO $ getTerm
   s <- use stage
-  liftIO $ printColoredS t $ "\n{- " <> Colored.Style Italic (Colored.Value (show s)) <> " -}\n\n"
+  liftIO $ printColoredS t $ Colored.Fg White (Colored.Bg Green (Colored.Style Bold (Colored.Value (show s ++ " (" ++ info ++ ")")))) <> "\n"
   displayBare x
 
 displayBare :: Pretty a => a -> Praxis ()

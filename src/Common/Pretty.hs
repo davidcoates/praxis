@@ -17,7 +17,7 @@ import           Data.Monoid.Colorful (Color (..), Colored, Style (..), getTerm,
 import qualified Data.Monoid.Colorful as Color
 import           Data.String          (IsString (..))
 
-data Option = Plain | Types | Kinds deriving Eq
+data Option = Simple | Types | Kinds deriving Eq
 
 newtype Printable a = Printable { runPrintable :: Option -> Colored a }
 

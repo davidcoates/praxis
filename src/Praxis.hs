@@ -59,10 +59,7 @@ module Praxis
 
   , freshKindUni
   , freshRef
-  , freshTypeUniPlain
-  , freshTypeUniRef
-  , freshTypeUniValue
-  , freshTypeUniView
+  , freshTypeUni
   , freshVar
 
   , clearTerm
@@ -193,7 +190,7 @@ makeLenses ''PraxisState
 format :: Pretty a => a -> Praxis (Colored String)
 format x = do
   stage' <- use stage
-  let opt = case stage' of { KindCheck -> Kinds; TypeCheck -> Types; _ -> Plain }
+  let opt = case stage' of { KindCheck -> Kinds; TypeCheck -> Types; _ -> Simple }
   return (runPrintable (pretty x) opt)
 
 abort :: Pretty a => a -> Praxis b
@@ -303,31 +300,20 @@ freshRef :: Praxis (Annotated Type)
 freshRef = do
   (l:ls) <- use (fresh . freshRefs)
   fresh . freshRefs .= ls
-  return (TypeOpRef l `as` phantom KindType)
+  return (TypeRef l `as` phantom KindType)
 
-freshTypeUniPlain :: Praxis (Annotated Type)
-freshTypeUniPlain = do
-  (x:xs) <- use (fresh . freshTypeUniPlains)
-  fresh . freshTypeUniPlains .= xs
-  return (TypeUniPlain x `as` phantom KindType)
-
-freshTypeUniRef ::Praxis (Annotated Type)
-freshTypeUniRef = do
-  (o:os) <- use (fresh . freshTypeUniRefs)
-  fresh . freshTypeUniRefs .= os
-  return (TypeOpUniRef o `as` phantom KindRef)
-
-freshTypeUniValue :: Praxis (Annotated Type)
-freshTypeUniValue = do
-  (x:xs) <- use (fresh . freshTypeUniValues)
-  fresh . freshTypeUniValues .= xs
-  return (TypeUniValue x `as` phantom KindType)
-
-freshTypeUniView ::Praxis (Annotated Type)
-freshTypeUniView = do
-  (o:os) <- use (fresh . freshTypeUniViews)
-  fresh . freshTypeUniViews .= os
-  return (TypeOpUniView o `as` phantom KindView)
+freshTypeUni :: Flavor -> Praxis (Annotated Type)
+freshTypeUni f = case f of
+  Plain -> freshTypeUni' freshTypeUniPlains KindType
+  Ref   -> freshTypeUni' freshTypeUniRefs KindRef
+  Value -> freshTypeUni' freshTypeUniValues KindType
+  View  -> freshTypeUni' freshTypeUniViews KindView
+  where
+    freshTypeUni' :: Lens' Fresh [String] -> Kind -> Praxis (Annotated Type)
+    freshTypeUni' freshTypeUnis kind = do
+      (x:xs) <- use (fresh . freshTypeUnis)
+      fresh . freshTypeUnis .= xs
+      return (TypeUni f x `as` phantom kind)
 
 freshVar :: Name -> Praxis Name
 freshVar var = do

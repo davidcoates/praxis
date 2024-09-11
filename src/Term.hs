@@ -29,11 +29,11 @@ module Term
   , Tok(..)
 
   -- | T1
+  , Flavor(..)
   , QType(..)
   , TypeConstraint(..)
   , Type(..)
   , TypeVar(..)
-  , typeVarName
 
   -- | T2
   , Kind(..)
@@ -164,37 +164,23 @@ data Tok = TokExp (Annotated Exp)
          | TokOp Name
   deriving (Eq, Ord)
 
-data TypeVar = TypeVarVarPlain Name
-             | TypeVarVarRef Name
-             | TypeVarVarValue Name
-             | TypeVarVarView Name
+data Flavor = Plain | Ref | Value | View
   deriving (Eq, Ord)
 
--- TODO this is a good hint that name should be factored out
-typeVarName :: Annotated TypeVar -> Name
-typeVarName typeVar = case view value typeVar of
-  TypeVarVarPlain n -> n
-  TypeVarVarRef   n -> n
-  TypeVarVarValue n -> n
-  TypeVarVarView  n -> n
+data TypeVar = TypeVarVar Flavor Name
+  deriving (Eq, Ord)
 
 data Type = TypeApply (Annotated Type) (Annotated Type)
           | TypeApplyOp (Annotated Type) (Annotated Type)
           | TypeCon Name
           | TypeFn (Annotated Type) (Annotated Type)
-          | TypeOpIdentity
-          | TypeOpMulti (Set (Annotated Type))
-          | TypeOpRef Name
-          | TypeOpUniRef Name
-          | TypeOpUniView Name
-          | TypeOpVarRef Name
-          | TypeOpVarView Name
+          | TypeIdentityOp
           | TypePair (Annotated Type) (Annotated Type)
-          | TypeUniPlain Name
-          | TypeUniValue Name
+          | TypeRef Name
+          | TypeSetOp (Set (Annotated Type))
+          | TypeUni Flavor Name
           | TypeUnit
-          | TypeVarPlain Name
-          | TypeVarValue Name
+          | TypeVar Flavor Name
   deriving (Eq, Ord)
 
 data QType = Forall [Annotated TypeVar] [Annotated TypeConstraint] (Annotated Type)

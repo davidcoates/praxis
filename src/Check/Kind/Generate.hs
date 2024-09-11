@@ -89,9 +89,9 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
     TypeUnit -> do
       return (phantom KindType :< TypeUnit)
 
-    TypeOpIdentity -> return (phantom KindView :< TypeOpIdentity)
+    TypeIdentityOp -> return (phantom KindView :< TypeIdentityOp)
 
-    TypeOpMulti tys -> do
+    TypeSetOp tys -> do
       tys <- mapM generateType (Set.toList tys)
       let
         checkRefOrView :: Annotated Type -> Praxis ()
@@ -102,15 +102,7 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       mapM_ checkRefOrView tys
       let
         isRef = all (\op -> case view value (getKind op) of { KindRef -> True; KindView -> False }) tys
-      return (phantom (if isRef then KindRef else KindView) :< TypeOpMulti (Set.fromList tys))
-
-    TypeOpVarRef var -> do
-      Just k <- kEnv `uses` Env.lookup var
-      return (k :< TypeOpVarRef var)
-
-    TypeOpVarView var -> do
-      Just k <- kEnv `uses` Env.lookup var
-      return (k :< TypeOpVarView var)
+      return (phantom (if isRef then KindRef else KindView) :< TypeSetOp (Set.fromList tys))
 
     TypePair t1 t2 -> do
       t1 <- generateType t1
@@ -119,37 +111,33 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       require $ (src, KindReasonType t2) :< (getKind t2 `KindIsEq` phantom KindType)
       return (phantom KindType :< TypePair t1 t2)
 
-    TypeVarPlain var -> do
+    TypeVar f var -> do
       Just k <- kEnv `uses` Env.lookup var
-      return (k :< TypeVarPlain var)
-
-    TypeVarValue var -> do
-      Just k <- kEnv `uses` Env.lookup var
-      return (k :< TypeVarValue var)
+      return (k :< TypeVar f var)
 
 
 generateTypeVar :: Annotated TypeVar -> Praxis (Annotated TypeVar)
-generateTypeVar (a@(src, _) :< typeVar) = (\(k :< t) -> (src, Just k) :< t) <$> case typeVar of
+generateTypeVar typeVar@(a@(src, _) :< TypeVarVar f var) = (\k -> (src, Just k) :< TypeVarVar f var) <$> case f of
 
-  TypeVarVarPlain var -> do
+  Plain -> do
     k <- freshKindUni
     introKind src var k
-    require $ (src, KindReasonTypeVar (a :< typeVar)) :< KindIsPlain k
-    return (k :< TypeVarVarPlain var)
+    require $ (src, KindReasonTypeVar typeVar) :< KindIsPlain k
+    return k
 
-  TypeVarVarRef var -> do
+  Ref -> do
     introKind src var (phantom KindRef)
-    return (phantom KindRef :< TypeVarVarRef var)
+    return (phantom KindRef)
 
-  TypeVarVarValue var -> do
+  Value -> do
     k <- freshKindUni
     introKind src var k
-    require $ (src, KindReasonTypeVar (a :< typeVar)) :< KindIsPlain k
-    return (k :< TypeVarVarValue var)
+    require $ (src, KindReasonTypeVar typeVar) :< KindIsPlain k
+    return k
 
-  TypeVarVarView var -> do
+  View -> do
     introKind src var (phantom KindView)
-    return (phantom KindView :< TypeVarVarView var)
+    return (phantom KindView)
 
 
 generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
@@ -180,12 +168,9 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       deduce :: (Annotated Type -> TypeConstraint) -> [Annotated Type] -> (InstanceOrigin, Instance)
       deduce mkConstraint args' = (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
         f (_ :< t) = case t of
-          TypeVarPlain  n -> n `lookup` specialisedVars
-          TypeVarValue  n -> n `lookup` specialisedVars
-          TypeOpVarRef  n -> n `lookup` specialisedVars
-          TypeOpVarView n -> n `lookup` specialisedVars
-          _               -> Nothing
-        specialisedVars = zip (map typeVarName args) args'
+          TypeVar _  n -> n `lookup` specialisedVars
+          _            -> Nothing
+        specialisedVars = zip (map (\(a :< TypeVarVar f n) -> n) args) args'
 
       instances = case mode of
         DataUnboxed -> Map.fromList

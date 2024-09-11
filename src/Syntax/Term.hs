@@ -69,23 +69,25 @@ varId = match f VarId where
     VarId n -> Just n
     _       -> Nothing
 
+flavoredVarId :: Syntax f => f (Flavor, Name)
+flavoredVarId = match parse print where
+  parse = \case
+    VarId n      -> Just (Plain, n)
+    VarIdRef n   -> Just (Ref, n)
+    VarIdValue n -> Just (Value, n)
+    VarIdView n  -> Just (View, n)
+    _            -> Nothing
+  print (f, n) = case f of
+    Plain -> VarId n
+    Ref   -> VarIdRef n
+    Value -> VarIdValue n
+    View  -> VarIdView n
+
 varIdRef :: Syntax f => f Name
 varIdRef = match f VarIdRef where
   f = \case
     VarIdRef n -> Just n
     _          -> Nothing
-
-varIdValue :: Syntax f => f Name
-varIdValue = match f VarIdValue where
-  f = \case
-    VarIdValue n -> Just n
-    _            -> Nothing
-
-varIdView :: Syntax f => f Name
-varIdView = match f VarIdView where
-  f = \case
-    VarIdView n -> Just n
-    _           -> Nothing
 
 varSym :: Syntax f => f Name
 varSym = match f VarSym where
@@ -96,14 +98,13 @@ varSym = match f VarSym where
 uni :: Syntax f => f Name
 uni = match (const Nothing) (Uni . VarId)
 
-uniRef :: Syntax f => f Name
-uniRef = match (const Nothing) (Uni . VarIdRef)
-
-uniValue :: Syntax f => f Name
-uniValue = match (const Nothing) (Uni . VarIdValue)
-
-uniView :: Syntax f => f Name
-uniView = match (const Nothing) (Uni . VarIdView)
+flavoredUni :: Syntax f => f (Flavor, Name)
+flavoredUni = match (const Nothing) print where
+  print (f, n) = Uni $ case f of
+    Plain -> VarId n
+    Ref   -> VarIdRef n
+    Value -> VarIdValue n
+    View  -> VarIdView n
 
 lit :: Syntax f => f Lit
 lit = match f Token.Lit where
@@ -175,14 +176,14 @@ syntax = \case
   ITok            -> tok
   -- | T1
   IQType          -> qTy
-  ITypeConstraint   -> typeConstraint
+  ITypeConstraint -> typeConstraint
   IType           -> ty
-  ITypeVar          -> typeVar
+  ITypeVar        -> typeVar
   -- | T2
   IKind           -> kind
   IKindConstraint -> kindConstraint
   -- | Solver
-  ITypeRequirement   -> typeRequirement
+  ITypeRequirement -> typeRequirement
   IKindRequirement -> kindRequirement
 
 
@@ -273,11 +274,8 @@ dataCon :: Syntax f => f DataCon
 dataCon = _DataCon <$> conId <*> annotated ty1
 
 typeVar :: Syntax f => f TypeVar
-typeVar = _TypeVarVarPlain <$> varId <|>
-        _TypeVarVarRef <$> varIdRef <|>
-        _TypeVarVarValue <$> varIdValue <|>
-        _TypeVarVarView <$> varIdView <|>
-        mark "type variable"
+typeVar = _TypeVarVar <$> flavoredVarId <|>
+          mark "type variable"
 
 declTerm :: Syntax f => f DeclTerm
 declTerm = declTermRec <|> declTerm' <|> mark "term declaration/definition" where
@@ -336,29 +334,23 @@ foldTy = Prism (view value . fold) (Just . unfold . phantom) where
     _             -> [x]
   isTypeOp :: Annotated Type -> Bool
   isTypeOp t = case view value t of
-    TypeOpIdentity  -> True
-    TypeOpMulti _   -> True
-    TypeOpRef _     -> True
-    TypeOpUniRef _  -> True
-    TypeOpUniView _ -> True
-    TypeOpVarRef _  -> True
-    TypeOpVarView _ -> True
-    _               -> False
+    TypeIdentityOp -> True
+    TypeRef _      -> True
+    TypeSetOp _    -> True
+    TypeUni Ref _  -> True
+    TypeUni View _ -> True
+    TypeVar Ref _  -> True
+    TypeVar View _ -> True
+    _              -> False
 
 ty1 :: Syntax f => f Type
 ty1 = foldTy <$> some (annotated ty0) <|> mark "type(1)" where
   ty0 = _TypeCon <$> conId <|>
-        _TypeVarPlain <$> varId <|>
-        _TypeVarValue <$> varIdValue <|>
-        _TypeOpIdentity <$> reservedSym "@" <|>
-        _TypeOpMulti <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
-        _TypeOpVarRef <$> varIdRef <|>
-        _TypeOpVarView <$> varIdView <|>
-        internal (_TypeOpRef <$> varIdRef) <|>
-        internal (_TypeOpUniRef <$> uniRef) <|>
-        internal (_TypeOpUniView <$> uniView) <|>
-        internal (_TypeUniPlain <$> uni) <|>
-        internal (_TypeUniValue <$> uniValue) <|>
+        _TypeIdentityOp <$> reservedSym "@" <|>
+        internal (_TypeRef <$> varIdRef) <|>
+        _TypeSetOp <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
+        internal (_TypeUni <$> flavoredUni) <|>
+        _TypeVar <$> flavoredVarId <|>
         tuple _TypeUnit _TypePair ty <|>
         mark "type(0)"
 

@@ -294,19 +294,13 @@ instance Term Type where
     TypeApplyOp a b -> TypeApplyOp <$> f a <*> f b
     TypeCon n       -> pure (TypeCon n)
     TypeFn a b      -> TypeFn <$> f a <*> f b
-    TypeOpIdentity  -> pure TypeOpIdentity
-    TypeOpMulti os  -> TypeOpMulti . Set.fromList <$> traverse f (Set.toList os)
-    TypeOpRef n     -> pure (TypeOpRef n)
-    TypeOpUniRef n  -> pure (TypeOpUniRef n)
-    TypeOpUniView n -> pure (TypeOpUniView n)
-    TypeOpVarRef n  -> pure (TypeOpVarRef n)
-    TypeOpVarView n -> pure (TypeOpVarView n)
+    TypeIdentityOp  -> pure TypeIdentityOp
     TypePair a b    -> TypePair <$> f a <*> f b
-    TypeUniPlain n  -> pure (TypeUniPlain n)
-    TypeUniValue n  -> pure (TypeUniValue n)
+    TypeRef n       -> pure (TypeRef n)
+    TypeSetOp os    -> TypeSetOp . Set.fromList <$> traverse f (Set.toList os)
+    TypeUni f n     -> pure (TypeUni f n)
     TypeUnit        -> pure TypeUnit
-    TypeVarPlain n  -> pure (TypeVarPlain n)
-    TypeVarValue n  -> pure (TypeVarValue n)
+    TypeVar f n     -> pure (TypeVar f n)
 
 instance Term TypeVar where
   witness = ITypeVar

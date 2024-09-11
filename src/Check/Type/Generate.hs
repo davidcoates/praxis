@@ -51,11 +51,7 @@ expIsFunction (_ :< exp) = case exp of
   _          -> False
 
 specialiseTypeVar :: Annotated TypeVar -> Praxis (Name, Annotated Type)
-specialiseTypeVar (a :< typeVar) = case typeVar of
-  TypeVarVarPlain n -> (\t -> (n, a :< view value t)) <$> freshTypeUniPlain
-  TypeVarVarRef n   -> (\t -> (n, a :< view value t)) <$> freshTypeUniRef
-  TypeVarVarValue n -> (\t -> (n, a :< view value t)) <$> freshTypeUniValue
-  TypeVarVarView n  -> (\t -> (n, a :< view value t)) <$> freshTypeUniView
+specialiseTypeVar (a :< TypeVarVar f n) = (\t -> (n, a :< view value t)) <$> freshTypeUni f
 
 specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Maybe Specialisation)
 specialiseQType src name (_ :< qTy) = case qTy of
@@ -66,11 +62,8 @@ specialiseQType src name (_ :< qTy) = case qTy of
       typeRewrite = sub (embedSub f)
       f :: Annotated Type -> Maybe (Annotated Type)
       f (_ :< t) = case t of
-        TypeVarPlain  n -> n `lookup` vs'
-        TypeVarValue  n -> n `lookup` vs'
-        TypeOpVarRef  n -> n `lookup` vs'
-        TypeOpVarView n -> n `lookup` vs'
-        _               -> Nothing
+        TypeVar _  n -> n `lookup` vs'
+        _            -> Nothing
     let specialisation = zip vs (map snd vs')
     requires [ (src, Specialisation name) :< view value (typeRewrite c) | c <- cs ]
     return (typeRewrite t, Just specialisation)
@@ -113,7 +106,7 @@ scope src block = do
 -- A copy constraint will be generated if the variable has already been used or has been captured.
 readVar :: Source -> Name -> Praxis (Name, Annotated Type)
 readVar src name = do
-  r@(_ :< TypeOpRef refName) <- freshRef
+  r@(_ :< TypeRef refName) <- freshRef
   Just entry <- tEnv `uses` Env.lookup name
   (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
   when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
@@ -185,15 +178,6 @@ parallel src (x:xs) = do
   (a, as) <- join src x (parallel src xs)
   return (a:as)
 
--- TODO use introspection?
-typeVarToType :: Annotated TypeVar -> Annotated Type
-typeVarToType = over value typeVarToType' where
-  typeVarToType' = \case
-    TypeVarVarPlain n -> TypeVarPlain n
-    TypeVarVarValue n -> TypeVarValue n
-    TypeVarVarRef n   -> TypeOpVarRef n
-    TypeVarVarView n  -> TypeOpVarView n
-
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of
 
@@ -204,7 +188,12 @@ generateDeclType (a@(src, Just k) :< ty) = case ty of
       retTy = retTy' (TypeCon name `as` k) typeVars where
         retTy' ty = \case
           [] -> ty
-          (typeVar:typeVars) | Just (_ :< KindFn k1 k2) <- view annotation ty -> retTy' (TypeApply ty (typeVarToType typeVar) `as` k2) typeVars
+          (typeVar:typeVars) ->
+            let
+              Just (_ :< KindFn _ k) = view annotation ty
+              a :< TypeVarVar f n = typeVar
+            in
+              retTy' (TypeApply ty (a :< TypeVar f n) `as` k) typeVars
 
       buildConType :: Annotated Type -> Annotated QType
       buildConType argTy = case typeVars of
@@ -238,7 +227,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
     return $ DeclTermRec decls
     where
       getTypeFromSig = \case
-        Nothing -> mono <$> freshTypeUniPlain
+        Nothing -> mono <$> freshTypeUni Plain
         Just ty -> pure ty
       preDeclare decl = case decl of
         ((src, _) :< DeclTermVar name sig exp)
@@ -275,7 +264,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
 
 generateInteger :: Source -> Integer -> Praxis (Annotated Type)
 generateInteger src n = do
-  t <- freshTypeUniValue
+  t <- freshTypeUni Value
   require $ (src, TypeReasonIntegerLiteral n) :< integral t
   require $ (src, TypeReasonIntegerLiteral n) :< TypeIsIntegralOver t n
   return $ t
@@ -284,7 +273,7 @@ generateExp :: Annotated Exp -> Praxis (Annotated Exp)
 generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp of
 
   Apply f x -> do
-    rTy <- freshTypeUniPlain
+    rTy <- freshTypeUni Plain
     f <- generateExp f
     x <- generateExp x
     let fTy = getType f
@@ -347,7 +336,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     Char _
       -> return $ TypeCon "Char" `as` phantom KindType
     String _ -> do
-      op <- freshTypeUniView
+      op <- freshTypeUni View
       return $ TypeApplyOp op (TypeCon "String" `as` phantom KindType) `as` phantom KindType
 
   Read var exp -> do
@@ -431,7 +420,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
   PatData name pat -> do
     qTy <- getConType src name
     (t, _) <- specialiseQType src name qTy
-    op <- freshTypeUniView
+    op <- freshTypeUni View
     let wrap' t = TypeApplyOp op t `as`phantom KindType
     case view value t of
       TypeFn argTy retTy -> do
@@ -452,7 +441,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
   PatHole -> do
     -- Treat this is a variable for drop analysis
     var <- freshVar "hole"
-    t <- freshTypeUniPlain
+    t <- freshTypeUni Plain
     introType src var (mono (wrap t))
     return (t, wrap t :< PatVar var)
 
@@ -464,7 +453,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
     String _  -> return $ TypeCon "String" `as` phantom KindType
 
   PatPair pat1 pat2 -> do
-    op <- freshTypeUniView
+    op <- freshTypeUni View
     let wrap' t = TypeApplyOp op t `as`phantom KindType
     (t1, pat1) <- generatePat' (wrap . wrap') pat1
     (t2, pat2) <- generatePat' (wrap . wrap') pat2
@@ -476,7 +465,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
     return (t, t :< PatUnit)
 
   PatVar var -> do
-    t <- freshTypeUniPlain
+    t <- freshTypeUni Plain
     introType src var (mono (wrap t))
     return (t, wrap t :< PatVar var)
 

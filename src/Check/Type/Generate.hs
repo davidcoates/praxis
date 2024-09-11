@@ -250,7 +250,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
       Nothing -> do
         exp <- generateExp exp
         case forwardTy of
-          Just (_ :< Mono t) -> require $ (src, FnCongruence name) :< (t `TEq` getType exp)
+          Just (_ :< Mono t) -> require $ (src, FnCongruence name) :< (t `TypeIsEq` getType exp)
           Nothing            -> introType src name (mono (getType exp))
         return $ DeclTermVar name Nothing exp
 
@@ -259,7 +259,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
         case forwardTy of
           Just _  -> return () -- forwardTy is sig, so a FnCongruence constraint is redundant (covered by the below FnSignature constraint)
           Nothing -> introType src name sig
-        require $ (src, FnSignature name) :< (t `TEq` getType exp)
+        require $ (src, FnSignature name) :< (t `TypeIsEq` getType exp)
         return $ DeclTermVar name (Just sig) exp
 
       Just sig@(_ :< Forall vs cs t) -> do
@@ -269,7 +269,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
         case forwardTy of
           Just _  -> return () -- forwardTy is sig, so a FnCongruence constraint is redundant (covered by the below FnSignature constraint)
           Nothing -> introType src name sig
-        require $ (src, FnSignature name) :< (t `TEq` getType exp)
+        require $ (src, FnSignature name) :< (t `TypeIsEq` getType exp)
         return $ DeclTermVar name (Just sig) exp
 
 
@@ -277,7 +277,7 @@ generateInteger :: Source -> Integer -> Praxis (Annotated Type)
 generateInteger src n = do
   t <- freshTypeUniValue
   require $ (src, TypeReasonIntegerLiteral n) :< integral t
-  require $ (src, TypeReasonIntegerLiteral n) :< HoldsInteger n t
+  require $ (src, TypeReasonIntegerLiteral n) :< TypeIsIntegralOver t n
   return $ t
 
 generateExp :: Annotated Exp -> Praxis (Annotated Exp)
@@ -289,7 +289,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     x <- generateExp x
     let fTy = getType f
     let xTy = getType x
-    require $ (src, TypeReasonApply f x) :< (fTy `TEq` (TypeFn xTy rTy `as` phantom KindType))
+    require $ (src, TypeReasonApply f x) :< (fTy `TypeIsEq` (TypeFn xTy rTy `as` phantom KindType))
     return (rTy :< Apply f x)
 
   Case exp alts -> do
@@ -298,7 +298,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     alts <- parallel src (map generateAlt alts)
     t1 <- equals (map fst alts) CaseCongruence
     t2 <- equals (map snd alts) CaseCongruence
-    require $ (src, CaseCongruence) :< (expTy `TEq` t1) -- TODO probably should pick a better name for this
+    require $ (src, CaseCongruence) :< (expTy `TypeIsEq` t1) -- TODO probably should pick a better name for this
     return (t2 :< Case exp alts)
 
   Cases alts -> closure src $ do
@@ -323,8 +323,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
   If condExp thenExp elseExp -> do
     condExp <- generateExp condExp
     (thenExp, elseExp) <- join src (generateExp thenExp) (generateExp elseExp)
-    require $ (src,  IfCondition) :< (getType condExp `TEq` TypeCon "Bool" `as` phantom KindType)
-    require $ (src, IfCongruence) :< (getType thenExp `TEq` getType elseExp)
+    require $ (src,  IfCondition) :< (getType condExp `TypeIsEq` TypeCon "Bool" `as` phantom KindType)
+    require $ (src, IfCongruence) :< (getType thenExp `TypeIsEq` getType elseExp)
     return (getType thenExp :< If condExp thenExp elseExp)
 
   Lambda pat exp -> closure src $ do
@@ -359,7 +359,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     unless (view LEnv.used entry' > 0) $ throwAt src (quote (pretty var) <> " is not used in read")
     tEnv %= Env.adjust (const entry) var
     let t = getType exp
-    require $ (src, TypeReasonRead var) :< RefFree refName t
+    require $ (src, TypeReasonRead var) :< TypeIsRefFree t refName
     return (t :< Read var exp)
 
   Pair exp1 exp2 -> do
@@ -375,12 +375,12 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
   Sig exp t -> do
     exp <- generateExp exp
-    require $ (src, UserSignature) :< (t `TEq` getType exp)
+    require $ (src, UserSignature) :< (t `TypeIsEq` getType exp)
     return (t :< Sig exp t)
 
   Switch alts -> do
     conditions <- sequence (map (generateExp . fst) alts)
-    requires [ (view source condition, SwitchCondition) :< (getType condition `TEq` TypeCon "Bool" `as` phantom KindType)  | condition <- conditions ]
+    requires [ (view source condition, SwitchCondition) :< (getType condition `TypeIsEq` TypeCon "Bool" `as` phantom KindType)  | condition <- conditions ]
     exps <- parallel src (map (generateExp . snd) alts)
     t <- equals exps SwitchCongruence
     return (t :< Switch (zip conditions exps))
@@ -404,13 +404,13 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 equals :: (Term a, Annotation a ~ Annotated Type) => [Annotated a] -> TypeReason -> Praxis (Annotated Type)
 equals exps = equals' $ map (\((src, Just t) :< _) -> (src, t)) exps where
   equals' :: [(Source, Annotated Type)] -> TypeReason -> Praxis (Annotated Type)
-  equals' ((_, t):ts) reason = requires [ (src, reason) :< (t `TEq` t') | (src, t') <- ts ] >> return t
+  equals' ((_, t):ts) reason = requires [ (src, reason) :< (t `TypeIsEq` t') | (src, t') <- ts ] >> return t
 
 generateBind :: Annotated Bind -> Praxis (Annotated Bind)
 generateBind (a@(src, _) :< Bind pat exp) = do
   exp <- generateExp exp
   pat <- generatePat pat
-  require $ (src, TypeReasonBind pat exp) :< (getType pat `TEq` getType exp)
+  require $ (src, TypeReasonBind pat exp) :< (getType pat `TypeIsEq` getType exp)
   return (a :< Bind pat exp)
 
 generateAlt ::  (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
@@ -436,7 +436,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
     case view value t of
       TypeFn argTy retTy -> do
         (patArgType, pat) <- generatePat' (wrap . wrap') pat
-        require $ (src, ConPattern name) :< (patArgType `TEq` argTy)
+        require $ (src, ConPattern name) :< (patArgType `TypeIsEq` argTy)
         let retTy' = wrap' retTy
         return (retTy', wrap retTy' :< PatData name pat)
       _ -> throwAt src $ "missing argument in constructor pattern " <> quote (pretty name)

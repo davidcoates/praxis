@@ -30,39 +30,39 @@ run term = do
 reduce :: Disambiguating (Reducer KindConstraint)
 reduce disambiguate = \case
 
-  KEq k1 k2 | k1 == k2 -> return tautology
+  KindIsEq k1 k2 | k1 == k2 -> return tautology
 
-  KEq (_ :< KindUni x) k -> if x `Set.member` kindUnis k then return contradiction else solved (x `is` view value k) -- Note: Occurs check here
+  KindIsEq (_ :< KindUni x) k -> if x `Set.member` kindUnis k then return contradiction else solved (x `is` view value k) -- Note: Occurs check here
 
-  KEq k1 k2@(_ :< KindUni _) -> reduce disambiguate (k2 `KEq` k1) -- handled by the above case
+  KindIsEq k1 k2@(_ :< KindUni _) -> reduce disambiguate (k2 `KindIsEq` k1) -- handled by the above case
 
-  KEq (_ :< KindFn k1 k2) (_ :< KindFn l1 l2) -> return $ subgoals [ Subgoal (KEq k1 l1), Subgoal (KEq k2 l2) ]
+  KindIsEq (_ :< KindFn k1 k2) (_ :< KindFn l1 l2) -> return $ subgoals [ Subgoal (KindIsEq k1 l1), Subgoal (KindIsEq k2 l2) ]
 
-  KPlain (_ :< k) -> case k of
+  KindIsPlain (_ :< k) -> case k of
     KindUni _ -> return skip
     KindRef   -> return contradiction
     KindView  -> return contradiction
     _         -> return tautology -- What about Constraint?
 
-  KSub k1 k2 | k1 == k2 -> return tautology
+  KindIsSub k1 k2 | k1 == k2 -> return tautology
 
-  KSub (_ :< KindUni _) (_ :< KindUni _) -> return skip
+  KindIsSub (_ :< KindUni _) (_ :< KindUni _) -> return skip
 
-  KSub (_ :< KindUni x) (_ :< KindRef) -> solved (x `is` KindRef)
+  KindIsSub (_ :< KindUni x) (_ :< KindRef) -> solved (x `is` KindRef)
 
-  KSub (_ :< KindUni _) (_ :< KindView) -> return skip
+  KindIsSub (_ :< KindUni _) (_ :< KindView) -> return skip
 
-  KSub (_ :< KindRef) (_ :< KindUni _) -> return skip
+  KindIsSub (_ :< KindRef) (_ :< KindUni _) -> return skip
 
-  KSub (_ :< KindRef) (_ :< KindView) -> return tautology
+  KindIsSub (_ :< KindRef) (_ :< KindView) -> return tautology
 
-  KSub (_ :< KindRef) _ -> return contradiction
+  KindIsSub (_ :< KindRef) _ -> return contradiction
 
-  KSub (_ :< KindView) (_ :< KindUni x) -> solved (x `is` KindView)
+  KindIsSub (_ :< KindView) (_ :< KindUni x) -> solved (x `is` KindView)
 
-  KSub (_ :< KindView) _ -> return contradiction
+  KindIsSub (_ :< KindView) _ -> return contradiction
 
-  KSub k1 k2 -> return $ subgoals [ Subgoal (KEq k1 k2) ]
+  KindIsSub k1 k2 -> return $ subgoals [ Subgoal (KindIsEq k1 k2) ]
 
   _ -> return contradiction
 

@@ -278,13 +278,13 @@ instance Term TypeConstraint where
   witness = ITypeConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
-    HoldsInteger n t  -> HoldsInteger n <$> f t
-    Instance t        -> Instance <$> f t
-    Ref t             -> Ref <$> f t
-    RefFree n t       -> RefFree n <$> f t
-    TEq a b           -> TEq <$> f a <*> f b
-    TEqIfAffine a b t -> TEqIfAffine <$> f a <*> f b <*> f t
-    Value t           -> Value <$> f t
+    TypeIsEq a b            -> TypeIsEq <$> f a <*> f b
+    TypeIsEqIfAffine a b t  -> TypeIsEqIfAffine <$> f a <*> f b <*> f t
+    TypeIsInstance t        -> TypeIsInstance <$> f t
+    TypeIsIntegralOver t n  -> TypeIsIntegralOver <$> f t <*> pure n
+    TypeIsRef t             -> TypeIsRef <$> f t
+    TypeIsRefFree t n       -> TypeIsRefFree <$> f t <*> pure n
+    TypeIsValue t           -> TypeIsValue <$> f t
 
 instance Term Type where
   witness = IType
@@ -330,9 +330,9 @@ instance Term KindConstraint where
   witness = IKindConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
-    KEq k l  -> KEq <$> f k <*> f l
-    KPlain k -> KPlain <$> f k
-    KSub k l -> KSub <$> f k <*> f l
+    KindIsEq k l  -> KindIsEq <$> f k <*> f l
+    KindIsPlain k -> KindIsPlain <$> f k
+    KindIsSub k l -> KindIsSub <$> f k <*> f l
 
 -- | Solver
 

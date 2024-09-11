@@ -76,19 +76,19 @@ initialKEnv = Env.Strict.fromList
 -- TODO should be replaced with instances in prelude
 
 integral :: Annotated Type -> TypeConstraint
-integral t = Instance $ TypeApply (TypeCon "Integral" `as` kind "Type -> Constraint") t `as` kind "Type"
+integral t = TypeIsInstance $ TypeApply (TypeCon "Integral" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 clone :: Annotated Type -> TypeConstraint
-clone t = Instance $ TypeApply (TypeCon "Clone" `as` kind "Type -> Constraint") t `as` kind "Type"
+clone t = TypeIsInstance $ TypeApply (TypeCon "Clone" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 dispose :: Annotated Type -> TypeConstraint
-dispose t = Instance $ TypeApply (TypeCon "Dispose" `as` kind "Type -> Constraint") t `as` kind "Type"
+dispose t = TypeIsInstance $ TypeApply (TypeCon "Dispose" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 copy :: Annotated Type -> TypeConstraint
-copy t = Instance $ TypeApply (TypeCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type"
+copy t = TypeIsInstance $ TypeApply (TypeCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 capture :: Annotated Type -> TypeConstraint
-capture t = Instance $ TypeApply (TypeCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
+capture t = TypeIsInstance $ TypeApply (TypeCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 initialIEnv :: IEnv
 initialIEnv = Env.Strict.fromList

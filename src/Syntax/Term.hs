@@ -233,19 +233,19 @@ integer = match f (Token.Lit . Integer) where
     _                     -> Nothing
 
 typeConstraint :: Syntax f => f TypeConstraint
-typeConstraint = internal (_HoldsInteger <$> integer <*> reservedSym "∈" *> annotated ty) <|>
-               _Instance <$> annotated ty <|>
-               internal (_Ref <$> reservedCon "Ref" *> annotated ty) <|>
-               internal (_RefFree <$> varId <*> reservedSym "∉" *> annotated ty) <|>
-               internal (_TEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
-               internal (_TEqIfAffine <$> annotated ty <*> reservedSym "=" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
-               internal (_Value <$> reservedCon "Value" *> annotated ty) <|>
-               mark "type constraint"
+typeConstraint = _TypeIsInstance <$> annotated ty <|>
+                 internal (_TypeIsEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
+                 internal (_TypeIsEqIfAffine <$> annotated ty <*> reservedSym "=" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
+                 internal (_TypeIsIntegralOver <$> swap <$> integer <*> reservedSym "∈" *> annotated ty) <|>
+                 internal (_TypeIsRef <$> reservedCon "Ref" *> annotated ty) <|>
+                 internal (_TypeIsRefFree <$> swap <$> varId <*> reservedSym "∉" *> annotated ty) <|>
+                 internal (_TypeIsValue <$> reservedCon "Value" *> annotated ty) <|>
+                 mark "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
-kindConstraint = internal (_KEq <$> annotated kind <*> reservedSym "=" *> annotated kind) <|>
-                 internal (_KPlain <$> annotated kind <* reservedId "plain") <|>
-                 internal (_KSub <$> annotated kind <*> reservedSym "≤" *> annotated kind) <|>
+kindConstraint = internal (_KindIsEq <$> annotated kind <*> reservedSym "=" *> annotated kind) <|>
+                 internal (_KindIsPlain <$> reservedCon "Plain" *> annotated kind) <|>
+                 internal (_KindIsSub <$> annotated kind <*> reservedSym "≤" *> annotated kind) <|>
                  mark "kind constraint"
 
 program :: Syntax f => f Program

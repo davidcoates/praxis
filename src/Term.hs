@@ -209,24 +209,24 @@ data Kind = KindUni Name
           | KindView
   deriving (Eq, Ord)
 
-data TypeConstraint = HoldsInteger Integer (Annotated Type)
-                    | Instance (Annotated Type)
-                    | RefFree Name (Annotated Type)
-                    | Ref (Annotated Type)
-                    | TEq (Annotated Type) (Annotated Type)
-                    | TEqIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
-                    | Value (Annotated Type)
+data TypeConstraint = TypeIsEq (Annotated Type) (Annotated Type)
+                    | TypeIsEqIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
+                    | TypeIsInstance (Annotated Type)
+                    | TypeIsIntegralOver (Annotated Type) Integer
+                    | TypeIsRef (Annotated Type)
+                    | TypeIsRefFree (Annotated Type) Name
+                    | TypeIsValue (Annotated Type)
   deriving (Eq, Ord)
 
-infixl 8 `TEq`
+infixl 8 `TypeIsEq`
 
-data KindConstraint = KEq (Annotated Kind) (Annotated Kind)
-                    | KPlain (Annotated Kind)
-                    | KSub (Annotated Kind) (Annotated Kind)
+data KindConstraint = KindIsEq (Annotated Kind) (Annotated Kind)
+                    | KindIsPlain (Annotated Kind)
+                    | KindIsSub (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
-infixl 8 `KEq`
-infixl 8 `KSub`
+infixl 8 `KindIsEq`
+infixl 8 `KindIsSub`
 
 newtype Requirement a = Requirement a
   deriving (Eq, Ord)

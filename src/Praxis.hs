@@ -165,7 +165,7 @@ defaultFresh = Fresh
   , _freshRefs        = map (("'l"++) . show) [0..]
   , _freshTypeUniPlains = map (("^t"++) . show) [0..]
   , _freshTypeUniRefs   = map (("^r"++) . show) [0..]
-  , _freshTypeUniValues = map (("^p"++) . show) [0..]
+  , _freshTypeUniValues = map (("^s"++) . show) [0..]
   , _freshTypeUniViews  = map (("^v"++) . show) [0..]
   , _freshVars        = Map.empty
   }

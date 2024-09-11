@@ -17,6 +17,7 @@ module Syntax.Syntax
   , optional
   , prefix
   , prefix'
+  , swap
   ) where
 
 import           Common
@@ -95,3 +96,6 @@ prefix' a (l, b) r = Prism f g <$> a <*> (_Just <$> b <|> _Nothing <$> pure ()) 
     (Just (a, b), Nothing) -> Just (a, Just b)
     (Nothing, Just a)      -> Just (a, Nothing)
     (Nothing, Nothing)     -> Nothing
+
+swap :: Prism (a, b) (b, a)
+swap = Prism (\(a, b) -> (b, a)) (\(a, b) -> Just (b, a))

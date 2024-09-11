@@ -63,14 +63,14 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       x <- generateType x
       k1 <- freshKindUni
       k2 <- freshKindUni
-      require $ (src, KindReasonTypeApply f x) :< (getKind f `KEq` phantom (KindFn k1 k2))
-      require $ (src, KindReasonTypeApply f x) :< (getKind x `KSub` k1)
+      require $ (src, KindReasonTypeApply f x) :< (getKind f `KindIsEq` phantom (KindFn k1 k2))
+      require $ (src, KindReasonTypeApply f x) :< (getKind x `KindIsSub` k1)
       return (k2 :< TypeApply f x)
 
     TypeApplyOp f x -> do
       f <- generateType f
       x <- generateType x
-      require $ (src, KindReasonTypeApplyOp f x) :< (getKind x `KEq` phantom KindType)
+      require $ (src, KindReasonTypeApplyOp f x) :< (getKind x `KindIsEq` phantom KindType)
       return (phantom KindType :< TypeApplyOp f x)
 
     TypeCon con -> do
@@ -82,8 +82,8 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
     TypeFn t1 t2 -> do
       t1 <- generateType t1
       t2 <- generateType t2
-      require $ (src, KindReasonType t1) :< (getKind t1 `KEq` phantom KindType)
-      require $ (src, KindReasonType t2) :< (getKind t2 `KEq` phantom KindType)
+      require $ (src, KindReasonType t1) :< (getKind t1 `KindIsEq` phantom KindType)
+      require $ (src, KindReasonType t2) :< (getKind t2 `KindIsEq` phantom KindType)
       return (phantom KindType :< TypeFn t1 t2)
 
     TypeUnit -> do
@@ -115,8 +115,8 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
     TypePair t1 t2 -> do
       t1 <- generateType t1
       t2 <- generateType t2
-      require $ (src, KindReasonType t1) :< (getKind t1 `KEq` phantom KindType)
-      require $ (src, KindReasonType t2) :< (getKind t2 `KEq` phantom KindType)
+      require $ (src, KindReasonType t1) :< (getKind t1 `KindIsEq` phantom KindType)
+      require $ (src, KindReasonType t2) :< (getKind t2 `KindIsEq` phantom KindType)
       return (phantom KindType :< TypePair t1 t2)
 
     TypeVarPlain var -> do
@@ -134,7 +134,7 @@ generateTypeVar (a@(src, _) :< typeVar) = (\(k :< t) -> (src, Just k) :< t) <$> 
   TypeVarVarPlain var -> do
     k <- freshKindUni
     introKind src var k
-    require $ (src, KindReasonTypeVar (a :< typeVar)) :< KPlain k
+    require $ (src, KindReasonTypeVar (a :< typeVar)) :< KindIsPlain k
     return (k :< TypeVarVarPlain var)
 
   TypeVarVarRef var -> do
@@ -144,7 +144,7 @@ generateTypeVar (a@(src, _) :< typeVar) = (\(k :< t) -> (src, Just k) :< t) <$> 
   TypeVarVarValue var -> do
     k <- freshKindUni
     introKind src var k
-    require $ (src, KindReasonTypeVar (a :< typeVar)) :< KPlain k
+    require $ (src, KindReasonTypeVar (a :< typeVar)) :< KindIsPlain k
     return (k :< TypeVarVarValue var)
 
   TypeVarVarView var -> do
@@ -156,7 +156,7 @@ generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
 generateDataCon (a@(src, _) :< DataCon name arg) = do
   arg <- generate arg
   let dataCon = (a :< DataCon name arg)
-  require $ (src, KindReasonType arg) :< (getKind arg `KEq` phantom KindType) -- TODO should just match kind of data type?
+  require $ (src, KindReasonType arg) :< (getKind arg `KindIsEq` phantom KindType) -- TODO should just match kind of data type?
   return dataCon
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
@@ -175,7 +175,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       mkKind args = case args of
         []         -> phantom KindType
         (arg:args) -> phantom (KindFn (getKind arg) (mkKind args))
-    require $ (src, KindReasonData name args) :< (k `KEq` mkKind args)
+    require $ (src, KindReasonData name args) :< (k `KindIsEq` mkKind args)
     let
       deduce :: (Annotated Type -> TypeConstraint) -> [Annotated Type] -> (InstanceOrigin, Instance)
       deduce mkConstraint args' = (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where

@@ -48,6 +48,13 @@ datatype Foo ?a &a = Foo &a
     it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: variables are not distinct"
 
 
+    let program = trim [r|
+datatype Foo !a = Foo a
+|]
+
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:23: variable 'a' has the wrong flavor"
+
+
   describe "type redeclaration" $ do
 
     let program = trim [r|

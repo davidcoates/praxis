@@ -31,20 +31,20 @@ rename term = ($ term) $ case typeof (view value term) of
   _         -> value (recurseTerm rename)
 
 
-disambiguate :: Source -> Name -> Praxis Name
+disambiguate :: Source -> (Flavor, Name) -> Praxis Name
 disambiguate = Check.disambiguate kindCheckState
 
-intro :: Name -> Praxis Name
+intro :: (Flavor, Name) -> Praxis Name
 intro = Check.intro kindCheckState
 
-introMany :: Source -> [Name] -> Praxis [Name]
+introMany :: Source -> [(Flavor, Name)] -> Praxis [Name]
 introMany = Check.introMany kindCheckState
 
 introFromQType :: Annotated QType -> Praxis ()
 introFromQType ((src, _) :< qTy) = case qTy of
 
   Forall vs _ _ -> do
-    introMany src (map (\(_ :< TypeVarVar _ n) -> n) vs)
+    introMany src (map (\(_ :< TypeVarVar f n) -> (f, n)) vs)
     return ()
 
   Mono _ -> return ()
@@ -64,7 +64,7 @@ renameDeclTerm (a@(src, _) :< decl) = (a :<) <$> case decl of
 renameDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 
-  DeclTypeData _ _ typeVars _ -> save (kindCheckState . scopes) $ introMany src (map (\(_ :< TypeVarVar _ n) -> n) typeVars) >> recurseTerm rename decl
+  DeclTypeData _ _ typeVars _ -> save (kindCheckState . scopes) $ introMany src (map (\(_ :< TypeVarVar f n) -> (f, n)) typeVars) >> recurseTerm rename decl
 
   _ -> recurseTerm rename decl
 
@@ -72,13 +72,13 @@ renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 renameType :: Annotated Type -> Praxis (Annotated Type)
 renameType (a@(src, _) :< ty) = (a :<) <$> case ty of
 
-  TypeVar f n -> TypeVar f <$> disambiguate src n
+  TypeVar f n -> TypeVar f <$> disambiguate src (f, n)
 
   _           -> recurseTerm rename ty
 
 
 renameTypeVar :: Annotated TypeVar -> Praxis (Annotated TypeVar)
-renameTypeVar (a@(src, _) :< TypeVarVar f n) = (\n -> a :< TypeVarVar f n) <$> disambiguate src n
+renameTypeVar (a@(src, _) :< TypeVarVar f n) = (\n -> a :< TypeVarVar f n) <$> disambiguate src (f, n)
 
 renameQType :: Annotated QType -> Praxis (Annotated QType)
 renameQType qTy = save (kindCheckState . scopes) $ introFromQType qTy >> recurse rename qTy

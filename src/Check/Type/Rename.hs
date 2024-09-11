@@ -32,13 +32,13 @@ rename term = ($ term) $ case typeof (view value term) of
 
 
 disambiguate :: Source -> Name -> Praxis Name
-disambiguate = Check.disambiguate typeCheckState
+disambiguate src var = Check.disambiguate typeCheckState src (Plain, var)
 
 intro :: Name -> Praxis Name
-intro = Check.intro typeCheckState
+intro var = Check.intro typeCheckState (Plain, var)
 
 introMany :: Source -> [Name] -> Praxis [Name]
-introMany = Check.introMany typeCheckState
+introMany src vars = Check.introMany typeCheckState src (map (\var -> (Plain, var)) vars)
 
 introFromPat :: Annotated Pat -> Praxis ()
 introFromPat pat = do

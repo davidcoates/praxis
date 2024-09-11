@@ -178,8 +178,8 @@ emptypeState = PraxisState
   , _kEnv           = Env.Strict.empty
   , _tEnv           = Env.Linear.empty
   , _vEnv           = Env.Lazy.empty
-  , _typeSynonyms     = Map.empty
-  , _typeCheckState   = Check.emptypeState
+  , _typeSynonyms   = Map.empty
+  , _typeCheckState = Check.emptypeState
   , _kindCheckState = Check.emptypeState
   }
 

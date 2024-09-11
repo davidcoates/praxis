@@ -24,7 +24,7 @@ data State c = State
   { _requirements :: Set (Annotated (Requirement c))
   , _assumptions  :: Set c
   , _counts       :: Map Name Int
-  , _scopes       :: Map Name Int
+  , _scopes       :: Map Name (Flavor, Int)
   }
 
 makeLenses ''State

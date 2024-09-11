@@ -40,20 +40,20 @@ data DecInfo = DecInfo Type [TyVarBndrUnit] [Con]
 
 -- | Extract data or newtype declaration information
 decInfo :: Dec -> Q DecInfo
-decInfo (DataD    _ name tyVars _ cs _) =  return $ DecInfo (ConT name) tyVars cs
-decInfo (NewtypeD _ name tyVars _ c _) =  return $ DecInfo (ConT name) tyVars [c]
+decInfo (DataD    _ name typeVars _ cs _) =  return $ DecInfo (ConT name) typeVars cs
+decInfo (NewtypeD _ name typeVars _ c _) =  return $ DecInfo (ConT name) typeVars [c]
 decInfo _ = fail "partial prisms can only be derived for constructors of data type or newtype declarations."
 
--- | Convert tyVarBndr to type
-tyVarBndrToType :: TyVarBndrUnit -> Type
-tyVarBndrToType (PlainTV  n _)   = VarT n
-tyVarBndrToType (KindedTV n _ k) = SigT (VarT n) k
+-- | Convert typeVarBndr to type
+typeVarBndrToType :: TyVarBndrUnit -> Type
+typeVarBndrToType (PlainTV  n _)   = VarT n
+typeVarBndrToType (KindedTV n _ k) = SigT (VarT n) k
 
 -- | Create Prism type for specified type and conctructor fields (Prism (a, b) (CustomType a b c))
 prismType :: Type -> [TyVarBndrUnit] -> [Type] -> Q Type
-prismType typ tyVarBndrs fields = do
+prismType typ typeVarBndrs fields = do
     prismCon <- [t| Prism |]
-    return $ ForallT (map spec tyVarBndrs) [] $ prismCon `AppT` (applyAll typ $ map tyVarBndrToType tyVarBndrs) `AppT` (prismArgs fields) where
+    return $ ForallT (map spec typeVarBndrs) [] $ prismCon `AppT` (applyAll typ $ map typeVarBndrToType typeVarBndrs) `AppT` (prismArgs fields) where
         spec (PlainTV n _)    = PlainTV n SpecifiedSpec
         spec (KindedTV n _ k) = KindedTV n SpecifiedSpec k
 
@@ -79,8 +79,8 @@ rename n
 definePrisms :: Name -> Q [Dec]
 definePrisms d = do
   TyConI dec <- reify d
-  DecInfo typ tyVarBndrs cs <- decInfo dec
-  join `fmap` mapM (\a -> defFromCon (wildcard cs) typ tyVarBndrs a) cs
+  DecInfo typ typeVarBndrs cs <- decInfo dec
+  join `fmap` mapM (\a -> defFromCon (wildcard cs) typ typeVarBndrs a) cs
 
 -- | Constructs a partial prism definition for a
 --   constructor, given information about the constructor.
@@ -88,9 +88,9 @@ definePrisms d = do
 --   spelling the constructor name with an initial lower-case
 --   letter.
 defFromCon :: [MatchQ] -> Type -> [TyVarBndrUnit] -> Con -> DecsQ
-defFromCon matches t tyVarBndrs con = do
+defFromCon matches t typeVarBndrs con = do
     let funName = rename $ conName con
-    sig <- SigD funName `fmap` prismType t tyVarBndrs (conFields con)
+    sig <- SigD funName `fmap` prismType t typeVarBndrs (conFields con)
     fun <- funD funName [ clause [] (normalB (prismFromCon matches con)) [] ]
     return [sig, fun]
 

@@ -75,20 +75,20 @@ initialKEnv = Env.Strict.fromList
 
 -- TODO should be replaced with instances in prelude
 
-integral :: Annotated Type -> TyConstraint
-integral t = Instance $ TyApply (TyCon "Integral" `as` kind "Type -> Constraint") t `as` kind "Type"
+integral :: Annotated Type -> TypeConstraint
+integral t = Instance $ TypeApply (TypeCon "Integral" `as` kind "Type -> Constraint") t `as` kind "Type"
 
-clone :: Annotated Type -> TyConstraint
-clone t = Instance $ TyApply (TyCon "Clone" `as` kind "Type -> Constraint") t `as` kind "Type"
+clone :: Annotated Type -> TypeConstraint
+clone t = Instance $ TypeApply (TypeCon "Clone" `as` kind "Type -> Constraint") t `as` kind "Type"
 
-dispose :: Annotated Type -> TyConstraint
-dispose t = Instance $ TyApply (TyCon "Dispose" `as` kind "Type -> Constraint") t `as` kind "Type"
+dispose :: Annotated Type -> TypeConstraint
+dispose t = Instance $ TypeApply (TypeCon "Dispose" `as` kind "Type -> Constraint") t `as` kind "Type"
 
-copy :: Annotated Type -> TyConstraint
-copy t = Instance $ TyApply (TyCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type"
+copy :: Annotated Type -> TypeConstraint
+copy t = Instance $ TypeApply (TypeCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type"
 
-capture :: Annotated Type -> TyConstraint
-capture t = Instance $ TyApply (TyCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
+capture :: Annotated Type -> TypeConstraint
+capture t = Instance $ TypeApply (TypeCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
 
 initialIEnv :: IEnv
 initialIEnv = Env.Strict.fromList
@@ -248,7 +248,7 @@ inbuilts =
   ]
   where
     liftI :: ((Integer -> Value, Value -> Integer) -> Value) -> Value
-    liftI f = Polymorphic $ \[(_, _ :< TyCon ty)] -> f (integerToValue ty, valueToInteger)
+    liftI f = Polymorphic $ \[(_, _ :< TypeCon ty)] -> f (integerToValue ty, valueToInteger)
     liftII :: (forall a. Integral a => (a -> a)) -> Value
     liftII f = liftI $ \(con, decon) -> Fn (\x -> return (con (f (decon x))))
     liftIII :: (forall a. Integral a => (a -> a -> a)) -> Value

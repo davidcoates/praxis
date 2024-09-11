@@ -44,8 +44,8 @@ instance Applicative Printable where
 
 class Pretty a where
   pretty :: a -> Printable String
-  prettyIf :: Option -> a -> Printable String
-  prettyIf s x = Printable (\t -> if s == t then runPrintable (pretty x) t else Color.Nil)
+  prettypeIf :: Option -> a -> Printable String
+  prettypeIf s x = Printable (\t -> if s == t then runPrintable (pretty x) t else Color.Nil)
 
 instance Pretty String where
   pretty = pure

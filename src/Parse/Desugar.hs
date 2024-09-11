@@ -245,7 +245,7 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
   DeclSynSweet name ty -> do
     ty <- desugar ty
-    tySynonyms %= Map.insert name ty
+    typeSynonyms %= Map.insert name ty
     decls <- desugarDecls decls
     return decls
 
@@ -282,11 +282,11 @@ desugarType :: Annotated Type -> Praxis (Annotated Type)
 desugarType (a :< ty) = case ty of
 
   -- TODO allow more generic type synonyms
-  TyCon name -> do
-    syn <- tySynonyms `uses` Map.lookup name
+  TypeCon name -> do
+    syn <- typeSynonyms `uses` Map.lookup name
     return $ case syn of
       Just ty -> ty
-      Nothing -> a :< TyCon name
+      Nothing -> a :< TypeCon name
 
   _           -> (a :<) <$> recurseTerm desugar ty
 

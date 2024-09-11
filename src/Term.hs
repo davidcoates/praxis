@@ -30,10 +30,10 @@ module Term
 
   -- | T1
   , QType(..)
-  , TyConstraint(..)
+  , TypeConstraint(..)
   , Type(..)
-  , TyVar(..)
-  , tyVarName
+  , TypeVar(..)
+  , typeVarName
 
   -- | T2
   , Kind(..)
@@ -41,9 +41,9 @@ module Term
 
   -- | Solver
   , Requirement(..)
-  , TyRequirement(..)
+  , TypeRequirement(..)
   , KindRequirement(..)
-  , TyReason(..)
+  , TypeReason(..)
   , KindReason(..)
 
   , Annotation
@@ -85,7 +85,7 @@ data DataCon = DataCon Name (Annotated Type)
 data DataMode = DataUnboxed | DataBoxed | DataRec
   deriving (Eq, Ord)
 
-data DeclType = DeclTypeData DataMode Name [Annotated TyVar] [Annotated DataCon]
+data DeclType = DeclTypeData DataMode Name [Annotated TypeVar] [Annotated DataCon]
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
@@ -102,7 +102,7 @@ data Decl = DeclOpSweet (Annotated Op) Name (Annotated OpRules)
   deriving (Eq, Ord)
 
 -- TODO constraints
-type Specialisation = [(Annotated TyVar, Annotated Type)]
+type Specialisation = [(Annotated TypeVar, Annotated Type)]
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
@@ -164,40 +164,40 @@ data Tok = TokExp (Annotated Exp)
          | TokOp Name
   deriving (Eq, Ord)
 
-data TyVar = TyVarVarPlain Name
-           | TyVarVarRef Name
-           | TyVarVarValue Name
-           | TyVarVarView Name
+data TypeVar = TypeVarVarPlain Name
+             | TypeVarVarRef Name
+             | TypeVarVarValue Name
+             | TypeVarVarView Name
   deriving (Eq, Ord)
 
 -- TODO this is a good hint that name should be factored out
-tyVarName :: Annotated TyVar -> Name
-tyVarName tyVar = case view value tyVar of
-  TyVarVarPlain n -> n
-  TyVarVarRef   n -> n
-  TyVarVarValue n -> n
-  TyVarVarView  n -> n
+typeVarName :: Annotated TypeVar -> Name
+typeVarName typeVar = case view value typeVar of
+  TypeVarVarPlain n -> n
+  TypeVarVarRef   n -> n
+  TypeVarVarValue n -> n
+  TypeVarVarView  n -> n
 
-data Type = TyApply (Annotated Type) (Annotated Type)
-          | TyApplyOp (Annotated Type) (Annotated Type)
-          | TyCon Name
-          | TyFn (Annotated Type) (Annotated Type)
-          | TyOpIdentity
-          | TyOpMulti (Set (Annotated Type))
-          | TyOpRef Name
-          | TyOpUniRef Name
-          | TyOpUniView Name
-          | TyOpVarRef Name
-          | TyOpVarView Name
-          | TyPair (Annotated Type) (Annotated Type)
-          | TyUniPlain Name
-          | TyUniValue Name
-          | TyUnit
-          | TyVarPlain Name
-          | TyVarValue Name
+data Type = TypeApply (Annotated Type) (Annotated Type)
+          | TypeApplyOp (Annotated Type) (Annotated Type)
+          | TypeCon Name
+          | TypeFn (Annotated Type) (Annotated Type)
+          | TypeOpIdentity
+          | TypeOpMulti (Set (Annotated Type))
+          | TypeOpRef Name
+          | TypeOpUniRef Name
+          | TypeOpUniView Name
+          | TypeOpVarRef Name
+          | TypeOpVarView Name
+          | TypePair (Annotated Type) (Annotated Type)
+          | TypeUniPlain Name
+          | TypeUniValue Name
+          | TypeUnit
+          | TypeVarPlain Name
+          | TypeVarValue Name
   deriving (Eq, Ord)
 
-data QType = Forall [Annotated TyVar] [Annotated TyConstraint] (Annotated Type)
+data QType = Forall [Annotated TypeVar] [Annotated TypeConstraint] (Annotated Type)
            | Mono (Annotated Type)
   deriving (Eq, Ord)
 
@@ -209,13 +209,13 @@ data Kind = KindUni Name
           | KindView
   deriving (Eq, Ord)
 
-data TyConstraint = HoldsInteger Integer (Annotated Type)
-                  | Instance (Annotated Type)
-                  | RefFree Name (Annotated Type)
-                  | Ref (Annotated Type)
-                  | TEq (Annotated Type) (Annotated Type)
-                  | TEqIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
-                  | Value (Annotated Type)
+data TypeConstraint = HoldsInteger Integer (Annotated Type)
+                    | Instance (Annotated Type)
+                    | RefFree Name (Annotated Type)
+                    | Ref (Annotated Type)
+                    | TEq (Annotated Type) (Annotated Type)
+                    | TEqIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
+                    | Value (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TEq`
@@ -231,17 +231,17 @@ infixl 8 `KSub`
 newtype Requirement a = Requirement a
   deriving (Eq, Ord)
 
-type TyRequirement = Requirement TyConstraint
+type TypeRequirement = Requirement TypeConstraint
 type KindRequirement = Requirement KindConstraint
 
 type family Annotation a where
   Annotation Exp      = Annotated Type
   Annotation Pat      = Annotated Type
   Annotation Type     = Annotated Kind
-  Annotation TyVar    = Annotated Kind
+  Annotation TypeVar  = Annotated Kind
   Annotation DataCon  = Annotated QType
   Annotation DeclType = Annotated Kind
-  Annotation TyRequirement   = TyReason
+  Annotation TypeRequirement = TypeReason
   Annotation KindRequirement = KindReason
   Annotation a               = Void
 
@@ -259,33 +259,33 @@ phantom x = (Phantom, Nothing) :< x
 as :: a -> Annotation a -> Annotated a
 as x a = (Phantom, Just a) :< x
 
-data TyReason = TyReasonApply (Annotated Exp) (Annotated Exp)
-              | TyReasonBind (Annotated Pat) (Annotated Exp)
-              | TyReasonRead Name
-              | TyReasonIntegerLiteral Integer
-              -- TODO
-              | Captured Name
-              | CaseCongruence
-              | ConPattern Name
-              | FnCongruence Name
-              | FnSignature Name
-              | IfCondition
-              | IfCongruence
-              | InstanceOf Name
-              | MultiAlias Name
-              | MultiUse Name
-              | Specialisation Name
-              | SwitchCondition
-              | SwitchCongruence
-              | UserSignature
+data TypeReason = TypeReasonApply (Annotated Exp) (Annotated Exp)
+                | TypeReasonBind (Annotated Pat) (Annotated Exp)
+                | TypeReasonRead Name
+                | TypeReasonIntegerLiteral Integer
+                -- TODO
+                | Captured Name
+                | CaseCongruence
+                | ConPattern Name
+                | FnCongruence Name
+                | FnSignature Name
+                | IfCondition
+                | IfCongruence
+                | InstanceOf Name
+                | MultiAlias Name
+                | MultiUse Name
+                | Specialisation Name
+                | SwitchCondition
+                | SwitchCongruence
+                | UserSignature
   deriving (Eq, Ord)
 
-data KindReason = KindReasonData Name [Annotated TyVar]
+data KindReason = KindReasonData Name [Annotated TypeVar]
                 | KindReasonDataCon (Annotated DataCon)
                 | KindReasonQType (Annotated QType)
-                | KindReasonTyApply (Annotated Type) (Annotated Type)
-                | KindReasonTyApplyOp (Annotated Type) (Annotated Type)
+                | KindReasonTypeApply (Annotated Type) (Annotated Type)
+                | KindReasonTypeApplyOp (Annotated Type) (Annotated Type)
                 | KindReasonType (Annotated Type)
-                | KindReasonTyVar (Annotated TyVar)
+                | KindReasonTypeVar (Annotated TypeVar)
   deriving (Eq, Ord)
 

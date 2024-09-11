@@ -59,14 +59,14 @@ data I a where
   ITok      :: I Tok
   -- | T1
   IQType        :: I QType
-  ITyConstraint :: I TyConstraint
+  ITypeConstraint :: I TypeConstraint
   IType         :: I Type
-  ITyVar        :: I TyVar
+  ITypeVar        :: I TypeVar
   -- | T2
   IKind           :: I Kind
   IKindConstraint :: I KindConstraint
   -- | Solver
-  ITyRequirement   :: I TyRequirement
+  ITypeRequirement   :: I TypeRequirement
   IKindRequirement :: I KindRequirement
 
 
@@ -93,14 +93,14 @@ switch a b eq neq = case (a, b) of
   (ITok, ITok)                         -> eq
   -- | T1
   (IQType, IQType)                     -> eq
-  (ITyConstraint, ITyConstraint)       -> eq
+  (ITypeConstraint, ITypeConstraint)   -> eq
   (IType, IType)                       -> eq
-  (ITyVar, ITyVar)                     -> eq
+  (ITypeVar, ITypeVar)                 -> eq
   -- | T2
   (IKind, IKind)                       -> eq
   (IKindConstraint, IKindConstraint)   -> eq
   -- | Solver
-  (ITyRequirement, ITyRequirement)     -> eq
+  (ITypeRequirement, ITypeRequirement) -> eq
   (IKindRequirement, IKindRequirement) -> eq
   -- |
   _                                    -> neq
@@ -274,8 +274,8 @@ instance Term QType where
     Forall vs cs t -> Forall <$> traverse f vs <*> traverse f cs <*> f t
     Mono t         -> Mono <$> f t
 
-instance Term TyConstraint where
-  witness = ITyConstraint
+instance Term TypeConstraint where
+  witness = ITypeConstraint
   recurseAnnotation = trivial
   recurseTerm f = \case
     HoldsInteger n t  -> HoldsInteger n <$> f t
@@ -290,26 +290,26 @@ instance Term Type where
   witness = IType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    TyApply a b   -> TyApply <$> f a <*> f b
-    TyApplyOp a b -> TyApplyOp <$> f a <*> f b
-    TyCon n       -> pure (TyCon n)
-    TyFn a b      -> TyFn <$> f a <*> f b
-    TyOpIdentity  -> pure TyOpIdentity
-    TyOpMulti os  -> TyOpMulti . Set.fromList <$> traverse f (Set.toList os)
-    TyOpRef n     -> pure (TyOpRef n)
-    TyOpUniRef n  -> pure (TyOpUniRef n)
-    TyOpUniView n -> pure (TyOpUniView n)
-    TyOpVarRef n  -> pure (TyOpVarRef n)
-    TyOpVarView n -> pure (TyOpVarView n)
-    TyPair a b    -> TyPair <$> f a <*> f b
-    TyUniPlain n  -> pure (TyUniPlain n)
-    TyUniValue n  -> pure (TyUniValue n)
-    TyUnit        -> pure TyUnit
-    TyVarPlain n  -> pure (TyVarPlain n)
-    TyVarValue n  -> pure (TyVarValue n)
+    TypeApply a b   -> TypeApply <$> f a <*> f b
+    TypeApplyOp a b -> TypeApplyOp <$> f a <*> f b
+    TypeCon n       -> pure (TypeCon n)
+    TypeFn a b      -> TypeFn <$> f a <*> f b
+    TypeOpIdentity  -> pure TypeOpIdentity
+    TypeOpMulti os  -> TypeOpMulti . Set.fromList <$> traverse f (Set.toList os)
+    TypeOpRef n     -> pure (TypeOpRef n)
+    TypeOpUniRef n  -> pure (TypeOpUniRef n)
+    TypeOpUniView n -> pure (TypeOpUniView n)
+    TypeOpVarRef n  -> pure (TypeOpVarRef n)
+    TypeOpVarView n -> pure (TypeOpVarView n)
+    TypePair a b    -> TypePair <$> f a <*> f b
+    TypeUniPlain n  -> pure (TypeUniPlain n)
+    TypeUniValue n  -> pure (TypeUniValue n)
+    TypeUnit        -> pure TypeUnit
+    TypeVarPlain n  -> pure (TypeVarPlain n)
+    TypeVarValue n  -> pure (TypeVarValue n)
 
-instance Term TyVar where
-  witness = ITyVar
+instance Term TypeVar where
+  witness = ITypeVar
   recurseAnnotation _ f x = f x
   recurseTerm f = pure
 
@@ -336,26 +336,26 @@ instance Term KindConstraint where
 
 -- | Solver
 
-instance Term TyRequirement where
-  witness = ITyRequirement
+instance Term TypeRequirement where
+  witness = ITypeRequirement
   recurseAnnotation _ f x = case x of
-    TyReasonApply a b -> TyReasonApply <$> f a <*> f b
-    TyReasonBind p e  -> TyReasonBind <$> f p <*> f e
-    TyReasonRead n    -> pure (TyReasonRead n)
+    TypeReasonApply a b -> TypeReasonApply <$> f a <*> f b
+    TypeReasonBind p e  -> TypeReasonBind <$> f p <*> f e
+    TypeReasonRead n    -> pure (TypeReasonRead n)
     -- TODO
-    _                 -> pure x
+    _                   -> pure x
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c
 
 instance Term KindRequirement where
   witness = IKindRequirement
   recurseAnnotation _ f x = case x of
-    KindReasonData n a      -> KindReasonData n <$> traverse f a
-    KindReasonDataCon c     -> KindReasonDataCon <$> f c
-    KindReasonQType t       -> KindReasonQType <$> f t
-    KindReasonTyApply a b   -> KindReasonTyApply <$> f a <*> f b
-    KindReasonTyApplyOp a b -> KindReasonTyApplyOp <$> f a <*> f b
-    KindReasonType t        -> KindReasonType <$> f t
-    KindReasonTyVar t       -> KindReasonTyVar <$> f t
+    KindReasonData n a        -> KindReasonData n <$> traverse f a
+    KindReasonDataCon c       -> KindReasonDataCon <$> f c
+    KindReasonQType t         -> KindReasonQType <$> f t
+    KindReasonTypeApply a b   -> KindReasonTypeApply <$> f a <*> f b
+    KindReasonTypeApplyOp a b -> KindReasonTypeApplyOp <$> f a <*> f b
+    KindReasonType t          -> KindReasonType <$> f t
+    KindReasonTypeVar t       -> KindReasonTypeVar <$> f t
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c

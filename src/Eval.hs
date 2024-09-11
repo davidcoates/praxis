@@ -104,7 +104,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Con name -> do
     case t of
-      (_ :< TyFn _ _) -> return $ Value.Fn (\val -> return $ Value.Data name val)
+      (_ :< TypeFn _ _) -> return $ Value.Fn (\val -> return $ Value.Data name val)
       _                -> return $ Value.Enum name
 
   Defer exp1 exp2 -> do
@@ -125,7 +125,7 @@ evalExp ((src, Just t) :< exp) = case exp of
   Lit lit -> pure $ case lit of
     Bool    val -> Value.Bool val
     Char    val -> Value.Char val
-    Integer val -> let (_ :< TyCon n) = t in integerToValue n val
+    Integer val -> let (_ :< TypeCon n) = t in integerToValue n val
     String  val -> Value.String val
 
   Read _ exp -> evalExp exp

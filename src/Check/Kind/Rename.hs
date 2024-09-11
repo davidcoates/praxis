@@ -26,7 +26,7 @@ rename term = ($ term) $ case typeof (view value term) of
   IDeclTerm -> renameDeclTerm
   IDeclType -> renameDeclType
   IType     -> renameType
-  ITyVar    -> renameTyVar
+  ITypeVar  -> renameTypeVar
   IQType    -> renameQType
   _         -> value (recurseTerm rename)
 
@@ -43,7 +43,7 @@ introMany = Check.introMany kindCheckState
 introFromQType :: Annotated QType -> Praxis ()
 introFromQType ((src, _) :< qTy) = case qTy of
   Forall vs _ _ -> do
-    introMany src (map tyVarName vs)
+    introMany src (map typeVarName vs)
     return ()
   Mono _ -> return ()
 
@@ -61,7 +61,7 @@ renameDeclTerm (a@(src, _) :< decl) = (a :<) <$> case decl of
 renameDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 
-  DeclTypeData _ _ tyVars _ -> save (kindCheckState . scopes) $ introMany src (map tyVarName tyVars) >> recurseTerm rename decl
+  DeclTypeData _ _ typeVars _ -> save (kindCheckState . scopes) $ introMany src (map typeVarName typeVars) >> recurseTerm rename decl
 
   _ -> recurseTerm rename decl
 
@@ -69,27 +69,27 @@ renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 renameType :: Annotated Type -> Praxis (Annotated Type)
 renameType (a@(src, _) :< ty) = (a :<) <$> case ty of
 
-  TyVarPlain n  -> TyVarPlain <$> disambiguate src n
+  TypeVarPlain n  -> TypeVarPlain <$> disambiguate src n
 
-  TyVarValue n  -> TyVarValue <$> disambiguate src n
+  TypeVarValue n  -> TypeVarValue <$> disambiguate src n
 
-  TyOpVarRef n  -> TyOpVarRef <$> disambiguate src n
+  TypeOpVarRef n  -> TypeOpVarRef <$> disambiguate src n
 
-  TyOpVarView n -> TyOpVarView <$> disambiguate src n
+  TypeOpVarView n -> TypeOpVarView <$> disambiguate src n
 
-  _             -> recurseTerm rename ty
+  _               -> recurseTerm rename ty
 
 
-renameTyVar :: Annotated TyVar -> Praxis (Annotated TyVar)
-renameTyVar (a@(src, _) :< tyVar) = (a :<) <$> case tyVar of
+renameTypeVar :: Annotated TypeVar -> Praxis (Annotated TypeVar)
+renameTypeVar (a@(src, _) :< typeVar) = (a :<) <$> case typeVar of
 
-  TyVarVarPlain n -> TyVarVarPlain <$> disambiguate src n
+  TypeVarVarPlain n -> TypeVarVarPlain <$> disambiguate src n
 
-  TyVarVarRef n   -> TyVarVarRef <$> disambiguate src n
+  TypeVarVarRef n   -> TypeVarVarRef <$> disambiguate src n
 
-  TyVarVarValue n -> TyVarVarValue <$> disambiguate src n
+  TypeVarVarValue n -> TypeVarVarValue <$> disambiguate src n
 
-  TyVarVarView n  -> TyVarVarView <$> disambiguate src n
+  TypeVarVarView n  -> TypeVarVarView <$> disambiguate src n
 
 
 renameQType :: Annotated QType -> Praxis (Annotated QType)

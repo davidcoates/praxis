@@ -53,16 +53,16 @@ module Praxis
   , kEnv
   , tEnv
   , vEnv
-  , tySynonyms
-  , tyCheckState
+  , typeSynonyms
+  , typeCheckState
   , kindCheckState
 
   , freshKindUni
   , freshRef
-  , freshTyUniPlain
-  , freshTyUniRef
-  , freshTyUniValue
-  , freshTyUniView
+  , freshTypeUniPlain
+  , freshTypeUniRef
+  , freshTypeUniValue
+  , freshTypeUniView
   , freshVar
 
   , clearTerm
@@ -104,13 +104,13 @@ data Flags = Flags
   } deriving (Show)
 
 data Fresh = Fresh
-  { _freshKindUnis    :: [String]
-  , _freshRefs        :: [String]
-  , _freshTyUniPlains :: [String]
-  , _freshTyUniRefs   :: [String]
-  , _freshTyUniValues :: [String]
-  , _freshTyUniViews  :: [String]
-  , _freshVars        :: Map Name Int
+  { _freshKindUnis      :: [String]
+  , _freshRefs          :: [String]
+  , _freshTypeUniPlains :: [String]
+  , _freshTypeUniRefs   :: [String]
+  , _freshTypeUniValues :: [String]
+  , _freshTypeUniViews  :: [String]
+  , _freshVars          :: Map Name Int
   }
 
 type CEnv = Env.Strict.Env (Annotated QType)
@@ -118,7 +118,7 @@ type CEnv = Env.Strict.Env (Annotated QType)
 data InstanceOrigin = Inbuilt | Trivial | User
   deriving Eq
 
-data Instance = IsInstance | IsInstanceOnlyIf [TyConstraint]
+data Instance = IsInstance | IsInstanceOnlyIf [TypeConstraint]
 
 type IEnv = Env.Strict.Env (Map Name ([Annotated Type] -> (InstanceOrigin, Instance)))
 
@@ -150,8 +150,8 @@ data PraxisState = PraxisState
   , _kEnv           :: KEnv                -- ^ Kind environment
   , _tEnv           :: TEnv                -- ^ Type environment
   , _vEnv           :: VEnv                -- ^ Value environment
-  , _tySynonyms     :: Map Name (Annotated Type) -- ^ Type synonyms
-  , _tyCheckState   :: Check.State TyConstraint
+  , _typeSynonyms   :: Map Name (Annotated Type) -- ^ Type synonyms
+  , _typeCheckState :: Check.State TypeConstraint
   , _kindCheckState :: Check.State KindConstraint
   }
 
@@ -163,15 +163,15 @@ defaultFlags = Flags { _debug = False, _silent = False }
 defaultFresh = Fresh
   { _freshKindUnis    = map (("^k"++) . show) [0..]
   , _freshRefs        = map (("'l"++) . show) [0..]
-  , _freshTyUniPlains = map (("^t"++) . show) [0..]
-  , _freshTyUniRefs   = map (("^r"++) . show) [0..]
-  , _freshTyUniValues = map (("^p"++) . show) [0..]
-  , _freshTyUniViews  = map (("^v"++) . show) [0..]
+  , _freshTypeUniPlains = map (("^t"++) . show) [0..]
+  , _freshTypeUniRefs   = map (("^r"++) . show) [0..]
+  , _freshTypeUniValues = map (("^p"++) . show) [0..]
+  , _freshTypeUniViews  = map (("^v"++) . show) [0..]
   , _freshVars        = Map.empty
   }
 
-emptyState :: PraxisState
-emptyState = PraxisState
+emptypeState :: PraxisState
+emptypeState = PraxisState
   { _flags          = defaultFlags
   , _fresh          = defaultFresh
   , _stage          = Unknown
@@ -181,9 +181,9 @@ emptyState = PraxisState
   , _kEnv           = Env.Strict.empty
   , _tEnv           = Env.Linear.empty
   , _vEnv           = Env.Lazy.empty
-  , _tySynonyms     = Map.empty
-  , _tyCheckState   = Check.emptyState
-  , _kindCheckState = Check.emptyState
+  , _typeSynonyms     = Map.empty
+  , _typeCheckState   = Check.emptypeState
+  , _kindCheckState = Check.emptypeState
   }
 
 makeLenses ''Flags
@@ -288,7 +288,7 @@ runPraxis' :: Praxis a -> PraxisState -> IO (Either String a, PraxisState)
 runPraxis' = runStateT . runExceptT
 
 runPraxis :: Praxis a -> IO (Either String a)
-runPraxis c = fst <$> runPraxis' c emptyState
+runPraxis c = fst <$> runPraxis' c emptypeState
 
 ifFlag :: Praxis () -> Lens' Flags Bool -> Praxis ()
 ifFlag c f = use (flags . f) >>= (flip when) c
@@ -303,31 +303,31 @@ freshRef :: Praxis (Annotated Type)
 freshRef = do
   (l:ls) <- use (fresh . freshRefs)
   fresh . freshRefs .= ls
-  return (TyOpRef l `as` phantom KindType)
+  return (TypeOpRef l `as` phantom KindType)
 
-freshTyUniPlain :: Praxis (Annotated Type)
-freshTyUniPlain = do
-  (x:xs) <- use (fresh . freshTyUniPlains)
-  fresh . freshTyUniPlains .= xs
-  return (TyUniPlain x `as` phantom KindType)
+freshTypeUniPlain :: Praxis (Annotated Type)
+freshTypeUniPlain = do
+  (x:xs) <- use (fresh . freshTypeUniPlains)
+  fresh . freshTypeUniPlains .= xs
+  return (TypeUniPlain x `as` phantom KindType)
 
-freshTyUniRef ::Praxis (Annotated Type)
-freshTyUniRef = do
-  (o:os) <- use (fresh . freshTyUniRefs)
-  fresh . freshTyUniRefs .= os
-  return (TyOpUniRef o `as` phantom KindRef)
+freshTypeUniRef ::Praxis (Annotated Type)
+freshTypeUniRef = do
+  (o:os) <- use (fresh . freshTypeUniRefs)
+  fresh . freshTypeUniRefs .= os
+  return (TypeOpUniRef o `as` phantom KindRef)
 
-freshTyUniValue :: Praxis (Annotated Type)
-freshTyUniValue = do
-  (x:xs) <- use (fresh . freshTyUniValues)
-  fresh . freshTyUniValues .= xs
-  return (TyUniValue x `as` phantom KindType)
+freshTypeUniValue :: Praxis (Annotated Type)
+freshTypeUniValue = do
+  (x:xs) <- use (fresh . freshTypeUniValues)
+  fresh . freshTypeUniValues .= xs
+  return (TypeUniValue x `as` phantom KindType)
 
-freshTyUniView ::Praxis (Annotated Type)
-freshTyUniView = do
-  (o:os) <- use (fresh . freshTyUniViews)
-  fresh . freshTyUniViews .= os
-  return (TyOpUniView o `as` phantom KindView)
+freshTypeUniView ::Praxis (Annotated Type)
+freshTypeUniView = do
+  (o:os) <- use (fresh . freshTypeUniViews)
+  fresh . freshTypeUniViews .= os
+  return (TypeOpUniView o `as` phantom KindView)
 
 freshVar :: Name -> Praxis Name
 freshVar var = do
@@ -342,7 +342,7 @@ requireMain = do
   case ty of
     Nothing -> throw ("missing main function" :: String)
     Just ty
-      | (_ :< Mono (_ :< TyFn (_ :< TyUnit) (_ :< TyUnit))) <- ty
+      | (_ :< Mono (_ :< TypeFn (_ :< TypeUnit) (_ :< TypeUnit))) <- ty
         -> return ()
       | otherwise
         -> throwAt (view source ty) $ "main function has bad type " <> quote (pretty ty) <> ", expected () -> ()"

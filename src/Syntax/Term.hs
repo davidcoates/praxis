@@ -146,12 +146,12 @@ definePrisms ''Tok
 
 definePrisms ''QType
 definePrisms ''Type
-definePrisms ''TyVar
+definePrisms ''TypeVar
 
 definePrisms ''Kind
 
 definePrisms ''KindConstraint
-definePrisms ''TyConstraint
+definePrisms ''TypeConstraint
 
 definePrisms ''Requirement
 
@@ -175,14 +175,14 @@ syntax = \case
   ITok            -> tok
   -- | T1
   IQType          -> qTy
-  ITyConstraint   -> tyConstraint
+  ITypeConstraint   -> typeConstraint
   IType           -> ty
-  ITyVar          -> tyVar
+  ITypeVar          -> typeVar
   -- | T2
   IKind           -> kind
   IKindConstraint -> kindConstraint
   -- | Solver
-  ITyRequirement   -> tyRequirement
+  ITypeRequirement   -> typeRequirement
   IKindRequirement -> kindRequirement
 
 
@@ -232,8 +232,8 @@ integer = match f (Token.Lit . Integer) where
     Token.Lit (Integer n) -> Just n
     _                     -> Nothing
 
-tyConstraint :: Syntax f => f TyConstraint
-tyConstraint = internal (_HoldsInteger <$> integer <*> reservedSym "∈" *> annotated ty) <|>
+typeConstraint :: Syntax f => f TypeConstraint
+typeConstraint = internal (_HoldsInteger <$> integer <*> reservedSym "∈" *> annotated ty) <|>
                _Instance <$> annotated ty <|>
                internal (_Ref <$> reservedCon "Ref" *> annotated ty) <|>
                internal (_RefFree <$> varId <*> reservedSym "∉" *> annotated ty) <|>
@@ -261,7 +261,7 @@ declType :: Syntax f => f DeclType
 declType = declTypeData <|> declTypeEnum
 
 declTypeData :: Syntax f => f DeclType
-declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated tyVar) <*> reservedSym "=" *> dataCons where
+declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated typeVar) <*> reservedSym "=" *> dataCons where
   dataCons = _Cons <$> annotated dataCon <*> many (contextualOp "|" *> annotated dataCon)
   dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataRec <$> reservedId "rec") <|> (_DataUnboxed <$> (reservedId "unboxed" <|> pure ()))
 
@@ -272,11 +272,11 @@ declTypeEnum = _DeclTypeEnum <$> reservedId "enum" *> conId <*> reservedSym "=" 
 dataCon :: Syntax f => f DataCon
 dataCon = _DataCon <$> conId <*> annotated ty1
 
-tyVar :: Syntax f => f TyVar
-tyVar = _TyVarVarPlain <$> varId <|>
-        _TyVarVarRef <$> varIdRef <|>
-        _TyVarVarValue <$> varIdValue <|>
-        _TyVarVarView <$> varIdView <|>
+typeVar :: Syntax f => f TypeVar
+typeVar = _TypeVarVarPlain <$> varId <|>
+        _TypeVarVarRef <$> varIdRef <|>
+        _TypeVarVarValue <$> varIdValue <|>
+        _TypeVarVarView <$> varIdView <|>
         mark "type variable"
 
 declTerm :: Syntax f => f DeclTerm
@@ -309,13 +309,13 @@ kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> mark "kind
 
 qTy :: Syntax f => f QType
 qTy = poly <|> mono <|> mark "quantified type" where
-  poly = _Forall <$> reservedId "forall" *> some (annotated tyVar) <*> tyConstraints <*> (contextualOp "." *> annotated ty)
+  poly = _Forall <$> reservedId "forall" *> some (annotated typeVar) <*> typeConstraints <*> (contextualOp "." *> annotated ty)
   mono = _Mono <$> annotated ty
-  tyConstraints :: Syntax f => f [Annotated TyConstraint]
-  tyConstraints = _Cons <$> (contextualOp "|" *> annotated tyConstraint) <*> many (special ',' *> annotated tyConstraint) <|> _Nil <$> pure ()
+  typeConstraints :: Syntax f => f [Annotated TypeConstraint]
+  typeConstraints = _Cons <$> (contextualOp "|" *> annotated typeConstraint) <*> many (special ',' *> annotated typeConstraint) <|> _Nil <$> pure ()
 
 ty :: Syntax f => f Type
-ty = ty1 `join` (_TyFn, reservedSym "->" *> annotated ty) <|> mark "type"
+ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> mark "type"
 
 -- special sauce to make op applications right associative, but normal applications left associative
 -- &r ?v C t &r ?v t -> &r (?v ((((C t) &r) ?v) t))
@@ -323,43 +323,43 @@ foldTy :: Prism Type [Annotated Type]
 foldTy = Prism (view value . fold) (Just . unfold . phantom) where
   fold [x] = x
   fold (x:xs)
-    | isTyOp x  = let y = fold xs in (view source x <> view source y, Nothing) :< TyApplyOp x y
+    | isTypeOp x  = let y = fold xs in (view source x <> view source y, Nothing) :< TypeApplyOp x y
     | otherwise = foldLeft (x:xs)
   foldLeft [x] = x
-  foldLeft (x:y:ys) = fold ((view source x <> view source y, Nothing) :< TyApply x y : ys)
+  foldLeft (x:y:ys) = fold ((view source x <> view source y, Nothing) :< TypeApply x y : ys)
   unfold x = case view value x of
-    TyApplyOp x y -> x : unfold y
-    TyApply _   _ -> unfoldLeft x
-    _             -> [x]
+    TypeApplyOp x y -> x : unfold y
+    TypeApply _   _ -> unfoldLeft x
+    _               -> [x]
   unfoldLeft x = case view value x of
-    TyApply x y -> unfoldLeft x ++ [y]
-    _           -> [x]
-  isTyOp :: Annotated Type -> Bool
-  isTyOp t = case view value t of
-    TyOpIdentity  -> True
-    TyOpMulti _   -> True
-    TyOpRef _     -> True
-    TyOpUniRef _  -> True
-    TyOpUniView _ -> True
-    TyOpVarRef _  -> True
-    TyOpVarView _ -> True
-    _             -> False
+    TypeApply x y -> unfoldLeft x ++ [y]
+    _             -> [x]
+  isTypeOp :: Annotated Type -> Bool
+  isTypeOp t = case view value t of
+    TypeOpIdentity  -> True
+    TypeOpMulti _   -> True
+    TypeOpRef _     -> True
+    TypeOpUniRef _  -> True
+    TypeOpUniView _ -> True
+    TypeOpVarRef _  -> True
+    TypeOpVarView _ -> True
+    _               -> False
 
 ty1 :: Syntax f => f Type
 ty1 = foldTy <$> some (annotated ty0) <|> mark "type(1)" where
-  ty0 = _TyCon <$> conId <|>
-        _TyVarPlain <$> varId <|>
-        _TyVarValue <$> varIdValue <|>
-        _TyOpIdentity <$> reservedSym "@" <|>
-        _TyOpMulti <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
-        _TyOpVarRef <$> varIdRef <|>
-        _TyOpVarView <$> varIdView <|>
-        internal (_TyOpRef <$> varIdRef) <|>
-        internal (_TyOpUniRef <$> uniRef) <|>
-        internal (_TyOpUniView <$> uniView) <|>
-        internal (_TyUniPlain <$> uni) <|>
-        internal (_TyUniValue <$> uniValue) <|>
-        tuple _TyUnit _TyPair ty <|>
+  ty0 = _TypeCon <$> conId <|>
+        _TypeVarPlain <$> varId <|>
+        _TypeVarValue <$> varIdValue <|>
+        _TypeOpIdentity <$> reservedSym "@" <|>
+        _TypeOpMulti <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
+        _TypeOpVarRef <$> varIdRef <|>
+        _TypeOpVarView <$> varIdView <|>
+        internal (_TypeOpRef <$> varIdRef) <|>
+        internal (_TypeOpUniRef <$> uniRef) <|>
+        internal (_TypeOpUniView <$> uniView) <|>
+        internal (_TypeUniPlain <$> uni) <|>
+        internal (_TypeUniValue <$> uniValue) <|>
+        tuple _TypeUnit _TypePair ty <|>
         mark "type(0)"
 
 tok :: Syntax f => f Tok
@@ -428,8 +428,8 @@ prec = _Prec <$> ordering <*> op where
              _LT <$> contextualId "below" <|>
              _EQ <$> contextualId "equal"
 
-tyRequirement :: Syntax f => f TyRequirement
-tyRequirement = _Requirement <$> tyConstraint
+typeRequirement :: Syntax f => f TypeRequirement
+typeRequirement = _Requirement <$> typeConstraint
 
 kindRequirement :: Syntax f => f KindRequirement
 kindRequirement = _Requirement <$> kindConstraint

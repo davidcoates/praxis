@@ -86,30 +86,30 @@ hideLabel x = case typeof x of
     PatPair _ _ -> True -- Note: Not trivial due to references/views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
     _           -> False
   IType -> case x of
-    TyApply _ _   -> True
-    TyApplyOp _ _ -> True
-    _             -> False
+    TypeApply _ _   -> True
+    TypeApplyOp _ _ -> True
+    _               -> False
   _ -> False
 
 label :: Term a => Annotated a -> Printable String
 label ((s, a) :< x) = case a of
   Just a | not (hideLabel x) -> case typeof x of
-    IExp             -> prettyIf Types a
-    IPat             -> prettyIf Types a
-    IDataCon         -> prettyIf Types a
-    ITyVar           -> prettyIf Kinds a
-    IType            -> prettyIf Kinds a
-    ITyRequirement   -> pretty a
+    IExp             -> prettypeIf Types a
+    IPat             -> prettypeIf Types a
+    IDataCon         -> prettypeIf Types a
+    ITypeVar         -> prettypeIf Kinds a
+    IType            -> prettypeIf Kinds a
+    ITypeRequirement -> pretty a
     IKindRequirement -> pretty a
     _                -> blank
   _ -> blank
 
-instance Pretty TyReason where
+instance Pretty TypeReason where
   pretty = \case
-    TyReasonApply f x        -> "application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
-    TyReasonRead n           -> "read of " <> pretty n
-    TyReasonBind p e         -> "binding " <> pretty p <> pretty (Colored.Fg Red (" (<-) " :: Colored String)) <> pretty e
-    TyReasonIntegerLiteral i -> "integer literal " <> pretty (show i)
+    TypeReasonApply f x        -> "application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
+    TypeReasonRead n           -> "read of " <> pretty n
+    TypeReasonBind p e         -> "binding " <> pretty p <> pretty (Colored.Fg Red (" (<-) " :: Colored String)) <> pretty e
+    TypeReasonIntegerLiteral i -> "integer literal " <> pretty (show i)
     -- TODO
     Captured n       -> "variable " <> quote (pretty n) <> " captured"
     CaseCongruence   -> "alternatives of case expression must have the same type"
@@ -128,10 +128,10 @@ instance Pretty TyReason where
 
 instance Pretty KindReason where
   pretty = \case
-    KindReasonTyApply f x   -> "type application " <> pretty f <> pretty (Colored.Fg Red (" $ " :: Colored String)) <> pretty x
-    KindReasonTyApplyOp f x -> "type operator application " <> pretty f <> pretty (Colored.Fg Red (" ★ " :: Colored String)) <> pretty x
+    KindReasonTypeApply f x   -> "type application " <> pretty f <> pretty (Colored.Fg Red (" $ " :: Colored String)) <> pretty x
+    KindReasonTypeApplyOp f x -> "type operator application " <> pretty f <> pretty (Colored.Fg Red (" ★ " :: Colored String)) <> pretty x
     KindReasonDataCon c     -> "data constructor " <> pretty c
     KindReasonData n args   -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
     KindReasonType t        -> "type " <> pretty t
-    KindReasonTyVar t       -> "type pattern " <> pretty t
+    KindReasonTypeVar t       -> "type pattern " <> pretty t
     KindReasonQType t       -> "qualified type " <> pretty t

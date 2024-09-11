@@ -32,13 +32,13 @@ rename term = ($ term) $ case typeof (view value term) of
 
 
 disambiguate :: Source -> Name -> Praxis Name
-disambiguate = Check.disambiguate tyCheckState
+disambiguate = Check.disambiguate typeCheckState
 
 intro :: Name -> Praxis Name
-intro = Check.intro tyCheckState
+intro = Check.intro typeCheckState
 
 introMany :: Source -> [Name] -> Praxis [Name]
-introMany = Check.introMany tyCheckState
+introMany = Check.introMany typeCheckState
 
 introFromPat :: Annotated Pat -> Praxis ()
 introFromPat pat = do
@@ -70,7 +70,7 @@ renameDeclTerm (a@(src, _) :< decl) = (a :<) <$> case decl of
 
 
 renameAlt :: (Annotated Pat, Annotated Exp) -> Praxis (Annotated Pat, Annotated Exp)
-renameAlt (pat, exp) = save (tyCheckState . scopes) $ do
+renameAlt (pat, exp) = save (typeCheckState . scopes) $ do
   introFromPat pat
   pat <- renamePat pat
   exp <- renameExp exp
@@ -90,7 +90,7 @@ renameExp (a@(src, _) :< exp) = (a :<) <$> case exp of
 
   Read name exp -> Read <$> disambiguate src name <*> renameExp exp
 
-  Where exp decls -> save (tyCheckState . scopes) $ do
+  Where exp decls -> save (typeCheckState . scopes) $ do
     decls <- traverse renameDeclTerm decls
     exp <- renameExp exp
     return $ Where exp decls
@@ -104,11 +104,11 @@ renameExp (a@(src, _) :< exp) = (a :<) <$> case exp of
     alts <- traverse renameAlt alts
     return $ Cases alts
 
-  Lambda pat _ -> save (tyCheckState . scopes) $ do
+  Lambda pat _ -> save (typeCheckState . scopes) $ do
     introFromPat pat
     recurseTerm rename exp
 
-  Let bind exp -> save (tyCheckState . scopes) $ do
+  Let bind exp -> save (typeCheckState . scopes) $ do
     bind <- renameBind bind
     exp <- renameExp exp
     return $ Let bind exp

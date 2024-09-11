@@ -75,7 +75,10 @@ x = 1
 x = 2
 |]
 
-    it "does not parse" $ runPretty (parse IProgram program) `shouldReturn` "parse error at 1:1: multiple definitions for 'x'"
+    it "checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+x_0 = [I32] 1
+x_1 = [I32] 2
+|]
 
 
   describe "out of scope term" $ do

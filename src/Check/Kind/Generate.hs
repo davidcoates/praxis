@@ -51,7 +51,7 @@ introKind :: Source -> Name -> Annotated Kind -> Praxis ()
 introKind src name kind = do
   entry <- kEnv `uses` Env.lookup name
   case entry of
-    Just _ -> throwAt src $ "type " <> quote (pretty name) <> " redeclared"
+    Just _ -> throwAt src $ "type " <> pretty name <> " redeclared"
     _      -> kEnv %= Env.insert name kind
 
 
@@ -77,7 +77,7 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       entry <- kEnv `uses` Env.lookup con
       case entry of
         Just k  -> return (k :< TypeCon con)
-        Nothing -> throwAt src $ "type " <> quote (pretty con) <> " is not in scope"
+        Nothing -> throwAt src $ "type " <> pretty con <> " is not in scope"
 
     TypeFn t1 t2 -> do
       t1 <- generateType t1
@@ -98,7 +98,7 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
         checkRefOrView ty = case view value (getKind ty) of
           KindRef  -> return ()
           KindView -> return ()
-          _        -> throwAt src $ "type " <> quote (pretty ty) <> " is in a type operator set but is not a type operator"
+          _        -> throwAt src $ "type " <> pretty ty <> " is in a type operator set but is not a type operator"
       mapM_ checkRefOrView tys
       let
         isRef = all (\op -> case view value (getKind op) of { KindRef -> True; KindView -> False }) tys

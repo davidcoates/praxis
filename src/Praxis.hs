@@ -331,4 +331,4 @@ requireMain = do
       | (_ :< Mono (_ :< TypeFn (_ :< TypeUnit) (_ :< TypeUnit))) <- ty
         -> return ()
       | otherwise
-        -> throwAt (view source ty) $ "main function has bad type " <> quote (pretty ty) <> ", expected () -> ()"
+        -> throwAt (view source ty) $ "main function has bad type " <> pretty ty <> ", expected () -> ()"

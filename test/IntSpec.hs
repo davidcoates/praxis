@@ -31,7 +31,7 @@ spec = do
       it (number ++ " overflows " ++ ty) $ runPretty (check IProgram ("x = " ++ number ++ " : " ++ ty)) `shouldReturn` trim [r|
 type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
   | primary cause: integer literal |] <> number <> [r| at 1:5
-  | secondary cause: user-supplied signature at 1:5|]
+  | secondary cause: signature |] ++ ty ++ " at 1:5"
 
     let
       underflows =
@@ -49,4 +49,4 @@ type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
       it (number ++ " underflows " ++ ty) $ runPretty (check IProgram ("x = " ++ number ++ " : " ++ ty)) `shouldReturn` trim [r|
 type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
   | primary cause: integer literal |] <> number <> [r| at 1:5
-  | secondary cause: user-supplied signature at 1:5|]
+  | secondary cause: signature |] ++ ty ++ " at 1:5"

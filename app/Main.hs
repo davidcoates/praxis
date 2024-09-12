@@ -50,7 +50,7 @@ parseOpts args = do
   args <- parseDebug args
   (args, interactive) <- parseInteractive args
   (args, file) <- parseFilename args
-  when (not (null args)) $ throw (pretty "unknown option " <> quote (pretty (unwords args)))
+  when (not (null args)) $ throw (pretty "unknown option: " <> pretty (unwords args))
   if interactive
     then return (Interactive file)
     else case file of

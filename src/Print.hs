@@ -106,32 +106,31 @@ label ((s, a) :< x) = case a of
 
 instance Pretty TypeReason where
   pretty = \case
-    TypeReasonApply f x        -> "application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
-    TypeReasonRead n           -> "read of " <> pretty n
-    TypeReasonBind p e         -> "binding " <> pretty p <> pretty (Colored.Fg Red (" (<-) " :: Colored String)) <> pretty e
+    TypeReasonApply f x -> "application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
+    TypeReasonBind p e -> "binding " <> pretty p <> pretty (Colored.Fg Red (" (<-) " :: Colored String)) <> pretty e
+    TypeReasonCaptured n -> "variable " <> pretty n <> " captured"
+    TypeReasonCaseCongruence -> "case(s) expression branches must have the same type"
+    TypeReasonConstructor n  -> "constructor " <> pretty n
+    TypeReasonFunctionCongruence n sig -> case sig of
+      Nothing  -> "function " <> pretty n
+      Just sig -> "function " <> pretty n <> " with signature " <> pretty sig
+    TypeReasonIfCondition  -> "if expression condition must have type Bool"
+    TypeReasonIfCongruence -> "if expression branches must have the same type"
     TypeReasonIntegerLiteral i -> "integer literal " <> pretty (show i)
-    -- TODO
-    Captured n       -> "variable " <> quote (pretty n) <> " captured"
-    CaseCongruence   -> "alternatives of case expression must have the same type"
-    ConPattern n     -> "constructor pattern " <> quote (pretty n)
-    FnCongruence n  -> "function " <> quote (pretty n)
-    FnSignature n   -> "function signature for " <> quote (pretty n)
-    IfCondition      -> "type of if condition must be Bool"
-    IfCongruence     -> "branches of if expression must have the same type"
-    InstanceOf n     -> "monomorphic usage of " <> quote (pretty n)
-    MultiAlias n     -> "variable " <> quote (pretty n) <> " is not a unique alias"
-    MultiUse n       -> "variable " <> quote (pretty n) <> " used more than once"
-    Specialisation n -> "specialisation of " <> quote (pretty n)
-    SwitchCondition  -> "type of switch condition must be Bool"
-    SwitchCongruence -> "branches of switch expression must have the same type"
-    UserSignature    -> "user-supplied signature"
+    TypeReasonRead n -> "read of " <> pretty n
+    TypeReasonSignature t -> "signature " <> pretty t
+    TypeReasonSpecialisation n -> "specialisation of " <> pretty n
+    TypeReasonSwitchCondition -> "switch expression condition must have type Bool"
+    TypeReasonSwitchCongruence -> "switch expression branches must have the same type"
+    TypeReasonMultiAlias n -> "variable " <> pretty n <> " is not a unique alias"
+    TypeReasonMultiUse n -> "variable " <> pretty n <> " used more than once"
 
 instance Pretty KindReason where
   pretty = \case
-    KindReasonTypeApply f x   -> "type application " <> pretty f <> pretty (Colored.Fg Red (" $ " :: Colored String)) <> pretty x
-    KindReasonTypeApplyOp f x -> "type operator application " <> pretty f <> pretty (Colored.Fg Red (" ★ " :: Colored String)) <> pretty x
-    KindReasonDataCon c     -> "data constructor " <> pretty c
-    KindReasonData n args   -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
-    KindReasonType t        -> "type " <> pretty t
-    KindReasonTypeVar t       -> "type pattern " <> pretty t
-    KindReasonQType t       -> "qualified type " <> pretty t
+    KindReasonTypeApply f x -> "type application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
+    KindReasonTypeApplyOp f x -> "type operator application " <> pretty f <> pretty (Colored.Fg Red (" (★) " :: Colored String)) <> pretty x
+    KindReasonDataCon c -> "data constructor " <> pretty c
+    KindReasonData n args -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
+    KindReasonType t -> "type " <> pretty t
+    KindReasonTypeVar t -> "type pattern " <> pretty t
+    KindReasonQType t -> "qualified type " <> pretty t

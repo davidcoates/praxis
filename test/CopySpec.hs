@@ -87,8 +87,8 @@ f x = (x, x)
       it "does not type check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 type check error: unable to satisfy: Copy a_0
   | derived from: Copy ( ?r_0 a_0 )
-  | primary cause: variable 'x_0' used more than once at 3:11
-  | secondary cause: function signature for 'f_0' at 2:1
+  | primary cause: variable x_0 used more than once at 3:11
+  | secondary cause: function f_0 with signature forall ?r_0 a_0 . ?r_0 a_0 -> ( ?r_0 a_0 , ?r_0 a_0 ) at 2:1
 |]
 
   describe "boxed type" $ do
@@ -106,8 +106,8 @@ copy x = (x, x)
 
         it "does not type check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 type check error: unable to satisfy: Copy ( Boxed a_1 )
-  | primary cause: variable 'x_0' used more than once at 5:14
-  | secondary cause: function signature for 'copy_0' at 4:1
+  | primary cause: variable x_0 used more than once at 5:14
+  | secondary cause: function copy_0 with signature forall a_1 . Boxed a_1 -> ( Boxed a_1 , Boxed a_1 ) at 4:1
 |]
 
       describe "trivial copy constraint" $ do
@@ -123,7 +123,7 @@ foo = copy (Boxed 1)
 
         it "does not type check" $ runPretty (check IProgram program)  `shouldReturn` trim [r|
 type check error: unable to satisfy: Copy ( Boxed ^t2 )
-  | primary cause: specialisation of 'copy_0' at 7:7
+  | primary cause: specialisation of copy_0 at 7:7
 |]
 
       describe "reduced copy constraint" $ do
@@ -137,8 +137,8 @@ copy x = (x, x)
 
         it "does not type check" $ runPretty (check IProgram program)  `shouldReturn` trim [r|
 type check error: unable to satisfy: Copy ( Boxed a_1 )
-  | primary cause: variable 'x_0' used more than once at 5:14
-  | secondary cause: function signature for 'copy_0' at 4:1
+  | primary cause: variable x_0 used more than once at 5:14
+  | secondary cause: function copy_0 with signature forall a_1 | Copy a_1 . Boxed a_1 -> ( Boxed a_1 , Boxed a_1 ) at 4:1
 |]
 
   describe "unboxed type" $ do
@@ -157,8 +157,8 @@ copy x =  (x, x)
         it "does not type check" $ runPretty (check IProgram program)  `shouldReturn` trim [r|
 type check error: unable to satisfy: Copy a_1
   | derived from: Copy ( Unboxed a_1 b_1 )
-  | primary cause: variable 'x_0' used more than once at 5:15
-  | secondary cause: function signature for 'copy_0' at 4:1
+  | primary cause: variable x_0 used more than once at 5:15
+  | secondary cause: function copy_0 with signature forall a_1 b_1 . Unboxed a_1 b_1 -> ( Unboxed a_1 b_1 , Unboxed a_1 b_1 ) at 4:1
 |]
 
       describe "trivial copy constraint" $ do

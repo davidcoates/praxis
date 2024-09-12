@@ -6,7 +6,6 @@ module Common.Pretty
   , Printable(..)
   , blank
   , Pretty(..)
-  , quote
   , separate
   , module Data.Monoid.Colorful
   ) where
@@ -55,9 +54,6 @@ instance Pretty (Colored String) where
 
 instance Pretty (Printable String) where
   pretty = id
-
-quote :: Printable String -> Printable String
-quote p = Printable $ \o -> "'" <> runPrintable p o <> "'"
 
 separate :: Pretty a => String -> [a] -> Printable String
 separate _ []     = blank

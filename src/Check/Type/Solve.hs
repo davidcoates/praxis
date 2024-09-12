@@ -360,16 +360,16 @@ tryDefault term@((src, _) :< _) = do
 
   -- TODO could just be a warning, and default to ()?
   let freeTys = deepTypeUnis (\f -> f == Plain || f == Value) term
-  when (not (null freeTys)) $ throwAt src $ "underdetermined type: " <> quote (pretty (Set.elemAt 0 freeTys))
+  when (not (null freeTys)) $ throwAt src $ "underdetermined type " <> pretty (Set.elemAt 0 freeTys)
 
   let
     defaultRef name = do
       ref <- freshRef
-      warnAt src $ "underdetermined reference " <> quote (pretty name) <> ", defaulting to " <> quote (pretty ref)
+      warnAt src $ "underdetermined reference " <> pretty name <> ", defaulting to " <> pretty ref
       return (name, view value ref)
 
     defaultView name = do
-      warnAt src $ "underdetermined view " <> quote (pretty name) <> ", defaulting to " <> quote (pretty (phantom TypeIdentityOp))
+      warnAt src $ "underdetermined view " <> pretty name <> ", defaulting to " <> pretty (phantom TypeIdentityOp)
       return (name, TypeIdentityOp)
 
   defaultViews <- mapM defaultView (Set.toList (deepTypeUnis (== View) term))

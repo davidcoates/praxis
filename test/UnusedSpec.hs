@@ -23,7 +23,7 @@ fst (x, y) = x
 fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> x
 |]
 
-    it "does not type check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:5: 'y_0' is not used"
+    it "does not type check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:5: variable y_0 is not used"
 
 
   describe "unused underscore" $ do
@@ -53,7 +53,7 @@ fst (x, y) = read y in x
 fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> read y in x
 |]
 
-    it "does not type check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:14: 'y_0' is not used in read"
+    it "does not type check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:14: variable y_0 is not used in read"
 
 
   describe "used read variable" $ do

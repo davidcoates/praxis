@@ -334,10 +334,10 @@ instance Term TypeRequirement where
   witness = ITypeRequirement
   recurseAnnotation _ f x = case x of
     TypeReasonApply a b -> TypeReasonApply <$> f a <*> f b
-    TypeReasonBind p e  -> TypeReasonBind <$> f p <*> f e
-    TypeReasonRead n    -> pure (TypeReasonRead n)
-    -- TODO
-    _                   -> pure x
+    TypeReasonBind p e -> TypeReasonBind <$> f p <*> f e
+    TypeReasonFunctionCongruence n s -> TypeReasonFunctionCongruence n <$> traverse f s
+    TypeReasonSignature t -> TypeReasonSignature <$> f t
+    _ -> pure x
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c
 

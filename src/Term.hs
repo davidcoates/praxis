@@ -247,23 +247,20 @@ as x a = (Phantom, Just a) :< x
 
 data TypeReason = TypeReasonApply (Annotated Exp) (Annotated Exp)
                 | TypeReasonBind (Annotated Pat) (Annotated Exp)
+                | TypeReasonCaptured Name
+                | TypeReasonCaseCongruence
+                | TypeReasonConstructor Name
+                | TypeReasonFunctionCongruence Name (Maybe (Annotated QType))
                 | TypeReasonRead Name
+                | TypeReasonIfCondition
+                | TypeReasonIfCongruence
                 | TypeReasonIntegerLiteral Integer
-                -- TODO
-                | Captured Name
-                | CaseCongruence
-                | ConPattern Name
-                | FnCongruence Name
-                | FnSignature Name
-                | IfCondition
-                | IfCongruence
-                | InstanceOf Name
-                | MultiAlias Name
-                | MultiUse Name
-                | Specialisation Name
-                | SwitchCondition
-                | SwitchCongruence
-                | UserSignature
+                | TypeReasonMultiAlias Name
+                | TypeReasonMultiUse Name
+                | TypeReasonSignature (Annotated Type)
+                | TypeReasonSpecialisation Name
+                | TypeReasonSwitchCondition
+                | TypeReasonSwitchCongruence
   deriving (Eq, Ord)
 
 data KindReason = KindReasonData Name [Annotated TypeVar]

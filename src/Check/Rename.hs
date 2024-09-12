@@ -24,8 +24,8 @@ disambiguate state src (flavor, name) = do
   case entry of
     Just (flavor', index)
       | flavor' == flavor -> return $ name ++ "_" ++ show index
-      | otherwise         -> throwAt src $ "variable " <> quote (pretty name) <> " has the wrong flavor"
-    Nothing    -> throwAt src $ "variable " <> quote (pretty name) <> " is not in scope"
+      | otherwise         -> throwAt src $ "variable " <> pretty name <> " has the wrong flavor"
+    Nothing    -> throwAt src $ "variable " <> pretty name <> " is not in scope"
 
 intro :: Lens' PraxisState (State c) -> (Flavor, Name) -> Praxis Name
 intro state (flavor, name) = do

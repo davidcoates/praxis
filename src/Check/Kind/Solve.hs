@@ -92,7 +92,7 @@ tryDefault term@((src, _) :< _) = do
 
   -- TODO could just be a warning, and default to Type?
   let freeKinds = deepKindUnis term
-  when (not (null freeKinds)) $ throwAt src $ "underdetermined kind: " <> quote (pretty (Set.elemAt 0 freeKinds))
+  when (not (null freeKinds)) $ throwAt src $ "underdetermined kind: " <> pretty (Set.elemAt 0 freeKinds)
   return term
 
   where

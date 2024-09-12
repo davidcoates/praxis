@@ -52,7 +52,7 @@ datatype Foo ?a &a = Foo &a
 datatype Foo !a = Foo a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:23: variable 'a' has the wrong flavor"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:23: variable a has the wrong flavor"
 
 
   describe "type redeclaration" $ do
@@ -62,7 +62,7 @@ datatype Foo = Foo ()
 enum Foo = Bar | Baz
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 2:1: type 'Foo' redeclared"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 2:1: type Foo redeclared"
 
 
   describe "constructor redeclaration" $ do
@@ -72,7 +72,7 @@ datatype FooData = Foo ()
 enum FooEnum = Foo | Bar
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:1: constructor 'Foo' redeclared"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:1: constructor Foo redeclared"
 
 
   describe "term redeclaration" $ do
@@ -95,7 +95,7 @@ x = y where y = 1
 z = y
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:5: variable 'y' is not in scope"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:5: variable y is not in scope"
 
 
   describe "out of scope non-recursive function" $ do
@@ -104,7 +104,7 @@ z = y
 x () = x ()
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 1:8: variable 'x' is not in scope"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 1:8: variable x is not in scope"
 
 
   describe "shadowing" $ do

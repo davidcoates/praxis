@@ -65,7 +65,7 @@ specialiseQType src name (_ :< qTy) = case qTy of
         TypeVar _  n -> n `lookup` vs'
         _            -> Nothing
     let specialisation = zip vs (map snd vs')
-    requires [ (src, Specialisation name) :< view value (typeRewrite c) | c <- cs ]
+    requires [ (src, TypeReasonSpecialisation name) :< view value (typeRewrite c) | c <- cs ]
     return (typeRewrite t, Just specialisation)
   Mono t -> return (t, Nothing)
 
@@ -87,7 +87,7 @@ closure src exp = do
   e2 <- use tEnv
   let captures = Env.toList (LEnv.touched e1 e2)
   -- Note: copy restrictions do not apply to polymorphic terms
-  requires [ (src, Captured name) :< capture t | (name, _ :< Mono t) <- captures ]
+  requires [ (src, TypeReasonCaptured name) :< capture t | (name, _ :< Mono t) <- captures ]
   return $ t :< Closure captures ((src, Just t) :< x)
 
 scope :: Source -> Praxis a -> Praxis a
@@ -98,7 +98,7 @@ scope src block = do
   let
     scopedVars = e2 `LEnv.difference` e1
     unusedVars = [ (n, view LEnv.value e) | (n, e) <- Env.toList scopedVars, view LEnv.used e == 0 && view LEnv.read e == 0 ]
-  series $ [ throwAt src (quote (pretty n) <> " is not used") | (n, _) <- unusedVars, head n /= '_' ] -- hacky
+  series $ [ throwAt src ("variable " <> pretty n <> " is not used") | (n, _) <- unusedVars, head n /= '_' ] -- hacky
   tEnv .= e2 `LEnv.difference` scopedVars
   return x
 
@@ -109,9 +109,9 @@ readVar src name = do
   r@(_ :< TypeRef refName) <- freshRef
   Just entry <- tEnv `uses` Env.lookup name
   (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
-  when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> quote (pretty name) <> " read after use"
+  when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> pretty name <> " read after use"
   -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
-  when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> quote (pretty name)
+  when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> pretty name
   tEnv %= LEnv.incRead name
   return $ (refName, phantom (TypeApplyOp r t))
 
@@ -123,21 +123,21 @@ useVar src name = do
   (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
   tEnv %= LEnv.incUsed name
   unless (isJust specialisation) $ do
-    requires [ (src, MultiUse name) :< copy t | view LEnv.used entry > 0 ]
+    requires [ (src, TypeReasonMultiUse name) :< copy t | view LEnv.used entry > 0 ]
   return (t, specialisation)
 
 introType :: Source -> Name -> Annotated QType -> Praxis ()
 introType src name qTy = do
   entry <- tEnv `uses` Env.lookup name
   case entry of
-    Just _ -> throwAt src $ "variable " <> quote (pretty name) <> " redeclared"
+    Just _ -> throwAt src $ "variable " <> pretty name <> " redeclared"
     _      -> tEnv %= LEnv.insert name qTy
 
 introConType :: Source -> Name -> Annotated QType -> Praxis ()
 introConType src name qTy = do
   l <- use cEnv
   case Env.lookup name l of
-    Just _ -> throwAt src $ "constructor " <> quote (pretty name) <> " redeclared"
+    Just _ -> throwAt src $ "constructor " <> pretty name <> " redeclared"
     _      -> cEnv %= Env.insert name qTy
 
 getConType :: Source -> Name -> Praxis (Annotated QType)
@@ -145,7 +145,7 @@ getConType src name = do
   l <- use cEnv
   case Env.lookup name l of
     Just t  -> return t
-    Nothing -> throwAt src $ "constructor " <> quote (pretty name) <> " is not in scope"
+    Nothing -> throwAt src $ "constructor " <> pretty name <> " is not in scope"
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
@@ -232,34 +232,34 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
       preDeclare decl = case decl of
         ((src, _) :< DeclTermVar name sig exp)
           | expIsFunction exp -> do { ty <- getTypeFromSig sig; introType src name ty; return (ty, decl) }
-          | otherwise         -> throwAt src $ "non-function " <> quote (pretty name) <> " can not be recursive"
+          | otherwise         -> throwAt src $ "non-function " <> pretty name <> " can not be recursive"
 
   DeclTermVar name sig exp -> case sig of
 
       Nothing -> do
         exp <- generateExp exp
         case forwardTy of
-          Just (_ :< Mono t) -> require $ (src, FnCongruence name) :< (t `TypeIsEq` getType exp)
+          Just (_ :< Mono t) -> require $ (src, TypeReasonFunctionCongruence name sig) :< (t `TypeIsEq` getType exp)
           Nothing            -> introType src name (mono (getType exp))
         return $ DeclTermVar name Nothing exp
 
-      Just sig@(_ :< Mono t) -> do
+      Just sig'@(_ :< Mono t) -> do
         exp <- generateExp exp
         case forwardTy of
           Just _  -> return () -- forwardTy is sig, so a FnCongruence constraint is redundant (covered by the below FnSignature constraint)
-          Nothing -> introType src name sig
-        require $ (src, FnSignature name) :< (t `TypeIsEq` getType exp)
-        return $ DeclTermVar name (Just sig) exp
+          Nothing -> introType src name sig'
+        require $ (src, TypeReasonFunctionCongruence name sig) :< (t `TypeIsEq` getType exp)
+        return $ DeclTermVar name sig exp
 
-      Just sig@(_ :< Forall vs cs t) -> do
-        when (not (expIsFunction exp)) $ throwAt src $ "non-function " <> quote (pretty name) <> " can not be polymorphic"
+      Just sig'@(_ :< Forall vs cs t) -> do
+        when (not (expIsFunction exp)) $ throwAt src $ "non-function " <> pretty name <> " can not be polymorphic"
         assumeFromQType vs cs -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         case forwardTy of
           Just _  -> return () -- forwardTy is sig, so a FnCongruence constraint is redundant (covered by the below FnSignature constraint)
-          Nothing -> introType src name sig
-        require $ (src, FnSignature name) :< (t `TypeIsEq` getType exp)
-        return $ DeclTermVar name (Just sig) exp
+          Nothing -> introType src name sig'
+        require $ (src, TypeReasonFunctionCongruence name sig) :< (t `TypeIsEq` getType exp)
+        return $ DeclTermVar name sig exp
 
 
 generateInteger :: Source -> Integer -> Praxis (Annotated Type)
@@ -285,15 +285,15 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     exp <- generateExp exp
     let expTy = getType exp
     alts <- parallel src (map generateAlt alts)
-    t1 <- equals (map fst alts) CaseCongruence
-    t2 <- equals (map snd alts) CaseCongruence
-    require $ (src, CaseCongruence) :< (expTy `TypeIsEq` t1) -- TODO probably should pick a better name for this
+    t1 <- equals (map fst alts) TypeReasonCaseCongruence
+    t2 <- equals (map snd alts) TypeReasonCaseCongruence
+    require $ (src, TypeReasonCaseCongruence) :< (expTy `TypeIsEq` t1) -- TODO probably should pick a better name for this
     return (t2 :< Case exp alts)
 
   Cases alts -> closure src $ do
     alts <- parallel src (map generateAlt alts)
-    t1 <- equals (map fst alts) CaseCongruence
-    t2 <- equals (map snd alts) CaseCongruence
+    t1 <- equals (map fst alts) TypeReasonCaseCongruence
+    t2 <- equals (map snd alts) TypeReasonCaseCongruence
     let t = TypeFn t1 t2 `as` phantom KindType
     return (t :< Cases alts)
 
@@ -312,8 +312,8 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
   If condExp thenExp elseExp -> do
     condExp <- generateExp condExp
     (thenExp, elseExp) <- join src (generateExp thenExp) (generateExp elseExp)
-    require $ (src,  IfCondition) :< (getType condExp `TypeIsEq` TypeCon "Bool" `as` phantom KindType)
-    require $ (src, IfCongruence) :< (getType thenExp `TypeIsEq` getType elseExp)
+    require $ (src, TypeReasonIfCondition) :< (getType condExp `TypeIsEq` TypeCon "Bool" `as` phantom KindType)
+    require $ (src, TypeReasonIfCongruence) :< (getType thenExp `TypeIsEq` getType elseExp)
     return (getType thenExp :< If condExp thenExp elseExp)
 
   Lambda pat exp -> closure src $ do
@@ -345,7 +345,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
     tEnv %= Env.adjust (const (LEnv.mkEntry (mono refType))) var
     exp <- generateExp exp
     Just entry' <- tEnv `uses` Env.lookup var
-    unless (view LEnv.used entry' > 0) $ throwAt src (quote (pretty var) <> " is not used in read")
+    unless (view LEnv.used entry' > 0) $ throwAt src ("variable " <> pretty var <> " is not used in read")
     tEnv %= Env.adjust (const entry) var
     let t = getType exp
     require $ (src, TypeReasonRead var) :< TypeIsRefFree t refName
@@ -364,14 +364,14 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
   Sig exp t -> do
     exp <- generateExp exp
-    require $ (src, UserSignature) :< (t `TypeIsEq` getType exp)
+    require $ (src, TypeReasonSignature t) :< (t `TypeIsEq` getType exp)
     return (t :< Sig exp t)
 
   Switch alts -> do
     conditions <- sequence (map (generateExp . fst) alts)
-    requires [ (view source condition, SwitchCondition) :< (getType condition `TypeIsEq` TypeCon "Bool" `as` phantom KindType)  | condition <- conditions ]
+    requires [ (view source condition, TypeReasonSwitchCondition) :< (getType condition `TypeIsEq` TypeCon "Bool" `as` phantom KindType)  | condition <- conditions ]
     exps <- parallel src (map (generateExp . snd) alts)
-    t <- equals exps SwitchCongruence
+    t <- equals exps TypeReasonSwitchCongruence
     return (t :< Switch (zip conditions exps))
 
   Unit -> do
@@ -414,7 +414,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
   PatAt name pat -> do
     (t, pat) <- generatePat' wrap pat
     introType src name (mono t)
-    require $ (src, MultiAlias name) :< copy t
+    require $ (src, TypeReasonMultiAlias name) :< copy t
     return (t, wrap t :< PatAt name pat)
 
   PatData name pat -> do
@@ -425,16 +425,16 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
     case view value t of
       TypeFn argTy retTy -> do
         (patArgType, pat) <- generatePat' (wrap . wrap') pat
-        require $ (src, ConPattern name) :< (patArgType `TypeIsEq` argTy)
+        require $ (src, TypeReasonConstructor name) :< (patArgType `TypeIsEq` argTy)
         let retTy' = wrap' retTy
         return (retTy', wrap retTy' :< PatData name pat)
-      _ -> throwAt src $ "missing argument in constructor pattern " <> quote (pretty name)
+      _ -> throwAt src $ "missing argument in constructor pattern " <> pretty name
 
   PatEnum name -> do
     qTy <- getConType src name
     let (_ :< Mono t) = qTy
     case t of
-      (_ :< TypeFn _ _) -> throwAt src $ "unexpected argument in enum pattern " <> quote (pretty name)
+      (_ :< TypeFn _ _) -> throwAt src $ "unexpected argument in enum pattern " <> pretty name
       _  -> do
         return (t, t :< PatEnum name)
 

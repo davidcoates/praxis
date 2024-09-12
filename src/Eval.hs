@@ -78,7 +78,7 @@ getValue src name = do
   entry <- vEnv `uses` Env.lookup name
   case entry of
      Just val -> return val
-     Nothing  -> throwAt src ("unknown variable: " <> quote (pretty name))
+     Nothing  -> throwAt src ("unknown variable " <> pretty name)
 
 evalExp :: Annotated Exp -> Praxis Value
 evalExp ((src, Just t) :< exp) = case exp of
@@ -165,7 +165,7 @@ evalSwitch src ((condExp,bodyExp):alts) = do
     Value.Bool False -> evalSwitch src alts
 
 evalCase :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
-evalCase src val [] = throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
+evalCase src val [] = throwAt src ("no matching pattern for value " <> pretty (show val))
 evalCase src val ((pat,exp):alts) = case tryMatch val pat of
   Just doMatch -> save vEnv $ do
     doMatch
@@ -176,7 +176,7 @@ evalCase src val ((pat,exp):alts) = case tryMatch val pat of
 forceMatch :: Source -> Value -> Annotated Pat -> Praxis ()
 forceMatch src val pat = case tryMatch val pat of
   Just doMatch -> doMatch
-  Nothing -> throwAt src ("no matching pattern for value " <> quote (pretty (show val)))
+  Nothing -> throwAt src ("no matching pattern for value " <> pretty (show val))
 
 evalBind :: Annotated Bind -> Praxis ()
 evalBind ((src, _) :< Bind pat exp) = do

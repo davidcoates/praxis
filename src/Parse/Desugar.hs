@@ -101,7 +101,7 @@ desugarExp (a@(src, _) :< exp) = case exp of
     let freeVars = collectFreeVars x
     (x, readVars) <- desugarExpRef x
     let mixedVars = freeVars `Set.intersection` readVars
-    when (not (null mixedVars)) $ throwAt src $ "variable(s) " <> separate ", " (map (quote . pretty) (Set.elems mixedVars)) <> " used in a read context"
+    when (not (null mixedVars)) $ throwAt src $ "variable(s) " <> separate ", " (map pretty (Set.elems mixedVars)) <> " used in a read context"
     let unrollReads []     = (a :< Apply f x)
         unrollReads (v:vs) = (a :< Read v (unrollReads vs))
     return (unrollReads (Set.elems readVars))
@@ -126,7 +126,7 @@ desugarExp (a@(src, _) :< exp) = case exp of
     -- Call Mixfix.parse to fold the token sequence into a single expression, then desugar that expression
   MixfixSweet tokens -> Mixfix.parse src tokens >>= desugar
 
-  VarRefSweet var -> throwAt src $ "observed variable " <> quote (pretty var) <> " is not in a valid read context"
+  VarRefSweet var -> throwAt src $ "observed variable " <> pretty var <> " is not in a valid read context"
 
   Con "True" -> pure (a :< Lit (Bool True))
 
@@ -150,7 +150,7 @@ desugarOp op@((src, _) :< Op parts) = do
         []                   -> False
         (p:ps)               -> hasConsecutiveHoles ps
 
-  when (hasConsecutiveHoles parts) $ throwAt src $ "op " <> quote (pretty op) <> " has two consecutive holes"
+  when (hasConsecutiveHoles parts) $ throwAt src $ "op " <> pretty op <> " has two consecutive holes"
   return op
 
 
@@ -162,8 +162,8 @@ desugarOpRules op (a@(src, _) :< OpRulesSweet rules) = do
     let assocs = mapMaybe (\r -> case r of { Left a -> Just a; _ -> Nothing}) rules
         precs  = mapMaybe (\r -> case r of {Right p -> Just p; _ -> Nothing}) rules
 
-    when (length assocs > 1) $ throwAt src ("more than one associativity specified for op " <> quote (pretty op))
-    when (length  precs > 1) $ throwAt src ("more than one precedence block specified for op " <> quote (pretty op))
+    when (length assocs > 1) $ throwAt src ("more than one associativity specified for op " <> pretty op)
+    when (length  precs > 1) $ throwAt src ("more than one precedence block specified for op " <> pretty op)
 
     return (a :< OpRules (listToMaybe assocs) (concat precs))
 
@@ -192,7 +192,7 @@ desugarDeclTerms (a@(src, _) :< decl : decls) = case decl of
     desugarDeclTerms decls >>= \case
       (a' :< DeclTermVar name' Nothing exp) : decls
         | name == name' -> return $ ((a <> a') :< DeclTermVar name (Just ty) exp) : decls
-      _ -> throwAt src $ "declaration of " <> quote (pretty name) <> " lacks an accompanying binding"
+      _ -> throwAt src $ "declaration of " <> pretty name <> " lacks an accompanying binding"
 
 
 desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
@@ -206,7 +206,7 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
     -- For simplicity of managing the op table, allow only one equal precedence relation
     let (eqPrecs, precs') = partition (\(_ :< Prec ord _) -> ord == EQ) precs
-    unless (length eqPrecs <= 1) $ throwAt src ("more than one equal precedence specified for op " <> quote (pretty op))
+    unless (length eqPrecs <= 1) $ throwAt src ("more than one equal precedence specified for op " <> pretty op)
     let eq = listToMaybe eqPrecs
 
     -- Add operator to levels
@@ -218,7 +218,7 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
         indexOf = Map.fromList [ (op, i) | (i, ops) <- zip [0..] opLevels', op <- ops ]
 
     -- Determine fixity
-    let noAssoc = unless (isNothing assoc) $ throwAt src ("associativity can not be specified for non-infix op " <> quote (pretty op))
+    let noAssoc = unless (isNothing assoc) $ throwAt src ("associativity can not be specified for non-infix op " <> pretty op)
     fixity <- case (head parts, last parts) of
       (Nothing, Nothing) -> return (Infix (view value <$> assoc))
       (Nothing,  Just _) -> noAssoc >> return Postfix

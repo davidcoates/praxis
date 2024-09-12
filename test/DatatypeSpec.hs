@@ -88,7 +88,7 @@ datatype List a = Nil () | Cons (a, List a)
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-kind check error at 2:37: type 'List' is not in scope
+kind check error at 2:37: type List is not in scope
 |]
 
 

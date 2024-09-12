@@ -50,13 +50,13 @@ expIsFunction (_ :< exp) = case exp of
   Cases  _   -> True
   _          -> False
 
-specialiseTypeVar :: Annotated TypeVar -> Praxis (Name, Annotated Type)
-specialiseTypeVar (a :< TypeVarVar f n) = (\t -> (n, a :< view value t)) <$> freshTypeUni f
+specialiseTypePat :: Annotated TypePat -> Praxis (Name, Annotated Type)
+specialiseTypePat (a :< TypePatVar f n) = (\t -> (n, a :< view value t)) <$> freshTypeUni f
 
 specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Maybe Specialisation)
 specialiseQType src name (_ :< qTy) = case qTy of
   Forall vs cs t -> do
-    vs' <- mapM specialiseTypeVar vs
+    vs' <- mapM specialiseTypePat vs
     let
       typeRewrite :: Term a => Annotated a -> Annotated a
       typeRewrite = sub (embedSub f)
@@ -181,24 +181,24 @@ parallel src (x:xs) = do
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just k) :< ty) = case ty of
 
-  DeclTypeData mode name typeVars alts -> do
+  DeclTypeData mode name typePats alts -> do
     let
       -- The return type of the constructors
       retTy :: Annotated Type
-      retTy = retTy' (TypeCon name `as` k) typeVars where
+      retTy = retTy' (TypeCon name `as` k) typePats where
         retTy' ty = \case
           [] -> ty
-          (typeVar:typeVars) ->
+          (typePat:typePats) ->
             let
               Just (_ :< KindFn _ k) = view annotation ty
-              a :< TypeVarVar f n = typeVar
+              (a :< TypePatVar f n) = typePat
             in
-              retTy' (TypeApply ty (a :< TypeVar f n) `as` k) typeVars
+              retTy' (TypeApply ty (a :< TypeVar f n) `as` k) typePats
 
       buildConType :: Annotated Type -> Annotated QType
-      buildConType argTy = case typeVars of
+      buildConType argTy = case typePats of
         [] -> phantom $ Mono (TypeFn argTy retTy `as` phantom KindType)
-        _  -> phantom $ Forall typeVars [] (TypeFn argTy retTy `as` phantom KindType)
+        _  -> phantom $ Forall typePats [] (TypeFn argTy retTy `as` phantom KindType)
 
       generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
       generateDataCon ((src, Nothing) :< DataCon name argTy) = do
@@ -207,7 +207,7 @@ generateDeclType (a@(src, Just k) :< ty) = case ty of
         return ((src, Just qTy) :< DataCon name argTy)
 
     alts <- traverse generateDataCon alts
-    return $ (a :< DeclTypeData mode name typeVars alts)
+    return $ (a :< DeclTypeData mode name typePats alts)
 
   DeclTypeEnum name alts -> do
     let qTy = phantom $ Mono (TypeCon name `as` k)

@@ -58,15 +58,15 @@ data I a where
   IStmt     :: I Stmt
   ITok      :: I Tok
   -- | T1
-  IQType        :: I QType
+  IQType          :: I QType
   ITypeConstraint :: I TypeConstraint
-  IType         :: I Type
-  ITypeVar        :: I TypeVar
+  IType           :: I Type
+  ITypePat        :: I TypePat
   -- | T2
   IKind           :: I Kind
   IKindConstraint :: I KindConstraint
   -- | Solver
-  ITypeRequirement   :: I TypeRequirement
+  ITypeRequirement :: I TypeRequirement
   IKindRequirement :: I KindRequirement
 
 
@@ -95,7 +95,7 @@ switch a b eq neq = case (a, b) of
   (IQType, IQType)                     -> eq
   (ITypeConstraint, ITypeConstraint)   -> eq
   (IType, IType)                       -> eq
-  (ITypeVar, ITypeVar)                 -> eq
+  (ITypePat, ITypePat)                 -> eq
   -- | T2
   (IKind, IKind)                       -> eq
   (IKindConstraint, IKindConstraint)   -> eq
@@ -302,8 +302,8 @@ instance Term Type where
     TypeUnit        -> pure TypeUnit
     TypeVar f n     -> pure (TypeVar f n)
 
-instance Term TypeVar where
-  witness = ITypeVar
+instance Term TypePat where
+  witness = ITypePat
   recurseAnnotation _ f x = f x
   recurseTerm f = pure
 
@@ -350,6 +350,6 @@ instance Term KindRequirement where
     KindReasonTypeApply a b   -> KindReasonTypeApply <$> f a <*> f b
     KindReasonTypeApplyOp a b -> KindReasonTypeApplyOp <$> f a <*> f b
     KindReasonType t          -> KindReasonType <$> f t
-    KindReasonTypeVar t       -> KindReasonTypeVar <$> f t
+    KindReasonTypePat t       -> KindReasonTypePat <$> f t
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c

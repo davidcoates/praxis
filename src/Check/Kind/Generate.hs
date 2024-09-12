@@ -43,7 +43,7 @@ generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case typeof (view value term) of
   IDecl    -> generateDecl
   IType    -> generateType
-  ITypeVar -> generateTypeVar
+  ITypePat -> generateTypePat
   IDataCon -> generateDataCon
   _        -> value (recurseTerm generate)
 
@@ -116,13 +116,13 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       return (k :< TypeVar f var)
 
 
-generateTypeVar :: Annotated TypeVar -> Praxis (Annotated TypeVar)
-generateTypeVar typeVar@(a@(src, _) :< TypeVarVar f var) = (\k -> (src, Just k) :< TypeVarVar f var) <$> case f of
+generateTypePat :: Annotated TypePat -> Praxis (Annotated TypePat)
+generateTypePat typePat@(a@(src, _) :< TypePatVar f var) = (\k -> (src, Just k) :< TypePatVar f var) <$> case f of
 
   Plain -> do
     k <- freshKindUni
     introKind src var k
-    require $ (src, KindReasonTypeVar typeVar) :< KindIsPlain k
+    require $ (src, KindReasonTypePat typePat) :< KindIsPlain k
     return k
 
   Ref -> do
@@ -132,7 +132,7 @@ generateTypeVar typeVar@(a@(src, _) :< TypeVarVar f var) = (\k -> (src, Just k) 
   Value -> do
     k <- freshKindUni
     introKind src var k
-    require $ (src, KindReasonTypeVar typeVar) :< KindIsPlain k
+    require $ (src, KindReasonTypePat typePat) :< KindIsPlain k
     return k
 
   View -> do
@@ -170,7 +170,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
         f (_ :< t) = case t of
           TypeVar _  n -> n `lookup` specialisedVars
           _            -> Nothing
-        specialisedVars = zip (map (\(a :< TypeVarVar f n) -> n) args) args'
+        specialisedVars = zip (map (\(a :< TypePatVar f n) -> n) args) args'
 
       instances = case mode of
         DataUnboxed -> Map.fromList

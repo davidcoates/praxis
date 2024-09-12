@@ -33,7 +33,7 @@ module Term
   , QType(..)
   , TypeConstraint(..)
   , Type(..)
-  , TypeVar(..)
+  , TypePat(..)
 
   -- | T2
   , Kind(..)
@@ -85,7 +85,7 @@ data DataCon = DataCon Name (Annotated Type)
 data DataMode = DataUnboxed | DataBoxed | DataRec
   deriving (Eq, Ord)
 
-data DeclType = DeclTypeData DataMode Name [Annotated TypeVar] [Annotated DataCon]
+data DeclType = DeclTypeData DataMode Name [Annotated TypePat] [Annotated DataCon]
               | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
@@ -102,7 +102,7 @@ data Decl = DeclOpSweet (Annotated Op) Name (Annotated OpRules)
   deriving (Eq, Ord)
 
 -- TODO constraints
-type Specialisation = [(Annotated TypeVar, Annotated Type)]
+type Specialisation = [(Annotated TypePat, Annotated Type)]
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
@@ -167,7 +167,7 @@ data Tok = TokExp (Annotated Exp)
 data Flavor = Plain | Ref | Value | View
   deriving (Eq, Ord)
 
-data TypeVar = TypeVarVar Flavor Name
+data TypePat = TypePatVar Flavor Name
   deriving (Eq, Ord)
 
 data Type = TypeApply (Annotated Type) (Annotated Type)
@@ -183,7 +183,7 @@ data Type = TypeApply (Annotated Type) (Annotated Type)
           | TypeVar Flavor Name
   deriving (Eq, Ord)
 
-data QType = Forall [Annotated TypeVar] [Annotated TypeConstraint] (Annotated Type)
+data QType = Forall [Annotated TypePat] [Annotated TypeConstraint] (Annotated Type)
            | Mono (Annotated Type)
   deriving (Eq, Ord)
 
@@ -224,7 +224,7 @@ type family Annotation a where
   Annotation Exp      = Annotated Type
   Annotation Pat      = Annotated Type
   Annotation Type     = Annotated Kind
-  Annotation TypeVar  = Annotated Kind
+  Annotation TypePat  = Annotated Kind
   Annotation DataCon  = Annotated QType
   Annotation DeclType = Annotated Kind
   Annotation TypeRequirement = TypeReason
@@ -263,12 +263,12 @@ data TypeReason = TypeReasonApply (Annotated Exp) (Annotated Exp)
                 | TypeReasonSwitchCongruence
   deriving (Eq, Ord)
 
-data KindReason = KindReasonData Name [Annotated TypeVar]
+data KindReason = KindReasonData Name [Annotated TypePat]
                 | KindReasonDataCon (Annotated DataCon)
                 | KindReasonQType (Annotated QType)
                 | KindReasonTypeApply (Annotated Type) (Annotated Type)
                 | KindReasonTypeApplyOp (Annotated Type) (Annotated Type)
                 | KindReasonType (Annotated Type)
-                | KindReasonTypeVar (Annotated TypeVar)
+                | KindReasonTypePat (Annotated TypePat)
   deriving (Eq, Ord)
 

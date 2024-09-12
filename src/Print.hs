@@ -97,7 +97,7 @@ label ((s, a) :< x) = case a of
     IExp             -> prettypeIf Types a
     IPat             -> prettypeIf Types a
     IDataCon         -> prettypeIf Types a
-    ITypeVar         -> prettypeIf Kinds a
+    ITypePat         -> prettypeIf Kinds a
     IType            -> prettypeIf Kinds a
     ITypeRequirement -> pretty a
     IKindRequirement -> pretty a
@@ -132,5 +132,5 @@ instance Pretty KindReason where
     KindReasonDataCon c -> "data constructor " <> pretty c
     KindReasonData n args -> "data type " <> pretty n <> (case args of { [] -> ""; _ -> " with argument(s) " <> separate ", " args })
     KindReasonType t -> "type " <> pretty t
-    KindReasonTypeVar t -> "type pattern " <> pretty t
+    KindReasonTypePat t -> "type pattern " <> pretty t
     KindReasonQType t -> "qualified type " <> pretty t

@@ -147,7 +147,7 @@ definePrisms ''Tok
 
 definePrisms ''QType
 definePrisms ''Type
-definePrisms ''TypeVar
+definePrisms ''TypePat
 
 definePrisms ''Kind
 
@@ -178,7 +178,7 @@ syntax = \case
   IQType          -> qTy
   ITypeConstraint -> typeConstraint
   IType           -> ty
-  ITypeVar        -> typeVar
+  ITypePat        -> typePat
   -- | T2
   IKind           -> kind
   IKindConstraint -> kindConstraint
@@ -262,7 +262,7 @@ declType :: Syntax f => f DeclType
 declType = declTypeData <|> declTypeEnum
 
 declTypeData :: Syntax f => f DeclType
-declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated typeVar) <*> reservedSym "=" *> dataCons where
+declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated typePat) <*> reservedSym "=" *> dataCons where
   dataCons = _Cons <$> annotated dataCon <*> many (contextualOp "|" *> annotated dataCon)
   dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataRec <$> reservedId "rec") <|> (_DataUnboxed <$> (reservedId "unboxed" <|> pure ()))
 
@@ -273,8 +273,8 @@ declTypeEnum = _DeclTypeEnum <$> reservedId "enum" *> conId <*> reservedSym "=" 
 dataCon :: Syntax f => f DataCon
 dataCon = _DataCon <$> conId <*> annotated ty1
 
-typeVar :: Syntax f => f TypeVar
-typeVar = _TypeVarVar <$> flavoredVarId <|>
+typePat :: Syntax f => f TypePat
+typePat = _TypePatVar <$> flavoredVarId <|>
           mark "type variable"
 
 declTerm :: Syntax f => f DeclTerm
@@ -307,7 +307,7 @@ kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> mark "kind
 
 qTy :: Syntax f => f QType
 qTy = poly <|> mono <|> mark "quantified type" where
-  poly = _Forall <$> reservedId "forall" *> some (annotated typeVar) <*> typeConstraints <*> (contextualOp "." *> annotated ty)
+  poly = _Forall <$> reservedId "forall" *> some (annotated typePat) <*> typeConstraints <*> (contextualOp "." *> annotated ty)
   mono = _Mono <$> annotated ty
   typeConstraints :: Syntax f => f [Annotated TypeConstraint]
   typeConstraints = _Cons <$> (contextualOp "|" *> annotated typeConstraint) <*> many (special ',' *> annotated typeConstraint) <|> _Nil <$> pure ()

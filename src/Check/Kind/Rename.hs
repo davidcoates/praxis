@@ -26,7 +26,7 @@ rename term = ($ term) $ case typeof (view value term) of
   IDeclTerm -> renameDeclTerm
   IDeclType -> renameDeclType
   IType     -> renameType
-  ITypeVar  -> renameTypeVar
+  ITypePat  -> renameTypePat
   IQType    -> renameQType
   _         -> value (recurseTerm rename)
 
@@ -44,7 +44,7 @@ introFromQType :: Annotated QType -> Praxis ()
 introFromQType ((src, _) :< qTy) = case qTy of
 
   Forall vs _ _ -> do
-    introMany src (map (\(_ :< TypeVarVar f n) -> (f, n)) vs)
+    introMany src (map (\(_ :< TypePatVar f n) -> (f, n)) vs)
     return ()
 
   Mono _ -> return ()
@@ -64,7 +64,7 @@ renameDeclTerm (a@(src, _) :< decl) = (a :<) <$> case decl of
 renameDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 renameDeclType (a@(src, _) :< decl) = (a :< ) <$> case decl of
 
-  DeclTypeData _ _ typeVars _ -> save (kindCheckState . scopes) $ introMany src (map (\(_ :< TypeVarVar f n) -> (f, n)) typeVars) >> recurseTerm rename decl
+  DeclTypeData _ _ typePats _ -> save (kindCheckState . scopes) $ introMany src (map (\(_ :< TypePatVar f n) -> (f, n)) typePats) >> recurseTerm rename decl
 
   _ -> recurseTerm rename decl
 
@@ -77,8 +77,8 @@ renameType (a@(src, _) :< ty) = (a :<) <$> case ty of
   _           -> recurseTerm rename ty
 
 
-renameTypeVar :: Annotated TypeVar -> Praxis (Annotated TypeVar)
-renameTypeVar (a@(src, _) :< TypeVarVar f n) = (\n -> a :< TypeVarVar f n) <$> disambiguate src (f, n)
+renameTypePat :: Annotated TypePat -> Praxis (Annotated TypePat)
+renameTypePat (a@(src, _) :< TypePatVar f n) = (\n -> a :< TypePatVar f n) <$> disambiguate src (f, n)
 
 renameQType :: Annotated QType -> Praxis (Annotated QType)
 renameQType qTy = save (kindCheckState . scopes) $ introFromQType qTy >> recurse rename qTy

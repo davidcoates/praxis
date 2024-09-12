@@ -399,7 +399,7 @@ tryDefault term@((src, _) :< _) = do
 -- We also "expand" the assumptions, e.g. if there is an instance C t => D t, the the assumption D t should also include C t.
 
 -- TODO handle references/views!
-assumeFromQType :: [Annotated TypeVar] -> [Annotated TypeConstraint] -> Praxis ()
+assumeFromQType :: [Annotated TypePat] -> [Annotated TypeConstraint] -> Praxis ()
 assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
 
   assumeConstraint :: Annotated TypeConstraint -> Praxis ()
@@ -438,7 +438,7 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
           -> checkConstraintType t1 >> checkConstraintType t2
         TypeFn t1 t2
           -> checkConstraintType t1 >> checkConstraintType t2
-        TypeVar _ n | n `elem` Set.fromList (map (\(_ :< TypeVarVar _ n) -> n) boundVars)
+        TypeVar _ n | n `elem` Set.fromList (map (\(_ :< TypePatVar _ n) -> n) boundVars)
           -> return ()
         _ | Just (n, ts@(_:_)) <- unapplyTypeCon (a :< ty)
           -> mapM_ checkConstraintType ts

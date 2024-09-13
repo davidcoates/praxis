@@ -111,13 +111,6 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
 
   TypeIsEq t1 t2@(_ :< TypeApplyOp _ _) -> reduce disambiguate (TypeIsEq t2 t1) -- handled by the above case
 
-  TypeIsEqIfAffine op1 op2 t -> do
-    affine <- isAffine t
-    case affine of
-      No      -> return tautology
-      Unknown -> return skip
-      _       -> return $ subgoals [ Subgoal (TypeIsEq op1 op2) ]
-
   TypeIsEq op1@(_ :< TypeIdentityOp) op2 -> do
     case isRef op2 of
       Yes -> return contradiction
@@ -127,6 +120,38 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
         solved (are viewUnis)
 
   TypeIsEq op1 op2@(_ :< TypeIdentityOp) -> return $ subgoals [ Subgoal (TypeIsEq op2 op1) ] -- handled by the above case
+
+  TypeIsEqIfAffine op1 op2 t -> do
+    affine <- isAffine t
+    case affine of
+      No      -> return tautology
+      Unknown -> return skip
+      _       -> return $ subgoals [ Subgoal (TypeIsEq op1 op2) ]
+
+  TypeIsSub t1' t2'@(_ :< TypeApplyOp _ _) -> do
+    let
+      (op1, t1) = splitTypeOp t1'
+      (op2, t2) = splitTypeOp t2'
+    case (view value t1, view value t2) of
+      (TypeUni Plain _, _) -> return skip
+      (_, TypeUni Plain _) -> return skip
+      _                    -> return $ subgoals [ Subgoal (TypeIsEq t1 t2), Subgoal (TypeIsSubIfAffine op1 op2 t1) ]
+
+  TypeIsSub _ (_ :< TypeUni Plain _) -> return skip
+
+  TypeIsSub op1 op2 | isTyOp op1 -> do
+    if expandTypeOps op1 `Set.isSubsetOf` expandTypeOps op2
+      then return tautology
+      else return skip
+
+  TypeIsSub t1 t2 -> return $ subgoals [ Subgoal (TypeIsEq t1 t2) ]
+
+  TypeIsSubIfAffine op1 op2 t -> do
+    affine <- isAffine t
+    case affine of
+      No      -> return tautology
+      Unknown -> return skip
+      _       -> return $ subgoals [ Subgoal (TypeIsSub op1 op2) ]
 
   TypeIsRef op -> do
     case isRef op of
@@ -221,6 +246,12 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
         TypeRef n -> Set.singleton n
         _         -> Set.empty
 
+
+isTyOp :: Annotated Type -> Bool
+isTyOp ((_, Just (_ :< k)) :< _) = case k of
+  KindView -> True
+  KindRef  -> True
+  _        -> False
 
 -- Rewrite helpers
 solved :: Resolver -> Praxis (Reduction TypeConstraint)

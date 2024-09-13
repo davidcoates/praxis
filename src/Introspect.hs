@@ -284,6 +284,8 @@ instance Term TypeConstraint where
     TypeIsIntegralOver t n  -> TypeIsIntegralOver <$> f t <*> pure n
     TypeIsRef t             -> TypeIsRef <$> f t
     TypeIsRefFree t n       -> TypeIsRefFree <$> f t <*> pure n
+    TypeIsSub a b           -> TypeIsSub <$> f a <*> f b
+    TypeIsSubIfAffine a b t -> TypeIsSubIfAffine <$> f a <*> f b <*> f t
     TypeIsValue t           -> TypeIsValue <$> f t
 
 instance Term Type where

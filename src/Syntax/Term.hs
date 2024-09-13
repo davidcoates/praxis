@@ -240,6 +240,8 @@ typeConstraint = _TypeIsInstance <$> annotated ty <|>
                  internal (_TypeIsIntegralOver <$> swap <$> integer <*> reservedSym "∈" *> annotated ty) <|>
                  internal (_TypeIsRef <$> reservedCon "Ref" *> annotated ty) <|>
                  internal (_TypeIsRefFree <$> swap <$> varId <*> reservedSym "∉" *> annotated ty) <|>
+                 internal (_TypeIsSub <$> annotated ty <*> reservedSym "≤" *> annotated ty) <|>
+                 internal (_TypeIsSubIfAffine <$> annotated ty <*> reservedSym "≤" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
                  internal (_TypeIsValue <$> reservedCon "Value" *> annotated ty) <|>
                  mark "type constraint"
 
@@ -292,7 +294,7 @@ pat :: Syntax f => f Pat
 pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> mark "pattern" where
   pat0 = _PatHole <$> special '_' <|>
          _PatLit <$> litNoString <|> -- TODO allow string literals
-         _PatVar <$> varId <|>
+         prefix' varId (_PatAt, reservedSym "@" *> annotated pat) _PatVar <|>
          tuple _PatUnit _PatPair pat <|>
          mark "pattern(0)"
 

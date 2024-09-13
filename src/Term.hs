@@ -201,10 +201,13 @@ data TypeConstraint = TypeIsEq (Annotated Type) (Annotated Type)
                     | TypeIsIntegralOver (Annotated Type) Integer
                     | TypeIsRef (Annotated Type)
                     | TypeIsRefFree (Annotated Type) Name
+                    | TypeIsSub (Annotated Type) (Annotated Type)
+                    | TypeIsSubIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
                     | TypeIsValue (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TypeIsEq`
+infixl 8 `TypeIsSub`
 
 data KindConstraint = KindIsEq (Annotated Kind) (Annotated Kind)
                     | KindIsPlain (Annotated Kind)

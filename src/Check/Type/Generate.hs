@@ -364,7 +364,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
   Sig exp t -> do
     exp <- generateExp exp
-    require $ (src, TypeReasonSignature t) :< (t `TypeIsEq` getType exp)
+    require $ (src, TypeReasonSignature t) :< (getType exp `TypeIsSub` t)
     return (t :< Sig exp t)
 
   Switch alts -> do
@@ -414,7 +414,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, t' :< p) -> (t, (src, Just t') :< p)
   PatAt name pat -> do
     (t, pat) <- generatePat' wrap pat
     introType src name (mono t)
-    require $ (src, TypeReasonMultiAlias name) :< copy t
+    require $ (src, TypeReasonMultiAlias name) :< copy t -- TODO only needed if pat includes variables!
     return (t, wrap t :< PatAt name pat)
 
   PatData name pat -> do

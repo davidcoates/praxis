@@ -75,13 +75,13 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
   TypeIsEq op1 op2@(_ :< TypeUni Plain _) -> return $ subgoals [ Subgoal (TypeIsEq op2 op1) ] -- handled by the above case
 
   TypeIsEq op1@(_ :< TypeUni View x) op2 -> do
-    op2' <- normalize $ contractTypeOps $ Set.delete op1 (expandTypeOps op2)
+    let op2' = op2 `removeTypeOp` op1
     solved (x `is` view value op2')
 
   TypeIsEq op1 op2@(_ :< TypeUni View _) -> return $ subgoals [ Subgoal (TypeIsEq op2 op1) ] -- handled by the above case
 
   TypeIsEq op1@(_ :< TypeUni Ref x) op2 -> do
-    op2' <- normalize $ contractTypeOps $ Set.delete op1 (expandTypeOps op2)
+    let op2' = op2 `removeTypeOp` op1
     solvedWithSubgoals (x `is` (view value op2')) [ Subgoal (TypeIsRef op1) ]
 
   TypeIsEq op1 op2@(_ :< TypeUni Ref _) -> return $ subgoals [ Subgoal (TypeIsEq op2 op1) ] -- handled by the above case
@@ -165,7 +165,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
       case affine of
         Unknown  -> return skip
         No       -> error "unnormalized"
-        _        -> return $ subgoals [ Subgoal (TypeIsEq op (phantom TypeIdentityOp)), Subgoal (TypeIsValue t) ]
+        _        -> return $ subgoals [ Subgoal (TypeIsEq op (TypeIdentityOp `as` phantom KindView)), Subgoal (TypeIsValue t) ]
     TypeVar Plain _ -> return contradiction
     TypeUni Plain _ -> return skip
     _               -> return tautology
@@ -279,7 +279,7 @@ is n t = embedSub f where
 splitTypeOp :: Annotated Type -> (Annotated Type, Annotated Type)
 splitTypeOp ty = case view value ty of
   TypeApplyOp op ty -> (op, ty)
-  _                 -> (phantom TypeIdentityOp, ty)
+  _                 -> (TypeIdentityOp `as` phantom KindView, ty)
 
 expandTypeOps :: Annotated Type -> Set (Annotated Type)
 expandTypeOps op = case view value op of
@@ -289,9 +289,18 @@ expandTypeOps op = case view value op of
 
 contractTypeOps :: Set (Annotated Type) -> Annotated Type
 contractTypeOps ops = case Set.toList ops of
-  []   -> phantom TypeIdentityOp
+  []   -> TypeIdentityOp `as` phantom KindView
   [op] -> op
-  _    -> phantom (TypeSetOp ops)
+  _    -> (src, kind) :< TypeSetOp ops where
+    (src, kind) = let (t:ts) = map (view tag) (Set.toList ops) in foldr (\(s1, Just k1) (s2, Just k2) -> (s1 <> s2, Just (combineKinds k1 k2))) t ts
+    combineKinds (s1 :< k1) (s2 :< k2) = ((s1 <> s2) :<) $ case (k1, k2) of
+      (KindView, KindView) -> KindView
+      (KindRef, KindRef)   -> KindRef
+      (KindView, KindRef)  -> KindRef
+      (KindRef, KindView)  -> KindRef
+
+removeTypeOp :: Annotated Type -> Annotated Type -> Annotated Type
+removeTypeOp op1 op2  = contractTypeOps (expandTypeOps op1 `Set.difference` expandTypeOps op2)
 
 -- Term normalizer (after a substitution is applied)
 normalize :: Normaliser
@@ -299,24 +308,22 @@ normalize (a :< x) = case typeof x of
 
   IType -> case x of
 
-    TypeApplyOp op1 (_ :< TypeApplyOp op2 ty) -> do
-      let op = (view source op1 <> view source op2, Nothing) :< TypeSetOp (Set.fromList [op1, op2])
-      normalize (a :< TypeApplyOp op ty)
-
     TypeApplyOp op ty -> do
       op <- normalize op
       ty <- normalize ty
-      case view value op of
-        TypeIdentityOp -> return ty
-        _            -> do
-          affine <- isAffine ty
-          case affine of
-            No -> return $ ty
-            _  -> return $ (a :< TypeApplyOp op ty)
+      case op of
+        (_ :< TypeIdentityOp) -> return ty
+        _ -> case ty of
+          (_ :< TypeApplyOp op' ty') -> return $ (a :< TypeApplyOp (contractTypeOps (Set.fromList [op, op'])) ty')
+          _ -> do
+            affine <- isAffine ty
+            case affine of
+              No -> return ty
+              _  -> return (a :< TypeApplyOp op ty)
 
     TypeSetOp ops -> do
       ops <- mapM normalize (Set.toList ops)
-      return $ (contractTypeOps . Set.delete (phantom TypeIdentityOp) . Set.unions . map expandTypeOps) ops
+      return $ (contractTypeOps . Set.unions . map expandTypeOps) ops
 
     _ -> continue
 
@@ -333,7 +340,7 @@ isRef :: Annotated Type -> Truth
 isRef op = case view value op of
   TypeIdentityOp -> No
   TypeRef _      -> Yes
-  TypeSetOp ops  -> Set.fold (\op -> truthOr (isRef op)) No ops
+  TypeSetOp ops  -> foldr (\op -> truthOr (isRef op)) No ops
   TypeUni Ref _  -> Yes
   TypeUni View _ -> Unknown
   TypeVar Ref _  -> Yes

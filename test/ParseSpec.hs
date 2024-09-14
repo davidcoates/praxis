@@ -111,3 +111,19 @@ ifthenelse : ( Bool , I32 , I32 ) -> I32 = \ ( c , a , b ) -> if c then a else b
 
     it "evals" $ do
       runEvaluate program "False <-> True <?> 1 <:> 0" `shouldReturn` "0"
+
+
+  describe "parse errors" $ do
+
+    let program = trim [r|
+x =
+y = 5
+|]
+
+    it "does not parse" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+parse error at 2:1: expected expression but found ';'
+|]
+
+    it "does not parse" $ runPretty (parse IProgram "") `shouldReturn` trim [r|
+parse error at EOF: expected program but found EOF
+|]

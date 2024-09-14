@@ -252,10 +252,14 @@ kindConstraint = internal (_KindIsEq <$> annotated kind <*> reservedSym "=" *> a
                  mark "kind constraint"
 
 program :: Syntax f => f Program
-program = _Program <$> block (annotated decl) -- TODO module
+program = _Program <$> block (annotated decl) <|> mark "program"
 
 decl :: Syntax f => f Decl
-decl = declSyn <|> (_DeclType <$> annotated declType) <|> declOp <|> (_DeclTerm <$> annotated declTerm) -- TODO imports
+decl = declSyn <|>
+       _DeclType <$> annotated declType <|>
+       declOp <|>
+       _DeclTerm <$> annotated declTerm <|>
+      mark "declaration"
 
 declSyn :: Syntax f => f Decl
 declSyn = _DeclSynSweet <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty

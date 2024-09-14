@@ -16,7 +16,7 @@ semi :: Sourced Token
 semi = Phantom :< Layout ';'
 
 unlayout :: Bool -> [Sourced Token] -> [Sourced Token]
-unlayout wrapInBlock tokens = if wrapInBlock then [lbrace] ++ tokens' ++ [rbrace] else tokens' where tokens' = unlayout' [] (lines tokens)
+unlayout wrapInBlock tokens = unlayout' (if wrapInBlock then [-1] else []) (lines tokens)
 
 lines :: [Sourced Token] -> [[Sourced Token]]
 lines []     = []
@@ -27,9 +27,14 @@ lines (x:xs) = case lines xs of
 unlayout' :: [Int] -> [[Sourced Token]] -> [Sourced Token]
 unlayout' [] []     = []
 unlayout' is []     = replicate (length is - 1) rbrace
-unlayout' is (l:ls) = let li = (column . start . view tag) (head l) in case is of
-  [] -> l ++ unlayout' [li] ls
-  _  -> case compare li (head is) of
-    GT -> (lbrace : l) ++ unlayout' (li : is) ls
-    EQ -> (semi : l) ++ unlayout' is ls
-    LT -> rbrace : unlayout' (tail is) (l : ls)
+unlayout' is (l:ls) = case is of
+    [] -> l ++ unlayout' [li] ls
+    _  -> case compare li (head is) of
+      GT -> (layout '{' : l) ++ unlayout' (li : is) ls
+      EQ -> (layout ';' : l) ++ unlayout' is ls
+      LT -> (layout '}') : unlayout' (tail is) (l : ls)
+  where
+    src = view tag (head l)
+    li = (column . start) src
+    layout :: Char -> Sourced Token
+    layout c = Source { start = start src, end = start src } :< Layout c

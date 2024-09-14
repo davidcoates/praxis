@@ -35,10 +35,6 @@ instance Syntax.Parser Parser where
 
 run :: Pretty a => Parser a -> [Sourced Token] -> Praxis a
 run (Parser p) ts = case Parser.run (view value <$> p) ts of
-  (Left e,  ts) -> throwAt (pos ts) e
+  (Left e,  ts) -> throwAt (sourceHead ts) e
   (Right x, []) -> return x
-  (Right x, ts) -> throwAt (pos ts) $ "unexpected " <> (pretty . view value . head $ ts)
-  where
-  pos :: [Sourced a] -> Source
-  pos           [] = EndOfFile
-  pos (s :< _ : _) = s
+  (Right x, ts) -> throwAt (sourceHead ts) $ "unexpected " <> (pretty . view value . head $ ts)

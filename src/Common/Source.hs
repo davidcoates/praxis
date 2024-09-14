@@ -5,6 +5,7 @@ module Common.Source
   , Source(..)
   , (<>)
   , Sourced
+  , sourceHead
   ) where
 
 import           Common.Tag
@@ -24,7 +25,7 @@ instance Show Pos where
 
 instance Show Source where
   show = \case
-    EndOfFile        -> "eof"
+    EndOfFile        -> "EOF"
     Phantom          -> "<?>"
     Source { start } -> show start
 
@@ -38,3 +39,9 @@ instance Monoid Source where
   mempty = Phantom
 
 type Sourced a = Tag Source a
+
+sourceHead :: [Sourced a] -> Source
+sourceHead ts = case ts of
+  []             -> EndOfFile
+  ((src :< _):_) -> Source { start = start src, end = start src }
+

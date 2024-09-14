@@ -37,8 +37,7 @@ run :: Pretty a => Tokeniser (Maybe a) -> String -> Praxis [Sourced a]
 run (Tokeniser t) cs = all (sourced cs) where
   all [] = pure []
   all cs = case Parser.run t cs of
-    (Left e, [])              -> throwAt EndOfFile e
-    (Left e, s :< _ : _)      -> throwAt s e
+    (Left e, cs)              -> throwAt (sourceHead cs) e
     (Right (s :< Just x), cs) -> ((:) <$> pure (s :< x) <*> all cs)
     (Right _, cs)             -> all cs
 

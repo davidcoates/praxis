@@ -292,6 +292,7 @@ contractTypeOps ops = case Set.toList ops of
   []   -> TypeIdentityOp `as` phantom KindView
   [op] -> op
   _    -> (src, kind) :< TypeSetOp ops where
+    -- FIXME source combining here is not (generally) valid
     (src, kind) = let (t:ts) = map (view tag) (Set.toList ops) in foldr (\(s1, Just k1) (s2, Just k2) -> (s1 <> s2, Just (combineKinds k1 k2))) t ts
     combineKinds (s1 :< k1) (s2 :< k2) = ((s1 <> s2) :<) $ case (k1, k2) of
       (KindView, KindView) -> KindView

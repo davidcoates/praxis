@@ -139,7 +139,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
 
   TypeIsSub _ (_ :< TypeUni Plain _) -> return skip
 
-  TypeIsSub op1 op2 | isTyOp op1 -> do
+  TypeIsSub op1 op2 | isTypeOp op1 -> do
     if expandTypeOps op1 `Set.isSubsetOf` expandTypeOps op2
       then return tautology
       else return skip
@@ -247,8 +247,8 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
         _         -> Set.empty
 
 
-isTyOp :: Annotated Type -> Bool
-isTyOp ((_, Just (_ :< k)) :< _) = case k of
+isTypeOp :: Annotated Type -> Bool
+isTypeOp ty = case view (annotation . just . value) ty of
   KindView -> True
   KindRef  -> True
   _        -> False
@@ -291,10 +291,11 @@ contractTypeOps :: Set (Annotated Type) -> Annotated Type
 contractTypeOps ops = case Set.toList ops of
   []   -> TypeIdentityOp `as` phantom KindView
   [op] -> op
-  _    -> (src, kind) :< TypeSetOp ops where
-    -- FIXME source combining here is not (generally) valid
-    (src, kind) = let (t:ts) = map (view tag) (Set.toList ops) in foldr (\(s1, Just k1) (s2, Just k2) -> (s1 <> s2, Just (combineKinds k1 k2))) t ts
-    combineKinds (s1 :< k1) (s2 :< k2) = ((s1 <> s2) :<) $ case (k1, k2) of
+  _    -> (Phantom, Just kind) :< TypeSetOp ops where -- TODO source is lost
+    kind :: Annotated Kind
+    kind = let (k:ks) = map (view (annotation . just)) (Set.toList ops) in foldr combineKinds k ks
+    combineKinds :: Annotated Kind -> Annotated Kind -> Annotated Kind
+    combineKinds (_ :< k1) (_ :< k2) = ((Phantom, Nothing) :<) $ case (k1, k2) of
       (KindView, KindView) -> KindView
       (KindRef, KindRef)   -> KindRef
       (KindView, KindRef)  -> KindRef

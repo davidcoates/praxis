@@ -414,61 +414,65 @@ generatePat pat = do
   return pat
 
 generatePat' :: (Annotated Type -> Annotated Type) -> Annotated Pat -> Praxis (Annotated Type, Annotated Pat, Bool)
-generatePat' wrap ((src, _) :< pat) = (\(t :< p, aliased) -> (t, (src, Just (wrap t)) :< p, aliased)) <$> case pat of
+generatePat' wrap ((src, _) :< pat) = (\(t, p, aliased) -> (t, (src, Just (wrap t)) :< p, aliased)) <$> case pat of
 
   PatAt name pat -> do
     (t, pat, aliased) <- generatePat' wrap pat
     introType src name (mono t)
     when aliased $ require $ (src, TypeReasonMultiAlias name) :< copy t
-    return (t :< PatAt name pat, True)
+    return (t, PatAt name pat, True)
 
   PatData name pat -> do
     qTy <- getConType src name
-    (t, _) <- specialiseQType src name qTy
-    op <- freshTypeUni View
-    let wrap' t = TypeApplyOp op t `as`phantom KindType
-    case view value t of
-      TypeFn argTy retTy -> do
-        (patArgType, pat, aliased) <- generatePat' (wrap . wrap') pat
+    (conTy, _) <- specialiseQType src name qTy
+    case conTy of
+      (_ :< TypeFn argTy retTy) -> do
+        layer <- freshLayer
+        (patArgType, pat, aliased) <- generatePat' (wrap . layer) pat
         require $ (src, TypeReasonConstructor name) :< (patArgType `TypeIsEq` argTy)
-        return (wrap' retTy :< PatData name pat, aliased)
+        return (layer retTy, PatData name pat, aliased)
       _ -> throwAt src $ "missing argument in constructor pattern " <> pretty name
 
   PatEnum name -> do
     qTy <- getConType src name
-    let (_ :< Mono t) = qTy
-    case t of
+    let (_ :< Mono conTy) = qTy
+    case conTy of
       (_ :< TypeFn _ _) -> throwAt src $ "unexpected argument in enum pattern " <> pretty name
       _  -> do
-        return (t :< PatEnum name, False)
+        return (conTy, PatEnum name, False)
 
   PatHole -> do
     -- Treat this is a variable for drop analysis
     var <- freshVar "hole"
     t <- freshTypeUni Plain
     introType src var (mono (wrap t))
-    return (t :< PatVar var, False)
+    return (t, PatVar var, False)
 
   -- TODO think about how view literals would work, e.g. x@"abc"
-  PatLit lit -> (\t -> (t :< PatLit lit, False)) <$> case lit of
+  PatLit lit -> (\t -> (t, PatLit lit, False)) <$> case lit of
     Bool _    -> return $ TypeCon "Bool" `as` phantom KindType
     Char _    -> return $ TypeCon "Char" `as` phantom KindType
     Integer n -> generateInteger src n
     String _  -> return $ TypeCon "String" `as` phantom KindType
 
   PatPair pat1 pat2 -> do
-    op <- freshTypeUni View
-    let wrap' t = TypeApplyOp op t `as`phantom KindType
-    (t1, pat1, aliased1) <- generatePat' (wrap . wrap') pat1
-    (t2, pat2, aliased2) <- generatePat' (wrap . wrap') pat2
-    let t = wrap' (TypePair t1 t2 `as` phantom KindType)
-    return (t :< PatPair pat1 pat2, aliased1 || aliased2)
+    layer <- freshLayer
+    (t1, pat1, aliased1) <- generatePat' (wrap . layer) pat1
+    (t2, pat2, aliased2) <- generatePat' (wrap . layer) pat2
+    let t = layer (TypePair t1 t2 `as` phantom KindType)
+    return (t, PatPair pat1 pat2, aliased1 || aliased2)
 
   PatUnit -> do
     let t = TypeUnit `as` phantom KindType
-    return (t :< PatUnit, False)
+    return (t, PatUnit, False)
 
   PatVar var -> do
     t <- freshTypeUni Plain
     introType src var (mono (wrap t))
-    return (t :< PatVar var, True)
+    return (t, PatVar var, True)
+
+  where
+    freshLayer :: Praxis (Annotated Type -> Annotated Type)
+    freshLayer = do
+      op <- freshTypeUni View
+      return $ \t -> TypeApplyOp op t `as` phantom KindType

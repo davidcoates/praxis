@@ -73,7 +73,7 @@ collectFreeVars x = collectFreeVars' x where
     _     -> continue
     where continue = getConst $ recurseTerm (Const . collectFreeVars') x
 
--- Helper for desugaring "&". It turns top-level VarRefSweet into Var and returns the name of such variables
+-- Helper for desugaring "&". It turns top-level VarRefSugar into Var and returns the name of such variables
 desugarExpRef :: Annotated Exp -> Praxis (Annotated Exp, Set Name)
 desugarExpRef (a :< exp) = case exp of
 
@@ -86,7 +86,7 @@ desugarExpRef (a :< exp) = case exp of
     (exp2, readVars2) <- desugarExpRef exp2
     return (a :< Pair exp1 exp2, readVars1 `Set.union` readVars2)
 
-  VarRefSweet var -> return (a :< Var var, Set.singleton var)
+  VarRefSugar var -> return (a :< Var var, Set.singleton var)
 
   _ -> do
     exp <- desugar (a :< exp)
@@ -106,7 +106,7 @@ desugarExp (a@(src, _) :< exp) = case exp of
         unrollReads (v:vs) = (a :< Read v (unrollReads vs))
     return (unrollReads (Set.elems readVars))
 
-  DoSweet stmts -> desugarStmts stmts where
+  DoSugar stmts -> desugarStmts stmts where
     desugarStmts :: [Annotated Stmt] -> Praxis (Annotated Exp)
     desugarStmts [stmt]
       | (_ :< StmtExp exp)   <- stmt = desugarExp exp
@@ -124,9 +124,9 @@ desugarExp (a@(src, _) :< exp) = case exp of
         return (a :< Let bind exp)
 
     -- Call Mixfix.parse to fold the token sequence into a single expression, then desugar that expression
-  MixfixSweet tokens -> Mixfix.parse src tokens >>= desugar
+  MixfixSugar tokens -> Mixfix.parse src tokens >>= desugar
 
-  VarRefSweet var -> throwAt src $ "observed variable " <> pretty var <> " is not in a valid read context"
+  VarRefSugar var -> throwAt src $ "observed variable " <> pretty var <> " is not in a valid read context"
 
   Con "True" -> pure (a :< Lit (Bool True))
 
@@ -155,7 +155,7 @@ desugarOp op@((src, _) :< Op parts) = do
 
 
 desugarOpRules :: Annotated Op -> Annotated OpRules -> Praxis (Annotated OpRules)
-desugarOpRules op (a@(src, _) :< OpRulesSweet rules) = do
+desugarOpRules op (a@(src, _) :< OpRulesSugar rules) = do
 
     -- FIXME check the precedence operators exist?
 
@@ -172,7 +172,7 @@ desugarDeclTerms :: [Annotated DeclTerm] -> Praxis [Annotated DeclTerm]
 desugarDeclTerms [] = pure []
 desugarDeclTerms (a@(src, _) :< decl : decls) = case decl of
 
-  DeclTermDefSweet name args exp -> do
+  DeclTermDefSugar name args exp -> do
     args <- mapM desugar args
     exp <- desugar exp
     let decl = a :< DeclTermVar name Nothing (curry args exp)
@@ -187,7 +187,7 @@ desugarDeclTerms (a@(src, _) :< decl : decls) = case decl of
     decls <- desugarDeclTerms decls
     return (a :< DeclTermRec recDeclTerms : decls)
 
-  DeclTermSigSweet name ty -> do
+  DeclTermSigSugar name ty -> do
     ty <- desugar ty
     desugarDeclTerms decls >>= \case
       (a' :< DeclTermVar name' Nothing exp) : decls
@@ -199,7 +199,7 @@ desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
 desugarDecls [] = pure []
 desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
-  DeclOpSweet op name rules -> do
+  DeclOpSugar op name rules -> do
 
     op@(_ :< Op parts) <- desugar op
     rules@(_ :< OpRules assoc precs) <- desugarOpRules op rules
@@ -240,7 +240,7 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
     decls <- desugarDecls decls
     return decls
 
-  DeclSynSweet name ty -> do
+  DeclSynSugar name ty -> do
     ty <- desugar ty
     typeSynonyms %= Map.insert name ty
     decls <- desugarDecls decls

@@ -262,7 +262,7 @@ decl = declSyn <|>
       mark "declaration"
 
 declSyn :: Syntax f => f Decl
-declSyn = _DeclSynSweet <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
+declSyn = _DeclSynSugar <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
 
 declType :: Syntax f => f DeclType
 declType = declTypeData <|> declTypeEnum
@@ -285,7 +285,7 @@ typePat = _TypePatVar <$> flavoredVarId <|>
 
 declTerm :: Syntax f => f DeclTerm
 declTerm = declTermRec <|> declTerm' <|> mark "term declaration/definition" where
-  declTerm' = prefix varId (_DeclTermSigSweet, declTermSig) (_DeclTermDefSweet, declTermDef) <|> internal declTermVar <|> mark "non-rec term declaration/definition"
+  declTerm' = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> mark "non-rec term declaration/definition"
   declTermSig = reservedSym ":" *> annotated qTy
   declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
@@ -370,7 +370,7 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
   exp5 = rightWithSep (reservedId "defer") _Defer exp4 <|> mark "expression(5)"
   exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> mark "expression(4)"
   exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
-         _DoSweet <$> reservedId "do" *> block (annotated stmt) <|>
+         _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
@@ -380,9 +380,9 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          _Switch <$> reservedId "switch" *> block switch <|>
          exp2 <|> mark "expression(3)"
   exp2 = mixfix <$> some (annotated (_TokOp <$> varSym <|> _TokExp <$> annotated exp1)) <|> internal exp1 <|> mark "expression(2)"
-  mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> MixfixSweet ts }) (\case { MixfixSweet ts -> Just ts; _ -> Nothing })
+  mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> MixfixSugar ts }) (\case { MixfixSugar ts -> Just ts; _ -> Nothing })
   exp1 = left _Apply exp0 <|> mark "expression(1)"
-  exp0 = _VarRefSweet <$> varIdRef <|>
+  exp0 = _VarRefSugar <$> varIdRef <|>
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
@@ -401,14 +401,14 @@ alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedSym "->" *> annotated exp <|> mark "case alternative"
 
 declOp :: Syntax f => f Decl
-declOp = _DeclOpSweet <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
+declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
 
 op :: Syntax f => f Op
 op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> mark "operator section"  where
   atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> mark "operator or hole"
 
 opRules :: Syntax f => f OpRules
-opRules = _OpRulesSweet <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
+opRules = _OpRulesSugar <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
           internal (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
           internal (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
 

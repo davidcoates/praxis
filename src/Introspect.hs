@@ -152,7 +152,7 @@ instance Term OpRules where
   recurseAnnotation = trivial
   recurseTerm f = \case
     OpRules a ps    -> OpRules <$> traverse f a <*> traverse f ps
-    OpRulesSweet rs -> OpRulesSweet <$> traverse (bitraverse f (traverse f)) rs
+    OpRulesSugar rs -> OpRulesSugar <$> traverse (bitraverse f (traverse f)) rs
 
 instance Term Prec where
   witness = IPrec
@@ -177,8 +177,8 @@ instance Term Decl where
   witness = IDecl
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclOpSweet o d rs -> DeclOpSweet <$> f o <*> pure d <*> f rs
-    DeclSynSweet n t   -> DeclSynSweet n <$> f t
+    DeclOpSugar o d rs -> DeclOpSugar <$> f o <*> pure d <*> f rs
+    DeclSynSugar n t   -> DeclSynSugar n <$> f t
     DeclType d         -> DeclType <$> f d
     DeclTerm d         -> DeclTerm <$> f d
 
@@ -188,8 +188,8 @@ instance Term DeclTerm where
   recurseTerm f = \case
     DeclTermRec ds          -> DeclTermRec <$> traverse f ds
     DeclTermVar n t e       -> DeclTermVar n <$> traverse f t <*> f e
-    DeclTermDefSweet n ps e -> DeclTermDefSweet n <$> traverse f ps <*> f e
-    DeclTermSigSweet n t    -> DeclTermSigSweet n <$> f t
+    DeclTermDefSugar n ps e -> DeclTermDefSugar n <$> traverse f ps <*> f e
+    DeclTermSigSugar n t    -> DeclTermSigSugar n <$> f t
 
 instance Term DeclType where
   witness = IDeclType
@@ -215,12 +215,12 @@ instance Term Exp where
     Closure cs e    -> Closure <$> traverse (second f) cs <*> f e
     Con n           -> pure (Con n)
     Defer a b       -> Defer <$> f a <*> f b
-    DoSweet ss      -> DoSweet <$> traverse f ss
+    DoSugar ss      -> DoSugar <$> traverse f ss
     If a b c        -> If <$> f a <*> f b <*> f c
     Lambda a b      -> Lambda <$> f a <*> f b
     Let a b         -> Let <$> f a <*> f b
     Lit l           -> pure (Lit l)
-    MixfixSweet ts  -> MixfixSweet <$> traverse f ts
+    MixfixSugar ts  -> MixfixSugar <$> traverse f ts
     Read n a        -> Read n <$> f a
     Pair a b        -> Pair <$> f a <*> f b
     Seq a b         -> Seq <$> f a <*> f b
@@ -229,7 +229,7 @@ instance Term Exp where
     Switch as       -> Switch <$> pairs f as
     Unit            -> pure Unit
     Var n           -> pure (Var n)
-    VarRefSweet n   -> pure (VarRefSweet n)
+    VarRefSugar n   -> pure (VarRefSugar n)
     Where a bs      -> Where <$> f a <*> traverse f bs
 
 instance Term Pat where

@@ -67,7 +67,7 @@ data Op = Op [Maybe Name] -- TDO qualification over this
   deriving (Eq, Ord)
 
 data OpRules = OpRules (Maybe (Annotated Assoc)) [Annotated Prec]
-             | OpRulesSweet [Either (Annotated Assoc) [Annotated Prec]]
+             | OpRulesSugar [Either (Annotated Assoc) [Annotated Prec]]
   deriving (Eq, Ord)
 
 data Prec = Prec Ordering Op
@@ -91,12 +91,12 @@ data DeclType = DeclTypeData DataMode Name [Annotated TypePat] [Annotated DataCo
 
 data DeclTerm = DeclTermRec [Annotated DeclTerm]
               | DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
-              | DeclTermDefSweet Name [Annotated Pat] (Annotated Exp)
-              | DeclTermSigSweet Name (Annotated QType)
+              | DeclTermDefSugar Name [Annotated Pat] (Annotated Exp)
+              | DeclTermSigSugar Name (Annotated QType)
   deriving (Eq, Ord)
 
-data Decl = DeclOpSweet (Annotated Op) Name (Annotated OpRules)
-          | DeclSynSweet Name (Annotated Type)
+data Decl = DeclOpSugar (Annotated Op) Name (Annotated OpRules)
+          | DeclSynSugar Name (Annotated Type)
           | DeclType (Annotated DeclType)
           | DeclTerm (Annotated DeclTerm)
   deriving (Eq, Ord)
@@ -110,12 +110,12 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Closure [(Name, Annotated QType)] (Annotated Exp)
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
-         | DoSweet [Annotated Stmt]
+         | DoSugar [Annotated Stmt]
          | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
          | Lambda (Annotated Pat) (Annotated Exp)
          | Let (Annotated Bind) (Annotated Exp)
          | Lit Lit
-         | MixfixSweet [Annotated Tok]
+         | MixfixSugar [Annotated Tok]
          | Read Name (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
@@ -124,7 +124,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name
-         | VarRefSweet Name
+         | VarRefSugar Name
          | Where (Annotated Exp) [Annotated DeclTerm]
   deriving (Eq, Ord)
 

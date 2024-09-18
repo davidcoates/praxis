@@ -375,8 +375,8 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
   exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> expected "expression(4)"
   exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
          _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
-         internal (_CaptureDetail <$> empty <*> special '#' *> annotated exp3) <|>
-         internal (_ClosureCore <$> captures <*> special '#' *> varId) <|>
+         internal (_CaptureDetail <$> empty <*> annotated exp3) <|>
+         internal (_ClosureCore <$> varId <*> captures) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>

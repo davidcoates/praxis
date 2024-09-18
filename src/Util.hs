@@ -32,13 +32,10 @@ parse :: forall a. Term a => I a -> String -> Praxis (Annotated a)
 parse _ term = Parse.parse term :: Praxis (Annotated a)
 
 check :: forall a. Term a => I a -> String -> Praxis (Annotated a)
-check _ term = Parse.parse term >>= Check.check :: Praxis (Annotated a)
+check _ term = Parse.parse term >>= Check.check >>= Core.run :: Praxis (Annotated a)
 
 evalProgram :: String -> Praxis ()
-evalProgram program = do
-  program <- check IProgram program
-  Core.run program -- FIXME remove
-  Eval.runProgram program
+evalProgram program = check IProgram program >>= Eval.runProgram
 
 evalExp :: String -> Praxis Value
 evalExp exp = check IExp exp >>= Eval.runExp

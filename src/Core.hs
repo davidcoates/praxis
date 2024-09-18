@@ -15,6 +15,6 @@ run term = save stage $ do
   stage .= Core
   clearTerm `ifFlag` debug
   term <- Lift.run term
---  term <- Mono.run term
+  term <- Mono.run term
   return term
 

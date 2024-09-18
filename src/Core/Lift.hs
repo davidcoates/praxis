@@ -29,11 +29,6 @@ import qualified Data.Map.Strict as Map
   - ClosureCore
 -}
 
-{-
--- _capturesByName  :: Map Name Captures
-
--}
-
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- lift term
@@ -134,7 +129,7 @@ liftExp (a :< exp) = case exp of
     name <- freshVar "_anon"
     captures <- resolveCaptures captures
     liftFunction name captures fn
-    return (a :< ClosureCore captures name)
+    return (a :< ClosureCore name captures)
 
   Where exp decls -> do
     decls <- concat . (map toList) <$> mapM liftDeclTerm decls

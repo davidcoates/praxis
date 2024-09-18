@@ -118,7 +118,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | CaptureDetail [(Name, Annotated QType)] (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
-         | ClosureCore Captures Name
+         | ClosureCore Name Captures
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
          | DoSugar [Annotated Stmt]

@@ -214,7 +214,7 @@ instance Term Exp where
     CaptureDetail cs e    -> CaptureDetail <$> traverse (second f) cs <*> f e
     Case a as             -> Case <$> f a <*> pairs f as
     Cases as              -> Cases <$> pairs f as
-    ClosureCore cs n      -> ClosureCore <$> traverse (second f) cs <*> pure n
+    ClosureCore n cs      -> ClosureCore <$> pure n <*> traverse (second f) cs
     Con n                 -> pure (Con n)
     Defer a b             -> Defer <$> f a <*> f b
     DoSugar ss            -> DoSugar <$> traverse f ss

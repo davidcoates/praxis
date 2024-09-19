@@ -17,16 +17,16 @@ import qualified Data.Map.Strict as Map
 
 
 {-|
-  All function definitions (Lambda & Cases) are replaced by top-level defintions (DeclTermFnCore)
+  All function definitions (Lambda & Cases) are replaced by top-level defintions (DeclTermFn)
 
   The following constructs are eliminated:
   - Cases
   - Lambda
-  - CaptureDetail
+  - Capture
   - DeclTermRec
   And the following are introduced:
-  - DeclTermFnCore
-  - ClosureCore
+  - DeclTermFn
+  - Closure
 -}
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
@@ -60,13 +60,13 @@ liftDeclTerm :: Annotated DeclTerm -> Praxis (Maybe (Annotated DeclTerm))
 liftDeclTerm decl = case view value decl of
 
   DeclTermRec decls -> do
-    let (names, captures) = unzip $ map (\(_ :< DeclTermVar name _ (_ :< CaptureDetail captures _)) -> (name, captures)) decls
+    let (names, captures) = unzip $ map (\(_ :< DeclTermVar name _ (_ :< Capture captures _)) -> (name, captures)) decls
     captures <- resolveCaptures . filter (\(n, t) -> not (n `elem` names)) . nub . concat $ captures
     mapM_ (\name -> coreState . capturesByName %= Map.insert name captures) names
     mapM_ (liftDeclTermFn captures) decls
     return Nothing
 
-  DeclTermVar name sig (_ :< CaptureDetail captures fn) -> do
+  DeclTermVar name sig (_ :< Capture captures fn) -> do
     captures <- resolveCaptures captures
     coreState . capturesByName %= Map.insert name captures
     liftDeclTermFn captures decl
@@ -80,7 +80,7 @@ liftDeclTerm decl = case view value decl of
 liftDeclTermFn :: Captures -> Annotated DeclTerm -> Praxis ()
 liftDeclTermFn captures decl = case view value decl of
 
-  DeclTermVar name _ (_ :< CaptureDetail _ fn) -> do
+  DeclTermVar name _ (_ :< Capture _ fn) -> do
     liftFunction name captures fn
 
 
@@ -93,7 +93,7 @@ liftFunction name captures fn = do
     exp = case view value fn of
       Lambda pat exp -> Let (phantom (Bind pat (Var arg `as` t1))) exp `as` t2
       Cases cs       -> Case (Var arg `as` t1) cs `as` t2
-  let decl = phantom (DeclTermFnCore name captures (arg, t1) exp)
+  let decl = phantom (DeclTermFn name captures (arg, t1) exp)
   coreState . liftedFunctions %= (decl:)
 
 liftDecl :: Annotated Decl -> Praxis [Annotated Decl]
@@ -125,11 +125,11 @@ liftProgram (a :< Program decls) = do
 liftExp :: Annotated Exp -> Praxis (Annotated Exp)
 liftExp (a :< exp) = case exp of
 
-  CaptureDetail captures fn -> do
+  Capture captures fn -> do
     name <- freshVar "_anon"
     captures <- resolveCaptures captures
     liftFunction name captures fn
-    return (a :< ClosureCore name captures)
+    return (a :< Closure name captures)
 
   Where exp decls -> do
     decls <- concat . (map toList) <$> mapM liftDeclTerm decls

@@ -151,8 +151,8 @@ instance Term OpRules where
   witness = IOpRules
   recurseAnnotation = trivial
   recurseTerm f = \case
-    OpRules a ps    -> OpRules <$> traverse f a <*> traverse f ps
-    OpRulesSugar rs -> OpRulesSugar <$> traverse (bitraverse f (traverse f)) rs
+    OpRules a ps   -> OpRules <$> traverse f a <*> traverse f ps
+    OpRulesList rs -> OpRulesList <$> traverse (bitraverse f (traverse f)) rs
 
 instance Term Prec where
   witness = IPrec
@@ -177,20 +177,20 @@ instance Term Decl where
   witness = IDecl
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclOpSugar o d rs -> DeclOpSugar <$> f o <*> pure d <*> f rs
-    DeclSynSugar n t   -> DeclSynSugar n <$> f t
-    DeclType d         -> DeclType <$> f d
-    DeclTerm d         -> DeclTerm <$> f d
+    DeclOp o d rs -> DeclOp <$> f o <*> pure d <*> f rs
+    DeclSyn n t   -> DeclSyn n <$> f t
+    DeclType d    -> DeclType <$> f d
+    DeclTerm d    -> DeclTerm <$> f d
 
 instance Term DeclTerm where
   witness = IDeclTerm
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclTermFnCore n cs a e -> DeclTermFnCore n <$> traverse (second f) cs <*> second f a <*> f e
-    DeclTermRec ds          -> DeclTermRec <$> traverse f ds
-    DeclTermVar n t e       -> DeclTermVar n <$> traverse f t <*> f e
-    DeclTermDefSugar n ps e -> DeclTermDefSugar n <$> traverse f ps <*> f e
-    DeclTermSigSugar n t    -> DeclTermSigSugar n <$> f t
+    DeclTermFn n cs a e -> DeclTermFn n <$> traverse (second f) cs <*> second f a <*> f e
+    DeclTermRec ds      -> DeclTermRec <$> traverse f ds
+    DeclTermVar n t e   -> DeclTermVar n <$> traverse f t <*> f e
+    DeclTermDef n ps e  -> DeclTermDef n <$> traverse f ps <*> f e
+    DeclTermSig n t     -> DeclTermSig n <$> f t
 
 instance Term DeclType where
   witness = IDeclType
@@ -210,29 +210,29 @@ instance Term Exp where
   witness = IExp
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    Apply a b             -> Apply <$> f a <*> f b
-    CaptureDetail cs e    -> CaptureDetail <$> traverse (second f) cs <*> f e
-    Case a as             -> Case <$> f a <*> pairs f as
-    Cases as              -> Cases <$> pairs f as
-    ClosureCore n cs      -> ClosureCore <$> pure n <*> traverse (second f) cs
-    Con n                 -> pure (Con n)
-    Defer a b             -> Defer <$> f a <*> f b
-    DoSugar ss            -> DoSugar <$> traverse f ss
-    If a b c              -> If <$> f a <*> f b <*> f c
-    Lambda a b            -> Lambda <$> f a <*> f b
-    Let a b               -> Let <$> f a <*> f b
-    Lit l                 -> pure (Lit l)
-    MixfixSugar ts        -> MixfixSugar <$> traverse f ts
-    Read n a              -> Read n <$> f a
-    Pair a b              -> Pair <$> f a <*> f b
-    Seq a b               -> Seq <$> f a <*> f b
-    Sig e t               -> Sig <$> f e <*> f t
-    SpecialiseDetail e xs -> SpecialiseDetail <$> f e <*> pairs f xs
-    Switch as             -> Switch <$> pairs f as
-    Unit                  -> pure Unit
-    Var n                 -> pure (Var n)
-    VarRefSugar n         -> pure (VarRefSugar n)
-    Where a bs            -> Where <$> f a <*> traverse f bs
+    Apply a b       -> Apply <$> f a <*> f b
+    Capture cs e    -> Capture <$> traverse (second f) cs <*> f e
+    Case a as       -> Case <$> f a <*> pairs f as
+    Cases as        -> Cases <$> pairs f as
+    Closure n cs    -> Closure <$> pure n <*> traverse (second f) cs
+    Con n           -> pure (Con n)
+    Defer a b       -> Defer <$> f a <*> f b
+    Do ss           -> Do <$> traverse f ss
+    If a b c        -> If <$> f a <*> f b <*> f c
+    Lambda a b      -> Lambda <$> f a <*> f b
+    Let a b         -> Let <$> f a <*> f b
+    Lit l           -> pure (Lit l)
+    Mixfix ts       -> Mixfix <$> traverse f ts
+    Read n a        -> Read n <$> f a
+    Pair a b        -> Pair <$> f a <*> f b
+    Seq a b         -> Seq <$> f a <*> f b
+    Sig e t         -> Sig <$> f e <*> f t
+    Specialise e xs -> Specialise <$> f e <*> pairs f xs
+    Switch as       -> Switch <$> pairs f as
+    Unit            -> pure Unit
+    Var n           -> pure (Var n)
+    VarRef n        -> pure (VarRef n)
+    Where a bs      -> Where <$> f a <*> traverse f bs
 
 instance Term Pat where
   witness = IPat
@@ -337,10 +337,10 @@ instance Term KindConstraint where
 instance Term TypeRequirement where
   witness = ITypeRequirement
   recurseAnnotation _ f x = case x of
-    TypeReasonApply a b -> TypeReasonApply <$> f a <*> f b
-    TypeReasonBind p e -> TypeReasonBind <$> f p <*> f e
+    TypeReasonApply a b              -> TypeReasonApply <$> f a <*> f b
+    TypeReasonBind p e               -> TypeReasonBind <$> f p <*> f e
     TypeReasonFunctionCongruence n s -> TypeReasonFunctionCongruence n <$> traverse f s
-    TypeReasonSignature t -> TypeReasonSignature <$> f t
+    TypeReasonSignature t            -> TypeReasonSignature <$> f t
     _ -> pure x
   recurseTerm f = \case
     Requirement c -> Requirement <$> recurseTerm f c

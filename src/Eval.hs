@@ -88,7 +88,7 @@ evalExp ((src, Just t) :< exp) = case exp of
     x <- evalExp x
     f x
 
-  CaptureDetail captures exp -> do
+  Capture captures exp -> do
     let names = map fst captures
     values <- mapM (getValue src) names
     Value.Fn fn <- evalExp exp
@@ -139,7 +139,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Sig exp _ -> evalExp exp
 
-  SpecialiseDetail exp specialisation -> do
+  Specialise exp specialisation -> do
     exp <- evalExp exp
     case exp of
       Value.Polymorphic polyFun -> return (polyFun specialisation)

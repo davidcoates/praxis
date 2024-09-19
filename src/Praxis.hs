@@ -53,6 +53,7 @@ module Praxis
   , kEnv
   , tEnv
   , vEnv
+  , fEnv
   , typeSynonyms
   , typeCheckState
   , kindCheckState
@@ -90,7 +91,6 @@ import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Monoid.Colorful         as Colored
-import qualified Env.Lazy
 import qualified Env.Linear
 import qualified Env.Strict
 import           Introspect
@@ -125,7 +125,7 @@ type KEnv = Env.Strict.Env (Annotated Kind)
 
 type TEnv = Env.Linear.Env (Annotated QType)
 
-type VEnv = Env.Lazy.Env Value
+type VEnv = Env.Strict.Env Value
 
 data Fixity = Infix (Maybe Assoc)
             | Prefix
@@ -149,6 +149,7 @@ data PraxisState = PraxisState
   , _kEnv           :: KEnv                -- ^ Kind environment
   , _tEnv           :: TEnv                -- ^ Type environment
   , _vEnv           :: VEnv                -- ^ Value environment
+  , _fEnv           :: VEnv                -- ^ Frame (value) environment -- TODO should be Eval internal
   , _typeSynonyms   :: Map Name (Annotated Type) -- ^ Type synonyms
   , _typeCheckState :: Check.State TypeConstraint
   , _kindCheckState :: Check.State KindConstraint
@@ -180,7 +181,8 @@ emptypeState = PraxisState
   , _iEnv           = Env.Strict.empty
   , _kEnv           = Env.Strict.empty
   , _tEnv           = Env.Linear.empty
-  , _vEnv           = Env.Lazy.empty
+  , _vEnv           = Env.Strict.empty
+  , _fEnv           = Env.Strict.empty
   , _typeSynonyms   = Map.empty
   , _typeCheckState = Check.emptypeState
   , _kindCheckState = Check.emptypeState

@@ -2,12 +2,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Eval
-  ( runExp
-  , runProgram
+  ( run
   ) where
 
 import           Common
-import qualified Env.Lazy          as Env
+import qualified Env.Strict        as Env
 import           Praxis
 import           Stage
 import           Term
@@ -19,66 +18,46 @@ import           Data.Array.IO
 import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
 
-runExp :: Annotated Exp -> Praxis Value
-runExp exp = save stage $ do
+
+run :: Annotated Snippet -> Praxis Value
+run snippet = save stage $ do
   stage .= Evaluate
   clearTerm `ifFlag` debug
-  evalExp exp
+  evalSnippet snippet
 
-runProgram :: Annotated Program -> Praxis ()
-runProgram program = save stage $ do
-  stage .= Evaluate
-  clearTerm `ifFlag` debug
-  evalProgram program
-
-evalProgram :: Annotated Program -> Praxis ()
-evalProgram (_ :< Program decls) = do
+evalSnippet :: Annotated Snippet -> Praxis Value
+evalSnippet (_ :< Snippet decls exp) = do
   traverse evalDecl decls
-  return ()
-
--- | A helper for decls, irrefutably matching the [b] argument
-irrefMapM :: Monad m => ((a, b) -> m c) -> [a] -> [b] -> m [c]
-irrefMapM f as bs = case as of
-  []     -> return []
-  (a:as) -> case bs of
-    ~(b:bs) -> do
-      c <- f (a, b)
-      cs <- irrefMapM f as bs
-      return (c : cs)
+  evalExp exp
 
 evalDecl :: Annotated Decl -> Praxis ()
 evalDecl (_ :< decl) = case decl of
 
-  DeclTerm decl -> evalDeclTerm decl
+  DeclTerm (_ :< decl) -> case decl of
+
+    DeclTermFn name captures (arg, argTy) exp -> do
+      let
+        fn = Value.Fn $ \val -> save fEnv $ do
+          fEnv %= Env.insert arg val
+          evalExp exp
+      vEnv %= Env.insert name fn
+
+    DeclTermVar name _ exp -> do
+      value <- evalExp exp
+      vEnv %= Env.insert name value
 
   DeclType _    -> return ()
 
 
-evalDeclTerm :: Annotated DeclTerm -> Praxis ()
-evalDeclTerm (_ :< decl) = case decl of
-
-  DeclTermRec decls -> do
-    let (names, exps) = unzip [ (name, exp) | (_ :< DeclTermVar name _ exp) <- decls ]
-    -- To support mutual recursion, each function needs to see the evaluation of all other functions (including itself).
-    -- Leverage mfix to find the fixpoint.
-    mfix $ \values -> do
-      -- Evaluate each of the functions in turn, with all of the evaluations in the environment
-      -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
-      irrefMapM (\(name, value) -> vEnv %= Env.insert name value) names values
-      mapM evalExp exps
-    return ()
-
-  DeclTermVar name _ exp -> do
-    value <- evalExp exp
-    vEnv %= Env.insert name value
-
-
 getValue :: Source -> Name -> Praxis Value
 getValue src name = do
-  entry <- vEnv `uses` Env.lookup name
-  case entry of
-     Just val -> return val
-     Nothing  -> throwAt src ("unknown variable " <> pretty name)
+  entry1 <- vEnv `uses` Env.lookup name
+  entry2 <- fEnv `uses` Env.lookup name
+  case (entry1, entry2) of
+     (Just val, Nothing) -> return val
+     (Nothing, Just val) -> return val
+     (Nothing, Nothing)  -> throwAt src ("unknown variable " <> pretty name)
+     (Just _, Just _)    -> throwAt src ("duplicated variable " <> pretty name)
 
 evalExp :: Annotated Exp -> Praxis Value
 evalExp ((src, Just t) :< exp) = case exp of
@@ -88,24 +67,26 @@ evalExp ((src, Just t) :< exp) = case exp of
     x <- evalExp x
     f x
 
-  Capture captures exp -> do
+  Closure name captures -> do
     let names = map fst captures
     values <- mapM (getValue src) names
-    Value.Fn fn <- evalExp exp
-    return $ Value.Fn $ \val -> save vEnv $ do
-      vEnv .= Env.fromList (zip names values)
-      fn val
+    fn <- getValue src name
+    let
+      wrap :: Value -> Value
+      wrap (Value.Polymorphic polyFun) = Value.Polymorphic (\sp -> wrap (polyFun sp))
+      wrap (Value.Fn fn) = Value.Fn $ \val -> save fEnv $ do
+        fEnv .= Env.fromList (zip names values)
+        fn val
+    return (wrap fn)
 
   Case exp alts -> do
     val <- evalExp exp
     evalCase src val alts
 
-  Cases alts -> return $ Value.Fn $ \val -> evalCase src val alts
-
   Con name -> do
     case t of
       (_ :< TypeFn _ _) -> return $ Value.Fn (\val -> return $ Value.Data name val)
-      _                -> return $ Value.Enum name
+      _                 -> return $ Value.Enum name
 
   Defer exp1 exp2 -> do
     val <- evalExp exp1
@@ -116,9 +97,7 @@ evalExp ((src, Just t) :< exp) = case exp of
     Value.Bool cond <- evalExp condExp
     if cond then evalExp thenExp else evalExp elseExp
 
-  Lambda pat exp -> return $ Value.Fn $ \val -> forceMatch src val pat >> evalExp exp
-
-  Let bind exp -> save vEnv $ do
+  Let bind exp -> save fEnv $ do
     evalBind bind
     evalExp exp
 
@@ -149,11 +128,9 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Term.Unit -> return Value.Unit
 
-  Var var -> getValue src var
-
-  Where exp decls -> save vEnv $ do
-    traverse evalDeclTerm decls
-    evalExp exp
+  Var var -> do
+    display "var" var
+    getValue src var
 
 
 evalSwitch :: Source -> [(Annotated Exp, Annotated Exp)] -> Praxis Value
@@ -167,7 +144,7 @@ evalSwitch src ((condExp,bodyExp):alts) = do
 evalCase :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 evalCase src val [] = throwAt src ("no matching pattern for value " <> pretty (show val))
 evalCase src val ((pat,exp):alts) = case tryMatch val pat of
-  Just doMatch -> save vEnv $ do
+  Just doMatch -> save fEnv $ do
     doMatch
     evalExp exp
   Nothing ->
@@ -187,7 +164,7 @@ tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
 tryMatch val ((_, Just t) :< pat) = case pat of
 
   PatAt name pat
-    -> (\doMatch -> do { vEnv %= Env.insert name val; doMatch }) <$> tryMatch val pat
+    -> (\doMatch -> do { fEnv %= Env.insert name val; doMatch }) <$> tryMatch val pat
 
   PatData name pat | Value.Data name' val <- val
     -> if name == name' then tryMatch val pat else Nothing
@@ -212,7 +189,7 @@ tryMatch val ((_, Just t) :< pat) = case pat of
     -> Just (return ())
 
   PatVar name
-    -> Just $ vEnv %= Env.insert name val
+    -> Just $ fEnv %= Env.insert name val
 
   _
     -> Nothing

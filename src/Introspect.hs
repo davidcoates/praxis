@@ -55,6 +55,7 @@ data I a where
   IExp      :: I Exp
   IPat      :: I Pat
   IProgram  :: I Program
+  ISnippet  :: I Snippet
   IStmt     :: I Stmt
   ITok      :: I Tok
   -- | T1
@@ -69,6 +70,7 @@ data I a where
   ITypeRequirement :: I TypeRequirement
   IKindRequirement :: I KindRequirement
 
+deriving instance Show (I a)
 
 typeof :: forall a. Term a => a -> I a
 typeof _ = witness :: I a
@@ -89,6 +91,7 @@ switch a b eq neq = case (a, b) of
   (IExp, IExp)                         -> eq
   (IPat, IPat)                         -> eq
   (IProgram, IProgram)                 -> eq
+  (ISnippet, ISnippet)                 -> eq
   (IStmt, IStmt)                       -> eq
   (ITok, ITok)                         -> eq
   -- | T1
@@ -252,6 +255,12 @@ instance Term Program where
   recurseAnnotation = trivial
   recurseTerm f = \case
     Program ds -> Program <$> traverse f ds
+
+instance Term Snippet where
+  witness = ISnippet
+  recurseAnnotation = trivial
+  recurseTerm f = \case
+    Snippet ds e -> Snippet <$> traverse f ds <*> f e
 
 instance Term Stmt where
   witness = IStmt

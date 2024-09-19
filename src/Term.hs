@@ -25,6 +25,7 @@ module Term
   , Lit(..)
   , Pat(..)
   , Program(..)
+  , Snippet(..)
   , Specialisation
   , Stmt(..)
   , Tok(..)
@@ -160,6 +161,9 @@ data Pat = PatAt Name (Annotated Pat)
   deriving (Eq, Ord)
 
 data Program = Program [Annotated Decl]
+  deriving (Eq, Ord)
+
+data Snippet = Snippet [Annotated Decl] (Annotated Exp)
   deriving (Eq, Ord)
 
 data Stmt = StmtBind (Annotated Bind)

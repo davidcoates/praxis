@@ -1,11 +1,12 @@
 module Main where
 
 import           Common
-import qualified Env.Lazy           as Env
+import qualified Env.Strict         as Env
 import           Inbuilts           (runWithPrelude)
+import           Introspect
 import           Praxis
 import           Term
-import           Util               (evalExp, evalProgram)
+import           Util               (eval)
 import           Value
 
 import           Control.Monad      (void, when)
@@ -65,12 +66,12 @@ parse xs = do
       case file of
         Just file -> do
           text <- liftIO (readFile file)
-          evalProgram text
+          eval IProgram text
           repl
         Nothing   -> repl
     Interpret file -> do
       text <- liftIO (readFile file)
-      evalProgram text
+      eval IProgram text
       runMain
 
 help :: Praxis a
@@ -95,11 +96,4 @@ forever p = try p >> forever p
 repl :: Praxis ()
 repl = forever $ do
   liftIO (putStr "> " >> hFlush stdout)
-  liftIO getLine >>= eval
-
-eval :: String -> Praxis ()
-eval s = do
-  -- TODO fix this so we can have declarations
-  v <- evalExp s
-  liftIO $ print v
-
+  liftIO getLine >>= eval IExp >>= liftIO . print

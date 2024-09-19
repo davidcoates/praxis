@@ -18,7 +18,7 @@ import qualified Data.Map.Strict as Map
 
 data State = State
   { _capturesByName  :: Map Name Captures
-  , _liftedFunctions :: [Annotated DeclTerm]
+  , _liftedFunctions :: [Annotated Decl]
   }
 
 emptyState :: State

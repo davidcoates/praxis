@@ -24,12 +24,13 @@ import qualified Data.Map.Strict as Map
   - Lambda
   - Capture
   - DeclTermRec
+  - Where
   And the following are introduced:
   - DeclTermFn
   - Closure
 -}
 
-run :: Term a => Annotated a -> Praxis (Annotated a)
+run :: Annotated Snippet -> Praxis (Annotated Snippet)
 run term = do
   term <- lift term
   display "lifted term" term `ifFlag` debug
@@ -37,12 +38,13 @@ run term = do
 
 lift :: Term a => Annotated a -> Praxis (Annotated a)
 lift term = ($ term) $ case typeof (view value term) of
-  IDecl     -> error "standalone Decl"
-  IDeclTerm -> error "standalone DeclTerm"
+  ISnippet  -> liftSnippet
   IExp      -> liftExp
-  IProgram  -> liftProgram
-  _         -> value (recurseTerm lift)
-
+  IBind     -> value (recurseTerm lift)
+  IType     -> return
+  ITypePat  -> return
+  IPat      -> return
+  IDeclType -> return
 
 resolveCapture :: (Name, Annotated QType) -> Praxis [(Name, Annotated Type)]
 resolveCapture (n, qTy) = do
@@ -51,7 +53,6 @@ resolveCapture (n, qTy) = do
     Just captures -> return captures
     Nothing -> case view value qTy of
       Mono t -> return [(n, t)]
-      _      -> return [] -- inbuilts... what else?
 
 resolveCaptures :: [(Name, Annotated QType)] -> Praxis [(Name, Annotated Type)]
 resolveCaptures captures = (nub . concat) <$> mapM resolveCapture captures
@@ -93,34 +94,36 @@ liftFunction name captures fn = do
     exp = case view value fn of
       Lambda pat exp -> Let (phantom (Bind pat (Var arg `as` t1))) exp `as` t2
       Cases cs       -> Case (Var arg `as` t1) cs `as` t2
-  let decl = phantom (DeclTermFn name captures (arg, t1) exp)
+  let decl = phantom (DeclTerm (phantom (DeclTermFn name captures (arg, t1) exp)))
   coreState . liftedFunctions %= (decl:)
 
 liftDecl :: Annotated Decl -> Praxis [Annotated Decl]
-liftDecl decl = do
-  decl <- liftDecl' decl
-  decls <- use (coreState . liftedFunctions)
+liftDecl (a :< decl) = do
+
+  decls <- case decl of
+
+    DeclTerm decl -> do
+      decl <- liftDeclTerm decl
+      case decl of
+        Nothing   -> return []
+        Just decl -> return [a :< DeclTerm decl]
+
+    _ -> do
+      decl <- recurse lift (a :< decl)
+      return [decl]
+
+  liftedDecls <- use (coreState . liftedFunctions)
   coreState . liftedFunctions .= []
-  return $ map (\decl -> phantom (DeclTerm decl)) decls ++ toList decl
 
-liftDecl' :: Annotated Decl -> Praxis (Maybe (Annotated Decl))
-liftDecl' (a :< decl) = case decl of
+  return $ liftedDecls ++ decls
 
-  DeclTerm decl -> do
-    decl <- liftDeclTerm decl
-    case decl of
-      Nothing   -> return Nothing
-      Just decl -> return $ Just (a :< DeclTerm decl)
-
-  _ -> do
-    decl <- recurse lift (a :< decl)
-    return (Just decl)
-
-
-liftProgram :: Annotated Program -> Praxis (Annotated Program)
-liftProgram (a :< Program decls) = do
+liftSnippet :: Annotated Snippet -> Praxis (Annotated Snippet)
+liftSnippet (a :< Snippet decls exp) = do
   decls <- concat <$> mapM liftDecl decls
-  return (a :< Program decls)
+  exp <- liftExp exp
+  liftedDecls <- use (coreState . liftedFunctions)
+  coreState . liftedFunctions .= []
+  return (a :< Snippet (decls ++ liftedDecls) exp)
 
 liftExp :: Annotated Exp -> Praxis (Annotated Exp)
 liftExp (a :< exp) = case exp of
@@ -134,8 +137,12 @@ liftExp (a :< exp) = case exp of
   Where exp decls -> do
     decls <- concat . (map toList) <$> mapM liftDeclTerm decls
     exp <- liftExp exp
-    return $ case decls of
-      [] -> exp
-      _  -> (a :< Where exp decls)
+    return $ foldr (\(_ :< DeclTermVar name _ exp1) exp2 -> phantom (Let (phantom (Bind (phantom (PatVar name)) exp1)) exp2)) exp decls -- FIXME source?
+
+  Var var -> do
+    entry <- (coreState . capturesByName) `uses` Map.lookup var
+    case entry of
+      Just captures -> return (a :< Closure var captures)
+      Nothing       -> return (a :< Var var)
 
   _ -> recurse lift (a :< exp)

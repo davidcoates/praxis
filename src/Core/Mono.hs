@@ -21,7 +21,7 @@ import           Term
 
 -- TODO !
 
-run :: Term a => Annotated a -> Praxis (Annotated a)
+run :: Annotated Snippet -> Praxis (Annotated Snippet)
 run term = do
   term <- mono term
   display "monomorphised term" term `ifFlag` debug

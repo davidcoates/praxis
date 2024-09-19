@@ -14,7 +14,7 @@ module Inbuilts
 
 import qualified Check.Type.Rename         as Rename
 import           Common
-import qualified Env.Lazy
+import qualified Core.State                as Core
 import qualified Env.Linear
 import qualified Env.Strict
 import           Introspect
@@ -273,8 +273,10 @@ runWithPrelude c = runPraxis (importPrelude >> c) where
     inbuilts <- mapM (\(n, t, v) -> (\n -> (n, t, v)) <$> Rename.intro n) inbuilts
     let initialTEnv = Env.Linear.fromList $ map (\(n, t, _) -> (n, t)) inbuilts
     tEnv .= initialTEnv
-    let initialVEnv = Env.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
+    let initialVEnv = Env.Strict.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
     vEnv .= initialVEnv
+    let captures = Map.fromList $ map (\(n, _, _) -> (n, [])) inbuilts
+    coreState . Core.capturesByName .= captures
     flags . silent .= True
     parse prelude :: Praxis (Annotated Program)
     flags . silent .= False

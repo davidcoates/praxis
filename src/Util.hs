@@ -6,8 +6,7 @@
 module Util
   ( parse
   , check
-  , evalProgram
-  , evalExp
+  , eval
 
   , runPretty
   , runEvaluate
@@ -32,13 +31,17 @@ parse :: forall a. Term a => I a -> String -> Praxis (Annotated a)
 parse _ term = Parse.parse term :: Praxis (Annotated a)
 
 check :: forall a. Term a => I a -> String -> Praxis (Annotated a)
-check _ term = Parse.parse term >>= Check.check >>= Core.run :: Praxis (Annotated a)
+check _ term = Parse.parse term >>= Check.check :: Praxis (Annotated a)
 
-evalProgram :: String -> Praxis ()
-evalProgram program = check IProgram program >>= Eval.runProgram
-
-evalExp :: String -> Praxis Value
-evalExp exp = check IExp exp >>= Eval.runExp
+eval :: forall a. Term a => I a -> String -> Praxis Value
+eval ty text = do
+  term <- check ty text
+  let
+    snippet = case ty of
+      IProgram -> let (_ :< Program decls) = term in phantom (Snippet decls ((Phantom, Just (phantom TypeUnit)) :< Term.Unit))
+      IExp     -> phantom (Snippet [] term)
+  snippet <- Core.run snippet
+  Eval.run snippet
 
 -- Helpers for tests
 
@@ -46,7 +49,7 @@ runPretty :: (Term a, x ~ Annotation a) => Praxis (Annotated a) -> IO String
 runPretty = runWith (\x -> fold (runPrintable (pretty x) Types))
 
 runEvaluate :: String -> String -> IO String
-runEvaluate program exp = runWith show (evalProgram program >> evalExp exp)
+runEvaluate program exp = runWith show (eval IProgram program >> eval IExp exp)
 
 runWith :: (a -> String) -> Praxis a -> IO String
 runWith show p = do

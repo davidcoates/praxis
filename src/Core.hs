@@ -10,7 +10,7 @@ import           Praxis
 import           Stage
 import           Term
 
-run :: Term a => Annotated a -> Praxis (Annotated a)
+run :: Annotated Snippet -> Praxis (Annotated Snippet)
 run term = save stage $ do
   stage .= Core
   clearTerm `ifFlag` debug

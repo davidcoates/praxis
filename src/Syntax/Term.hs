@@ -262,7 +262,7 @@ decl = declSyn <|>
       expected "declaration"
 
 declSyn :: Syntax f => f Decl
-declSyn = _DeclSynSugar <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
+declSyn = _DeclSyn <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
 
 declType :: Syntax f => f DeclType
 declType = declTypeData <|> declTypeEnum
@@ -285,12 +285,12 @@ typePat = _TypePatVar <$> flavoredVarId <|>
 
 declTerm :: Syntax f => f DeclTerm
 declTerm = internal declTermFn <|> declTermRec <|> declTerm' <|> expected "term declaration/definition" where
-  declTerm' = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> expected "non-rec term declaration/definition"
+  declTerm' = prefix varId (_DeclTermSig, declTermSig) (_DeclTermDef, declTermDef) <|> internal declTermVar <|> expected "non-rec term declaration/definition"
   declTermSig = reservedSym ":" *> annotated qTy
   declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
   declTermRec = _DeclTermRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
-  declTermFn = _DeclTermFnCore <$> varId <*> captures <*> (varId <*> reservedSym ":" *> annotated ty <* reservedSym "=") <*> annotated exp
+  declTermFn = _DeclTermFn <$> varId <*> captures <*> (varId <*> reservedSym ":" *> annotated ty <* reservedSym "=") <*> annotated exp
 
 captures :: Syntax f => f Captures
 captures = special '‹' *> many (varId <*> reservedSym ":" *> annotated ty) <* special '›'
@@ -374,9 +374,9 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
   exp5 = rightWithSep (reservedId "defer") _Defer exp4 <|> expected "expression(5)"
   exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> expected "expression(4)"
   exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
-         _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
-         internal (_CaptureDetail <$> empty <*> annotated exp3) <|>
-         internal (_ClosureCore <$> varId <*> captures) <|>
+         _Do <$> reservedId "do" *> block (annotated stmt) <|>
+         internal (_Capture <$> empty <*> annotated exp3) <|>
+         internal (_Closure <$> varId <*> captures) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
@@ -385,13 +385,13 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
          _Switch <$> reservedId "switch" *> block switch <|>
          exp2 <|> expected "expression(3)"
   exp2 = mixfix <$> some (annotated (_TokOp <$> varSym <|> _TokExp <$> annotated exp1)) <|> internal exp1 <|> expected "expression(2)"
-  mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> MixfixSugar ts }) (\case { MixfixSugar ts -> Just ts; _ -> Nothing })
+  mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> Mixfix ts }) (\case { Mixfix ts -> Just ts; _ -> Nothing })
   exp1 = left _Apply exp0 <|> expected "expression(1)"
-  exp0 = _VarRefSugar <$> varIdRef <|>
+  exp0 = _VarRef <$> varIdRef <|>
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
-         internal (_SpecialiseDetail <$> annotated exp0 <*> empty) <|>
+         internal (_Specialise <$> annotated exp0 <*> empty) <|>
          tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          expected "expression(0)"
 
@@ -406,14 +406,14 @@ alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedSym "->" *> annotated exp <|> expected "case alternative"
 
 declOp :: Syntax f => f Decl
-declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
+declOp = _DeclOp <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
 
 op :: Syntax f => f Op
 op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator section"  where
   atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> expected "operator or hole"
 
 opRules :: Syntax f => f OpRules
-opRules = _OpRulesSugar <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
+opRules = _OpRulesList <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
           internal (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
           internal (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
 

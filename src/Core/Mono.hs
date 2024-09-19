@@ -16,7 +16,7 @@ import           Term
   All polymorphic terms and types are specialised, so that the monod tree is completely monomorphic with no type variables.
 
   The following constructs are eliminated:
-  - SpecialiseDetail
+  - Specialise
 -}
 
 -- TODO !
@@ -39,15 +39,15 @@ mangleType (a :< ty) = case ty of
 
   TypeApplyOp _ t2 -> mangleType t2
 
-  TypeApply t1 t2 -> mangleType t2 ++ mangleType t1 ++ "A"
+  TypeApply t1 t2  -> mangleType t2 ++ mangleType t1 ++ "A"
 
-  TypeCon name -> mangleName name
+  TypeCon name     -> mangleName name
 
-  TypeFn t1 t2 -> mangleType t2 ++ mangleType t1 ++ "F"
+  TypeFn t1 t2     -> mangleType t2 ++ mangleType t1 ++ "F"
 
-  TypePair t1 t2 -> mangleType t1 ++ mangleType t2 ++ "P"
+  TypePair t1 t2   -> mangleType t1 ++ mangleType t2 ++ "P"
 
-  TypeUnit -> "U"
+  TypeUnit         -> "U"
 
 
 specialisedName :: Name -> [Annotated Type] -> Name

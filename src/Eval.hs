@@ -8,11 +8,12 @@ module Eval
 
 import           Common
 import qualified Env.Lazy          as Env
+import           Eval.State
+import           Eval.Value        (Value, integerToValue, valueToInteger)
+import qualified Eval.Value        as Value
 import           Praxis
 import           Stage
 import           Term
-import qualified Value
-import           Value             (Value, integerToValue, valueToInteger)
 
 import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
@@ -64,18 +65,18 @@ evalDeclTerm (_ :< decl) = case decl of
     mfix $ \values -> do
       -- Evaluate each of the functions in turn, with all of the evaluations in the environment
       -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
-      irrefMapM (\(name, value) -> vEnv %= Env.insert name value) names values
+      irrefMapM (\(name, value) -> (evalState . vEnv) %= Env.insert name value) names values
       mapM evalExp exps
     return ()
 
   DeclTermVar name _ exp -> do
     value <- evalExp exp
-    vEnv %= Env.insert name value
+    (evalState . vEnv) %= Env.insert name value
 
 
 getValue :: Source -> Name -> Praxis Value
 getValue src name = do
-  entry <- vEnv `uses` Env.lookup name
+  entry <- (evalState . vEnv) `uses` Env.lookup name
   case entry of
      Just val -> return val
      Nothing  -> throwAt src ("unknown variable " <> pretty name)
@@ -88,19 +89,19 @@ evalExp ((src, Just t) :< exp) = case exp of
     x <- evalExp x
     f x
 
+  Capture captures exp -> do
+    let names = map fst captures
+    values <- mapM (getValue src) names
+    Value.Fn fn <- evalExp exp
+    return $ Value.Fn $ \val -> save (evalState . vEnv) $ do
+      evalState . vEnv .= Env.fromList (zip names values)
+      fn val
+
   Case exp alts -> do
     val <- evalExp exp
     evalCase src val alts
 
   Cases alts -> return $ Value.Fn $ \val -> evalCase src val alts
-
-  Capture captures exp -> do
-    let names = map fst captures
-    values <- mapM (getValue src) names
-    Value.Fn fn <- evalExp exp
-    return $ Value.Fn $ \val -> save vEnv $ do
-      vEnv .= Env.fromList (zip names values)
-      fn val
 
   Con name -> do
     case t of
@@ -118,7 +119,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Lambda pat exp -> return $ Value.Fn $ \val -> forceMatch src val pat >> evalExp exp
 
-  Let bind exp -> save vEnv $ do
+  Let bind exp -> save (evalState . vEnv) $ do
     evalBind bind
     evalExp exp
 
@@ -151,7 +152,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Var var -> getValue src var
 
-  Where exp decls -> save vEnv $ do
+  Where exp decls -> save (evalState . vEnv) $ do
     traverse evalDeclTerm decls
     evalExp exp
 
@@ -167,7 +168,7 @@ evalSwitch src ((condExp,bodyExp):alts) = do
 evalCase :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 evalCase src val [] = throwAt src ("no matching pattern for value " <> pretty (show val))
 evalCase src val ((pat,exp):alts) = case tryMatch val pat of
-  Just doMatch -> save vEnv $ do
+  Just doMatch -> save (evalState . vEnv) $ do
     doMatch
     evalExp exp
   Nothing ->
@@ -187,7 +188,7 @@ tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
 tryMatch val ((_, Just t) :< pat) = case pat of
 
   PatAt name pat
-    -> (\doMatch -> do { vEnv %= Env.insert name val; doMatch }) <$> tryMatch val pat
+    -> (\doMatch -> do { evalState . vEnv %= Env.insert name val; doMatch }) <$> tryMatch val pat
 
   PatData name pat | Value.Data name' val <- val
     -> if name == name' then tryMatch val pat else Nothing
@@ -212,7 +213,7 @@ tryMatch val ((_, Just t) :< pat) = case pat of
     -> Just (return ())
 
   PatVar name
-    -> Just $ vEnv %= Env.insert name val
+    -> Just $ evalState . vEnv %= Env.insert name val
 
   _
     -> Nothing

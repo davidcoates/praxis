@@ -33,11 +33,11 @@ import qualified Data.Set            as Set
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   -- TODO pretty ugly to do this here
-  tEnv %%= traverse (LEnv.value normalize)
-  typeCheckState . requirements %%= (\set -> Set.fromList <$> traverse normalize (Set.toList set))
-  typeCheckState . assumptions %%= (\set -> Set.fromList <$> traverse (\c -> view value <$> normalize (phantom c)) (Set.toList set))
+  checkState . typeState . tEnv %%= traverse (LEnv.value normalize)
+  checkState . typeState . typeSolve . requirements %%= (\set -> Set.fromList <$> traverse normalize (Set.toList set))
+  checkState . typeState . typeSolve . assumptions %%= (\set -> Set.fromList <$> traverse (\c -> view value <$> normalize (phantom c)) (Set.toList set))
   term <- normalize term
-  term <- solve typeCheckState reduce term
+  term <- solve (checkState . typeState . typeSolve) reduce term
   term <- tryDefault term
   return term
 
@@ -224,7 +224,7 @@ reduce disambiguate constraint = assertNormalised (phantom constraint) >> case c
   where
     reduceTypeConInstance :: Name -> Name -> [Annotated Type] -> Praxis (Reduction TypeConstraint)
     reduceTypeConInstance cls name args = do
-      l <- use iEnv
+      l <- use (checkState . iEnv)
       let Just instances = Env.lookup name l
       case Map.lookup cls instances of
         Just resolver -> case resolver args of
@@ -260,7 +260,7 @@ solved resolve = solvedWithSubgoals resolve []
 -- note: assumption is the subgoals are not affected by the solution
 solvedWithSubgoals :: Resolver -> [Subgoal TypeConstraint] -> Praxis (Reduction TypeConstraint)
 solvedWithSubgoals resolve subgoals = do
-  tEnv %%= traverse (LEnv.value (normalize . sub resolve))
+  checkState . typeState . tEnv %%= traverse (LEnv.value (normalize . sub resolve))
   return (Progress (Just (resolve, normalize)) subgoals)
 
 are :: [(Name, Type)] -> Resolver
@@ -368,7 +368,7 @@ truthAnd a b = truthNot (truthOr (truthNot a) (truthNot b))
 
 isAffine :: Annotated Type -> Praxis Truth
 isAffine t = do
-  assumptions' <- use (typeCheckState . assumptions)
+  assumptions' <- use (checkState . typeState . typeSolve . assumptions)
   if copy t `Set.member` assumptions'
     then return No
     else isAffine' t
@@ -385,7 +385,7 @@ isAffine t = do
 
 isTypeConAffine :: Name -> [Annotated Type] -> Praxis Truth
 isTypeConAffine name args = do
-  l <- use iEnv
+  l <- use (checkState . iEnv)
   let Just instances = Env.lookup name l
   case Map.lookup "Copy" instances of
     Just resolver -> case resolver args of
@@ -447,7 +447,7 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
     constraint <- normalize constraint
     checkConstraint constraint
     constraints <- expandConstraint (view source constraint) (view value constraint)
-    typeCheckState . assumptions %= Set.union (Set.fromList constraints)
+    checkState . typeState . typeSolve . assumptions %= Set.union (Set.fromList constraints)
 
   expandConstraint :: Source -> TypeConstraint -> Praxis [TypeConstraint]
   expandConstraint src constraint = ((constraint:) <$>) $ case constraint of
@@ -461,7 +461,7 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
     where
       expandTypeConInstance :: Name -> Name -> [Annotated Type] -> Praxis [TypeConstraint]
       expandTypeConInstance cls name args = do
-        l <- use iEnv
+        l <- use (checkState . iEnv)
         let Just instances = Env.lookup name l
         case Map.lookup cls instances of
           Just resolver -> case resolver args of

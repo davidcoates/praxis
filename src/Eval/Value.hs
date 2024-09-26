@@ -1,4 +1,4 @@
-module Value
+module Eval.Value
   ( Value(..)
   , integerToValue
   , valueToInteger

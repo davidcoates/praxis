@@ -12,16 +12,20 @@ module Inbuilts
   , capture
   ) where
 
+import           Check.State
 import qualified Check.Type.Rename         as Rename
 import           Common
 import qualified Env.Lazy
 import qualified Env.Linear
 import qualified Env.Strict
+import           Eval.State
+import           Eval.Value                (Value (..), integerToValue,
+                                            valueToInteger)
+import qualified Eval.Value                as Value
 import           Introspect
 import           Parse                     (parse)
 import           Praxis
 import           Term                      hiding (Lit (..), Pair, Unit)
-import           Value
 
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import qualified Control.Monad.Trans.State as State (get)
@@ -259,22 +263,22 @@ inbuilts =
     liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
 
 mono :: String -> Annotated Type
-mono s = runInternal (kEnv .= initialKEnv >> parse s :: Praxis (Annotated Type))
+mono s = runInternal (checkState . kindState . kEnv .= initialKEnv >> parse s :: Praxis (Annotated Type))
 
 poly :: String -> Annotated QType
-poly s = runInternal (kEnv .= initialKEnv >> parse s :: Praxis (Annotated QType))
+poly s = runInternal (checkState . kindState . kEnv .= initialKEnv >> parse s :: Praxis (Annotated QType))
 
 runWithPrelude :: Praxis a -> IO (Either String a)
 runWithPrelude c = runPraxis (importPrelude >> c) where
   importPrelude :: Praxis ()
   importPrelude = do
-    kEnv .= initialKEnv
-    iEnv .= initialIEnv
+    checkState . iEnv .= initialIEnv
+    checkState . kindState . kEnv .= initialKEnv
     inbuilts <- mapM (\(n, t, v) -> (\n -> (n, t, v)) <$> Rename.intro n) inbuilts
     let initialTEnv = Env.Linear.fromList $ map (\(n, t, _) -> (n, t)) inbuilts
-    tEnv .= initialTEnv
+    checkState . typeState . tEnv .= initialTEnv
     let initialVEnv = Env.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
-    vEnv .= initialVEnv
+    evalState . vEnv .= initialVEnv
     flags . silent .= True
     parse prelude :: Praxis (Annotated Program)
     flags . silent .= False

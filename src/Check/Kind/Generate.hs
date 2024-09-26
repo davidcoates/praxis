@@ -25,7 +25,7 @@ import qualified Data.Set        as Set
 
 
 require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
-require ((src, reason) :< con) = kindCheckState . requirements %= Set.insert ((src, Just reason) :< Requirement con)
+require ((src, reason) :< con) = checkState . kindState . kindSolve . requirements %= Set.insert ((src, Just reason) :< Requirement con)
 
 getKind :: (Term a, Annotation a ~ Annotated Kind) => Annotated a -> Annotated Kind
 getKind term = view (annotation . just) term
@@ -34,7 +34,7 @@ run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- generate term
   display "annotated term" term `ifFlag` debug
-  requirements' <- use (kindCheckState . requirements)
+  requirements' <- use (checkState . kindState . kindSolve . requirements)
   display "requirements" (separate "\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
   return term
 
@@ -49,10 +49,10 @@ generate term = ($ term) $ case typeof (view value term) of
 
 introKind :: Source -> Name -> Annotated Kind -> Praxis ()
 introKind src name kind = do
-  entry <- kEnv `uses` Env.lookup name
+  entry <- (checkState . kindState . kEnv) `uses` Env.lookup name
   case entry of
     Just _ -> throwAt src $ "type " <> pretty name <> " redeclared"
-    _      -> kEnv %= Env.insert name kind
+    _      -> checkState . kindState . kEnv %= Env.insert name kind
 
 
 generateType :: Annotated Type -> Praxis (Annotated Type)
@@ -74,7 +74,7 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       return (phantom KindType :< TypeApplyOp f x)
 
     TypeCon con -> do
-      entry <- kEnv `uses` Env.lookup con
+      entry <- (checkState . kindState . kEnv) `uses` Env.lookup con
       case entry of
         Just k  -> return (k :< TypeCon con)
         Nothing -> throwAt src $ "type " <> pretty con <> " is not in scope"
@@ -112,7 +112,7 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
       return (phantom KindType :< TypePair t1 t2)
 
     TypeVar f var -> do
-      Just k <- kEnv `uses` Env.lookup var
+      Just k <- (checkState . kindState . kEnv) `uses` Env.lookup var
       return (k :< TypeVar f var)
 
 
@@ -154,7 +154,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
 
     k <- freshKindUni
     when (mode == DataRec) $ introKind src name k
-    (args, alts) <- save kEnv $ do
+    (args, alts) <- save (checkState . kindState . kEnv) $ do
         args <- traverse generate args
         alts <- traverse generate alts
         return (args, alts)
@@ -184,7 +184,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
           , ("Dispose",        deduce dispose)
           ]
 
-    iEnv %= Env.insert name instances
+    checkState . iEnv %= Env.insert name instances
     return $ (src, Just k) :< DeclTypeData mode name args alts
 
   DeclTypeEnum name alts -> do
@@ -197,7 +197,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
         , ("Copy",    \_ -> (Trivial, IsInstance))
         , ("Capture", \_ -> (Trivial, IsInstance))
         ]
-    iEnv %= Env.insert name instances
+    checkState . iEnv %= Env.insert name instances
     return $ (src, Just k) :< DeclTypeEnum name alts
 
 

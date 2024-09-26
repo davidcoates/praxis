@@ -10,6 +10,7 @@ module Check.Kind.Solve
   ) where
 
 import           Check.Solve
+import           Check.State
 import           Common
 import           Introspect
 import           Praxis
@@ -24,7 +25,7 @@ import qualified Data.Set    as Set
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
-  term <- solve kindCheckState reduce term
+  term <- solve (checkState . kindState . kindSolve) reduce term
   tryDefault term
 
 reduce :: Disambiguating (Reducer KindConstraint)
@@ -77,7 +78,7 @@ reduce disambiguate = \case
 -- Rewrite helpers
 solved :: Resolver -> Praxis (Reduction KindConstraint)
 solved resolve = do
-  kEnv %%= traverse (pure . sub resolve)
+  checkState . kindState . kEnv %%= traverse (pure . sub resolve)
   return (solution (resolve, pure))
 
 is :: Name -> Kind -> Resolver

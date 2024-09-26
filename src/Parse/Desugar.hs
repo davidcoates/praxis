@@ -12,6 +12,7 @@ module Parse.Desugar
 import           Common
 import           Introspect
 import qualified Parse.Mixfix        as Mixfix
+import           Parse.State
 import           Praxis
 import           Print
 import           Term
@@ -210,7 +211,7 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
     let eq = listToMaybe eqPrecs
 
     -- Add operator to levels
-    opLevels <- use (opContext . levels)
+    opLevels <- use (parseState . opContext . levels)
     let opLevels' = case eq of Nothing                 -> opLevels ++ [[view value op]]
                                Just (_ :< Prec EQ op') -> map (\ops -> if op' `elem` ops then view value op : ops else ops) opLevels
 
@@ -226,23 +227,23 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
       (Just _,   Just _) -> noAssoc >> return Closed
 
     -- Add operator to definitions
-    opDefns <- use (opContext . defns)
+    opDefns <- use (parseState . opContext . defns)
     when (view value op `Map.member` opDefns) $ throwAt src ("operator already defined" :: String)
     let opDefns' = Map.insert (view value op) (name, fixity) opDefns
 
     -- Add operator to precedence graph
-    opPrec <- use (opContext . prec)
+    opPrec <- use (parseState . opContext . prec)
     let opPrec' = addOp (view value op) (map (view value) precs') indexOf opPrec
     unless (isAcyclic opPrec') $ throwAt src ("operator precedence forms a cycle" :: String)
 
-    opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
+    parseState . opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
 
     decls <- desugarDecls decls
     return decls
 
   DeclSynSugar name ty -> do
     ty <- desugar ty
-    typeSynonyms %= Map.insert name ty
+    parseState . typeSynonyms %= Map.insert name ty
     decls <- desugarDecls decls
     return decls
 
@@ -280,7 +281,7 @@ desugarType (a :< ty) = case ty of
 
   -- TODO allow more generic type synonyms
   TypeCon name -> do
-    syn <- typeSynonyms `uses` Map.lookup name
+    syn <- (parseState . typeSynonyms) `uses` Map.lookup name
     return $ case syn of
       Just ty -> ty
       Nothing -> a :< TypeCon name

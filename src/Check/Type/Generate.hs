@@ -33,7 +33,7 @@ import           Prelude          hiding (log)
 
 
 require :: Tag (Source, TypeReason) TypeConstraint -> Praxis ()
-require ((src, reason) :< con) = typeCheckState . requirements %= Set.insert ((src, Just reason) :< Requirement con)
+require ((src, reason) :< con) = checkState . typeState . typeSolve . requirements %= Set.insert ((src, Just reason) :< Requirement con)
 
 requires :: [Tag (Source, TypeReason) TypeConstraint] -> Praxis ()
 requires = mapM_ require
@@ -71,20 +71,20 @@ specialiseQType src name (_ :< qTy) = case qTy of
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
 join src branch1 branch2 = do
-  e0 <- use tEnv
+  e0 <- use (checkState . typeState . tEnv)
   x <- branch1
-  e1 <- use tEnv
-  tEnv .= e0
+  e1 <- use (checkState . typeState . tEnv)
+  checkState . typeState .tEnv .= e0
   y <- branch2
-  e2 <- use tEnv
-  tEnv .= LEnv.join e1 e2
+  e2 <- use (checkState . typeState . tEnv)
+  checkState . typeState . tEnv .= LEnv.join e1 e2
   return (x, y)
 
 closure :: Source -> Praxis (Tag (Annotated Type) Exp) -> Praxis (Tag (Annotated Type) Exp)
 closure src exp = do
-  e1 <- use tEnv
+  e1 <- use (checkState . typeState . tEnv)
   (t :< x) <- scope src exp
-  e2 <- use tEnv
+  e2 <- use (checkState . typeState . tEnv)
   let captures = Env.toList (LEnv.touched e1 e2)
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, TypeReasonCaptured name) :< capture t | (name, _ :< Mono t) <- captures ]
@@ -92,14 +92,14 @@ closure src exp = do
 
 scope :: Source -> Praxis a -> Praxis a
 scope src block = do
-  e1 <- use tEnv
+  e1 <- use (checkState . typeState . tEnv)
   x <- block
-  e2 <- use tEnv
+  e2 <- use (checkState . typeState . tEnv)
   let
     scopedVars = e2 `LEnv.difference` e1
     unusedVars = [ (n, view LEnv.value e) | (n, e) <- Env.toList scopedVars, view LEnv.used e == 0 && view LEnv.read e == 0 ]
   series $ [ throwAt src ("variable " <> pretty n <> " is not used") | (n, _) <- unusedVars, head n /= '_' ] -- hacky
-  tEnv .= e2 `LEnv.difference` scopedVars
+  checkState . typeState . tEnv .= e2 `LEnv.difference` scopedVars
   return x
 
 -- | Marks a variable as read, returning the view-type of the variable and the view ref-name.
@@ -107,42 +107,42 @@ scope src block = do
 readVar :: Source -> Name -> Praxis (Name, Annotated Type)
 readVar src name = do
   r@(_ :< TypeRef refName) <- freshRef
-  Just entry <- tEnv `uses` Env.lookup name
+  Just entry <- (checkState . typeState . tEnv) `uses` Env.lookup name
   (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
   when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> pretty name <> " read after use"
   -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
   when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> pretty name
-  tEnv %= LEnv.incRead name
+  checkState . typeState . tEnv %= LEnv.incRead name
   return $ (refName, phantom (TypeApplyOp r t))
 
 -- | Marks a variable as used, returning the type of the variable.
 -- A copy constraint will be generated if the variable has already been used or has been captured.
 useVar :: Source -> Name -> Praxis (Annotated Type, Maybe Specialisation)
 useVar src name = do
-  Just entry <- tEnv `uses` Env.lookup name
+  Just entry <- (checkState . typeState . tEnv) `uses` Env.lookup name
   (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
-  tEnv %= LEnv.incUsed name
+  checkState . typeState . tEnv %= LEnv.incUsed name
   unless (isJust specialisation) $ do
     requires [ (src, TypeReasonMultiUse name) :< copy t | view LEnv.used entry > 0 ]
   return (t, specialisation)
 
 introType :: Source -> Name -> Annotated QType -> Praxis ()
 introType src name qTy = do
-  entry <- tEnv `uses` Env.lookup name
+  entry <- (checkState . typeState . tEnv) `uses` Env.lookup name
   case entry of
     Just _ -> throwAt src $ "variable " <> pretty name <> " redeclared"
-    _      -> tEnv %= LEnv.insert name qTy
+    _      -> checkState . typeState . tEnv %= LEnv.insert name qTy
 
 introConType :: Source -> Name -> Annotated QType -> Praxis ()
 introConType src name qTy = do
-  l <- use cEnv
+  l <- use (checkState . typeState . cEnv)
   case Env.lookup name l of
     Just _ -> throwAt src $ "constructor " <> pretty name <> " redeclared"
-    _      -> cEnv %= Env.insert name qTy
+    _      -> checkState . typeState . cEnv %= Env.insert name qTy
 
 getConType :: Source -> Name -> Praxis (Annotated QType)
 getConType src name = do
-  l <- use cEnv
+  l <- use (checkState . typeState . cEnv)
   case Env.lookup name l of
     Just t  -> return t
     Nothing -> throwAt src $ "constructor " <> pretty name <> " is not in scope"
@@ -151,11 +151,11 @@ run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- generate term
   display "annotated term" term `ifFlag` debug
-  requirements' <- use (typeCheckState . requirements)
+  requirements' <- use (checkState . typeState . typeSolve . requirements)
   (`ifFlag` debug) $ do
     display "requirements" (separate "\n" (nub . sort $ Set.toList requirements'))
-    use tEnv >>= display "environment"
-    use cEnv >>= display "constructor environment"
+    use (checkState . typeState . tEnv) >>= display "environment"
+    use (checkState . typeState . cEnv) >>= display "constructor environment"
   return term
 
 generate :: Term a => Annotated a -> Praxis (Annotated a)
@@ -341,12 +341,12 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
   Read var exp -> do
     (refName, refType) <- readVar src var
-    Just entry <- tEnv `uses` Env.lookup var
-    tEnv %= Env.adjust (const (LEnv.mkEntry (mono refType))) var
+    Just entry <- (checkState . typeState . tEnv) `uses` Env.lookup var
+    checkState . typeState . tEnv %= Env.adjust (const (LEnv.mkEntry (mono refType))) var
     exp <- generateExp exp
-    Just entry' <- tEnv `uses` Env.lookup var
+    Just entry' <- (checkState . typeState . tEnv) `uses` Env.lookup var
     unless (view LEnv.used entry' > 0) $ throwAt src ("variable " <> pretty var <> " is not used in read")
-    tEnv %= Env.adjust (const entry) var
+    checkState . typeState . tEnv %= Env.adjust (const entry) var
     let t = getType exp
     require $ (src, TypeReasonRead var) :< TypeIsRefFree t refName
     return (t :< Read var exp)

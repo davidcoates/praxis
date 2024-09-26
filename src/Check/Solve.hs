@@ -28,7 +28,7 @@ module Check.Solve
   , tautology
   ) where
 
-import           Check.State
+import           Check.State          (SolveState, assumptions, requirements)
 import           Common
 import           Introspect
 import           Praxis
@@ -97,7 +97,7 @@ solve :: forall c a.
   , Term (Requirement c)
   , Pretty (Annotation (Requirement c))
   , Ord (Annotation (Requirement c))
-  ) => Lens' PraxisState (State c) -> Disambiguating (Reducer c) -> Annotated a -> Praxis (Annotated a)
+  ) => Lens' PraxisState (SolveState c) -> Disambiguating (Reducer c) -> Annotated a -> Praxis (Annotated a)
 
 solve state reduce term = do
   requirements' <- Set.toList <$> use (state . requirements)
@@ -160,7 +160,7 @@ reduceGoals :: forall c.
   ( Term c
   , Ord c
   , Pretty (Annotation (Requirement c))
-  ) => Lens' PraxisState (State c) -> Reducer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
+  ) => Lens' PraxisState (SolveState c) -> Reducer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
 
 reduceGoals state reduce = \case
 
@@ -199,7 +199,7 @@ reduceGoals state reduce = \case
 reduceTree :: forall c.
   ( Ord c
   , Term c
-  ) => Lens' PraxisState (State c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
+  ) => Lens' PraxisState (SolveState c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
 
 -- Note: The supplied assumption may only be used locally (i.e. within 'tree').
 -- This means the assumption state needs to be reverted before exiting, to avoid the local assumption *or any consequents* from escaping the local context.

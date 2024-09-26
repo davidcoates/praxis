@@ -7,7 +7,7 @@ module Check.Rename
   , introMany
   ) where
 
-import           Check.State
+import           Check.State     (RenameState, counts, scopes)
 import           Common
 import           Praxis
 import           Print
@@ -18,7 +18,7 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 
-disambiguate :: Lens' PraxisState (State c) -> Source -> (Flavor, Name) -> Praxis Name
+disambiguate :: Lens' PraxisState RenameState -> Source -> (Flavor, Name) -> Praxis Name
 disambiguate state src (flavor, name) = do
   entry <- (state . scopes) `uses` Map.lookup name
   case entry of
@@ -27,7 +27,7 @@ disambiguate state src (flavor, name) = do
       | otherwise         -> throwAt src $ "variable " <> pretty name <> " has the wrong flavor"
     Nothing    -> throwAt src $ "variable " <> pretty name <> " is not in scope"
 
-intro :: Lens' PraxisState (State c) -> (Flavor, Name) -> Praxis Name
+intro :: Lens' PraxisState RenameState -> (Flavor, Name) -> Praxis Name
 intro state (flavor, name) = do
   entry <- (state . counts) `uses` Map.lookup name
   let count = case entry of { Nothing -> 0; Just count -> count }
@@ -35,7 +35,7 @@ intro state (flavor, name) = do
   state . scopes %= Map.insert name (flavor, count)
   return $ name ++ "_" ++ show count
 
-introMany :: Lens' PraxisState (State c) -> Source -> [(Flavor, Name)] -> Praxis [Name]
+introMany :: Lens' PraxisState RenameState -> Source -> [(Flavor, Name)] -> Praxis [Name]
 introMany state src vars = do
   let names = map snd vars
   when (not (isUnique names)) $ throwAt src ("variables are not distinct" :: String)

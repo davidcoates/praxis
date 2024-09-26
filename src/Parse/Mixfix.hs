@@ -4,6 +4,7 @@ module Parse.Mixfix
 where
 
 import           Common              hiding (asum)
+import           Parse.State
 import           Praxis
 import           Print
 import           Term                hiding (Derivation)
@@ -56,9 +57,9 @@ closure g = listArray (bounds g) (map (concatMap (reachable g)) (elems g))
 
 parse :: Source -> [Annotated Tok] -> Praxis (Annotated Exp)
 parse src ts = do
-  opLevels <- use (opContext . levels)
-  opDefns <- use (opContext . defns)
-  opPrec <- use (opContext . prec)
+  opLevels <- use (parseState . opContext . levels)
+  opDefns <- use (parseState . opContext . defns)
+  opPrec <- use (parseState . opContext . prec)
   run src (mixfix opDefns opLevels (closure opPrec)) ts -- TODO skip the closure?
 
 anyExp :: Parser (Annotated Exp)

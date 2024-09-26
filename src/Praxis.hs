@@ -7,23 +7,6 @@ module Praxis
   ( Praxis
   , PraxisState
 
-  -- | State types
-  , CEnv(..)
-  , InstanceOrigin(..)
-  , Instance(..)
-  , IEnv(..)
-  , KEnv(..)
-  , TEnv(..)
-  , VEnv(..)
-
-  -- | Operators
-  , Fixity(..)
-  , OpDefns
-  , OpContext(..)
-  , defns
-  , levels
-  , prec
-
   , warn
   , warnAt
   , throw
@@ -47,17 +30,10 @@ module Praxis
   , flags
   , fresh
   , stage
-  , opContext
-  , cEnv
-  , iEnv
-  , kEnv
-  , tEnv
-  , vEnv
-  , fEnv
-  , typeSynonyms
-  , typeCheckState
-  , kindCheckState
+  , parseState
+  , checkState
   , coreState
+  , evalState
 
   , freshKindUni
   , freshRef
@@ -75,24 +51,22 @@ module Praxis
 import qualified Check.State                  as Check
 import           Common
 import qualified Core.State                   as Core
+import qualified Eval.State                   as Eval
+import qualified Parse.State                  as Parse
 import           Print
 import           Stage
 import           Term
-import           Value
 
 import           Control.Applicative          (empty, liftA2)
 import           Control.Concurrent
 import           Control.Lens                 (Lens', makeLenses, traverseOf)
 import           Control.Monad.Trans.Class    (MonadTrans (..))
 import qualified Control.Monad.Trans.State    as State (get, modify, put)
-import           Data.Array                   (array)
-import           Data.Graph                   (Graph)
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Monoid.Colorful         as Colored
 import qualified Env.Linear
-import qualified Env.Strict
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 
@@ -112,48 +86,14 @@ data Fresh = Fresh
   , _freshVars          :: Map Name Int
   }
 
-type CEnv = Env.Strict.Env (Annotated QType)
-
-data InstanceOrigin = Inbuilt | Trivial | User
-  deriving Eq
-
-data Instance = IsInstance | IsInstanceOnlyIf [TypeConstraint]
-
-type IEnv = Env.Strict.Env (Map Name ([Annotated Type] -> (InstanceOrigin, Instance)))
-
-type KEnv = Env.Strict.Env (Annotated Kind)
-
-type TEnv = Env.Linear.Env (Annotated QType)
-
-type VEnv = Env.Strict.Env Value
-
-data Fixity = Infix (Maybe Assoc)
-            | Prefix
-            | Postfix
-            | Closed
-  deriving (Eq, Ord)
-
-type OpDefns = Map Op (Name, Fixity)
-
-data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Graph }
-
-makeLenses ''OpContext
-
 data PraxisState = PraxisState
-  { _flags          :: Flags               -- ^ Flags
-  , _fresh          :: Fresh
-  , _stage          :: Stage               -- ^ Current stage of compilation
-  , _opContext      :: OpContext
-  , _cEnv           :: CEnv                -- ^ Constructor environment
-  , _iEnv           :: IEnv                -- ^ Instance environment
-  , _kEnv           :: KEnv                -- ^ Kind environment
-  , _tEnv           :: TEnv                -- ^ Type environment
-  , _vEnv           :: VEnv                -- ^ Value environment
-  , _fEnv           :: VEnv                -- ^ Frame (value) environment -- TODO should be Eval internal
-  , _typeSynonyms   :: Map Name (Annotated Type) -- ^ Type synonyms
-  , _typeCheckState :: Check.State TypeConstraint
-  , _kindCheckState :: Check.State KindConstraint
-  , _coreState      :: Core.State
+  { _flags      :: Flags               -- ^ Flags
+  , _fresh      :: Fresh
+  , _stage      :: Stage               -- ^ Current stage of compilation
+  , _parseState :: Parse.State
+  , _checkState :: Check.State
+  , _coreState  :: Core.State
+  , _evalState  :: Eval.State
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -162,31 +102,24 @@ defaultFlags :: Flags
 defaultFlags = Flags { _debug = False, _silent = False }
 
 defaultFresh = Fresh
-  { _freshKindUnis    = map (("^k"++) . show) [0..]
-  , _freshRefs        = map (("'l"++) . show) [0..]
+  { _freshKindUnis      = map (("^k"++) . show) [0..]
+  , _freshRefs          = map (("'l"++) . show) [0..]
   , _freshTypeUniPlains = map (("^t"++) . show) [0..]
   , _freshTypeUniRefs   = map (("^r"++) . show) [0..]
   , _freshTypeUniValues = map (("^s"++) . show) [0..]
   , _freshTypeUniViews  = map (("^v"++) . show) [0..]
-  , _freshVars        = Map.empty
+  , _freshVars          = Map.empty
   }
 
 emptyState :: PraxisState
 emptyState = PraxisState
-  { _flags          = defaultFlags
-  , _fresh          = defaultFresh
-  , _stage          = Unknown
-  , _opContext      = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
-  , _cEnv           = Env.Strict.empty
-  , _iEnv           = Env.Strict.empty
-  , _kEnv           = Env.Strict.empty
-  , _tEnv           = Env.Linear.empty
-  , _vEnv           = Env.Strict.empty
-  , _fEnv           = Env.Strict.empty
-  , _typeSynonyms   = Map.empty
-  , _typeCheckState = Check.emptyState
-  , _kindCheckState = Check.emptyState
-  , _coreState      = Core.emptyState
+  { _flags      = defaultFlags
+  , _fresh      = defaultFresh
+  , _stage      = Unknown
+  , _parseState = Parse.emptyState
+  , _checkState = Check.emptyState
+  , _coreState  = Core.emptyState
+  , _evalState  = Eval.emptyState
   }
 
 makeLenses ''Flags
@@ -330,7 +263,7 @@ freshVar var = do
 
 requireMain :: Praxis ()
 requireMain = do
-  ty <- tEnv `uses` Env.Linear.lookup "main_0"
+  ty <- (checkState . Check.typeState . Check.tEnv) `uses` Env.Linear.lookup "main_0"
   case ty of
     Nothing -> throw ("missing main function" :: String)
     Just ty

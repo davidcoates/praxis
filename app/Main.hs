@@ -2,12 +2,13 @@ module Main where
 
 import           Common
 import qualified Env.Strict         as Env
+import           Eval.State         (vEnv)
+import           Eval.Value         (Value (..))
 import           Inbuilts           (runWithPrelude)
 import           Introspect
 import           Praxis
 import           Term
 import           Util               (eval)
-import           Value
 
 import           Control.Monad      (void, when)
 import           Data.List          (delete)
@@ -86,8 +87,8 @@ help = Praxis.abort helpStr where
 runMain :: Praxis ()
 runMain = do
   requireMain
-  Just (Fn f) <- vEnv `uses` Env.lookup "main_0"
-  f Value.Unit
+  Just (Fn f) <- (evalState . vEnv) `uses` Env.lookup "main_0"
+  f Eval.Value.Unit
   return ()
 
 forever :: Praxis a -> Praxis a

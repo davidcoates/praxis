@@ -18,13 +18,13 @@ import qualified Check
 import           Common
 import qualified Core
 import qualified Eval
+import           Eval.Value
 import           Inbuilts
 import           Introspect
 import qualified Parse
 import           Praxis
 import           Print
 import           Term
-import           Value
 
 
 parse :: forall a. Term a => I a -> String -> Praxis (Annotated a)

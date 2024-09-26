@@ -7,11 +7,12 @@ module Eval
 
 import           Common
 import qualified Env.Strict        as Env
+import           Eval.State
+import           Eval.Value        (Value, integerToValue, valueToInteger)
+import qualified Eval.Value        as Value
 import           Praxis
 import           Stage
 import           Term
-import qualified Value
-import           Value             (Value, integerToValue, valueToInteger)
 
 import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
@@ -37,22 +38,22 @@ evalDecl (_ :< decl) = case decl of
 
     DeclTermFn name captures (arg, argTy) exp -> do
       let
-        fn = Value.Fn $ \val -> save fEnv $ do
-          fEnv %= Env.insert arg val
+        fn = Value.Fn $ \val -> save (evalState . fEnv) $ do
+          evalState . fEnv %= Env.insert arg val
           evalExp exp
-      vEnv %= Env.insert name fn
+      evalState . vEnv %= Env.insert name fn
 
     DeclTermVar name _ exp -> do
       value <- evalExp exp
-      vEnv %= Env.insert name value
+      evalState . vEnv %= Env.insert name value
 
   DeclType _    -> return ()
 
 
 getValue :: Source -> Name -> Praxis Value
 getValue src name = do
-  entry1 <- vEnv `uses` Env.lookup name
-  entry2 <- fEnv `uses` Env.lookup name
+  entry1 <- (evalState . vEnv) `uses` Env.lookup name
+  entry2 <- (evalState . fEnv) `uses` Env.lookup name
   case (entry1, entry2) of
      (Just val, Nothing) -> return val
      (Nothing, Just val) -> return val
@@ -74,8 +75,8 @@ evalExp ((src, Just t) :< exp) = case exp of
     let
       wrap :: Value -> Value
       wrap (Value.Polymorphic polyFun) = Value.Polymorphic (\sp -> wrap (polyFun sp))
-      wrap (Value.Fn fn) = Value.Fn $ \val -> save fEnv $ do
-        fEnv .= Env.fromList (zip names values)
+      wrap (Value.Fn fn) = Value.Fn $ \val -> save (evalState . fEnv) $ do
+        evalState . fEnv .= Env.fromList (zip names values)
         fn val
     return (wrap fn)
 
@@ -97,7 +98,7 @@ evalExp ((src, Just t) :< exp) = case exp of
     Value.Bool cond <- evalExp condExp
     if cond then evalExp thenExp else evalExp elseExp
 
-  Let bind exp -> save fEnv $ do
+  Let bind exp -> save (evalState . fEnv) $ do
     evalBind bind
     evalExp exp
 
@@ -144,7 +145,7 @@ evalSwitch src ((condExp,bodyExp):alts) = do
 evalCase :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 evalCase src val [] = throwAt src ("no matching pattern for value " <> pretty (show val))
 evalCase src val ((pat,exp):alts) = case tryMatch val pat of
-  Just doMatch -> save fEnv $ do
+  Just doMatch -> save (evalState . fEnv) $ do
     doMatch
     evalExp exp
   Nothing ->
@@ -164,7 +165,7 @@ tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
 tryMatch val ((_, Just t) :< pat) = case pat of
 
   PatAt name pat
-    -> (\doMatch -> do { fEnv %= Env.insert name val; doMatch }) <$> tryMatch val pat
+    -> (\doMatch -> do { evalState . fEnv %= Env.insert name val; doMatch }) <$> tryMatch val pat
 
   PatData name pat | Value.Data name' val <- val
     -> if name == name' then tryMatch val pat else Nothing
@@ -189,7 +190,7 @@ tryMatch val ((_, Just t) :< pat) = case pat of
     -> Just (return ())
 
   PatVar name
-    -> Just $ fEnv %= Env.insert name val
+    -> Just $ evalState . fEnv %= Env.insert name val
 
   _
     -> Nothing

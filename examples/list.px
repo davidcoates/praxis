@@ -1,0 +1,19 @@
+datatype rec List a = Nil () | Cons (a, List a)
+
+rec
+  map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
+  map f = cases
+    Nil ()       -> Nil ()
+    Cons (x, xs) -> Cons (f x, map f xs)
+
+rec
+  sum : forall &r. &r List I32 -> I32
+  sum = cases
+    Nil ()       -> 0
+    Cons (x, xs) -> x + sum xs
+
+z : I32
+z = do
+  let xs = Cons (1, Cons (2, Cons (3, Nil ())))
+  let ys = map (\x -> x * 2) &xs
+  sum &ys

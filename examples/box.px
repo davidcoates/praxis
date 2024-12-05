@@ -1,0 +1,11 @@
+datatype Box &r a = Box &r a
+
+datatype rec List a = Nil () | Cons (a, List a)
+
+box = Box "x"
+
+y = do
+  let xs = Cons (1, Cons (2, Cons (3, Nil ())))
+  read xs in do
+    Box xs
+    () -- Note, Box xs can't escape the read

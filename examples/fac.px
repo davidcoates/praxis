@@ -1,0 +1,4 @@
+rec
+  fac = cases
+    0 -> 1 : I64
+    n -> n * fac (n - 1)

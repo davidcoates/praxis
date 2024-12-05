@@ -1,0 +1,6 @@
+
+fst : forall a. (a, a) -> a
+fst (a, b) = a
+
+
+

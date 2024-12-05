@@ -1,0 +1,8 @@
+rec
+  is_even = cases
+    0 -> True
+    n -> is_odd (n - 1)
+
+  is_odd = cases
+    0 -> False
+    n -> is_even (n - 1)

@@ -7,7 +7,7 @@ module Check.State
   , counts
   , scopes
 
-  , emptypeState
+  , emptyState
   ) where
 
 import           Common
@@ -29,8 +29,8 @@ data State c = State
 
 makeLenses ''State
 
-emptypeState :: State c
-emptypeState = State
+emptyState :: State c
+emptyState = State
   { _requirements   = Set.empty
   , _assumptions    = Set.empty
   , _counts         = Map.empty

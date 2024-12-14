@@ -167,8 +167,8 @@ defaultFresh = Fresh
   , _freshVars        = Map.empty
   }
 
-emptypeState :: PraxisState
-emptypeState = PraxisState
+emptyState :: PraxisState
+emptyState = PraxisState
   { _flags          = defaultFlags
   , _fresh          = defaultFresh
   , _stage          = Unknown
@@ -179,8 +179,8 @@ emptypeState = PraxisState
   , _tEnv           = Env.Linear.empty
   , _vEnv           = Env.Lazy.empty
   , _typeSynonyms   = Map.empty
-  , _typeCheckState = Check.emptypeState
-  , _kindCheckState = Check.emptypeState
+  , _typeCheckState = Check.emptyState
+  , _kindCheckState = Check.emptyState
   }
 
 makeLenses ''Flags
@@ -285,7 +285,7 @@ runPraxis' :: Praxis a -> PraxisState -> IO (Either String a, PraxisState)
 runPraxis' = runStateT . runExceptT
 
 runPraxis :: Praxis a -> IO (Either String a)
-runPraxis c = fst <$> runPraxis' c emptypeState
+runPraxis c = fst <$> runPraxis' c emptyState
 
 ifFlag :: Praxis () -> Lens' Flags Bool -> Praxis ()
 ifFlag c f = use (flags . f) >>= (flip when) c

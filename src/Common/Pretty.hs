@@ -55,6 +55,9 @@ instance Pretty (Colored String) where
 instance Pretty (Printable String) where
   pretty = id
 
+instance Pretty Char where
+  pretty = pretty . (:[])
+
 separate :: Pretty a => String -> [a] -> Printable String
 separate _ []     = blank
 separate _ [x]    = pretty x

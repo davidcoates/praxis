@@ -49,7 +49,7 @@ class Syntax f where
   (<|>) :: f a -> f a -> f a
   pure :: a -> f a
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
-  mark :: String -> f a
+  expected :: String -> f a
   annotated :: Term a => f a -> f (Annotated a)
   internal :: f a -> f a -- for internal constructs, supports printing but not parsing
 

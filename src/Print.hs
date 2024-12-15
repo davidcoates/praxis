@@ -34,7 +34,7 @@ instance Unparser Printer where
     Nothing -> g x
     Just xs -> Just xs
   token = Printer $ \x -> Just [x]
-  mark s = Printer (error s)
+  expected s = Printer (error s)
   annotated (Printer f) = Printer $ \x -> case f (view value x) of
     Nothing -> Nothing
     Just xs -> Just $ Annotation (label x) : xs

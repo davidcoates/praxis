@@ -20,7 +20,7 @@ import           Data.Maybe          (fromJust, isJust)
 
 class Alternative f => Parser f where
   match :: (Token -> Bool) -> f Token
-  mark :: String -> f a
+  expected :: String -> f a
   sourced :: f a -> f (Sourced a)
 
 newtype T f a = T { unT :: f a }
@@ -32,7 +32,7 @@ instance Parser f => Syntax (T f) where
   T p <|> T q = T (p <|> q)
   pure = T . pure
   match f _ = T $ fromJust . f <$> match (isJust . f)
-  mark = T . mark
+  expected = T . expected
   internal = const (T empty)
   annotated (T p) = T $ (\(s :< p) -> (s, Nothing) :< p) <$> sourced p
 

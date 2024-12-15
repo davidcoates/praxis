@@ -1,21 +1,19 @@
 {-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Parse.Tokenise.Tokeniser
   ( Tokeniser
-  , run
-  , consume
-  , satisfy
-  , satisfies
+  , expected
+  , lookahead
   , match
-  , matches
-  , throw
+  , run
   ) where
 
 import           Common
 import           Parse.Parser        (Parser (..))
-import qualified Parse.Parser        as Parser (match, run, satisfies, throw)
-import           Praxis              (Praxis, throwAt)
+import qualified Parse.Parser        as Parser (expected, lookahead, match, run)
+import           Praxis              (Praxis, throw, throwAt)
 import           Token
 
 import           Control.Applicative (Alternative (..), Applicative (..))
@@ -33,13 +31,23 @@ instance Alternative Tokeniser where
   empty = Tokeniser empty
   Tokeniser a <|> Tokeniser b = Tokeniser (a <|> b)
 
+expected :: String -> Tokeniser a
+expected msg = Tokeniser (Parser.expected msg)
+
+lookahead :: Tokeniser a -> Tokeniser a
+lookahead = Tokeniser . Parser.lookahead . runTokeniser
+
+match :: (Char -> Bool) -> Tokeniser Char
+match p = Tokeniser $ Parser.match (p . view value)
+
 run :: Pretty a => Tokeniser (Maybe a) -> String -> Praxis [Sourced a]
 run (Tokeniser t) cs = all (sourced cs) where
   all [] = pure []
   all cs = case Parser.run t cs of
-    (Left e, cs)              -> throwAt (sourceHead cs) e
+    (Left e, []) -> throw $ "expected " <> pretty e <> " but found EOF"
+    (Left e, (s :< t):_) -> throwAt s $ "expected " <> pretty e <> " but found '" <> pretty t <> "'"
     (Right (s :< Just x), cs) -> ((:) <$> pure (s :< x) <*> all cs)
-    (Right _, cs)             -> all cs
+    (Right _, cs) -> all cs
 
 sourced :: String -> [Sourced Char]
 sourced = sourced' Pos { line = 1, column = 1 } where
@@ -51,23 +59,3 @@ sourced = sourced' Pos { line = 1, column = 1 } where
     '\t' -> p { column = tabStop (column p) } where tabStop = (+ 1) . (* 8) . (+ 1) . (`div` 8) . subtract 1
     '\n' -> Pos { line = line p + 1, column = 1 }
     _    -> p { column = column p + 1 }
-
-satisfies :: Int -> (String -> Bool) -> Tokeniser ()
-satisfies i f = Tokeniser (Parser.satisfies i (f . map (view value)) *> pure (pure ()))
-
-satisfy :: (Char -> Bool) -> Tokeniser ()
-satisfy p = satisfies 1 (\[c] -> p c)
-
-matches :: Int -> (String -> Bool) -> Tokeniser String
-matches n p = satisfies n p *> consumes n where
-  consumes 0 = pure ""
-  consumes n = (:) <$> consume <*> consumes (n - 1)
-
-match :: (Char -> Bool) -> Tokeniser Char
-match p = Tokeniser $ Parser.match (p . view value)
-
-consume :: Tokeniser Char
-consume = match (const True)
-
-throw :: String -> Tokeniser a
-throw = Tokeniser . Parser.throw

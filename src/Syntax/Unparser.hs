@@ -25,7 +25,7 @@ class Unparser f where
   (<|>) :: f a -> f a -> f a
   token :: f Token
   annotated :: Term a => f a -> f (Annotated a)
-  mark :: String -> f a
+  expected :: String -> f a
 
 newtype T f a = T { unT :: f a }
 
@@ -36,7 +36,7 @@ instance Unparser f => Syntax (T f) where
   T p <|> T q = T (p <|> q)
   pure = const (T empty)
   match _ f = T $ (Just . f) >$< token
-  mark = T . mark
+  expected = T . expected
   internal = id
   annotated (T p) = T (annotated p)
 

@@ -30,11 +30,12 @@ instance Alternative Parser where
 
 instance Syntax.Parser Parser where
   match f = Parser $ Parser.match (f . view value)
-  mark = Parser . Parser.mark
+  expected = Parser . Parser.expected
   sourced (Parser p) = Parser ((\(s :< x) -> (s :< (s :< x))) <$> p)
 
 run :: Pretty a => Parser a -> [Sourced Token] -> Praxis a
 run (Parser p) ts = case Parser.run (view value <$> p) ts of
-  (Left e,  ts) -> throwAt (sourceHead ts) e
+  (Left e, []) -> throw $ "expected " <> pretty e <> " but found EOF"
+  (Left e, (s :< t):_) -> throwAt s $ "expected " <> pretty e <> " but found '" <> pretty t <> "'"
+  (Right x, ((s :< t):_)) -> throwAt s $ "unexpected " <> pretty t
   (Right x, []) -> return x
-  (Right x, ts) -> throwAt (sourceHead ts) $ "unexpected " <> (pretty . view value . head $ ts)

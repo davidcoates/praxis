@@ -125,5 +125,5 @@ parse error at 2:1: expected expression but found ';'
 |]
 
     it "does not parse" $ runPretty (parse IProgram "") `shouldReturn` trim [r|
-parse error at EOF: expected program but found EOF
+parse error: expected program but found EOF
 |]

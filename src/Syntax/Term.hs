@@ -35,16 +35,16 @@ token :: Syntax f => Token -> f ()
 token t = match (\t' -> if t' == t then Just () else Nothing) (const t)
 
 special :: Syntax f => Char -> f ()
-special c = token (Special c) <|> mark ("special '" ++ [c] ++ "'")
+special c = token (Special c) <|> expected ("special '" ++ [c] ++ "'")
 
 layout :: Syntax f => Char -> f ()
-layout c = token (Layout c) <|> mark ("layout '" ++ [c] ++ "'")
+layout c = token (Layout c) <|> expected ("layout '" ++ [c] ++ "'")
 
 contextualOp :: Syntax f => Name -> f ()
-contextualOp op = token (VarSym op) <|> internal (reservedSym op) <|> mark ("contextual keyword '" ++ op ++ "'")
+contextualOp op = token (VarSym op) <|> internal (reservedSym op) <|> expected ("contextual keyword '" ++ op ++ "'")
 
 contextualId :: Syntax f => Name -> f ()
-contextualId id = token (VarId id) <|> internal (reservedId id) <|> mark ("contextual keyword '" ++ id ++ "'")
+contextualId id = token (VarId id) <|> internal (reservedId id) <|> expected ("contextual keyword '" ++ id ++ "'")
 
 block :: Syntax f => f a -> f [a]
 block p = layout '{' *> _Cons <$> p <*> (layout ';' *> p) `until` layout '}'
@@ -120,13 +120,13 @@ litNoString = match f (\l -> Token.Lit l) where
     _                    -> Nothing
 
 reservedSym :: Syntax f => String -> f ()
-reservedSym s = token (ReservedSym s) <|> mark ("reserved symbol '" ++ s ++ "'")
+reservedSym s = token (ReservedSym s) <|> expected ("reserved symbol '" ++ s ++ "'")
 
 reservedCon :: Syntax f => String -> f ()
-reservedCon s = token (ReservedCon s) <|> mark ("reserved name '" ++ s ++ "'")
+reservedCon s = token (ReservedCon s) <|> expected ("reserved name '" ++ s ++ "'")
 
 reservedId :: Syntax f => String -> f ()
-reservedId s = token (ReservedId s) <|> mark ("reserved name '" ++ s ++ "'")
+reservedId s = token (ReservedId s) <|> expected ("reserved name '" ++ s ++ "'")
 
 definePrisms ''Assoc
 definePrisms ''Op
@@ -243,23 +243,23 @@ typeConstraint = _TypeIsInstance <$> annotated ty <|>
                  internal (_TypeIsSub <$> annotated ty <*> reservedSym "≤" *> annotated ty) <|>
                  internal (_TypeIsSubIfAffine <$> annotated ty <*> reservedSym "≤" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
                  internal (_TypeIsValue <$> reservedCon "Value" *> annotated ty) <|>
-                 mark "type constraint"
+                 expected "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
 kindConstraint = internal (_KindIsEq <$> annotated kind <*> reservedSym "=" *> annotated kind) <|>
                  internal (_KindIsPlain <$> reservedCon "Plain" *> annotated kind) <|>
                  internal (_KindIsSub <$> annotated kind <*> reservedSym "≤" *> annotated kind) <|>
-                 mark "kind constraint"
+                 expected "kind constraint"
 
 program :: Syntax f => f Program
-program = _Program <$> block (annotated decl) <|> mark "program"
+program = _Program <$> block (annotated decl) <|> expected "program"
 
 decl :: Syntax f => f Decl
 decl = declSyn <|>
        _DeclType <$> annotated declType <|>
        declOp <|>
        _DeclTerm <$> annotated declTerm <|>
-      mark "declaration"
+      expected "declaration"
 
 declSyn :: Syntax f => f Decl
 declSyn = _DeclSynSugar <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
@@ -281,45 +281,45 @@ dataCon = _DataCon <$> conId <*> annotated ty1
 
 typePat :: Syntax f => f TypePat
 typePat = _TypePatVar <$> flavoredVarId <|>
-          mark "type variable"
+          expected "type variable"
 
 declTerm :: Syntax f => f DeclTerm
-declTerm = declTermRec <|> declTerm' <|> mark "term declaration/definition" where
-  declTerm' = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> mark "non-rec term declaration/definition"
+declTerm = declTermRec <|> declTerm' <|> expected "term declaration/definition" where
+  declTerm' = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> expected "non-rec term declaration/definition"
   declTermSig = reservedSym ":" *> annotated qTy
   declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
   declTermRec = _DeclTermRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
 
 bind :: Syntax f => f Bind
-bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> mark "binding"
+bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> expected "binding"
 
 pat :: Syntax f => f Pat
-pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> mark "pattern" where
+pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> expected "pattern" where
   pat0 = _PatHole <$> special '_' <|>
          _PatLit <$> litNoString <|> -- TODO allow string literals
          prefix' varId (_PatAt, reservedSym "@" *> annotated pat) _PatVar <|>
          tuple _PatUnit _PatPair pat <|>
-         mark "pattern(0)"
+         expected "pattern(0)"
 
 kind :: Syntax f => f Kind
-kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> mark "kind" where
+kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> expected "kind" where
   kind0 = _KindRef <$> reservedCon "Ref" <|>
           _KindType <$> reservedCon "Type" <|>
           _KindView <$> reservedCon "View" <|>
           internal (_KindUni <$> uni) <|>
           _KindConstraint <$> reservedCon "Constraint" <|>
-          mark "kind(0)"
+          expected "kind(0)"
 
 qTy :: Syntax f => f QType
-qTy = poly <|> mono <|> mark "quantified type" where
+qTy = poly <|> mono <|> expected "quantified type" where
   poly = _Forall <$> reservedId "forall" *> some (annotated typePat) <*> typeConstraints <*> (contextualOp "." *> annotated ty)
   mono = _Mono <$> annotated ty
   typeConstraints :: Syntax f => f [Annotated TypeConstraint]
   typeConstraints = _Cons <$> (contextualOp "|" *> annotated typeConstraint) <*> many (special ',' *> annotated typeConstraint) <|> _Nil <$> pure ()
 
 ty :: Syntax f => f Type
-ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> mark "type"
+ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> expected "type"
 
 -- special sauce to make op applications right associative, but normal applications left associative
 -- &r ?v C t &r ?v t -> &r (?v ((((C t) &r) ?v) t))
@@ -350,7 +350,7 @@ foldTy = Prism (view value . fold) (Just . unfold . phantom) where
     _              -> False
 
 ty1 :: Syntax f => f Type
-ty1 = foldTy <$> some (annotated ty0) <|> mark "type(1)" where
+ty1 = foldTy <$> some (annotated ty0) <|> expected "type(1)" where
   ty0 = _TypeCon <$> conId <|>
         _TypeIdentityOp <$> reservedSym "@" <|>
         internal (_TypeRef <$> varIdRef) <|>
@@ -358,17 +358,17 @@ ty1 = foldTy <$> some (annotated ty0) <|> mark "type(1)" where
         internal (_TypeUni <$> flavoredUni) <|>
         _TypeVar <$> flavoredVarId <|>
         tuple _TypeUnit _TypePair ty <|>
-        mark "type(0)"
+        expected "type(0)"
 
 tok :: Syntax f => f Tok
-tok = internal (_TokOp <$> varSym <|> _TokExp <$> annotated exp) <|> mark "token"
+tok = internal (_TokOp <$> varSym <|> _TokExp <$> annotated exp) <|> expected "token"
 
 exp :: Syntax f => f Exp
-exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" where
-  exp6 = optWhere <$> annotated exp5 <*> blockLike (reservedId "where") (annotated declTerm) <|> internal exp5 <|> mark "expression(6)"
+exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expression" where
+  exp6 = optWhere <$> annotated exp5 <*> blockLike (reservedId "where") (annotated declTerm) <|> internal exp5 <|> expected "expression(6)"
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
-  exp5 = rightWithSep (reservedId "defer") _Defer exp4 <|> mark "expression(5)"
-  exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> mark "expression(4)"
+  exp5 = rightWithSep (reservedId "defer") _Defer exp4 <|> expected "expression(5)"
+  exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> expected "expression(4)"
   exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
          _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
          _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
@@ -378,34 +378,34 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> mark "expression" 
          internal (_Closure <$> empty <*> annotated exp3) <|>
          _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
          _Switch <$> reservedId "switch" *> block switch <|>
-         exp2 <|> mark "expression(3)"
-  exp2 = mixfix <$> some (annotated (_TokOp <$> varSym <|> _TokExp <$> annotated exp1)) <|> internal exp1 <|> mark "expression(2)"
+         exp2 <|> expected "expression(3)"
+  exp2 = mixfix <$> some (annotated (_TokOp <$> varSym <|> _TokExp <$> annotated exp1)) <|> internal exp1 <|> expected "expression(2)"
   mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> MixfixSugar ts }) (\case { MixfixSugar ts -> Just ts; _ -> Nothing })
-  exp1 = left _Apply exp0 <|> mark "expression(1)"
+  exp1 = left _Apply exp0 <|> expected "expression(1)"
   exp0 = _VarRefSugar <$> varIdRef <|>
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
          internal (_Specialise <$> annotated exp0 <*> empty) <|>
          tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
-         mark "expression(0)"
+         expected "expression(0)"
 
 switch :: Syntax f => f (Annotated Exp, Annotated Exp)
-switch = annotated exp <*> reservedSym "->" *> annotated exp <|> mark "switch alternative"
+switch = annotated exp <*> reservedSym "->" *> annotated exp <|> expected "switch alternative"
 
 -- TODO allow "let ... in" in expression?
 stmt :: Syntax f => f Stmt
-stmt = _StmtBind <$> reservedId "let" *> annotated bind <|> _StmtExp <$> annotated exp <|> mark "statement"
+stmt = _StmtBind <$> reservedId "let" *> annotated bind <|> _StmtExp <$> annotated exp <|> expected "statement"
 
 alt :: Syntax f => f (Annotated Pat, Annotated Exp)
-alt = annotated pat <*> reservedSym "->" *> annotated exp <|> mark "case alternative"
+alt = annotated pat <*> reservedSym "->" *> annotated exp <|> expected "case alternative"
 
 declOp :: Syntax f => f Decl
 declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
 
 op :: Syntax f => f Op
-op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> mark "operator section"  where
-  atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> mark "operator or hole"
+op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator section"  where
+  atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> expected "operator or hole"
 
 opRules :: Syntax f => f OpRules
 opRules = _OpRulesSugar <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>

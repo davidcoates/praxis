@@ -30,6 +30,7 @@ dependencies:
 - terminal-size
 - raw-strings-qq
 - mtl >= 2.2.2
+- wcwidth >= 0.0.2
 
 library:
   source-dirs: src

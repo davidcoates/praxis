@@ -39,7 +39,7 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` "_\'" || isAlphaNum c
 
 token :: Tokeniser (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> conId <|> varId <|> varIdRef <|> varIdValue <|> varIdView <|> varSym)) <|> expected "illegal character"
+token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> conId <|> varId <|> varIdRef <|> varIdValue <|> varIdView <|> varSym)) <|> expected "token"
 
 whitespace :: Tokeniser ()
 whitespace = newline <|> space <|> comment where

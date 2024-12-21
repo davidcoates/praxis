@@ -17,6 +17,7 @@ import           Praxis              (Praxis, throw, throwAt)
 import           Token
 
 import           Control.Applicative (Alternative (..), Applicative (..))
+import           Data.Char.WCWidth   (wcwidth)
 
 newtype Tokeniser a = Tokeniser { runTokeniser :: Parser (Sourced Char) (Sourced a) }
 
@@ -51,11 +52,10 @@ run (Tokeniser t) cs = all (sourced cs) where
 
 sourced :: String -> [Sourced Char]
 sourced = sourced' Pos { line = 1, column = 1 } where
-  sourced' _     [] = []
-  sourced' p (c:cs) = make p c : sourced' (advance c p) cs
-  make p c = Source { start = p, end = p } :< c
+  sourced' _ [] = []
+  sourced' start (c:cs) = let end = (advance c start) in (Source start end :< c) : sourced' end cs
   advance :: Char -> Pos -> Pos
   advance c p = case c of
     '\t' -> p { column = tabStop (column p) } where tabStop = (+ 1) . (* 8) . (+ 1) . (`div` 8) . subtract 1
     '\n' -> Pos { line = line p + 1, column = 1 }
-    _    -> p { column = column p + 1 }
+    _    -> p { column = column p + wcwidth c }

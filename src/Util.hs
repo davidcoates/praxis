@@ -28,10 +28,10 @@ import           Term
 
 
 parse :: forall a. Term a => I a -> String -> Praxis (Annotated a)
-parse _ term = Parse.parse term :: Praxis (Annotated a)
+parse _ term = Parse.run term :: Praxis (Annotated a)
 
 check :: forall a. Term a => I a -> String -> Praxis (Annotated a)
-check _ term = Parse.parse term >>= Check.check :: Praxis (Annotated a)
+check _ term = Parse.run term >>= Check.run :: Praxis (Annotated a)
 
 evalProgram :: String -> Praxis ()
 evalProgram program = check IProgram program >>= Eval.run

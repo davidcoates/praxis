@@ -23,7 +23,7 @@ import           Eval.Value                (Value (..), integerToValue,
                                             valueToInteger)
 import qualified Eval.Value                as Value
 import           Introspect
-import           Parse                     (parse)
+import qualified Parse                     (run)
 import           Praxis
 import           Term                      hiding (Lit (..), Pair, Unit)
 
@@ -42,7 +42,7 @@ runInternal c = case unsafePerformIO (runPraxis (flags . silent .= True >> c)) o
   Right x -> x
 
 kind :: String -> Annotated Kind
-kind s = runInternal (parse s :: Praxis (Annotated Kind))
+kind s = runInternal (Parse.run s :: Praxis (Annotated Kind))
 
 initialKEnv :: KEnv
 initialKEnv = Env.Strict.fromList
@@ -263,10 +263,10 @@ inbuilts =
     liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
 
 mono :: String -> Annotated Type
-mono s = runInternal (checkState . kindState . kEnv .= initialKEnv >> parse s :: Praxis (Annotated Type))
+mono s = runInternal (checkState . kindState . kEnv .= initialKEnv >> Parse.run s :: Praxis (Annotated Type))
 
 poly :: String -> Annotated QType
-poly s = runInternal (checkState . kindState . kEnv .= initialKEnv >> parse s :: Praxis (Annotated QType))
+poly s = runInternal (checkState . kindState . kEnv .= initialKEnv >> Parse.run s :: Praxis (Annotated QType))
 
 runWithPrelude :: Praxis a -> IO (Either String a)
 runWithPrelude c = runPraxis (importPrelude >> c) where
@@ -280,7 +280,7 @@ runWithPrelude c = runPraxis (importPrelude >> c) where
     let initialVEnv = Env.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
     evalState . vEnv .= initialVEnv
     flags . silent .= True
-    parse prelude :: Praxis (Annotated Program)
+    Parse.run prelude :: Praxis (Annotated Program)
     flags . silent .= False
 
 

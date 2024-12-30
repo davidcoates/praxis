@@ -1,5 +1,5 @@
 module Check
-  ( check
+  ( run
   ) where
 
 import qualified Check.Kind.Check as Kind
@@ -9,6 +9,6 @@ import           Introspect
 import           Praxis
 import           Term
 
-check :: Term a => Annotated a -> Praxis (Annotated a)
-check term = do
-  Kind.check term >>= Type.check
+run :: Term a => Annotated a -> Praxis (Annotated a)
+run term = do
+  Kind.run term >>= Type.run

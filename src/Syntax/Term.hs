@@ -375,7 +375,7 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
          _Cases <$> reservedId "cases" *> block alt <|>
          _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
          _Lambda <$> reservedSym "\\" *> alt <|>
-         internal (_Closure <$> empty <*> annotated exp3) <|>
+         internal (_Capture <$> empty <*> annotated exp3) <|>
          _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
          _Switch <$> reservedId "switch" *> block switch <|>
          exp2 <|> expected "expression(3)"

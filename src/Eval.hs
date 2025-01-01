@@ -94,7 +94,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Cases alts -> return $ Value.Fn $ \val -> evalCase src val alts
 
-  Closure captures exp -> do
+  Capture captures exp -> do
     let names = map fst captures
     values <- mapM (getValue src) names
     Value.Fn fn <- evalExp exp

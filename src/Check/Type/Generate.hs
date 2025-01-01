@@ -88,7 +88,7 @@ closure src exp = do
   let captures = Env.toList (LEnv.touched e1 e2)
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, TypeReasonCaptured name) :< capture t | (name, _ :< Mono t) <- captures ]
-  return $ t :< Closure captures ((src, Just t) :< x)
+  return $ t :< Capture captures ((src, Just t) :< x)
 
 scope :: Source -> Praxis a -> Praxis a
 scope src block = do

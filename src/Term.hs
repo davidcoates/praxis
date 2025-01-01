@@ -107,7 +107,7 @@ type Specialisation = [(Annotated TypePat, Annotated Type)]
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
          | Cases [(Annotated Pat, Annotated Exp)]
-         | Closure [(Name, Annotated QType)] (Annotated Exp)
+         | Capture [(Name, Annotated QType)] (Annotated Exp)
          | Con Name
          | Defer (Annotated Exp) (Annotated Exp)
          | DoSugar [Annotated Stmt]

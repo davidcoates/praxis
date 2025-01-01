@@ -212,7 +212,7 @@ instance Term Exp where
     Apply a b       -> Apply <$> f a <*> f b
     Case a as       -> Case <$> f a <*> pairs f as
     Cases as        -> Cases <$> pairs f as
-    Closure cs e    -> Closure <$> traverse (second f) cs <*> f e
+    Capture cs e    -> Capture <$> traverse (second f) cs <*> f e
     Con n           -> pure (Con n)
     Defer a b       -> Defer <$> f a <*> f b
     DoSugar ss      -> DoSugar <$> traverse f ss

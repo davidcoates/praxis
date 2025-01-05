@@ -6,8 +6,7 @@
 module Util
   ( parse
   , check
-  , evalProgram
-  , evalExp
+  , eval
 
   , runPretty
   , runEvaluate
@@ -31,14 +30,10 @@ parse :: forall a. Term a => I a -> String -> Praxis (Annotated a)
 parse _ term = Parse.run term :: Praxis (Annotated a)
 
 check :: forall a. Term a => I a -> String -> Praxis (Annotated a)
-check _ term = Parse.run term >>= Check.run :: Praxis (Annotated a)
+check ty term = parse ty term >>= Check.run
 
-evalProgram :: String -> Praxis ()
-evalProgram program = check IProgram program >>= Eval.run
-
-evalExp :: String -> Praxis Value
-evalExp exp = check IExp exp >>= Eval.run
-
+eval :: forall a. Term a => I a -> String -> Praxis (Eval.Evaluation a)
+eval ty term = check ty term >>= Eval.run
 
 -- Helpers for tests
 
@@ -46,7 +41,7 @@ runPretty :: (Term a, x ~ Annotation a) => Praxis (Annotated a) -> IO String
 runPretty = runWith (\x -> fold (runPrintable (pretty x) Types))
 
 runEvaluate :: String -> String -> IO String
-runEvaluate program exp = runWith show (evalProgram program >> evalExp exp)
+runEvaluate program exp = runWith show (eval IProgram program >> eval IExp exp)
 
 runWith :: (a -> String) -> Praxis a -> IO String
 runWith show p = do

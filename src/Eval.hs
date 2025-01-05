@@ -5,6 +5,8 @@
 module Eval
   ( run
   , runMain
+
+  , Evaluation(..)
   ) where
 
 import qualified Check.State       as Check

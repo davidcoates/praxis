@@ -3,9 +3,10 @@ module Main where
 import           Common
 import           Eval               (runMain)
 import           Inbuilts           (runWithPrelude)
+import           Introspect
 import           Praxis
 import           Term
-import           Util               (evalExp, evalProgram)
+import           Util               (eval)
 
 import           Control.Monad      (void, when)
 import           Data.List          (delete)
@@ -64,12 +65,12 @@ parse xs = do
       case file of
         Just file -> do
           text <- liftIO (readFile file)
-          evalProgram text
+          eval IProgram text
           repl
         Nothing   -> repl
     Interpret file -> do
       text <- liftIO (readFile file)
-      evalProgram text
+      eval IProgram text
       runMain
 
 help :: Praxis a
@@ -87,11 +88,11 @@ forever p = try p >> forever p
 repl :: Praxis ()
 repl = forever $ do
   liftIO (putStr "> " >> hFlush stdout)
-  liftIO getLine >>= eval
+  liftIO getLine >>= evalAndPrint
 
-eval :: String -> Praxis ()
-eval s = do
+evalAndPrint :: String -> Praxis ()
+evalAndPrint s = do
   -- TODO fix this so we can have declarations
-  v <- evalExp s
+  v <- eval IExp s
   liftIO $ print v
 

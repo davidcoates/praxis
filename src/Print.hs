@@ -119,7 +119,7 @@ instance Pretty TypeReason where
     TypeReasonIntegerLiteral i -> "integer literal " <> pretty (show i)
     TypeReasonRead n -> "read of " <> pretty n
     TypeReasonSignature t -> "signature " <> pretty t
-    TypeReasonSpecialisation n -> "specialisation of " <> pretty n
+    TypeReasonSpecialization n -> "specialization of " <> pretty n
     TypeReasonSwitchCondition -> "switch expression condition must have type Bool"
     TypeReasonSwitchCongruence -> "switch expression branches must have the same type"
     TypeReasonMultiAlias n -> "variable " <> pretty n <> " is not a unique alias"

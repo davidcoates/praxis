@@ -58,6 +58,8 @@ module Common
 
   , fold
   , foldMapA
+
+  , isDistinct
   ) where
 
 import           Common.Pretty
@@ -76,7 +78,7 @@ import           Control.Monad.Trans.State  (StateT (..))
 import           Data.Foldable              (fold)
 import           Data.Functor.Identity      (Identity (..))
 import           Data.Int
-import           Data.List                  (intercalate, intersperse)
+import           Data.List                  (intercalate, intersperse, nub)
 import           Data.Traversable           (sequenceA)
 import           Data.Void                  (Void, absurd)
 import           Data.Word
@@ -130,3 +132,5 @@ just f (Just x) = Just <$> f x
 
 infix 4 %%=
 
+isDistinct :: Eq a => [a] -> Bool
+isDistinct xs = length (nub xs) == length xs

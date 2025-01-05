@@ -95,4 +95,3 @@ evalAndPrint s = do
   -- TODO fix this so we can have declarations
   v <- eval IExp s
   liftIO $ print v
-

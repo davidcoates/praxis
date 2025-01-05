@@ -12,7 +12,6 @@ module Check.Kind.Generate
 
 import           Check.State
 import           Common
-import qualified Env.Strict      as Env
 import           Inbuilts
 import           Introspect
 import           Praxis
@@ -23,6 +22,50 @@ import           Data.List       (nub, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set        as Set
 
+
+introCon :: Source -> Name -> Annotated Kind -> Praxis ()
+introCon src name kind = do
+  entry <- (checkState . kindState . typeConEnv) `uses` Map.lookup name
+  case entry of
+    Just _ -> throwAt src $ "type " <> pretty name <> " redeclared"
+    _      -> checkState . kindState . typeConEnv %= Map.insert name kind
+
+introVar :: Source -> Flavor -> Name -> Annotated Kind -> Praxis Name
+introVar src flavor name kind = do
+  entry <- (checkState . kindState . typeVarRename . counts) `uses` Map.lookup name
+  let count = case entry of { Just count -> count; Nothing -> 0 }
+  let rename = name ++ "_" ++ show count
+  checkState . kindState . typeVarRename . counts %= Map.insert name (count + 1)
+  checkState . kindState . typeVarRename . renames %= Map.insert name rename
+  Nothing <- (checkState . kindState . typeVarEnv) `uses` Map.lookup rename -- sanity check
+  checkState . kindState . typeVarEnv %= Map.insert rename (flavor, kind)
+  return rename
+
+lookupCon :: Source -> Name -> Praxis (Annotated Kind)
+lookupCon src name = do
+  entry <- (checkState . kindState . typeConEnv) `uses` Map.lookup name
+  case entry of
+    Just kind -> return kind
+    Nothing   -> throwAt src $ "type " <> pretty name <> " is not in scope"
+
+lookupVar :: Source -> Flavor -> Name -> Praxis (Name, Annotated Kind)
+lookupVar src flavor name = do
+  entry <- (checkState . kindState . typeVarRename . renames) `uses` Map.lookup name
+  let rename = case entry of { Just rename -> rename; Nothing -> name }
+  entry <- (checkState . kindState . typeVarEnv) `uses` Map.lookup rename
+  case entry of
+    Just (flavor', kind)
+      | flavor == flavor' -> return (rename, kind)
+      | otherwise         -> throwAt src $ "type variable " <> pretty name <> " has the wrong flavor"
+    Nothing -> throwAt src $ "type variable " <> pretty name <> " is not in scope"
+
+checkDistinct :: Source -> [Annotated TypePat] -> Praxis ()
+checkDistinct src typePats = do
+  let names = map (\(_ :< TypePatVar _ name) -> name) typePats
+  unless (isDistinct names) $ throwAt src ("type variables are not distinct" :: String)
+
+scope :: Praxis a -> Praxis a
+scope block = save (checkState . kindState . typeVarRename . renames) $ block
 
 require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
 require ((src, reason) :< con) = checkState . kindState . kindSolve . requirements %= Set.insert ((src, Just reason) :< Requirement con)
@@ -41,50 +84,42 @@ run term = do
 -- TODO since we ignore annotation of input, could adjust this...
 generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case typeof (view value term) of
-  IDecl    -> generateDecl
-  IType    -> generateType
-  ITypePat -> generateTypePat
-  IDataCon -> generateDataCon
-  _        -> value (recurseTerm generate)
-
-introKind :: Source -> Name -> Annotated Kind -> Praxis ()
-introKind src name kind = do
-  entry <- (checkState . kindState . kEnv) `uses` Env.lookup name
-  case entry of
-    Just _ -> throwAt src $ "type " <> pretty name <> " redeclared"
-    _      -> checkState . kindState . kEnv %= Env.insert name kind
-
+  IDeclTerm -> generateDeclTerm
+  IDeclType -> generateDeclType
+  IType     -> generateType
+  ITypePat  -> generateTypePat
+  IDataCon  -> generateDataCon
+  IQType    -> generateQType
+  _         -> value (recurseTerm generate)
 
 generateType :: Annotated Type -> Praxis (Annotated Type)
-generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case ty of
+generateType (a@(src, _) :< ty) = (\(kind :< ty) -> ((src, Just kind) :< ty)) <$> case ty of
 
-    TypeApply f x -> do
-      f <- generateType f
-      x <- generateType x
-      k1 <- freshKindUni
-      k2 <- freshKindUni
-      require $ (src, KindReasonTypeApply f x) :< (getKind f `KindIsEq` phantom (KindFn k1 k2))
-      require $ (src, KindReasonTypeApply f x) :< (getKind x `KindIsSub` k1)
-      return (k2 :< TypeApply f x)
+    TypeApply ty1 ty2 -> do
+      ty1 <- generateType ty1
+      ty2 <- generateType ty2
+      argKind <- freshKindUni
+      retKind <- freshKindUni
+      require $ (src, KindReasonTypeApply ty1 ty2) :< (getKind ty1 `KindIsEq` phantom (KindFn argKind retKind))
+      require $ (src, KindReasonTypeApply ty1 ty2) :< (getKind ty2 `KindIsSub` argKind)
+      return (retKind :< TypeApply ty1 ty2)
 
-    TypeApplyOp f x -> do
-      f <- generateType f
-      x <- generateType x
-      require $ (src, KindReasonTypeApplyOp f x) :< (getKind x `KindIsEq` phantom KindType)
-      return (phantom KindType :< TypeApplyOp f x)
+    TypeApplyOp ty1 ty2 -> do
+      ty1 <- generateType ty1
+      ty2 <- generateType ty2
+      require $ (src, KindReasonTypeApplyOp ty1 ty2) :< (getKind ty2 `KindIsEq` phantom KindType)
+      return (phantom KindType :< TypeApplyOp ty1 ty2)
 
     TypeCon con -> do
-      entry <- (checkState . kindState . kEnv) `uses` Env.lookup con
-      case entry of
-        Just k  -> return (k :< TypeCon con)
-        Nothing -> throwAt src $ "type " <> pretty con <> " is not in scope"
+      kind <- lookupCon src con
+      return (kind :< TypeCon con)
 
-    TypeFn t1 t2 -> do
-      t1 <- generateType t1
-      t2 <- generateType t2
-      require $ (src, KindReasonType t1) :< (getKind t1 `KindIsEq` phantom KindType)
-      require $ (src, KindReasonType t2) :< (getKind t2 `KindIsEq` phantom KindType)
-      return (phantom KindType :< TypeFn t1 t2)
+    TypeFn ty1 ty2 -> do
+      ty1 <- generateType ty1
+      ty2 <- generateType ty2
+      require $ (src, KindReasonType ty1) :< (getKind ty1 `KindIsEq` phantom KindType)
+      require $ (src, KindReasonType ty2) :< (getKind ty2 `KindIsEq` phantom KindType)
+      return (phantom KindType :< TypeFn ty1 ty2)
 
     TypeUnit -> do
       return (phantom KindType :< TypeUnit)
@@ -104,40 +139,40 @@ generateType (a@(src, _) :< ty) = (\(k :< t) -> ((src, Just k) :< t)) <$> case t
         isRef = all (\op -> case view value (getKind op) of { KindRef -> True; KindView -> False }) tys
       return (phantom (if isRef then KindRef else KindView) :< TypeSetOp (Set.fromList tys))
 
-    TypePair t1 t2 -> do
-      t1 <- generateType t1
-      t2 <- generateType t2
-      require $ (src, KindReasonType t1) :< (getKind t1 `KindIsEq` phantom KindType)
-      require $ (src, KindReasonType t2) :< (getKind t2 `KindIsEq` phantom KindType)
-      return (phantom KindType :< TypePair t1 t2)
+    TypePair ty1 ty2 -> do
+      ty1 <- generateType ty1
+      ty2 <- generateType ty2
+      require $ (src, KindReasonType ty1) :< (getKind ty1 `KindIsEq` phantom KindType)
+      require $ (src, KindReasonType ty2) :< (getKind ty2 `KindIsEq` phantom KindType)
+      return (phantom KindType :< TypePair ty1 ty2)
 
-    TypeVar f var -> do
-      Just k <- (checkState . kindState . kEnv) `uses` Env.lookup var
-      return (k :< TypeVar f var)
+    TypeVar flavor var -> do
+      (var, kind) <- lookupVar src flavor var
+      return (kind :< TypeVar flavor var)
 
 
 generateTypePat :: Annotated TypePat -> Praxis (Annotated TypePat)
-generateTypePat typePat@(a@(src, _) :< TypePatVar f var) = (\k -> (src, Just k) :< TypePatVar f var) <$> case f of
+generateTypePat typePat@(a@(src, _) :< TypePatVar f var) = (\(var, k) -> (src, Just k) :< TypePatVar f var) <$> case f of
 
   Plain -> do
-    k <- freshKindUni
-    introKind src var k
-    require $ (src, KindReasonTypePat typePat) :< KindIsPlain k
-    return k
+    kind <- freshKindUni
+    var <- introVar src Plain var kind
+    require $ (src, KindReasonTypePat typePat) :< KindIsPlain kind
+    return (var, kind)
 
   Ref -> do
-    introKind src var (phantom KindRef)
-    return (phantom KindRef)
+    var <- introVar src Ref var (phantom KindRef)
+    return (var, phantom KindRef)
 
   Value -> do
-    k <- freshKindUni
-    introKind src var k
-    require $ (src, KindReasonTypePat typePat) :< KindIsPlain k
-    return k
+    kind <- freshKindUni
+    var <- introVar src Value var kind
+    require $ (src, KindReasonTypePat typePat) :< KindIsPlain kind
+    return (var, kind)
 
   View -> do
-    introKind src var (phantom KindView)
-    return (phantom KindView)
+    var <- introVar src View var (phantom KindView)
+    return (var, phantom KindView)
 
 
 generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
@@ -147,30 +182,32 @@ generateDataCon (a@(src, _) :< DataCon name arg) = do
   require $ (src, KindReasonType arg) :< (getKind arg `KindIsEq` phantom KindType) -- TODO should just match kind of data type?
   return dataCon
 
+
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, _) :< ty) = case ty of
 
   DeclTypeData mode name args alts -> do
 
-    k <- freshKindUni
-    when (mode == DataRec) $ introKind src name k
-    (args, alts) <- save (checkState . kindState . kEnv) $ do
+    kind <- freshKindUni
+    when (mode == DataRec) $ introCon src name kind
+    (args, alts) <- scope $ do
+        checkDistinct src args
         args <- traverse generate args
         alts <- traverse generate alts
         return (args, alts)
-    unless (mode == DataRec) $ introKind src name k
+    unless (mode == DataRec) $ introCon src name kind
     let
       mkKind args = case args of
         []         -> phantom KindType
         (arg:args) -> phantom (KindFn (getKind arg) (mkKind args))
-    require $ (src, KindReasonData name args) :< (k `KindIsEq` mkKind args)
+    require $ (src, KindReasonData name args) :< (kind `KindIsEq` mkKind args)
     let
       deduce :: (Annotated Type -> TypeConstraint) -> [Annotated Type] -> (InstanceOrigin, Instance)
       deduce mkConstraint args' = (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
-        f (_ :< t) = case t of
+        f (_ :< ty) = case ty of
           TypeVar _  n -> n `lookup` specializedVars
           _            -> Nothing
-        specializedVars = zip (map (\(a :< TypePatVar f n) -> n) args) args'
+        specializedVars = zip (map (\(a :< TypePatVar _ n) -> n) args) args'
 
       instances = case mode of
         DataUnboxed -> Map.fromList
@@ -184,12 +221,12 @@ generateDeclType (a@(src, _) :< ty) = case ty of
           , ("Dispose",        deduce dispose)
           ]
 
-    checkState . iEnv %= Env.insert name instances
-    return $ (src, Just k) :< DeclTypeData mode name args alts
+    checkState . instanceEnv %= Map.insert name instances
+    return $ (src, Just kind) :< DeclTypeData mode name args alts
 
   DeclTypeEnum name alts -> do
-    let k = phantom KindType
-    introKind src name k
+    let kind = phantom KindType
+    introCon src name kind
     let
       instances = Map.fromList
         [ ("Clone",   \_ -> (Trivial, IsInstance))
@@ -197,13 +234,25 @@ generateDeclType (a@(src, _) :< ty) = case ty of
         , ("Copy",    \_ -> (Trivial, IsInstance))
         , ("Capture", \_ -> (Trivial, IsInstance))
         ]
-    checkState . iEnv %= Env.insert name instances
-    return $ (src, Just k) :< DeclTypeEnum name alts
+    checkState . instanceEnv %= Map.insert name instances
+    return $ (src, Just kind) :< DeclTypeEnum name alts
 
 
-generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
-generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
+generateDeclTerm :: Annotated DeclTerm -> Praxis (Annotated DeclTerm)
+generateDeclTerm (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  DeclType ty -> DeclType <$> generateDeclType ty
+  DeclTermVar name (Just sig@(a :< Forall vs _ _)) exp -> scope $ do
+    checkDistinct src vs
+    sig <- recurse generate sig
+    exp <- recurse generate exp
+    return $ DeclTermVar name (Just sig) exp
 
-  decl        -> recurseTerm generate decl
+  _                        -> recurseTerm generate decl
+
+
+generateQType :: Annotated QType -> Praxis (Annotated QType)
+generateQType (a@(src, _) :< qTy) = (a :<) <$> case qTy of
+
+  Forall vs _ _ -> checkDistinct src vs >> (scope $ recurseTerm generate qTy)
+
+  _             -> recurseTerm generate qTy

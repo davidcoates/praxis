@@ -9,7 +9,7 @@ module Eval.Value
   ) where
 
 import {-# SOURCE #-}           Praxis           (Praxis, liftIOUnsafe)
-import                          Term             (Specialisation)
+import                          Term             (Specialization)
 
 import                          Common
 import                          Data.Array.IO    (IOArray)
@@ -31,7 +31,7 @@ data Value = Array Array
            | I64 I64
            | ISize ISize
            | Pair Value Value
-           | Polymorphic (Specialisation -> Value)
+           | Polymorphic (Specialization -> Value)
            | String String
            | U8 U8
            | U16 U16

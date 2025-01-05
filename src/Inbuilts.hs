@@ -13,11 +13,7 @@ module Inbuilts
   ) where
 
 import           Check.State
-import qualified Check.Type.Rename         as Rename
 import           Common
-import qualified Env.Lazy
-import qualified Env.Linear
-import qualified Env.Strict
 import           Eval.State
 import           Eval.Value                (Value (..), integerToValue,
                                             valueToInteger)
@@ -29,8 +25,8 @@ import           Term                      hiding (Lit (..), Pair, Unit)
 
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import qualified Control.Monad.Trans.State as State (get)
-import           Data.Map.Strict           (Map)
-import qualified Data.Map.Strict           as Map
+import qualified Data.Map                  as Map
+import qualified Data.Map.Lazy             as Map.Lazy
 import qualified Data.Set                  as Set
 import           System.IO.Unsafe          (unsafePerformIO)
 import           Text.RawString.QQ
@@ -44,8 +40,8 @@ runInternal c = case unsafePerformIO (runPraxis (flags . silent .= True >> c)) o
 kind :: String -> Annotated Kind
 kind s = runInternal (Parse.run s :: Praxis (Annotated Kind))
 
-initialKEnv :: KEnv
-initialKEnv = Env.Strict.fromList
+initialTypeConEnv :: TypeConEnv
+initialTypeConEnv = Map.fromList
   [
   -- Types
     ("Array",    kind "Type -> Type")
@@ -67,11 +63,11 @@ initialKEnv = Env.Strict.fromList
   , ("Unit",     kind "Type")
   , ("Pair",     kind "Type -> Type -> Type")
   -- Constraints
-  , ("Clone",          kind "Type -> Constraint")
-  , ("Dispose",        kind "Type -> Constraint")
-  , ("Copy",           kind "Type -> Constraint")
-  , ("Capture",        kind "Type -> Constraint")
-  , ("Integral",       kind "Type -> Constraint")
+  , ("Clone",    kind "Type -> Constraint")
+  , ("Dispose",  kind "Type -> Constraint")
+  , ("Copy",     kind "Type -> Constraint")
+  , ("Capture",  kind "Type -> Constraint")
+  , ("Integral", kind "Type -> Constraint")
   ]
 
 
@@ -94,8 +90,8 @@ copy t = TypeIsInstance $ TypeApply (TypeCon "Copy" `as` kind "Type -> Constrain
 capture :: Annotated Type -> TypeConstraint
 capture t = TypeIsInstance $ TypeApply (TypeCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
 
-initialIEnv :: IEnv
-initialIEnv = Env.Strict.fromList
+initialInstanceEnv :: InstanceEnv
+initialInstanceEnv = Map.fromList
   [ ("Array", Map.fromList
     [ ("Clone",   \[t] -> (Inbuilt, IsInstanceOnlyIf [clone t]))
     , ("Dispose", \[t] -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
@@ -150,6 +146,8 @@ initialIEnv = Env.Strict.fromList
       [ ("Integral", \_ -> (Inbuilt, IsInstance))
       ]
 
+
+-- FIXME: Intiailize "scopes"
 
 inbuilts :: [(Name, Annotated QType, Value)]
 inbuilts =
@@ -263,22 +261,21 @@ inbuilts =
     liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
 
 mono :: String -> Annotated Type
-mono s = runInternal (checkState . kindState . kEnv .= initialKEnv >> Parse.run s :: Praxis (Annotated Type))
+mono s = runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s :: Praxis (Annotated Type))
 
 poly :: String -> Annotated QType
-poly s = runInternal (checkState . kindState . kEnv .= initialKEnv >> Parse.run s :: Praxis (Annotated QType))
+poly s = runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s :: Praxis (Annotated QType))
 
 runWithPrelude :: Praxis a -> IO (Either String a)
 runWithPrelude c = runPraxis (importPrelude >> c) where
   importPrelude :: Praxis ()
   importPrelude = do
-    checkState . iEnv .= initialIEnv
-    checkState . kindState . kEnv .= initialKEnv
-    inbuilts <- mapM (\(n, t, v) -> (\n -> (n, t, v)) <$> Rename.intro n) inbuilts
-    let initialTEnv = Env.Linear.fromList $ map (\(n, t, _) -> (n, t)) inbuilts
-    checkState . typeState . tEnv .= initialTEnv
-    let initialVEnv = Env.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
-    evalState . vEnv .= initialVEnv
+    checkState . instanceEnv .= initialInstanceEnv
+    checkState . kindState . typeConEnv .= initialTypeConEnv
+    let initialVarEnv = Map.fromList $ map (\(n, qTy, _) -> (n, (mempty :: Usage, qTy))) inbuilts
+    checkState . typeState . varEnv .= initialVarEnv
+    let initialValueEnv = Map.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
+    evalState . valueEnv .= initialValueEnv
     flags . silent .= True
     Parse.run prelude :: Praxis (Annotated Program)
     flags . silent .= False

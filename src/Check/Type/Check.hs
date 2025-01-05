@@ -3,7 +3,6 @@ module Check.Type.Check
   ) where
 
 import qualified Check.Type.Generate as Generate
-import qualified Check.Type.Rename   as Rename
 import qualified Check.Type.Solve    as Solve
 import           Common
 import           Introspect
@@ -14,6 +13,6 @@ import           Term
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = save stage $ do
   stage .= TypeCheck
-  term <- Rename.run term >>= Generate.run >>= Solve.run
+  term <- Generate.run term >>= Solve.run
   display "checked term" term `ifFlag` debug
   return term

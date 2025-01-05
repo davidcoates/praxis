@@ -11,8 +11,8 @@ module Eval
 
 import qualified Check.State       as Check
 import           Common
-import qualified Env.Lazy          as Env
-import qualified Env.Linear
+import qualified Data.Map.Lazy     as Map
+import qualified Data.Map.Strict   as Map.Strict
 import           Eval.State
 import           Eval.Value        (Value, integerToValue, valueToInteger)
 import qualified Eval.Value        as Value
@@ -38,21 +38,20 @@ run term = save stage $ do
 runMain :: Praxis ()
 runMain = save stage $ do
   stage .= Evaluate
-  requireMain
-  Just (Value.Fn f) <- (evalState . vEnv) `uses` Env.lookup "main_0"
-  f Value.Unit
-  return ()
-
-requireMain :: Praxis ()
-requireMain = do
-  ty <- (checkState . Check.typeState . Check.tEnv) `uses` Env.Linear.lookup "main_0"
-  case ty of
+  entry <- (checkState . Check.typeState . Check.varRename . Check.renames) `uses` Map.Strict.lookup "main"
+  case entry of
     Nothing -> throw ("missing main function" :: String)
-    Just ty
-      | (_ :< Mono (_ :< TypeFn (_ :< TypeUnit) (_ :< TypeUnit))) <- ty
-        -> return ()
-      | otherwise
-        -> throwAt (view source ty) $ "main function has bad type " <> pretty ty <> ", expected () -> ()"
+    Just rename -> do
+      entry <- (checkState . Check.typeState . Check.varEnv) `uses` Map.Strict.lookup rename
+      case entry of
+        Just (_, qTy)
+          | (_ :< Mono (_ :< TypeFn (_ :< TypeUnit) (_ :< TypeUnit))) <- qTy
+            -> do
+              Just (Value.Fn f) <- (evalState . valueEnv) `uses` Map.lookup rename
+              f Value.Unit
+              return ()
+          | otherwise
+            -> throwAt (view source qTy) $ "main function has bad type " <> pretty qTy <> ", expected () -> ()"
 
 eval :: Term a => Annotated a -> Praxis (Evaluation a)
 eval term = ($ term) $ case typeof (view value term) of
@@ -90,18 +89,18 @@ evalDeclTerm (_ :< decl) = case decl of
     mfix $ \values -> do
       -- Evaluate each of the functions in turn, with all of the evaluations in the environment
       -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
-      irrefMapM (\(name, value) -> (evalState . vEnv) %= Env.insert name value) names values
+      irrefMapM (\(name, value) -> (evalState . valueEnv) %= Map.insert name value) names values
       mapM evalExp exps
     return ()
 
   DeclTermVar name _ exp -> do
     value <- evalExp exp
-    (evalState . vEnv) %= Env.insert name value
+    (evalState . valueEnv) %= Map.insert name value
 
 
 getValue :: Source -> Name -> Praxis Value
 getValue src name = do
-  entry <- (evalState . vEnv) `uses` Env.lookup name
+  entry <- (evalState . valueEnv) `uses` Map.lookup name
   case entry of
      Just val -> return val
      Nothing  -> throwAt src ("unknown variable " <> pretty name)
@@ -116,10 +115,12 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Capture captures exp -> do
     let names = map fst captures
+    display "captures" (show (map fst captures)) `ifFlag` debug
+    display "exp" exp `ifFlag` debug
     values <- mapM (getValue src) names
     Value.Fn fn <- evalExp exp
-    return $ Value.Fn $ \val -> save (evalState . vEnv) $ do
-      evalState . vEnv .= Env.fromList (zip names values)
+    return $ Value.Fn $ \val -> save (evalState . valueEnv) $ do
+      evalState . valueEnv .= Map.fromList (zip names values)
       fn val
 
   Case exp alts -> do
@@ -144,7 +145,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Lambda pat exp -> return $ Value.Fn $ \val -> forceMatch src val pat >> evalExp exp
 
-  Let bind exp -> save (evalState . vEnv) $ do
+  Let bind exp -> save (evalState . valueEnv) $ do
     evalBind bind
     evalExp exp
 
@@ -165,10 +166,10 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Sig exp _ -> evalExp exp
 
-  Specialize exp specialisation -> do
+  Specialize exp specialization -> do
     exp <- evalExp exp
     case exp of
-      Value.Polymorphic polyFun -> return (polyFun specialisation)
+      Value.Polymorphic polyFun -> return (polyFun specialization)
       _                         -> return exp
 
   Switch alts -> evalSwitch src alts
@@ -177,7 +178,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Var var -> getValue src var
 
-  Where exp decls -> save (evalState . vEnv) $ do
+  Where exp decls -> save (evalState . valueEnv) $ do
     traverse evalDeclTerm decls
     evalExp exp
 
@@ -193,7 +194,7 @@ evalSwitch src ((condExp,bodyExp):alts) = do
 evalCase :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
 evalCase src val [] = throwAt src ("no matching pattern for value " <> pretty (show val))
 evalCase src val ((pat,exp):alts) = case tryMatch val pat of
-  Just doMatch -> save (evalState . vEnv) $ do
+  Just doMatch -> save (evalState . valueEnv) $ do
     doMatch
     evalExp exp
   Nothing ->
@@ -213,7 +214,7 @@ tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
 tryMatch val ((_, Just t) :< pat) = case pat of
 
   PatAt name pat
-    -> (\doMatch -> do { evalState . vEnv %= Env.insert name val; doMatch }) <$> tryMatch val pat
+    -> (\doMatch -> do { evalState . valueEnv %= Map.insert name val; doMatch }) <$> tryMatch val pat
 
   PatData name pat | Value.Data name' val <- val
     -> if name == name' then tryMatch val pat else Nothing
@@ -226,10 +227,10 @@ tryMatch val ((_, Just t) :< pat) = case pat of
 
   PatLit pat -> if match then Just (return ()) else Nothing where
     match = case (pat, val) of
-      (Bool v, Value.Bool v') -> v == v'
-      (Char v, Value.Char v') -> v == v'
-      (Integer v, v')         -> v == valueToInteger v'
-      _                       -> False
+      (Bool x, Value.Bool y) -> x == y
+      (Char x, Value.Char y) -> x == y
+      (Integer x, y)         -> x == valueToInteger y
+      _                      -> False
 
   PatPair pat1 pat2 | Value.Pair val1 val2 <- val
     -> liftA2 (>>) (tryMatch val1 pat1) (tryMatch val2 pat2)
@@ -238,7 +239,7 @@ tryMatch val ((_, Just t) :< pat) = case pat of
     -> Just (return ())
 
   PatVar name
-    -> Just $ evalState . vEnv %= Env.insert name val
+    -> Just $ evalState . valueEnv %= Map.insert name val
 
   _
     -> Nothing

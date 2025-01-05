@@ -68,7 +68,7 @@ spec = do
     forM_ types $ \t -> do
       it (show t ++ " is not valid") $ do
         t' <- runPretty (check IQType t)
-        t' `shouldBe` "kind check error at 1:1: variables are not distinct"
+        t' `shouldBe` "kind check error at 1:1: type variables are not distinct"
 
 
   describe "do not ending in expression" $ do

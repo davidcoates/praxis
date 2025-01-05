@@ -24,7 +24,7 @@ module Term
   , Lit(..)
   , Pat(..)
   , Program(..)
-  , Specialisation
+  , Specialization
   , Stmt(..)
   , Tok(..)
 
@@ -102,7 +102,7 @@ data Decl = DeclOpSugar (Annotated Op) Name (Annotated OpRules)
   deriving (Eq, Ord)
 
 -- TODO constraints
-type Specialisation = [(Annotated TypePat, Annotated Type)]
+type Specialization = [(Annotated TypePat, Annotated Type)]
 
 data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
@@ -120,7 +120,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
-         | Specialize (Annotated Exp) Specialisation
+         | Specialize (Annotated Exp) Specialization
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name
@@ -261,7 +261,7 @@ data TypeReason = TypeReasonApply (Annotated Exp) (Annotated Exp)
                 | TypeReasonMultiAlias Name
                 | TypeReasonMultiUse Name
                 | TypeReasonSignature (Annotated Type)
-                | TypeReasonSpecialisation Name
+                | TypeReasonSpecialization Name
                 | TypeReasonSwitchCondition
                 | TypeReasonSwitchCongruence
   deriving (Eq, Ord)

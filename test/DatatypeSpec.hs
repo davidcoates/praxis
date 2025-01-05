@@ -131,7 +131,7 @@ rec
 rec
   sum_0 : forall &r_0 . &r_0 List I32 -> I32 = [&r_0 List I32 -> I32] cases
     [&r_0 List I32] Nil [( )] ( ) -> [I32] 0
-    [&r_0 List I32] Cons ( [I32] x_1 , [&r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add_0 ( [I32] x_1 , [&r_0 List I32 -> I32] sum_0 [&r_0 List I32] xs_1 )
+    [&r_0 List I32] Cons ( [I32] x_1 , [&r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add ( [I32] x_1 , [&r_0 List I32 -> I32] sum_0 [&r_0 List I32] xs_1 )
 |]
 
     it "evals" $ do

@@ -31,28 +31,28 @@ type check error at 2:5: variables are not distinct
 datatype Foo a a = Foo a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: variables are not distinct"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
 
 
     let program = trim [r|
 datatype Foo a &a = Foo a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: variables are not distinct"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
 
 
     let program = trim [r|
 datatype Foo ?a &a = Foo &a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: variables are not distinct"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
 
 
     let program = trim [r|
 datatype Foo !a = Foo a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:23: variable a has the wrong flavor"
+    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:23: type variable a has the wrong flavor"
 
 
   describe "type redeclaration" $ do
@@ -132,11 +132,11 @@ g_0 = \ [I32] x_2 -> [I32] [I32 -> I32] f_2 [I32] x_2 where
   rec
     f_2 = [I32 -> I32] cases
       [I32] 0 -> [I32] 1
-      [I32] n_0 -> [( I32 , I32 ) -> I32] multiply_0 ( [I32 -> I32] f_2 ( [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_0 , [I32] 1 ) ) , [I32] n_0 )
+      [I32] n_0 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_2 ( [( I32 , I32 ) -> I32] subtract ( [I32] n_0 , [I32] 1 ) ) , [I32] n_0 )
 h_0 = \ [I32] x_3 -> [I32] [I32 -> I32] f_3 [I32] x_3 where
   f_3 = [I32 -> I32] cases
     [I32] 0 -> [I32] 1
-    [I32] n_1 -> [( I32 , I32 ) -> I32] multiply_0 ( [I32 -> I32] f_1 ( [( I32 , I32 ) -> I32] subtract_0 ( [I32] n_1 , [I32] 1 ) ) , [I32] n_1 )
+    [I32] n_1 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_1 ( [( I32 , I32 ) -> I32] subtract ( [I32] n_1 , [I32] 1 ) ) , [I32] n_1 )
 |]
 
     it "evals" $ do

@@ -94,7 +94,7 @@ y = read x in ( 1 , x )
 
     it "does not type check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 type check error: unable to satisfy: 'l0 ∉ ( I32 , &'l0 List I32 )
-  | primary cause: read of x_0 at 5:5
+  | primary cause: read of x at 5:5
   | secondary causes:
   | - application [( I32 , List I32 ) -> List I32] Cons ($) ( [I32] 1 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 2 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 3 , [( ) -> List I32] Nil [( )] ( ) ) ) ) at 3:5
   | - integer literal 1 at 3:11

@@ -2,32 +2,30 @@
 
 module Eval.State
   ( State(..)
-  , vEnv
-  , fEnv
+  , valueEnv
   , emptyState
 
-  , VEnv(..)
+  , ValueEnv(..)
   ) where
 
 import           Common
 import           Eval.Value
 import           Term
 
-import           Control.Lens (makeLenses)
-import qualified Env.Strict
+import           Control.Lens    (makeLenses)
+import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 
 
-type VEnv = Env.Strict.Env Value
+type ValueEnv = Map Name Value
 
 data State = State
-  { _vEnv :: VEnv -- Value environment (globals)
-  , _fEnv :: VEnv -- Frame environment (locals)
+  { _valueEnv :: ValueEnv -- Value environment
   }
 
 makeLenses ''State
 
 emptyState :: State
 emptyState = State
-  { _vEnv = Env.Strict.empty
-  , _fEnv = Env.Strict.empty
+  { _valueEnv = Map.empty
   }

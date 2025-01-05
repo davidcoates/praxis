@@ -27,7 +27,7 @@ foo = let x = 1 in ( ) seq let y = 2 in add ( x , y )
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-foo_0 = [I32] let [I32] x_0 = [I32] 1 in [I32] [( )] ( ) seq [I32] let [I32] y_0 = [I32] 2 in [( I32 , I32 ) -> I32] add_0 ( [I32] x_0 , [I32] y_0 )
+foo_0 = [I32] let [I32] x_0 = [I32] 1 in [I32] [( )] ( ) seq [I32] let [I32] y_0 = [I32] 2 in [( I32 , I32 ) -> I32] add ( [I32] x_0 , [I32] y_0 )
 |]
 
     it "evals" $ runEvaluate program "foo" `shouldReturn` "3"
@@ -54,7 +54,7 @@ min = \ ( x , y ) -> if lt ( x , y ) then x else y
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-min_0 = \ ( [I32] x_0 , [I32] y_0 ) -> [I32] if [( I32 , I32 ) -> Bool] lt_0 ( [I32] x_0 , [I32] y_0 ) then [I32] x_0 else [I32] y_0
+min_0 = \ ( [I32] x_0 , [I32] y_0 ) -> [I32] if [( I32 , I32 ) -> Bool] lt ( [I32] x_0 , [I32] y_0 ) then [I32] x_0 else [I32] y_0
 |]
 
     it "evals" $ do
@@ -82,9 +82,9 @@ sign : I32 -> I32 = \ n -> switch
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 sign_0 : I32 -> I32 = \ [I32] n_0 -> [I32] switch
-  [( I32 , I32 ) -> Bool] lt_0 ( [I32] n_0 , [I32] 0 ) -> [I32] -1
-  [( I32 , I32 ) -> Bool] eq_0 ( [I32] n_0 , [I32] 0 ) -> [I32] 0
-  [( I32 , I32 ) -> Bool] gt_0 ( [I32] n_0 , [I32] 0 ) -> [I32] 1
+  [( I32 , I32 ) -> Bool] lt ( [I32] n_0 , [I32] 0 ) -> [I32] -1
+  [( I32 , I32 ) -> Bool] eq ( [I32] n_0 , [I32] 0 ) -> [I32] 0
+  [( I32 , I32 ) -> Bool] gt ( [I32] n_0 , [I32] 0 ) -> [I32] 1
 |]
 
     it "evals" $ do
@@ -94,6 +94,6 @@ sign_0 : I32 -> I32 = \ [I32] n_0 -> [I32] switch
       runEvaluate program "sign -5"   `shouldReturn` "-1"
       runEvaluate program "sign - 5"  `shouldReturn` trim [r|
 type check error: unable to satisfy: Integral ( I32 -> I32 )
-  | primary cause: specialisation of subtract_0 at 1:6
-  | secondary cause: application [( I32 -> I32 , I32 -> I32 ) -> I32 -> I32] subtract_0 ($) ( [I32 -> I32] sign_0 , [I32 -> I32] 5 ) at 1:1
+  | primary cause: specialization of subtract at 1:6
+  | secondary cause: application [( I32 -> I32 , I32 -> I32 ) -> I32 -> I32] subtract ($) ( [I32 -> I32] sign_0 , [I32 -> I32] 5 ) at 1:1
 |]  -- Note: Parses as "sign - 5" (binary subtract)

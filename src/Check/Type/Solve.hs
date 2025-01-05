@@ -14,8 +14,6 @@ module Check.Type.Solve
 import           Check.Solve
 import           Check.State
 import           Common
-import qualified Env.Linear          as LEnv
-import qualified Env.Strict          as Env
 import           Inbuilts            (copy)
 import           Introspect
 import           Praxis
@@ -33,7 +31,8 @@ import qualified Data.Set            as Set
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   -- TODO pretty ugly to do this here
-  checkState . typeState . tEnv %%= traverse (LEnv.value normalize)
+  checkState . typeState . varEnv %%= traverse (second normalize)
+  checkState . typeState . conEnv %%= traverse normalize
   checkState . typeState . typeSolve . requirements %%= (\set -> Set.fromList <$> traverse normalize (Set.toList set))
   checkState . typeState . typeSolve . assumptions %%= (\set -> Set.fromList <$> traverse (\c -> view value <$> normalize (phantom c)) (Set.toList set))
   term <- normalize term
@@ -44,9 +43,9 @@ run term = do
 unapplyTypeCon :: Annotated Type -> Maybe (Name, [Annotated Type])
 unapplyTypeCon (_ :< ty) = case ty of
   TypeCon n -> Just (n, [])
-  TypeApply t1 t2 -> case unapplyTypeCon t1 of
-    Just (n, ts) -> Just (n, ts ++ [t2])
-    Nothing      -> Nothing
+  TypeApply ty1 ty2 -> case unapplyTypeCon ty1 of
+    Just (n, tys) -> Just (n, tys ++ [ty2])
+    Nothing       -> Nothing
   _ -> Nothing
 
 assertNormalized :: (Eq a, Term a) => Annotated a -> Praxis ()
@@ -60,17 +59,17 @@ assertNormalized term = do
 reduce :: Disambiguating (Reducer TypeConstraint)
 reduce disambiguate constraint = assertNormalized (phantom constraint) >> case constraint of
 
-  TypeIsEq t1 t2 | t1 == t2 -> return tautology
+  TypeIsEq ty1 ty2 | ty1 == ty2 -> return tautology
 
-  TypeIsEq (_ :< TypeUni Value x) t
-    | x `Set.member` typeUnis t -> return contradiction
-    | otherwise               -> solvedWithSubgoals (x `is` view value t) [ Subgoal (TypeIsValue t) ]
+  TypeIsEq (_ :< TypeUni Value x) ty
+    | x `Set.member` typeUnis ty -> return contradiction
+    | otherwise                  -> solvedWithSubgoals (x `is` view value ty) [ Subgoal (TypeIsValue ty) ]
 
   TypeIsEq op1 op2@(_ :< TypeUni Value _) -> return $ subgoals [ Subgoal (TypeIsEq op2 op1) ] -- handled by the above case
 
-  TypeIsEq (_ :< TypeUni Plain x) t
-    | x `Set.member` typeUnis t -> return contradiction
-    | otherwise               -> solved (x `is` view value t)
+  TypeIsEq (_ :< TypeUni Plain x) ty
+    | x `Set.member` typeUnis ty -> return contradiction
+    | otherwise                  -> solved (x `is` view value ty)
 
   TypeIsEq op1 op2@(_ :< TypeUni Plain _) -> return $ subgoals [ Subgoal (TypeIsEq op2 op1) ] -- handled by the above case
 
@@ -86,30 +85,30 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
 
   TypeIsEq op1 op2@(_ :< TypeUni Ref _) -> return $ subgoals [ Subgoal (TypeIsEq op2 op1) ] -- handled by the above case
 
-  TypeIsEq t1 t2
-    | (Just (n1, t1s), Just (n2, t2s)) <- (unapplyTypeCon t1, unapplyTypeCon t2) ->
+  TypeIsEq ty1 ty2
+    | (Just (n1, ty1s), Just (n2, ty2s)) <- (unapplyTypeCon ty1, unapplyTypeCon ty2) ->
       if n1 == n2
-        then return $ subgoals (zipWith (\t1 t2 -> Subgoal (TypeIsEq t1 t2)) t1s t2s)
+        then return $ subgoals (zipWith (\ty1 ty2 -> Subgoal (TypeIsEq ty1 ty2)) ty1s ty2s)
         else return contradiction
 
-  TypeIsEq (_ :< TypePair s1 s2) (_ :< TypePair t1 t2) -> return $ subgoals [ Subgoal (TypeIsEq s1 t1), Subgoal (TypeIsEq s2 t2) ]
+  TypeIsEq (_ :< TypePair ty1 ty2) (_ :< TypePair ty3 ty4) -> return $ subgoals [ Subgoal (TypeIsEq ty1 ty3), Subgoal (TypeIsEq ty2 ty4) ]
 
-  TypeIsEq (_ :< TypeFn t1 t2) (_ :< TypeFn s1 s2) -> return $ subgoals [ Subgoal (TypeIsEq t1 s1), Subgoal (TypeIsEq t2 s2) ]
+  TypeIsEq (_ :< TypeFn ty1 ty2) (_ :< TypeFn ty3 ty4) -> return $ subgoals [ Subgoal (TypeIsEq ty1 ty3), Subgoal (TypeIsEq ty2 ty4) ]
 
-  TypeIsEq t1'@(_ :< TypeApplyOp _ _) t2' -> do
+  TypeIsEq ty1'@(_ :< TypeApplyOp _ _) ty2' -> do
     let
-      (op1, t1) = splitTypeOp t1'
-      (op2, t2) = splitTypeOp t2'
+      (op1, ty1) = splitTypeOp ty1'
+      (op2, ty2) = splitTypeOp ty2'
     let
-      split = subgoals [ Subgoal (TypeIsEq t1 t2), Subgoal (TypeIsEqIfAffine op1 op2 t1) ]
+      split = subgoals [ Subgoal (TypeIsEq ty1 ty2), Subgoal (TypeIsEqIfAffine op1 op2 ty1) ]
     if disambiguate
       then return split
-      else case (view value t1, view value t2) of
+      else case (view value ty1, view value ty2) of
         (TypeUni Plain _, _) -> return skip
         (_, TypeUni Plain _) -> return skip
         _                    -> return split
 
-  TypeIsEq t1 t2@(_ :< TypeApplyOp _ _) -> reduce disambiguate (TypeIsEq t2 t1) -- handled by the above case
+  TypeIsEq ty1 ty2@(_ :< TypeApplyOp _ _) -> reduce disambiguate (TypeIsEq ty2 ty1) -- handled by the above case
 
   TypeIsEq op1@(_ :< TypeIdentityOp) op2 -> do
     case isRef op2 of
@@ -121,21 +120,21 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
 
   TypeIsEq op1 op2@(_ :< TypeIdentityOp) -> return $ subgoals [ Subgoal (TypeIsEq op2 op1) ] -- handled by the above case
 
-  TypeIsEqIfAffine op1 op2 t -> do
-    affine <- isAffine t
+  TypeIsEqIfAffine op1 op2 ty -> do
+    affine <- isAffine ty
     case affine of
       No      -> return tautology
       Unknown -> return skip
       _       -> return $ subgoals [ Subgoal (TypeIsEq op1 op2) ]
 
-  TypeIsSub t1' t2'@(_ :< TypeApplyOp _ _) -> do
+  TypeIsSub ty1' ty2'@(_ :< TypeApplyOp _ _) -> do
     let
-      (op1, t1) = splitTypeOp t1'
-      (op2, t2) = splitTypeOp t2'
-    case (view value t1, view value t2) of
+      (op1, ty1) = splitTypeOp ty1'
+      (op2, ty2) = splitTypeOp ty2'
+    case (view value ty1, view value ty2) of
       (TypeUni Plain _, _) -> return skip
       (_, TypeUni Plain _) -> return skip
-      _                    -> return $ subgoals [ Subgoal (TypeIsEq t1 t2), Subgoal (TypeIsSubIfAffine op1 op2 t1) ]
+      _                    -> return $ subgoals [ Subgoal (TypeIsEq ty1 ty2), Subgoal (TypeIsSubIfAffine op1 op2 ty1) ]
 
   TypeIsSub _ (_ :< TypeUni Plain _) -> return skip
 
@@ -144,10 +143,10 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
       then return tautology
       else return skip
 
-  TypeIsSub t1 t2 -> return $ subgoals [ Subgoal (TypeIsEq t1 t2) ]
+  TypeIsSub ty1 ty2 -> return $ subgoals [ Subgoal (TypeIsEq ty1 ty2) ]
 
-  TypeIsSubIfAffine op1 op2 t -> do
-    affine <- isAffine t
+  TypeIsSubIfAffine op1 op2 ty -> do
+    affine <- isAffine ty
     case affine of
       No      -> return tautology
       Unknown -> return skip
@@ -159,50 +158,50 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
       Unknown -> return skip
       _       -> return contradiction
 
-  TypeIsValue (_ :< t) -> case t of
-    TypeApplyOp op t -> do
-      affine <- isAffine t
+  TypeIsValue (_ :< ty) -> case ty of
+    TypeApplyOp op ty -> do
+      affine <- isAffine ty
       case affine of
         Unknown  -> return skip
         No       -> error "unnormalized"
-        _        -> return $ subgoals [ Subgoal (TypeIsEq op (TypeIdentityOp `as` phantom KindView)), Subgoal (TypeIsValue t) ]
+        _        -> return $ subgoals [ Subgoal (TypeIsEq op (TypeIdentityOp `as` phantom KindView)), Subgoal (TypeIsValue ty) ]
     TypeVar Plain _ -> return contradiction
     TypeUni Plain _ -> return skip
     _               -> return tautology
 
-  TypeIsRefFree t refLabel
-    | Set.null (typeUnis t)
-      -> if refLabel `Set.member` refLabels t then return contradiction else return tautology
+  TypeIsRefFree ty refLabel
+    | Set.null (typeUnis ty)
+      -> if refLabel `Set.member` refLabels ty then return contradiction else return tautology
     | otherwise
       -> return skip
 
   TypeIsInstance (a0 :< inst) -> case inst of
 
-    TypeApply (_ :< TypeCon "Integral") t | disambiguate
-      -> return $ subgoals [ Subgoal (TypeIsEq t (TypeCon "I32" `as` phantom KindType)) ]
+    TypeApply (_ :< TypeCon "Integral") ty | disambiguate
+      -> return $ subgoals [ Subgoal (TypeIsEq ty (TypeCon "I32" `as` phantom KindType)) ]
 
-    TypeApply (a1 :< TypeCon cls) t -> case view value t of
-      TypeApplyOp op t -> do
+    TypeApply (a1 :< TypeCon cls) ty -> case view value ty of
+      TypeApplyOp op ty -> do
         let
-          instVal = TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) t)
-          instRef = TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) (phantom (TypeApply (phantom (TypeCon "Ref")) t)))
-        affine <- isAffine t
+          instVal = TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) ty)
+          instRef = TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) (phantom (TypeApply (phantom (TypeCon "Ref")) ty)))
+        affine <- isAffine ty
         case (isRef op, affine) of
           (No, _)         -> error "unnormalized"
           (_, No)         -> error "unnormalized"
           (_, Unknown)    -> return skip
           (Unknown, _)    -> return skip
-          (Yes, Yes)      -> reduceTypeConInstance cls "Ref" [t]
-          (Yes, Variable) -> return $ subgoals [ Subgoal instRef, copy t `Implies` instVal ]
+          (Yes, Yes)      -> reduceTypeConInstance cls "Ref" [ty]
+          (Yes, Variable) -> return $ subgoals [ Subgoal instRef, copy ty `Implies` instVal ]
           (Variable, _)   -> return $ subgoals [ Subgoal instRef, Subgoal instVal ]
-      TypePair t1 t2 -> reduceTypeConInstance cls "Pair" [t1, t2]
-      TypeFn t1 t2 -> reduceTypeConInstance cls "Fn" [t1, t2]
+      TypePair ty1 ty2 -> reduceTypeConInstance cls "Pair" [ty1, ty2]
+      TypeFn ty1 ty2 -> reduceTypeConInstance cls "Fn" [ty1, ty2]
       TypeUnit -> reduceTypeConInstance cls "Unit" []
       TypeVar _ _ -> return contradiction
-      _ | Just (n, ts) <- unapplyTypeCon t -> reduceTypeConInstance cls n ts
+      _ | Just (n, tys) <- unapplyTypeCon ty -> reduceTypeConInstance cls n tys
       _ -> return skip
 
-  TypeIsIntegralOver (_ :< t) n -> case t of
+  TypeIsIntegralOver (_ :< ty) n -> case ty of
     TypeCon "I8"    -> checkBounds n (undefined :: I8)
     TypeCon "I16"   -> checkBounds n (undefined :: I16)
     TypeCon "I32"   -> checkBounds n (undefined :: I32)
@@ -224,8 +223,8 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
   where
     reduceTypeConInstance :: Name -> Name -> [Annotated Type] -> Praxis (Reduction TypeConstraint)
     reduceTypeConInstance cls name args = do
-      l <- use (checkState . iEnv)
-      let Just instances = Env.lookup name l
+      l <- use (checkState . instanceEnv)
+      let Just instances = Map.lookup name l
       case Map.lookup cls instances of
         Just resolver -> case resolver args of
           (_, IsInstance)          -> return tautology
@@ -260,7 +259,8 @@ solved resolve = solvedWithSubgoals resolve []
 -- note: assumption is the subgoals are not affected by the solution
 solvedWithSubgoals :: Resolver -> [Subgoal TypeConstraint] -> Praxis (Reduction TypeConstraint)
 solvedWithSubgoals resolve subgoals = do
-  checkState . typeState . tEnv %%= traverse (LEnv.value (normalize . sub resolve))
+  checkState . typeState . varEnv %%= traverse (second (normalize . sub resolve))
+  checkState . typeState . conEnv %%= traverse (normalize . sub resolve)
   return (Progress (Just (resolve, normalize)) subgoals)
 
 are :: [(Name, Type)] -> Resolver
@@ -270,9 +270,9 @@ are ops = embedSub f where
     _           -> Nothing
 
 is :: Name -> Type -> Resolver
-is n t = embedSub f where
+is n ty = embedSub f where
   f (a :< x) = case x of
-    TypeUni _ n' -> if n == n' then Just (a :< t) else Nothing
+    TypeUni _ n' -> if n == n' then Just (a :< ty) else Nothing
     _            -> Nothing
 
 -- TypeOp helpers
@@ -295,7 +295,7 @@ contractTypeOps ops = case Set.toList ops of
     kind :: Annotated Kind
     kind = let (k:ks) = map (view (annotation . just)) (Set.toList ops) in foldr combineKinds k ks
     combineKinds :: Annotated Kind -> Annotated Kind -> Annotated Kind
-    combineKinds (_ :< k1) (_ :< k2) = ((Phantom, Nothing) :<) $ case (k1, k2) of
+    combineKinds (_ :< kind1) (_ :< kind2) = ((Phantom, Nothing) :<) $ case (kind1, kind2) of
       (KindView, KindView) -> KindView
       (KindRef, KindRef)   -> KindRef
       (KindView, KindRef)  -> KindRef
@@ -367,30 +367,30 @@ truthAnd :: Truth -> Truth -> Truth
 truthAnd a b = truthNot (truthOr (truthNot a) (truthNot b))
 
 isAffine :: Annotated Type -> Praxis Truth
-isAffine t = do
+isAffine ty = do
   assumptions' <- use (checkState . typeState . typeSolve . assumptions)
-  if copy t `Set.member` assumptions'
+  if copy ty `Set.member` assumptions'
     then return No
-    else isAffine' t
+    else isAffine' ty
   where
     isAffine' :: Annotated Type -> Praxis Truth
-    isAffine' (a :< t) = case t of
-      TypePair t1 t2 -> isTypeConAffine "Pair" [t1, t2]
-      TypeFn t1 t2 -> isTypeConAffine "Fn" [t1, t2]
+    isAffine' (a :< ty) = case ty of
+      TypePair ty1 ty2 -> isTypeConAffine "Pair" [ty1, ty2]
+      TypeFn ty1 ty2 -> isTypeConAffine "Fn" [ty1, ty2]
       TypeUnit -> isTypeConAffine "Unit" []
-      TypeApplyOp op t -> truthAnd (truthNot (isRef op)) <$> isAffine t
+      TypeApplyOp op ty -> truthAnd (truthNot (isRef op)) <$> isAffine ty
       TypeUni _ _ -> return Unknown
       TypeVar _ _ -> return Variable
-      _ | Just (n, ts) <- unapplyTypeCon (a :< t) -> isTypeConAffine n ts
+      _ | Just (n, tys) <- unapplyTypeCon (a :< ty) -> isTypeConAffine n tys
 
 isTypeConAffine :: Name -> [Annotated Type] -> Praxis Truth
 isTypeConAffine name args = do
-  l <- use (checkState . iEnv)
-  let Just instances = Env.lookup name l
+  l <- use (checkState . instanceEnv)
+  let Just instances = Map.lookup name l
   case Map.lookup "Copy" instances of
     Just resolver -> case resolver args of
       (_, IsInstance)                -> return No
-      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine t | (TypeIsInstance (_ :< TypeApply (_ :< TypeCon "Copy") t)) <- subgoals ]
+      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine ty | (TypeIsInstance (_ :< TypeApply (_ :< TypeCon "Copy") ty)) <- subgoals ]
     Nothing                          -> return Yes
 
 
@@ -452,17 +452,17 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
   expandConstraint :: Source -> TypeConstraint -> Praxis [TypeConstraint]
   expandConstraint src constraint = ((constraint:) <$>) $ case constraint of
     TypeIsInstance (a0 :< inst) -> case inst of
-      TypeApply (a1 :< TypeCon cls) t -> case view value t of
-        TypePair t1 t2 -> expandTypeConInstance cls "Pair" [t1, t2]
-        TypeFn t1 t2 -> expandTypeConInstance cls "Fn" [t1, t2]
+      TypeApply (a1 :< TypeCon cls) ty -> case view value ty of
+        TypePair ty1 ty2 -> expandTypeConInstance cls "Pair" [ty1, ty2]
+        TypeFn ty1 ty2 -> expandTypeConInstance cls "Fn" [ty1, ty2]
         TypeUnit -> expandTypeConInstance cls "Unit" []
         TypeVar _ _ -> return []
-        _ | Just (n, ts) <- unapplyTypeCon t -> expandTypeConInstance cls n ts
+        _ | Just (n, tys) <- unapplyTypeCon ty -> expandTypeConInstance cls n tys
     where
       expandTypeConInstance :: Name -> Name -> [Annotated Type] -> Praxis [TypeConstraint]
       expandTypeConInstance cls name args = do
-        l <- use (checkState . iEnv)
-        let Just instances = Env.lookup name l
+        l <- use (checkState . instanceEnv)
+        let Just instances = Map.lookup name l
         case Map.lookup cls instances of
           Just resolver -> case resolver args of
             (_, IsInstance)          -> throwAt src ("redundant constraint: " <> pretty (phantom constraint))
@@ -474,14 +474,14 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
     TypeIsInstance (_ :< TypeApply _ ty) -> checkConstraintType ty where
       checkConstraintType :: Annotated Type -> Praxis ()
       checkConstraintType (a@(src, _) :< ty) = case ty of
-        TypePair t1 t2
-          -> checkConstraintType t1 >> checkConstraintType t2
-        TypeFn t1 t2
-          -> checkConstraintType t1 >> checkConstraintType t2
+        TypePair ty1 ty2
+          -> checkConstraintType ty1 >> checkConstraintType ty2
+        TypeFn ty1 ty2
+          -> checkConstraintType ty1 >> checkConstraintType ty2
         TypeVar _ n | n `elem` Set.fromList (map (\(_ :< TypePatVar _ n) -> n) boundVars)
           -> return ()
-        _ | Just (n, ts@(_:_)) <- unapplyTypeCon (a :< ty)
-          -> mapM_ checkConstraintType ts
+        _ | Just (n, tys@(_:_)) <- unapplyTypeCon (a :< ty)
+          -> mapM_ checkConstraintType tys
         _
           -> throwAt src $ "illegal constraint: " <> pretty constraint
         -- TODO RefVar and ViewVar ?

@@ -168,9 +168,9 @@ generateDeclType (a@(src, _) :< ty) = case ty of
       deduce :: (Annotated Type -> TypeConstraint) -> [Annotated Type] -> (InstanceOrigin, Instance)
       deduce mkConstraint args' = (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
         f (_ :< t) = case t of
-          TypeVar _  n -> n `lookup` specialisedVars
+          TypeVar _  n -> n `lookup` specializedVars
           _            -> Nothing
-        specialisedVars = zip (map (\(a :< TypePatVar f n) -> n) args) args'
+        specializedVars = zip (map (\(a :< TypePatVar f n) -> n) args) args'
 
       instances = case mode of
         DataUnboxed -> Map.fromList

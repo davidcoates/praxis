@@ -120,7 +120,7 @@ data Exp = Apply (Annotated Exp) (Annotated Exp)
          | Pair (Annotated Exp) (Annotated Exp)
          | Seq (Annotated Exp) (Annotated Exp)
          | Sig (Annotated Exp) (Annotated Type)
-         | Specialise (Annotated Exp) Specialisation
+         | Specialize (Annotated Exp) Specialisation
          | Switch [(Annotated Exp, Annotated Exp)]
          | Unit
          | Var Name

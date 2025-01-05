@@ -225,7 +225,7 @@ instance Term Exp where
     Pair a b        -> Pair <$> f a <*> f b
     Seq a b         -> Seq <$> f a <*> f b
     Sig e t         -> Sig <$> f e <*> f t
-    Specialise e xs -> Specialise <$> f e <*> pairs f xs
+    Specialize e xs -> Specialize <$> f e <*> pairs f xs
     Switch as       -> Switch <$> pairs f as
     Unit            -> pure Unit
     Var n           -> pure (Var n)

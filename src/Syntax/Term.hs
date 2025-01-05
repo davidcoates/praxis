@@ -386,7 +386,7 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
          _Var <$> varId <|>
          _Con <$> conId <|>
          _Lit <$> lit <|>
-         internal (_Specialise <$> annotated exp0 <*> empty) <|>
+         internal (_Specialize <$> annotated exp0 <*> empty) <|>
          tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
          expected "expression(0)"
 

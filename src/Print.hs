@@ -79,7 +79,7 @@ hideLabel x = case typeof x of
     Capture _ _    -> True
     Lambda _ _     -> True
     Read _ _       -> True
-    Specialise _ _ -> True
+    Specialize _ _ -> True
     Sig _ _        -> True
     _              -> False
   IPat -> case x of

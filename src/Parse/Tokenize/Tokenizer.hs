@@ -2,8 +2,8 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
-module Parse.Tokenise.Tokeniser
-  ( Tokeniser
+module Parse.Tokenize.Tokenizer
+  ( Tokenizer
   , expected
   , lookahead
   , match
@@ -19,30 +19,30 @@ import           Token
 import           Control.Applicative (Alternative (..), Applicative (..))
 import           Data.Char.WCWidth   (wcwidth)
 
-newtype Tokeniser a = Tokeniser { runTokeniser :: Parser (Sourced Char) (Sourced a) }
+newtype Tokenizer a = Tokenizer { runTokenizer :: Parser (Sourced Char) (Sourced a) }
 
-instance Functor Tokeniser where
-  fmap f (Tokeniser t) = Tokeniser (fmap (fmap f) t)
+instance Functor Tokenizer where
+  fmap f (Tokenizer t) = Tokenizer (fmap (fmap f) t)
 
-instance Applicative Tokeniser where
-  pure x = Tokeniser $ pure (pure x)
-  (<*>) (Tokeniser s) (Tokeniser t) = Tokeniser $ (fmap (<*>) s) <*> t
+instance Applicative Tokenizer where
+  pure x = Tokenizer $ pure (pure x)
+  (<*>) (Tokenizer s) (Tokenizer t) = Tokenizer $ (fmap (<*>) s) <*> t
 
-instance Alternative Tokeniser where
-  empty = Tokeniser empty
-  Tokeniser a <|> Tokeniser b = Tokeniser (a <|> b)
+instance Alternative Tokenizer where
+  empty = Tokenizer empty
+  Tokenizer a <|> Tokenizer b = Tokenizer (a <|> b)
 
-expected :: String -> Tokeniser a
-expected msg = Tokeniser (Parser.expected msg)
+expected :: String -> Tokenizer a
+expected msg = Tokenizer (Parser.expected msg)
 
-lookahead :: Tokeniser a -> Tokeniser a
-lookahead = Tokeniser . Parser.lookahead . runTokeniser
+lookahead :: Tokenizer a -> Tokenizer a
+lookahead = Tokenizer . Parser.lookahead . runTokenizer
 
-match :: (Char -> Bool) -> Tokeniser Char
-match p = Tokeniser $ Parser.match (p . view value)
+match :: (Char -> Bool) -> Tokenizer Char
+match p = Tokenizer $ Parser.match (p . view value)
 
-run :: Pretty a => Tokeniser (Maybe a) -> String -> Praxis [Sourced a]
-run (Tokeniser t) cs = all (sourced cs) where
+run :: Pretty a => Tokenizer (Maybe a) -> String -> Praxis [Sourced a]
+run (Tokenizer t) cs = all (sourced cs) where
   all [] = pure []
   all cs = case Parser.run t cs of
     (Left e, []) -> throw $ "expected " <> pretty e <> " but found EOF"

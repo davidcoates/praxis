@@ -140,7 +140,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Sig exp _ -> evalExp exp
 
-  Specialise exp specialisation -> do
+  Specialize exp specialisation -> do
     exp <- evalExp exp
     case exp of
       Value.Polymorphic polyFun -> return (polyFun specialisation)

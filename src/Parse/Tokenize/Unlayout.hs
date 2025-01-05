@@ -1,4 +1,4 @@
-module Parse.Tokenise.Unlayout
+module Parse.Tokenize.Unlayout
   ( unlayout
   ) where
 

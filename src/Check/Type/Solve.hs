@@ -49,8 +49,8 @@ unapplyTypeCon (_ :< ty) = case ty of
     Nothing      -> Nothing
   _ -> Nothing
 
-assertNormalised :: (Eq a, Term a) => Annotated a -> Praxis ()
-assertNormalised term = do
+assertNormalized :: (Eq a, Term a) => Annotated a -> Praxis ()
+assertNormalized term = do
   term' <- normalize term
   let str1 = fold (runPrintable (pretty term) Simple)
   let str2 = fold (runPrintable (pretty term') Simple)
@@ -58,7 +58,7 @@ assertNormalised term = do
   return ()
 
 reduce :: Disambiguating (Reducer TypeConstraint)
-reduce disambiguate constraint = assertNormalised (phantom constraint) >> case constraint of
+reduce disambiguate constraint = assertNormalized (phantom constraint) >> case constraint of
 
   TypeIsEq t1 t2 | t1 == t2 -> return tautology
 
@@ -305,7 +305,7 @@ removeTypeOp :: Annotated Type -> Annotated Type -> Annotated Type
 removeTypeOp op1 op2  = contractTypeOps (expandTypeOps op1 `Set.difference` expandTypeOps op2)
 
 -- Term normalizer (after a substitution is applied)
-normalize :: Normaliser
+normalize :: Normalizer
 normalize (a :< x) = case typeof x of
 
   IType -> case x of

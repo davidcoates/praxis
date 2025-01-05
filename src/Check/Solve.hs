@@ -15,7 +15,7 @@
 module Check.Solve
   ( Resolver
   , Disambiguating
-  , Normaliser
+  , Normalizer
   , Subgoal(..)
   , Reduction(..)
   , Reducer(..)
@@ -44,9 +44,9 @@ import qualified Data.Set             as Set
 
 type Resolver = forall a. Term a => Annotated a -> Maybe (Annotated a)
 
-type Normaliser = forall a. Term a => Annotated a -> Praxis (Annotated a)
+type Normalizer = forall a. Term a => Annotated a -> Praxis (Annotated a)
 
-type Solution = (Resolver, Normaliser)
+type Solution = (Resolver, Normalizer)
 
 data Subgoal c = Subgoal c | Implies c c
 

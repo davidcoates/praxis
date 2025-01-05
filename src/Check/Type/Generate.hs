@@ -50,13 +50,13 @@ expIsFunction (_ :< exp) = case exp of
   Cases  _   -> True
   _          -> False
 
-specialiseTypePat :: Annotated TypePat -> Praxis (Name, Annotated Type)
-specialiseTypePat (a :< TypePatVar f n) = (\t -> (n, a :< view value t)) <$> freshTypeUni f
+specializeTypePat :: Annotated TypePat -> Praxis (Name, Annotated Type)
+specializeTypePat (a :< TypePatVar f n) = (\t -> (n, a :< view value t)) <$> freshTypeUni f
 
-specialiseQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Maybe Specialisation)
-specialiseQType src name (_ :< qTy) = case qTy of
+specializeQType :: Source -> Name -> Annotated QType -> Praxis (Annotated Type, Maybe Specialisation)
+specializeQType src name (_ :< qTy) = case qTy of
   Forall vs cs t -> do
-    vs' <- mapM specialiseTypePat vs
+    vs' <- mapM specializeTypePat vs
     let
       typeRewrite :: Term a => Annotated a -> Annotated a
       typeRewrite = sub (embedSub f)
@@ -108,7 +108,7 @@ readVar :: Source -> Name -> Praxis (Name, Annotated Type)
 readVar src name = do
   r@(_ :< TypeRef refName) <- freshRef
   Just entry <- (checkState . typeState . tEnv) `uses` Env.lookup name
-  (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
+  (t, specialisation) <- specializeQType src name (view LEnv.value entry)
   when (view LEnv.used entry > 0) $ throwAt src $ "variable " <> pretty name <> " read after use"
   -- reading a polymorphic term is illformed (and unnecessary since every specialisation is copyable anyway)
   when (isJust specialisation) $ throwAt src $ "illegal read of polymorphic variable " <> pretty name
@@ -120,7 +120,7 @@ readVar src name = do
 useVar :: Source -> Name -> Praxis (Annotated Type, Maybe Specialisation)
 useVar src name = do
   Just entry <- (checkState . typeState . tEnv) `uses` Env.lookup name
-  (t, specialisation) <- specialiseQType src name (view LEnv.value entry)
+  (t, specialisation) <- specializeQType src name (view LEnv.value entry)
   checkState . typeState . tEnv %= LEnv.incUsed name
   unless (isJust specialisation) $ do
     requires [ (src, TypeReasonMultiUse name) :< copy t | view LEnv.used entry > 0 ]
@@ -299,9 +299,9 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
 
   Con name -> do
     qTy <- getConType src name
-    (t, specialisation) <- specialiseQType src name qTy
+    (t, specialisation) <- specializeQType src name qTy
     case specialisation of
-      Just specialisation -> return (t :< Specialise ((src, Just t) :< Con name) specialisation)
+      Just specialisation -> return (t :< Specialize ((src, Just t) :< Con name) specialisation)
       Nothing             -> return (t :< Con name)
 
   Defer exp1 exp2 -> do
@@ -381,7 +381,7 @@ generateExp (a@(src, _) :< exp) = (\(t :< e) -> (src, Just t) :< e) <$> case exp
   Var name -> do
     (t, specialisation) <- useVar src name
     case specialisation of
-      Just specialisation -> return (t :< Specialise ((src, Just t) :< Var name) specialisation)
+      Just specialisation -> return (t :< Specialize ((src, Just t) :< Var name) specialisation)
       Nothing             -> return (t :< Var name)
 
   Where exp decls -> scope src $ do
@@ -424,7 +424,7 @@ generatePat' wrap ((src, _) :< pat) = (\(t, p, aliased) -> (t, (src, Just (wrap 
 
   PatData name pat -> do
     qTy <- getConType src name
-    (conTy, _) <- specialiseQType src name qTy
+    (conTy, _) <- specializeQType src name qTy
     case conTy of
       (_ :< TypeFn argTy retTy) -> do
         layer <- freshLayer

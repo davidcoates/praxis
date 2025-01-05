@@ -1,9 +1,7 @@
 module Main where
 
 import           Common
-import qualified Env.Lazy           as Env
-import           Eval.State         (vEnv)
-import           Eval.Value         (Value (..))
+import           Eval               (runMain)
 import           Inbuilts           (runWithPrelude)
 import           Praxis
 import           Term
@@ -82,13 +80,6 @@ help = Praxis.abort helpStr where
     , "-i interactive"
     , "-h help"
     ]
-
-runMain :: Praxis ()
-runMain = do
-  requireMain
-  Just (Fn f) <- (evalState . vEnv) `uses` Env.lookup "main_0"
-  f Eval.Value.Unit
-  return ()
 
 forever :: Praxis a -> Praxis a
 forever p = try p >> forever p

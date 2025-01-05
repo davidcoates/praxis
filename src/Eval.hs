@@ -1,16 +1,20 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Eval
-  ( runExp
-  , runProgram
+  ( run
+  , runMain
   ) where
 
+import qualified Check.State       as Check
 import           Common
 import qualified Env.Lazy          as Env
+import qualified Env.Linear
 import           Eval.State
 import           Eval.Value        (Value, integerToValue, valueToInteger)
 import qualified Eval.Value        as Value
+import           Introspect
 import           Praxis
 import           Stage
 import           Term
@@ -20,22 +24,41 @@ import           Data.Array.IO
 import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
 
-runExp :: Annotated Exp -> Praxis Value
-runExp exp = save stage $ do
-  stage .= Evaluate
-  clearTerm `ifFlag` debug
-  evalExp exp
+type family Evaluation a where
+  Evaluation Exp = Value
+  Evaluation _   = ()
 
-runProgram :: Annotated Program -> Praxis ()
-runProgram program = save stage $ do
+run :: Term a => Annotated a -> Praxis (Evaluation a)
+run term = save stage $ do
   stage .= Evaluate
-  clearTerm `ifFlag` debug
-  evalProgram program
+  eval term
+
+runMain :: Praxis ()
+runMain = save stage $ do
+  stage .= Evaluate
+  requireMain
+  Just (Value.Fn f) <- (evalState . vEnv) `uses` Env.lookup "main_0"
+  f Value.Unit
+  return ()
+
+requireMain :: Praxis ()
+requireMain = do
+  ty <- (checkState . Check.typeState . Check.tEnv) `uses` Env.Linear.lookup "main_0"
+  case ty of
+    Nothing -> throw ("missing main function" :: String)
+    Just ty
+      | (_ :< Mono (_ :< TypeFn (_ :< TypeUnit) (_ :< TypeUnit))) <- ty
+        -> return ()
+      | otherwise
+        -> throwAt (view source ty) $ "main function has bad type " <> pretty ty <> ", expected () -> ()"
+
+eval :: Term a => Annotated a -> Praxis (Evaluation a)
+eval term = ($ term) $ case typeof (view value term) of
+  IProgram -> evalProgram
+  IExp     -> evalExp
 
 evalProgram :: Annotated Program -> Praxis ()
-evalProgram (_ :< Program decls) = do
-  traverse evalDecl decls
-  return ()
+evalProgram (_ :< Program decls) = traverse evalDecl decls >> return ()
 
 -- | A helper for decls, irrefutably matching the [b] argument
 irrefMapM :: Monad m => ((a, b) -> m c) -> [a] -> [b] -> m [c]

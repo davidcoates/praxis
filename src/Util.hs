@@ -34,10 +34,10 @@ check :: forall a. Term a => I a -> String -> Praxis (Annotated a)
 check _ term = Parse.parse term >>= Check.check :: Praxis (Annotated a)
 
 evalProgram :: String -> Praxis ()
-evalProgram program = check IProgram program >>= Eval.runProgram
+evalProgram program = check IProgram program >>= Eval.run
 
 evalExp :: String -> Praxis Value
-evalExp exp = check IExp exp >>= Eval.runExp
+evalExp exp = check IExp exp >>= Eval.run
 
 
 -- Helpers for tests

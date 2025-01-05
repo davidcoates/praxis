@@ -42,8 +42,6 @@ module Praxis
   , clearTerm
   , ifFlag
   , display
-
-  , requireMain
   )
   where
 
@@ -64,8 +62,6 @@ import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import           Data.Maybe                   (fromMaybe)
 import qualified Data.Monoid.Colorful         as Colored
-import qualified Env.Lazy
-import qualified Env.Linear
 import           Introspect
 import qualified System.Console.Terminal.Size as Terminal
 
@@ -257,14 +253,3 @@ freshVar var = do
   let i = Map.findWithDefault 0 var m
   fresh . freshVars .= (Map.insert var (i+1) m)
   return ("_" ++ var ++ "_" ++ show i)
-
-requireMain :: Praxis ()
-requireMain = do
-  ty <- (checkState . Check.typeState . Check.tEnv) `uses` Env.Linear.lookup "main_0"
-  case ty of
-    Nothing -> throw ("missing main function" :: String)
-    Just ty
-      | (_ :< Mono (_ :< TypeFn (_ :< TypeUnit) (_ :< TypeUnit))) <- ty
-        -> return ()
-      | otherwise
-        -> throwAt (view source ty) $ "main function has bad type " <> pretty ty <> ", expected () -> ()"

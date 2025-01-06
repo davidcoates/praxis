@@ -33,20 +33,22 @@ view_0 : forall ?v_0 a_0 b_0 . ?v_0 ( a_0 , b_0 ) -> ( ?v_0 b_0 , ?v_0 a_0 ) = \
     let program = trim [r|
 datatype Box &v !a = Box &v !a
 
-datatype rec List a = Nil () | Cons (a, List a)
+rec datatype List a = Nil () | Cons (a, List a)
 
 box = Box "x"
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
 datatype unboxed Box &v !a = Box &v !a
-datatype rec List a = Nil ( ) | Cons ( a , List a )
+rec
+  datatype boxed List a = Nil ( ) | Cons ( a , List a )
 box = Box "x"
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
 datatype unboxed Box &v_0 !a_0 = [forall &v_0 !a_0 . &v_0 !a_0 -> Box &v_0 !a_0] Box &v_0 !a_0
-datatype rec List a_1 = [forall a_1 . ( ) -> List a_1] Nil ( ) | [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
+rec
+  datatype boxed List a_1 = [forall a_1 . ( ) -> List a_1] Nil ( ) | [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
 box_0 = [&'l0 String -> Box &'l0 String] Box [&'l0 String] "x"
 |]
 
@@ -78,7 +80,7 @@ do
   describe "read safety" $ do
 
     let program = trim [r|
-datatype rec List a = Nil () | Cons (a, List a)
+rec datatype List a = Nil () | Cons (a, List a)
 
 x = Cons (1, Cons (2, Cons (3, Nil ())))
 
@@ -87,7 +89,8 @@ y = read x in (1, x)
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype rec List a = Nil ( ) | Cons ( a , List a )
+rec
+  datatype boxed List a = Nil ( ) | Cons ( a , List a )
 x = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
 y = read x in ( 1 , x )
 |]

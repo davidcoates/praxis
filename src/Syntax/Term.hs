@@ -137,6 +137,7 @@ definePrisms ''Bind
 definePrisms ''DataCon
 definePrisms ''DataMode
 definePrisms ''Decl
+definePrisms ''DeclRec
 definePrisms ''DeclTerm
 definePrisms ''DeclType
 definePrisms ''Exp
@@ -167,6 +168,7 @@ syntax = \case
   -- | T0
   IDataCon        -> dataCon
   IDecl           -> decl
+  IDeclRec        -> declRec
   IDeclTerm       -> declTerm
   IDeclType       -> declType
   IExp            -> exp
@@ -255,26 +257,66 @@ program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) <|> expected "program"
 
 decl :: Syntax f => f Decl
-decl = declSyn <|>
-       _DeclType <$> annotated declType <|>
+decl = _DeclRec <$> reservedId "rec" *> blockOrLine (annotated declRec) <|>
+       declSyn <|>
        declOp <|>
        _DeclTerm <$> annotated declTerm <|>
-      expected "declaration"
+       _DeclType <$> annotated declType <|>
+       expected "declaration"
+
+declRec :: Syntax f => f DeclRec
+declRec = _DeclRecTerm <$> annotated declTerm <|>
+          _DeclRecType <$> annotated declType <|>
+          expected "recursive declaration"
+
+declOp :: Syntax f => f Decl
+declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
+
+op :: Syntax f => f Op
+op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator section"  where
+  atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> expected "operator or hole"
+
+opRules :: Syntax f => f OpRules
+opRules = _OpRulesSugar <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
+          internal (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
+          internal (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
+
+assoc :: Syntax f => f Assoc
+assoc = assoc' <* contextualId "associative" where
+  assoc' = _AssocLeft <$> contextualId "left" <|>
+           _AssocRight <$> contextualId "right"
+
+precs :: Syntax f => f [Annotated Prec]
+precs = blockLike (contextualId "precedence") (annotated prec)
+
+prec :: Syntax f => f Prec
+prec = _Prec <$> ordering <*> op where
+  ordering = _GT <$> contextualId "above" <|>
+             _LT <$> contextualId "below" <|>
+             _EQ <$> contextualId "equal"
 
 declSyn :: Syntax f => f Decl
 declSyn = _DeclSynSugar <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
 
 declType :: Syntax f => f DeclType
-declType = declTypeData <|> declTypeEnum
+declType = declTypeDataSugar <|> internal declTypeData <|> declTypeEnum where
 
-declTypeData :: Syntax f => f DeclType
-declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated typePat) <*> reservedSym "=" *> dataCons where
+  declTypeData :: Syntax f => f DeclType
+  declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated typePat) <*> reservedSym "=" *> dataCons
+
+  declTypeDataSugar :: Syntax f => f DeclType
+  declTypeDataSugar = _DeclTypeDataSugar <$> reservedId "datatype" *> optional dataMode <*> conId <*> many (annotated typePat) <*> reservedSym "=" *> dataCons
+
+  dataCons :: Syntax f => f [Annotated DataCon]
   dataCons = _Cons <$> annotated dataCon <*> many (contextualOp "|" *> annotated dataCon)
-  dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataRec <$> reservedId "rec") <|> (_DataUnboxed <$> (reservedId "unboxed" <|> pure ()))
 
-declTypeEnum :: Syntax f => f DeclType
-declTypeEnum = _DeclTypeEnum <$> reservedId "enum" *> conId <*> reservedSym "=" *> alts where
-  alts = _Cons <$> conId <*> many (contextualOp "|" *> conId)
+  dataMode :: Syntax f => f DataMode
+  dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataUnboxed <$> reservedId "unboxed")
+
+  declTypeEnum :: Syntax f => f DeclType
+  declTypeEnum = _DeclTypeEnum <$> reservedId "enum" *> conId <*> reservedSym "=" *> alts where
+    alts = _Cons <$> conId <*> many (contextualOp "|" *> conId)
+
 
 dataCon :: Syntax f => f DataCon
 dataCon = _DataCon <$> conId <*> annotated ty1
@@ -284,12 +326,10 @@ typePat = _TypePatVar <$> flavoredVarId <|>
           expected "type variable"
 
 declTerm :: Syntax f => f DeclTerm
-declTerm = declTermRec <|> declTerm' <|> expected "term declaration/definition" where
-  declTerm' = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> expected "non-rec term declaration/definition"
+declTerm = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> expected "term declaration" where
   declTermSig = reservedSym ":" *> annotated qTy
   declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
-  declTermRec = _DeclTermRec <$> reservedId "rec" *> blockOrLine (annotated declTerm')
 
 bind :: Syntax f => f Bind
 bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> expected "binding"
@@ -399,32 +439,6 @@ stmt = _StmtBind <$> reservedId "let" *> annotated bind <|> _StmtExp <$> annotat
 
 alt :: Syntax f => f (Annotated Pat, Annotated Exp)
 alt = annotated pat <*> reservedSym "->" *> annotated exp <|> expected "case alternative"
-
-declOp :: Syntax f => f Decl
-declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
-
-op :: Syntax f => f Op
-op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator section"  where
-  atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> expected "operator or hole"
-
-opRules :: Syntax f => f OpRules
-opRules = _OpRulesSugar <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
-          internal (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
-          internal (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
-
-assoc :: Syntax f => f Assoc
-assoc = assoc' <* contextualId "associative" where
-  assoc' = _AssocLeft <$> contextualId "left" <|>
-           _AssocRight <$> contextualId "right"
-
-precs :: Syntax f => f [Annotated Prec]
-precs = blockLike (contextualId "precedence") (annotated prec)
-
-prec :: Syntax f => f Prec
-prec = _Prec <$> ordering <*> op where
-  ordering = _GT <$> contextualId "above" <|>
-             _LT <$> contextualId "below" <|>
-             _EQ <$> contextualId "equal"
 
 typeRequirement :: Syntax f => f TypeRequirement
 typeRequirement = _Requirement <$> typeConstraint

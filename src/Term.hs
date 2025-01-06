@@ -18,6 +18,7 @@ module Term
   , DataCon(..)
   , DataMode(..)
   , Decl(..)
+  , DeclRec(..)
   , DeclTerm(..)
   , DeclType(..)
   , Exp(..)
@@ -82,23 +83,28 @@ data Bind = Bind (Annotated Pat) (Annotated Exp)
 data DataCon = DataCon Name (Annotated Type)
   deriving (Eq, Ord)
 
-data DataMode = DataUnboxed | DataBoxed | DataRec
-  deriving (Eq, Ord)
-
-data DeclType = DeclTypeData DataMode Name [Annotated TypePat] [Annotated DataCon]
-              | DeclTypeEnum Name [Name]
-  deriving  (Eq, Ord)
-
-data DeclTerm = DeclTermRec [Annotated DeclTerm]
-              | DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
-              | DeclTermDefSugar Name [Annotated Pat] (Annotated Exp)
-              | DeclTermSigSugar Name (Annotated QType)
+data DataMode = DataUnboxed | DataBoxed
   deriving (Eq, Ord)
 
 data Decl = DeclOpSugar (Annotated Op) Name (Annotated OpRules)
+          | DeclRec [Annotated DeclRec]
           | DeclSynSugar Name (Annotated Type)
-          | DeclType (Annotated DeclType)
           | DeclTerm (Annotated DeclTerm)
+          | DeclType (Annotated DeclType)
+  deriving (Eq, Ord)
+
+data DeclRec = DeclRecTerm (Annotated DeclTerm)
+             | DeclRecType (Annotated DeclType)
+  deriving (Eq, Ord)
+
+data DeclType = DeclTypeData DataMode Name [Annotated TypePat] [Annotated DataCon]
+              | DeclTypeDataSugar (Maybe DataMode) Name [Annotated TypePat] [Annotated DataCon]
+              | DeclTypeEnum Name [Name]
+  deriving  (Eq, Ord)
+
+data DeclTerm = DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
+              | DeclTermDefSugar Name [Annotated Pat] (Annotated Exp)
+              | DeclTermSigSugar Name (Annotated QType)
   deriving (Eq, Ord)
 
 -- TODO constraints

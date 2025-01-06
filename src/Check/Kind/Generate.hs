@@ -84,6 +84,7 @@ run term = do
 -- TODO since we ignore annotation of input, could adjust this...
 generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case typeof (view value term) of
+  IDecl     -> generateDecl
   IDeclTerm -> generateDeclTerm
   IDeclType -> generateDeclType
   IType     -> generateType
@@ -183,19 +184,42 @@ generateDataCon (a@(src, _) :< DataCon name arg) = do
   return dataCon
 
 
+generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
+generateDecl (a :< decl) = (a :<) <$> case decl of
+
+  DeclRec decls -> do
+    actions <- mapM preDeclare decls
+    decls <- series actions
+    return (DeclRec decls)
+     where
+      declTypeName (_ :< DeclTypeData _ name _ _) = name
+      declTypeName (_ :< DeclTypeEnum name _)     = name
+      preDeclare :: Annotated DeclRec -> Praxis (Praxis (Annotated DeclRec))
+      preDeclare (a@(src, _) :< decl) = case decl of
+        DeclRecTerm declTerm -> return $ (\declTerm -> a :< DeclRecTerm declTerm) <$> generateDeclTerm declTerm
+        DeclRecType declType -> do { kind <- freshKindUni; introCon src (declTypeName declType) kind; return ((\declType -> a :< DeclRecType declType) <$> generateDeclType' (Just kind) declType) }
+
+  _ -> recurseTerm generate decl
+
+
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
-generateDeclType (a@(src, _) :< ty) = case ty of
+generateDeclType = generateDeclType' Nothing
+
+generateDeclType' :: Maybe (Annotated Kind) -> Annotated DeclType -> Praxis (Annotated DeclType)
+generateDeclType' forwardKind (a@(src, _) :< ty) = case ty of
 
   DeclTypeData mode name args alts -> do
-
-    kind <- freshKindUni
-    when (mode == DataRec) $ introCon src name kind
     (args, alts) <- scope $ do
         checkDistinct src args
         args <- traverse generate args
         alts <- traverse generate alts
         return (args, alts)
-    unless (mode == DataRec) $ introCon src name kind
+    kind <- case forwardKind of
+      Just kind -> return kind
+      Nothing   -> do
+        kind <- freshKindUni
+        introCon src name kind
+        return kind
     let
       mkKind args = case args of
         []         -> phantom KindType
@@ -216,7 +240,7 @@ generateDeclType (a@(src, _) :< ty) = case ty of
           , ("Copy",           deduce copy)
           , ("Capture",        deduce capture)
           ]
-        _ -> Map.fromList
+        DataBoxed -> Map.fromList
           [ ("Clone",          deduce clone)
           , ("Dispose",        deduce dispose)
           ]

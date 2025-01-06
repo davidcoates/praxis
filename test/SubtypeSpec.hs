@@ -15,7 +15,7 @@ spec = do
   describe "view subsumption" $ do
 
     let program = trim [r|
-datatype rec List a = Nil () | Cons (a, List a)
+rec datatype List a = Nil () | Cons (a, List a)
 
 -- TODO this ought to be a no-op for value views
 rec
@@ -36,7 +36,8 @@ operator (_ ++ _) = concat where
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype rec List a = Nil ( ) | Cons ( a , List a )
+rec
+  datatype boxed List a = Nil ( ) | Cons ( a , List a )
 rec
   copy : forall ?v a . ?v List a -> List ( ?v a ) = cases
     Nil ( ) -> Nil ( )
@@ -49,7 +50,8 @@ rec
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-datatype rec List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
+rec
+  datatype boxed List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
   copy_0 : forall ?v_0 a_1 . ?v_0 List a_1 -> List ( ?v_0 a_1 ) = [?v_0 List a_1 -> List ( ?v_0 a_1 )] cases
     [?v_0 List a_1] Nil [( )] ( ) -> [( ) -> List ( ?v_0 a_1 )] Nil [( )] ( )

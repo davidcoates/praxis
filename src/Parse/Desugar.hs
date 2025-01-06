@@ -42,24 +42,27 @@ run term = do
 
 desugar :: Term a => Annotated a -> Praxis (Annotated a)
 desugar term = ($ term) $ case typeof (view value term) of
-  IDecl     -> error "standalone IDecl"
-  IDeclTerm -> error "standalone IDeclTerm"
-  IExp      -> desugarExp
-  IOp       -> desugarOp
-  IOpRules  -> error "standalone IOpRules"
-  IPat      -> desugarPat
-  IProgram  -> desugarProgram
-  IType     -> desugarType
-  _         -> value (recurseTerm desugar)
+  IBind           -> value (recurseTerm desugar)
+  IDataCon        -> value (recurseTerm desugar)
+  IExp            -> desugarExp
+  IKind           -> value (recurseTerm desugar)
+  IOp             -> desugarOp
+  IPat            -> desugarPat
+  IProgram        -> desugarProgram
+  IQType          -> value (recurseTerm desugar)
+  ITypePat        -> value (recurseTerm desugar)
+  IType           -> desugarType
+  ITypeConstraint -> value (recurseTerm desugar)
+    -- TODO
+  idx             -> error (show idx)
 
 
 -- Desugaring proper
 
 desugarProgram :: Annotated Program -> Praxis (Annotated Program)
 desugarProgram (a :< Program decls) = do
-  decls <- desugarDecls decls
+  decls <- (catMaybes <$> traverse desugarDecl decls) >>= coalesceDecls
   return (a :< Program decls)
-
 
 collectFreeVars :: Annotated Exp -> Set Name
 collectFreeVars x = collectFreeVars' x where
@@ -90,7 +93,7 @@ desugarExpRef (a :< exp) = case exp of
   VarRefSugar var -> return (a :< Var var, Set.singleton var)
 
   _ -> do
-    exp <- desugar (a :< exp)
+    exp <- desugarExp (a :< exp)
     return (exp, Set.empty)
 
 
@@ -98,7 +101,7 @@ desugarExp :: Annotated Exp -> Praxis (Annotated Exp)
 desugarExp (a@(src, _) :< exp) = case exp of
 
   Apply f x -> do
-    f <- desugar f
+    f <- desugarExp f
     let freeVars = collectFreeVars x
     (x, readVars) <- desugarExpRef x
     let mixedVars = freeVars `Set.intersection` readVars
@@ -134,12 +137,11 @@ desugarExp (a@(src, _) :< exp) = case exp of
   Con "False" -> pure (a :< Lit (Bool False))
 
   Where exp decls -> do
-    exp <- desugar exp
-    decls <- desugarDeclTerms decls
+    exp <- desugarExp exp
+    decls <- traverse (desugarDeclTerm False) decls >>= coalesceDeclTerms
     return (a :< Where exp decls)
 
   _           -> (a :<) <$> recurseTerm desugar exp
-
 
 
 desugarOp :: Annotated Op -> Praxis (Annotated Op)
@@ -169,40 +171,12 @@ desugarOpRules op (a@(src, _) :< OpRulesSugar rules) = do
     return (a :< OpRules (listToMaybe assocs) (concat precs))
 
 
-desugarDeclTerms :: [Annotated DeclTerm] -> Praxis [Annotated DeclTerm]
-desugarDeclTerms [] = pure []
-desugarDeclTerms (a@(src, _) :< decl : decls) = case decl of
-
-  DeclTermDefSugar name args exp -> do
-    args <- mapM desugar args
-    exp <- desugar exp
-    let decl = a :< DeclTermVar name Nothing (curry args exp)
-        curry :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
-        curry     [] e = e
-        curry (p:ps) e = (view source p <> view source e, Nothing) :< Lambda p (curry ps e)
-    decls <- desugarDeclTerms decls
-    return (decl:decls)
-
-  DeclTermRec recDeclTerms -> do
-    recDeclTerms <- desugarDeclTerms recDeclTerms
-    decls <- desugarDeclTerms decls
-    return (a :< DeclTermRec recDeclTerms : decls)
-
-  DeclTermSigSugar name ty -> do
-    ty <- desugar ty
-    desugarDeclTerms decls >>= \case
-      (a' :< DeclTermVar name' Nothing exp) : decls
-        | name == name' -> return $ ((a <> a') :< DeclTermVar name (Just ty) exp) : decls
-      _ -> throwAt src $ "declaration of " <> pretty name <> " lacks an accompanying binding"
-
-
-desugarDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
-desugarDecls [] = pure []
-desugarDecls (a@(src, _) :< decl : decls) = case decl of
+desugarDecl :: Annotated Decl -> Praxis (Maybe (Annotated Decl))
+desugarDecl (a@(src, _) :< decl) = case decl of
 
   DeclOpSugar op name rules -> do
 
-    op@(_ :< Op parts) <- desugar op
+    op@(_ :< Op parts) <- desugarOp op
     rules@(_ :< OpRules assoc precs) <- desugarOpRules op rules
 
     -- For simplicity of managing the op table, allow only one equal precedence relation
@@ -238,32 +212,107 @@ desugarDecls (a@(src, _) :< decl : decls) = case decl of
 
     parseState . opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
 
-    decls <- desugarDecls decls
-    return decls
+    return Nothing
+
+  DeclRec decls -> do
+    decls <- traverse desugarDeclRec decls >>= coalesceDeclRecs
+    return $ Just (a :< DeclRec decls)
 
   DeclSynSugar name ty -> do
     ty <- desugar ty
     parseState . typeSynonyms %= Map.insert name ty
-    decls <- desugarDecls decls
-    return decls
+    return Nothing
 
-  DeclTerm term -> do
-    let (terms, decls') = coalesceDeclTerms decls
-    terms <- desugarDeclTerms (term:terms)
-    decls' <- desugarDecls decls'
-    return $ (map (\term@(a :< _) -> (a :< DeclTerm term)) terms) ++ decls'
+  DeclTerm decl -> do
+    decl <- desugarDeclTerm False decl
+    return $ Just (a :< DeclTerm decl)
 
-  DeclType ty -> do
-    ty <- desugar ty
-    decls <- desugarDecls decls
-    return (a :< DeclType ty : decls)
+  DeclType decl -> do
+    decl <- desugarDeclType False decl
+    return $ Just (a :< DeclType decl)
 
 
-coalesceDeclTerms :: [Annotated Decl] -> ([Annotated DeclTerm], [Annotated Decl])
-coalesceDeclTerms [] = ([], [])
-coalesceDeclTerms (decl:decls) = case view value decl of
-  DeclTerm term -> let (terms, decls') = coalesceDeclTerms decls in (term : terms, decls')
-  _             -> ([], decl:decls)
+desugarDeclRec :: Annotated DeclRec -> Praxis (Annotated DeclRec)
+desugarDeclRec (a@(src, _) :< decl) = (a :<) <$> case decl of
+
+  DeclRecTerm decl -> DeclRecTerm <$> desugarDeclTerm True decl
+
+  DeclRecType decl -> DeclRecType <$> desugarDeclType True decl
+
+
+expIsFunction :: Annotated Exp -> Bool
+expIsFunction (_ :< exp) = case exp of
+  Lambda _ _ -> True
+  Cases  _   -> True
+  _          -> False
+
+
+desugarDeclTerm :: Bool -> Annotated DeclTerm -> Praxis (Annotated DeclTerm)
+desugarDeclTerm recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
+
+  DeclTermDefSugar name args exp -> do
+    args <- mapM desugarPat args
+    let
+      curry :: [Annotated Pat] -> Annotated Exp -> Annotated Exp
+      curry []     e = e
+      curry (p:ps) e = (view source p <> view source e, Nothing) :< Lambda p (curry ps e)
+    exp <- curry args <$> desugarExp exp
+    when (recursive && not (expIsFunction exp)) $ throwAt src $ "non-function " <> pretty name <> " can not be recursive"
+    return $ DeclTermVar name Nothing exp
+
+  DeclTermSigSugar _ _ -> recurseTerm desugar decl -- handled by coalesce*
+
+
+desugarDeclType :: Bool -> Annotated DeclType -> Praxis (Annotated DeclType)
+desugarDeclType recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
+
+  DeclTypeDataSugar optMode name args alts -> do
+    args <- traverse desugar args
+    alts <- traverse desugar alts
+    let mode = case optMode of { Nothing -> if recursive then DataBoxed else DataUnboxed; Just mode -> mode }
+    when (recursive && mode == DataUnboxed) $ throwAt src $ "recursive datatype " <> pretty name <> " can not be unboxed"
+    return (DeclTypeData mode name args alts)
+
+  DeclTypeEnum name _
+    | recursive -> throwAt src $ "enum " <> pretty name <> " can not be recursive"
+    | otherwise -> recurseTerm desugar decl
+
+
+coalesce :: (a -> Maybe (Source, b, DeclTerm)) -> ((b, b, DeclTerm) -> a) -> [a] -> Praxis [a]
+coalesce destruct construct = \case
+  [] -> return []
+  (a1:as)
+    | Just (src, b1, DeclTermSigSugar name1 sig) <- destruct a1 -> do
+      let fail = throwAt src $ "declaration of " <> pretty name1 <> " lacks an accompanying binding"
+      case as of
+        (a2:as) -> case destruct a2 of
+          Just (_, b2, DeclTermVar name2 _ exp)
+            | name1 == name2
+              -> (construct (b1, b2, DeclTermVar name2 (Just sig) exp) :) <$> coalesce destruct construct as
+          _  -> fail
+        _ -> fail
+    | otherwise
+      -> (a1:) <$> coalesce destruct construct as
+
+coalesceDeclTerms :: [Annotated DeclTerm] -> Praxis [Annotated DeclTerm]
+coalesceDeclTerms = coalesce destruct construct where
+  destruct (a@(src,_) :< decl) = Just (src, a, decl)
+  construct (a1, a2, decl) = (a1 <> a2) :< decl
+
+coalesceDeclRecs :: [Annotated DeclRec] -> Praxis [Annotated DeclRec]
+coalesceDeclRecs = coalesce destruct construct where
+  destruct = \case
+    (a1@(src, _) :< DeclRecTerm (a2 :< decl)) -> Just (src, (a1, a2), decl)
+    _ -> Nothing
+  construct ((a1, a2), (b1, b2), decl) = (a1 <> b1) :< DeclRecTerm ((a2 <> b2) :< decl)
+
+coalesceDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
+coalesceDecls = coalesce destruct construct where
+  destruct = \case
+    (a1@(src, _) :< DeclTerm (a2 :< decl)) -> Just (src, (a1, a2), decl)
+    _ -> Nothing
+  construct ((a1, a2), (b1, b2), decl) = (a1 <> b1) :< DeclTerm ((a2 <> b2) :< decl)
+
 
 -- TODO check for overlapping patterns?
 desugarPat :: Annotated Pat -> Praxis (Annotated Pat)

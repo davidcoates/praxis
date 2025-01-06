@@ -114,12 +114,7 @@ f x = f x where
   f : I32 -> I32
   f x = x
 
-g x = f x where rec
-  f = cases
-    0 -> 1
-    n -> f (n - 1) * n
-
-h x = f x where
+g x = f x where
   f = cases
     0 -> 1
     n -> f (n - 1) * n
@@ -129,16 +124,11 @@ h x = f x where
 f_1 = \ [I32] x_0 -> [I32] [I32 -> I32] f_0 [I32] x_0 where
   f_0 : I32 -> I32 = \ [I32] x_1 -> [I32] x_1
 g_0 = \ [I32] x_2 -> [I32] [I32 -> I32] f_2 [I32] x_2 where
-  rec
-    f_2 = [I32 -> I32] cases
-      [I32] 0 -> [I32] 1
-      [I32] n_0 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_2 ( [( I32 , I32 ) -> I32] subtract ( [I32] n_0 , [I32] 1 ) ) , [I32] n_0 )
-h_0 = \ [I32] x_3 -> [I32] [I32 -> I32] f_3 [I32] x_3 where
-  f_3 = [I32 -> I32] cases
+  f_2 = [I32 -> I32] cases
     [I32] 0 -> [I32] 1
-    [I32] n_1 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_1 ( [( I32 , I32 ) -> I32] subtract ( [I32] n_1 , [I32] 1 ) ) , [I32] n_1 )
+    [I32] n_0 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_1 ( [( I32 , I32 ) -> I32] subtract ( [I32] n_0 , [I32] 1 ) ) , [I32] n_0 )
 |]
 
     it "evals" $ do
       runEvaluate program "f 5" `shouldReturn` "5"
-      runEvaluate program "g 5" `shouldReturn` "120"
+      runEvaluate program "g 5" `shouldReturn` "20"

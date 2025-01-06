@@ -74,16 +74,10 @@ irrefMapM f as bs = case as of
 evalDecl :: Annotated Decl -> Praxis ()
 evalDecl (_ :< decl) = case decl of
 
-  DeclTerm decl -> evalDeclTerm decl
-
-  DeclType _    -> return ()
-
-
-evalDeclTerm :: Annotated DeclTerm -> Praxis ()
-evalDeclTerm (_ :< decl) = case decl of
-
-  DeclTermRec decls -> do
-    let (names, exps) = unzip [ (name, exp) | (_ :< DeclTermVar name _ exp) <- decls ]
+  DeclRec decls -> do
+    let
+      declTerms = mapMaybe (\(_ :< decl) -> case decl of { DeclRecTerm declTerm -> Just declTerm; _ -> Nothing }) decls
+      (names, exps) = unzip [ (name, exp) | (_ :< DeclTermVar name _ exp) <- declTerms ]
     -- To support mutual recursion, each function needs to see the evaluation of all other functions (including itself).
     -- Leverage mfix to find the fixpoint.
     mfix $ \values -> do
@@ -92,6 +86,14 @@ evalDeclTerm (_ :< decl) = case decl of
       irrefMapM (\(name, value) -> (evalState . valueEnv) %= Map.insert name value) names values
       mapM evalExp exps
     return ()
+
+  DeclTerm decl -> evalDeclTerm decl
+
+  DeclType _ -> return ()
+
+
+evalDeclTerm :: Annotated DeclTerm -> Praxis ()
+evalDeclTerm (_ :< decl) = case decl of
 
   DeclTermVar name _ exp -> do
     value <- evalExp exp

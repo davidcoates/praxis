@@ -120,12 +120,6 @@ getType term = view (annotation . just) term
 mono :: Annotated Type -> Annotated QType
 mono ty = (view source ty, Nothing) :< Mono ty
 
-expIsFunction :: Annotated Exp -> Bool
-expIsFunction (_ :< exp) = case exp of
-  Lambda _ _ -> True
-  Cases  _   -> True
-  _          -> False
-
 specializeTypePat :: Annotated TypePat -> Praxis (Name, Annotated Type)
 specializeTypePat (a :< TypePatVar f n) = (\ty -> (n, a :< view value ty)) <$> freshTypeUni f
 
@@ -185,6 +179,7 @@ generate :: Term a => Annotated a -> Praxis (Annotated a)
 generate term = ($ term) $ case typeof (view value term) of
   IBind     -> generateBind
   IDataCon  -> error "standalone DataCon"
+  IDecl     -> generateDecl
   IDeclTerm -> generateDeclTerm
   IDeclType -> generateDeclType
   IExp      -> generateExp
@@ -200,6 +195,32 @@ parallel _ [x]    = (:[]) <$> x
 parallel src (x:xs) = do
   (a, as) <- join src x (parallel src xs)
   return (a:as)
+
+generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
+generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
+
+  DeclRec decls -> do
+    let names = [ name | (_ :< DeclRecTerm (_ :< DeclTermVar name _ _)) <- decls ]
+    unless (isDistinct names) $ throwAt src ("recursive declarations are not distinct" :: String)
+    actions <- mapM preDeclare decls
+    decls <- series actions
+    return (DeclRec decls)
+    where
+      getTypeFromSig = \case
+        Nothing -> mono <$> freshTypeUni Plain
+        Just ty -> pure ty
+      preDeclare :: Annotated DeclRec -> Praxis (Praxis (Annotated DeclRec))
+      preDeclare (a@(src, _) :< decl) = ((a :<) <$>) <$> case decl of
+        DeclRecTerm declTerm@(a :< DeclTermVar name sig exp) -> do
+          ty <- getTypeFromSig sig
+          rename <- introVar src name ty
+          return (DeclRecTerm <$> generateDeclTerm' (Just ty) (a :< DeclTermVar rename sig exp))
+        DeclRecType declType -> do
+           -- FIXME: should pre-declare the constructors ?
+          return (DeclRecType <$> generateDeclType declType)
+
+  _ -> recurseTerm generate decl
+
 
 generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
 generateDeclType (a@(src, Just kind) :< ty) = case ty of
@@ -244,21 +265,6 @@ generateDeclTerm = generateDeclTerm' Nothing
 generateDeclTerm' :: Maybe (Annotated QType) -> Annotated DeclTerm -> Praxis (Annotated DeclTerm)
 generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  DeclTermRec decls -> do
-    let names = map (\(_ :< DeclTermVar name _ _) -> name) decls
-    unless (isDistinct names) $ throwAt src ("recursive declarations are not distinct" :: String)
-    terms <- mapM preDeclare decls
-    decls <- mapM (\(ty, decl) -> generateDeclTerm' (Just ty) decl) terms
-    return $ DeclTermRec decls
-    where
-      getTypeFromSig = \case
-        Nothing -> mono <$> freshTypeUni Plain
-        Just ty -> pure ty
-      preDeclare decl = case decl of
-        (a@(src, _) :< DeclTermVar name sig exp)
-          | expIsFunction exp -> do { ty <- getTypeFromSig sig; rename <- introVar src name ty; return (ty, a :< DeclTermVar rename sig exp) }
-          | otherwise         -> throwAt src $ "non-function " <> pretty name <> " can not be recursive"
-
   DeclTermVar name sig exp -> case sig of
 
       Nothing -> do
@@ -283,7 +289,6 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = (a :<) <$> case decl of
             return $ DeclTermVar rename sig exp
 
       Just sig'@(_ :< Forall vs cs ty) -> do
-        when (not (expIsFunction exp)) $ throwAt src $ "non-function " <> pretty name <> " can not be polymorphic"
         assumeFromQType vs cs -- constraints in the signature are added as assumptions
         exp <- generateExp exp
         require $ (src, TypeReasonFunctionCongruence name sig) :< (ty `TypeIsEq` getType exp)

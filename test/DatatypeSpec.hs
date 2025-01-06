@@ -95,7 +95,7 @@ kind check error at 2:37: type List is not in scope
   describe "datatype List (rec, with map & sum)" $ do
 
     let program = [r|
-datatype rec List a = Nil () | Cons (a, List a)
+rec datatype List a = Nil () | Cons (a, List a)
 
 rec
   map : forall ?v a b. (?v a -> b) -> ?v List a -> List b
@@ -111,7 +111,8 @@ rec
 |]
 
     it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
-datatype rec List a = Nil ( ) | Cons ( a , List a )
+rec
+  datatype boxed List a = Nil ( ) | Cons ( a , List a )
 rec
   map : forall ?v a b . ( ?v a -> b ) -> ?v List a -> List b = \ f -> cases
     Nil ( ) -> Nil ( )
@@ -123,7 +124,8 @@ rec
 |]
 
     it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
-datatype rec List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
+rec
+  datatype boxed List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec
   map_0 : forall ?v_0 a_1 b_0 . ( ?v_0 a_1 -> b_0 ) -> ?v_0 List a_1 -> List b_0 = \ [?v_0 a_1 -> b_0] f_0 -> [?v_0 List a_1 -> List b_0] cases
     [?v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )

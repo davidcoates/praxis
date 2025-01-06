@@ -10,5 +10,4 @@ import           Praxis
 import           Term
 
 run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = do
-  Kind.run term >>= Type.run
+run term = Kind.run term >>= Type.run

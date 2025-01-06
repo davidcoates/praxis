@@ -50,6 +50,7 @@ data I a where
   IBind     :: I Bind
   IDataCon  :: I DataCon
   IDecl     :: I Decl
+  IDeclRec  :: I DeclRec
   IDeclTerm :: I DeclTerm
   IDeclType :: I DeclType
   IExp      :: I Exp
@@ -69,6 +70,7 @@ data I a where
   ITypeRequirement :: I TypeRequirement
   IKindRequirement :: I KindRequirement
 
+deriving instance Show (I a)
 
 typeof :: forall a. Term a => a -> I a
 typeof _ = witness :: I a
@@ -84,6 +86,7 @@ switch a b eq neq = case (a, b) of
   (IBind, IBind)                       -> eq
   (IDataCon, IDataCon)                 -> eq
   (IDecl, IDecl)                       -> eq
+  (IDeclRec, IDeclRec)                 -> eq
   (IDeclTerm, IDeclTerm)               -> eq
   (IDeclType, IDeclType)               -> eq
   (IExp, IExp)                         -> eq
@@ -178,15 +181,22 @@ instance Term Decl where
   recurseAnnotation = trivial
   recurseTerm f = \case
     DeclOpSugar o d rs -> DeclOpSugar <$> f o <*> pure d <*> f rs
+    DeclRec ds         -> DeclRec <$> traverse f ds
     DeclSynSugar n t   -> DeclSynSugar n <$> f t
-    DeclType d         -> DeclType <$> f d
     DeclTerm d         -> DeclTerm <$> f d
+    DeclType d         -> DeclType <$> f d
+
+instance Term DeclRec where
+  witness = IDeclRec
+  recurseAnnotation = trivial
+  recurseTerm f = \case
+    DeclRecType d         -> DeclRecType <$> f d
+    DeclRecTerm d         -> DeclRecTerm <$> f d
 
 instance Term DeclTerm where
   witness = IDeclTerm
   recurseAnnotation = trivial
   recurseTerm f = \case
-    DeclTermRec ds          -> DeclTermRec <$> traverse f ds
     DeclTermVar n t e       -> DeclTermVar n <$> traverse f t <*> f e
     DeclTermDefSugar n ps e -> DeclTermDefSugar n <$> traverse f ps <*> f e
     DeclTermSigSugar n t    -> DeclTermSigSugar n <$> f t
@@ -195,8 +205,9 @@ instance Term DeclType where
   witness = IDeclType
   recurseAnnotation _ f x = f x
   recurseTerm f = \case
-    DeclTypeData m n t as -> DeclTypeData m n <$> traverse f t <*> traverse f as
-    DeclTypeEnum n as     -> pure (DeclTypeEnum n as)
+    DeclTypeData m n t as      -> DeclTypeData m n <$> traverse f t <*> traverse f as
+    DeclTypeDataSugar m n t as -> DeclTypeDataSugar m n <$> traverse f t <*> traverse f as
+    DeclTypeEnum n as          -> pure (DeclTypeEnum n as)
 
 
 pair :: (Term a, Term b) => Applicative f => TermAction f -> (Annotated a, Annotated b) -> f (Annotated a, Annotated b)

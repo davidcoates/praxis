@@ -34,6 +34,7 @@ import           Data.Set            (Set)
 import qualified Data.Set            as Set
 import           Prelude             hiding (exp)
 
+
 run :: Term a => Annotated a -> Praxis (Annotated a)
 run term = do
   term <- desugar term
@@ -42,22 +43,22 @@ run term = do
 
 desugar :: Term a => Annotated a -> Praxis (Annotated a)
 desugar term = ($ term) $ case typeof (view value term) of
-  IBind           -> value (recurseTerm desugar)
-  IDataCon        -> value (recurseTerm desugar)
+  IBind           -> auto
+  IDataCon        -> auto
   IExp            -> desugarExp
-  IKind           -> value (recurseTerm desugar)
   IOp             -> desugarOp
   IPat            -> desugarPat
   IProgram        -> desugarProgram
-  IQType          -> value (recurseTerm desugar)
-  ITypePat        -> value (recurseTerm desugar)
   IType           -> desugarType
-  ITypeConstraint -> value (recurseTerm desugar)
-    -- TODO
-  idx             -> error (show idx)
+  IKind           -> auto
+  IQType          -> auto
+  ITypePat        -> auto
+  ITypeConstraint -> auto
+  ty              -> error (show ty)
+  where
+    auto :: Term a => Annotated a -> Praxis (Annotated a)
+    auto = value (recurseTerm desugar)
 
-
--- Desugaring proper
 
 desugarProgram :: Annotated Program -> Praxis (Annotated Program)
 desugarProgram (a :< Program decls) = do
@@ -76,6 +77,7 @@ collectFreeVars x = collectFreeVars' x where
       _                 -> continue
     _     -> continue
     where continue = getConst $ recurseTerm (Const . collectFreeVars') x
+
 
 -- Helper for desugaring "&". It turns top-level VarRefSugar into Var and returns the name of such variables
 desugarExpRef :: Annotated Exp -> Praxis (Annotated Exp, Set Name)
@@ -278,40 +280,40 @@ desugarDeclType recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
     | otherwise -> recurseTerm desugar decl
 
 
-coalesce :: (a -> Maybe (Source, b, DeclTerm)) -> ((b, b, DeclTerm) -> a) -> [a] -> Praxis [a]
-coalesce destruct construct = \case
-  [] -> return []
-  (a1:as)
-    | Just (src, b1, DeclTermSigSugar name1 sig) <- destruct a1 -> do
-      let fail = throwAt src $ "declaration of " <> pretty name1 <> " lacks an accompanying binding"
-      case as of
-        (a2:as) -> case destruct a2 of
-          Just (_, b2, DeclTermVar name2 _ exp)
-            | name1 == name2
-              -> (construct (b1, b2, DeclTermVar name2 (Just sig) exp) :) <$> coalesce destruct construct as
-          _  -> fail
-        _ -> fail
-    | otherwise
-      -> (a1:) <$> coalesce destruct construct as
-
 coalesceDeclTerms :: [Annotated DeclTerm] -> Praxis [Annotated DeclTerm]
-coalesceDeclTerms = coalesce destruct construct where
-  destruct (a@(src,_) :< decl) = Just (src, a, decl)
-  construct (a1, a2, decl) = (a1 <> a2) :< decl
+coalesceDeclTerms [] = return []
+coalesceDeclTerms (decl:decls) = case decl of
+  (a1@(src, _) :< DeclTermSigSugar name1 sig) -> case decls of
+    ((a2 :< DeclTermVar name2 _ exp):decls) | name1 == name2 -> do
+      let decl = (a1 <> a2) :< DeclTermVar name2 (Just sig) exp
+      decls <- coalesceDeclTerms decls
+      return (decl:decls)
+    _ -> throwAt src $ "declaration of " <> pretty name1 <> " lacks an accompanying binding"
+  _ -> (decl:) <$> coalesceDeclTerms decls
+
+spanMaybe :: (a -> Maybe b) -> [a] -> ([b], [a])
+spanMaybe _ [] = ([], [])
+spanMaybe f (x:xs) = case f x of
+  Just y  -> let (ys', xs') = spanMaybe f xs in (y:ys', xs')
+  Nothing -> ([], xs)
 
 coalesceDeclRecs :: [Annotated DeclRec] -> Praxis [Annotated DeclRec]
-coalesceDeclRecs = coalesce destruct construct where
-  destruct = \case
-    (a1@(src, _) :< DeclRecTerm (a2 :< decl)) -> Just (src, (a1, a2), decl)
-    _ -> Nothing
-  construct ((a1, a2), (b1, b2), decl) = (a1 <> b1) :< DeclRecTerm ((a2 <> b2) :< decl)
+coalesceDeclRecs [] = return []
+coalesceDeclRecs decls@((_ :< DeclRecTerm _) : _) = do
+  let (declTerms, declOthers) = spanMaybe (\(_ :< decl) -> case decl of { DeclRecTerm decl -> Just decl; _ -> Nothing }) decls
+  declTerms <- map (\declTerm@(a :< _) -> (a :< DeclRecTerm declTerm)) <$> coalesceDeclTerms declTerms
+  declOthers <- coalesceDeclRecs declOthers
+  return $ declTerms ++ declOthers
+coalesceDeclRecs (decl:decls) = (decl:) <$> coalesceDeclRecs decls
 
 coalesceDecls :: [Annotated Decl] -> Praxis [Annotated Decl]
-coalesceDecls = coalesce destruct construct where
-  destruct = \case
-    (a1@(src, _) :< DeclTerm (a2 :< decl)) -> Just (src, (a1, a2), decl)
-    _ -> Nothing
-  construct ((a1, a2), (b1, b2), decl) = (a1 <> b1) :< DeclTerm ((a2 <> b2) :< decl)
+coalesceDecls [] = return []
+coalesceDecls decls@((_ :< DeclTerm _) : _) = do
+  let (declTerms, declOthers) = spanMaybe (\(_ :< decl) -> case decl of { DeclTerm decl -> Just decl; _ -> Nothing }) decls
+  declTerms <- map (\declTerm@(a :< _) -> (a :< DeclTerm declTerm)) <$> coalesceDeclTerms declTerms
+  declOthers <- coalesceDecls declOthers
+  return $ declTerms ++ declOthers
+coalesceDecls (decl:decls) = (decl:) <$> coalesceDecls decls
 
 
 -- TODO check for overlapping patterns?

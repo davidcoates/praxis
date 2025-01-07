@@ -31,6 +31,27 @@ import qualified Data.Set         as Set
 import           Prelude          hiding (log)
 
 
+run :: Term a => Annotated a -> Praxis (Annotated a)
+run term = do
+  term <- generate term
+  display "annotated term" term `ifFlag` debug
+  requirements' <- use (checkState . typeState . typeSolve . requirements)
+  (`ifFlag` debug) $ do
+    display "requirements" (separate "\n" (nub . sort $ Set.toList requirements'))
+  return term
+
+generate :: Term a => Annotated a -> Praxis (Annotated a)
+generate term = ($ term) $ case typeof (view value term) of
+  IBind     -> generateBind
+  IDecl     -> generateDecl
+  IDeclTerm -> generateDeclTerm
+  IDeclType -> generateDeclType
+  IExp      -> generateExp
+  IProgram  -> auto
+  ty        -> error (show ty)
+  where
+    auto :: Term a => Annotated a -> Praxis (Annotated a)
+    auto = value (recurseTerm generate)
 
 introCon :: Source -> Name -> Annotated QType -> Praxis ()
 introCon src name qTy = do
@@ -163,28 +184,6 @@ closure src exp = do
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, TypeReasonCaptured name) :< capture ty | (name, (_ :< Mono t)) <- captures ]
   return $ ty :< Capture captures ((src, Just ty) :< x)
-
-run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = do
-  term <- generate term
-  display "annotated term" term `ifFlag` debug
-  requirements' <- use (checkState . typeState . typeSolve . requirements)
-  (`ifFlag` debug) $ do
-    display "requirements" (separate "\n" (nub . sort $ Set.toList requirements'))
---    use (checkState . typeState . varEnv) >>= display "variable environment"
---    use (checkState . typeState . conEnv) >>= display "constructor environment"
-  return term
-
-generate :: Term a => Annotated a -> Praxis (Annotated a)
-generate term = ($ term) $ case typeof (view value term) of
-  IBind     -> generateBind
-  IDataCon  -> error "standalone DataCon"
-  IDecl     -> generateDecl
-  IDeclTerm -> generateDeclTerm
-  IDeclType -> generateDeclType
-  IExp      -> generateExp
-  IPat      -> error "standalone Pat"
-  _         -> value (recurseTerm generate)
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc

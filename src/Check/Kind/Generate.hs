@@ -23,6 +23,33 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set        as Set
 
 
+run :: Term a => Annotated a -> Praxis (Annotated a)
+run term = do
+  term <- generate term
+  display "annotated term" term `ifFlag` debug
+  requirements' <- use (checkState . kindState . kindSolve . requirements)
+  display "requirements" (separate "\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
+  return term
+
+generate :: Term a => Annotated a -> Praxis (Annotated a)
+generate term = ($ term) $ case typeof (view value term) of
+  IBind           -> auto
+  IDataCon        -> generateDataCon
+  IDecl           -> generateDecl
+  IDeclTerm       -> generateDeclTerm
+  IDeclType       -> generateDeclType
+  IExp            -> auto
+  IPat            -> auto
+  IProgram        -> auto
+  IQType          -> generateQType
+  IType           -> generateType
+  ITypeConstraint -> auto
+  ITypePat        -> generateTypePat
+  ty              -> error (show ty)
+  where
+    auto :: Term a => Annotated a -> Praxis (Annotated a)
+    auto = value (recurseTerm generate)
+
 introCon :: Source -> Name -> Annotated Kind -> Praxis ()
 introCon src name kind = do
   entry <- (checkState . kindState . typeConEnv) `uses` Map.lookup name
@@ -72,26 +99,6 @@ require ((src, reason) :< con) = checkState . kindState . kindSolve . requiremen
 
 getKind :: (Term a, Annotation a ~ Annotated Kind) => Annotated a -> Annotated Kind
 getKind term = view (annotation . just) term
-
-run :: Term a => Annotated a -> Praxis (Annotated a)
-run term = do
-  term <- generate term
-  display "annotated term" term `ifFlag` debug
-  requirements' <- use (checkState . kindState . kindSolve . requirements)
-  display "requirements" (separate "\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
-  return term
-
--- TODO since we ignore annotation of input, could adjust this...
-generate :: Term a => Annotated a -> Praxis (Annotated a)
-generate term = ($ term) $ case typeof (view value term) of
-  IDecl     -> generateDecl
-  IDeclTerm -> generateDeclTerm
-  IDeclType -> generateDeclType
-  IType     -> generateType
-  ITypePat  -> generateTypePat
-  IDataCon  -> generateDataCon
-  IQType    -> generateQType
-  _         -> value (recurseTerm generate)
 
 generateType :: Annotated Type -> Praxis (Annotated Type)
 generateType (a@(src, _) :< ty) = (\(kind :< ty) -> ((src, Just kind) :< ty)) <$> case ty of

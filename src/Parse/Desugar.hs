@@ -22,6 +22,7 @@ import           Control.Arrow       (left)
 import           Control.Monad       (unless)
 import           Data.Array          (array, assocs, bounds, elems, indices,
                                       listArray, (!), (//))
+import           Data.Either         (partitionEithers)
 import           Data.Graph          (Graph, reachable)
 import           Data.List           (intersect, intersperse, nub, partition,
                                       (\\))
@@ -159,18 +160,17 @@ desugarOp op@((src, _) :< Op parts) = do
   return op
 
 
-desugarOpRules :: Annotated Op -> Annotated OpRules -> Praxis (Annotated OpRules)
-desugarOpRules op (a@(src, _) :< OpRulesSugar rules) = do
+desugarOpRules :: Annotated Op -> Annotated OpRules -> Praxis (Maybe (Annotated Assoc), [Annotated Prec])
+desugarOpRules op ((src, _) :< OpRules rules) = do
 
     -- FIXME check the precedence operators exist?
 
-    let assocs = mapMaybe (\r -> case r of { Left a -> Just a; _ -> Nothing}) rules
-        precs  = mapMaybe (\r -> case r of {Right p -> Just p; _ -> Nothing}) rules
+    let (assocs, precs) = partitionEithers rules
 
     when (length assocs > 1) $ throwAt src ("more than one associativity specified for op " <> pretty op)
-    when (length  precs > 1) $ throwAt src ("more than one precedence block specified for op " <> pretty op)
+    when (length precs > 1) $ throwAt src ("more than one precedence block specified for op " <> pretty op)
 
-    return (a :< OpRules (listToMaybe assocs) (concat precs))
+    return (listToMaybe assocs, concat precs)
 
 
 desugarDecl :: Annotated Decl -> Praxis (Maybe (Annotated Decl))
@@ -179,7 +179,7 @@ desugarDecl (a@(src, _) :< decl) = case decl of
   DeclOpSugar op name rules -> do
 
     op@(_ :< Op parts) <- desugarOp op
-    rules@(_ :< OpRules assoc precs) <- desugarOpRules op rules
+    (assoc, precs) <- desugarOpRules op rules
 
     -- For simplicity of managing the op table, allow only one equal precedence relation
     let (eqPrecs, precs') = partition (\(_ :< Prec ord _) -> ord == EQ) precs

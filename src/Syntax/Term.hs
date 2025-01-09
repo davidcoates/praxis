@@ -277,9 +277,7 @@ op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator
   atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> expected "operator or hole"
 
 opRules :: Syntax f => f OpRules
-opRules = _OpRulesSugar <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|>
-          internal (Prism undefined (\r -> case r of { OpRules Nothing [] -> Just (); _ -> Nothing}) <$> pure ()) <|> -- TODO tidy up
-          internal (_OpRules <$> reservedId "where" *> layout '{' *> optional (annotated assoc <* layout ';') <*> precs <* layout '}')
+opRules = _OpRules <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|> expected "operator rules"
 
 assoc :: Syntax f => f Assoc
 assoc = assoc' <* contextualId "associative" where

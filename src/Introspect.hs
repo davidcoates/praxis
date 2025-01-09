@@ -154,8 +154,7 @@ instance Term OpRules where
   witness = IOpRules
   recurseAnnotation = trivial
   recurseTerm f = \case
-    OpRules a ps    -> OpRules <$> traverse f a <*> traverse f ps
-    OpRulesSugar rs -> OpRulesSugar <$> traverse (bitraverse f (traverse f)) rs
+    OpRules rs -> OpRules <$> traverse (bitraverse f (traverse f)) rs
 
 instance Term Prec where
   witness = IPrec

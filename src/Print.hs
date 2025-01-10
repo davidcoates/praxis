@@ -94,11 +94,11 @@ hideLabel x = case typeof x of
 label :: Term a => Annotated a -> Printable String
 label ((s, a) :< x) = case a of
   Just a | not (hideLabel x) -> case typeof x of
-    IExp             -> prettypeIf Types a
-    IPat             -> prettypeIf Types a
-    IDataCon         -> prettypeIf Types a
-    ITypePat         -> prettypeIf Kinds a
-    IType            -> prettypeIf Kinds a
+    IExp             -> prettyIf Types a
+    IPat             -> prettyIf Types a
+    IDataCon         -> prettyIf Types a
+    ITypePat         -> prettyIf Kinds a
+    IType            -> prettyIf Kinds a
     ITypeRequirement -> pretty a
     IKindRequirement -> pretty a
     _                -> blank

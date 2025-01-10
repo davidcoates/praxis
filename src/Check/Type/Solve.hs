@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds            #-}
 {-# LANGUAGE ImpredicativeTypes   #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
@@ -17,7 +18,7 @@ import           Common
 import           Inbuilts            (copy)
 import           Introspect
 import           Praxis
-import           Stage               hiding (Unknown)
+import           Stage
 import           Term
 
 import           Control.Applicative (liftA2)
@@ -28,7 +29,7 @@ import           Data.Set            (Set)
 import qualified Data.Set            as Set
 
 
-run :: Term a => Annotated a -> Praxis (Annotated a)
+run :: IsTerm a => Annotated TypeCheck a -> Praxis (Annotated TypeCheck a)
 run term = do
   -- TODO pretty ugly to do this here
   checkState . typeState . varEnv %%= traverse (second normalize)
@@ -40,7 +41,7 @@ run term = do
   term <- tryDefault term
   return term
 
-unapplyTypeCon :: Annotated Type -> Maybe (Name, [Annotated Type])
+unapplyTypeCon :: Annotated TypeCheck Type -> Maybe (Name, [Annotated TypeCheck Type])
 unapplyTypeCon (_ :< ty) = case ty of
   TypeCon n -> Just (n, [])
   TypeApply ty1 ty2 -> case unapplyTypeCon ty1 of
@@ -48,15 +49,15 @@ unapplyTypeCon (_ :< ty) = case ty of
     Nothing       -> Nothing
   _ -> Nothing
 
-assertNormalized :: (Eq a, Term a) => Annotated a -> Praxis ()
+assertNormalized :: (IsTerm a, Eq (a TypeCheck))  => Annotated TypeCheck a -> Praxis ()
 assertNormalized term = do
   term' <- normalize term
-  let str1 = fold (runPrintable (pretty term) Simple)
-  let str2 = fold (runPrintable (pretty term') Simple)
-  when (term /= term') $ throw ("unnormalized: " <> pretty term <> " vs " <> pretty term')
+  let str1 = fold (pretty term)
+  let str2 = fold (pretty term')
+  when (term /= term') $ throw TypeCheck ("unnormalized: " <> pretty term <> " vs " <> pretty term')
   return ()
 
-reduce :: Disambiguating (Reducer TypeConstraint)
+reduce :: Disambiguating (Reducer TypeCheck)
 reduce disambiguate constraint = assertNormalized (phantom constraint) >> case constraint of
 
   TypeIsEq ty1 ty2 | ty1 == ty2 -> return tautology
@@ -164,7 +165,7 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
       case affine of
         Unknown  -> return skip
         No       -> error "unnormalized"
-        _        -> return $ subgoals [ Subgoal (TypeIsEq op (TypeIdentityOp `as` phantom KindView)), Subgoal (TypeIsValue ty) ]
+        _        -> return $ subgoals [ Subgoal (TypeIsEq op (phantom TypeIdentityOp)), Subgoal (TypeIsValue ty) ]
     TypeVar Plain _ -> return contradiction
     TypeUni Plain _ -> return skip
     _               -> return tautology
@@ -178,7 +179,7 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
   TypeIsInstance (a0 :< inst) -> case inst of
 
     TypeApply (_ :< TypeCon "Integral") ty | disambiguate
-      -> return $ subgoals [ Subgoal (TypeIsEq ty (TypeCon "I32" `as` phantom KindType)) ]
+      -> return $ subgoals [ Subgoal (TypeIsEq ty (phantom (TypeCon "I32"))) ]
 
     TypeApply (a1 :< TypeCon cls) ty -> case view value ty of
       TypeApplyOp op ty -> do
@@ -214,14 +215,14 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
     TypeCon "USize" -> checkBounds n (undefined :: USize)
     _               -> return skip
     where
-      checkBounds :: forall a. (Integral a, Bounded a) => Integer -> a -> Praxis (Reduction TypeConstraint)
+      checkBounds :: forall a. (Integral a, Bounded a) => Integer -> a -> Praxis (Reduction TypeCheck)
       checkBounds n _ = if toInteger (minBound :: a) <= n && n <= toInteger (maxBound :: a) then return tautology else return contradiction
 
   _ -> return contradiction
 
 
   where
-    reduceTypeConInstance :: Name -> Name -> [Annotated Type] -> Praxis (Reduction TypeConstraint)
+    reduceTypeConInstance :: Name -> Name -> [Annotated TypeCheck Type] -> Praxis (Reduction TypeCheck)
     reduceTypeConInstance cls name args = do
       l <- use (checkState . instanceEnv)
       let Just instances = Map.lookup name l
@@ -233,82 +234,81 @@ reduce disambiguate constraint = assertNormalized (phantom constraint) >> case c
             return (subgoals (map Subgoal cs))
         Nothing -> return contradiction
 
-    typeUnis :: forall a. Term a => Annotated a -> Set Name
+    typeUnis :: forall a. IsTerm a => Annotated TypeCheck a -> Set Name
     typeUnis = extract (embedMonoid f) where
       f x = case x of
         TypeUni _ n -> Set.singleton n
         _           -> Set.empty
 
-    refLabels :: forall a. Term a => Annotated a -> Set Name
+    refLabels :: forall a. IsTerm a => Annotated TypeCheck a -> Set Name
     refLabels = extract (embedMonoid f) where
       f = \case
         TypeRef n -> Set.singleton n
         _         -> Set.empty
 
 
-isTypeOp :: Annotated Type -> Bool
-isTypeOp ty = case view (annotation . just . value) ty of
-  KindView -> True
-  KindRef  -> True
-  _        -> False
+-- TODO ideally would look at Kind?
+-- FIXME what about TypeApply?
+isTypeOp :: Annotated TypeCheck Type -> Bool
+isTypeOp (_ :< ty) = case ty of
+  TypeIdentityOp -> True
+  TypeRef _      -> True
+  TypeSetOp _    -> True
+  TypeUni Ref  _ -> True
+  TypeUni View _ -> True
+  TypeVar Ref _  -> True
+  TypeVar View _ -> True
+  _              -> False
 
 -- Rewrite helpers
-solved :: Resolver -> Praxis (Reduction TypeConstraint)
+solved :: Resolver TypeCheck -> Praxis (Reduction TypeCheck)
 solved resolve = solvedWithSubgoals resolve []
 
 -- note: assumption is the subgoals are not affected by the solution
-solvedWithSubgoals :: Resolver -> [Subgoal TypeConstraint] -> Praxis (Reduction TypeConstraint)
+solvedWithSubgoals :: Resolver TypeCheck -> [Subgoal TypeCheck] -> Praxis (Reduction TypeCheck)
 solvedWithSubgoals resolve subgoals = do
   checkState . typeState . varEnv %%= traverse (second (normalize . sub resolve))
   checkState . typeState . conEnv %%= traverse (normalize . sub resolve)
   return (Progress (Just (resolve, normalize)) subgoals)
 
-are :: [(Name, Type)] -> Resolver
+are :: [(Name, Type TypeCheck)] -> Resolver TypeCheck
 are ops = embedSub f where
   f (a :< x) = case x of
     TypeUni _ n -> case n `lookup` ops of { Just op -> Just (a :< op); Nothing -> Nothing }
     _           -> Nothing
 
-is :: Name -> Type -> Resolver
+is :: Name -> Type TypeCheck -> Resolver TypeCheck
 is n ty = embedSub f where
   f (a :< x) = case x of
     TypeUni _ n' -> if n == n' then Just (a :< ty) else Nothing
     _            -> Nothing
 
 -- TypeOp helpers
-splitTypeOp :: Annotated Type -> (Annotated Type, Annotated Type)
+splitTypeOp :: Annotated TypeCheck Type -> (Annotated TypeCheck Type, Annotated TypeCheck Type)
 splitTypeOp ty = case view value ty of
   TypeApplyOp op ty -> (op, ty)
-  _                 -> (TypeIdentityOp `as` phantom KindView, ty)
+  _                 -> (phantom TypeIdentityOp, ty)
 
-expandTypeOps :: Annotated Type -> Set (Annotated Type)
+expandTypeOps :: Annotated TypeCheck Type -> Set (Annotated TypeCheck Type)
 expandTypeOps op = case view value op of
   TypeIdentityOp -> Set.empty
   TypeSetOp ops  -> ops
   _              -> Set.singleton op
 
-contractTypeOps :: Set (Annotated Type) -> Annotated Type
+contractTypeOps :: Set (Annotated TypeCheck Type) -> Annotated TypeCheck Type
 contractTypeOps ops = case Set.toList ops of
-  []   -> TypeIdentityOp `as` phantom KindView
+  []   -> phantom TypeIdentityOp
   [op] -> op
-  _    -> (Phantom, Just kind) :< TypeSetOp ops where -- TODO source is lost
-    kind :: Annotated Kind
-    kind = let (k:ks) = map (view (annotation . just)) (Set.toList ops) in foldr combineKinds k ks
-    combineKinds :: Annotated Kind -> Annotated Kind -> Annotated Kind
-    combineKinds (_ :< kind1) (_ :< kind2) = ((Phantom, Nothing) :<) $ case (kind1, kind2) of
-      (KindView, KindView) -> KindView
-      (KindRef, KindRef)   -> KindRef
-      (KindView, KindRef)  -> KindRef
-      (KindRef, KindView)  -> KindRef
+  _    -> phantom (TypeSetOp ops) -- TODO source is lost
 
-removeTypeOp :: Annotated Type -> Annotated Type -> Annotated Type
+removeTypeOp :: Annotated TypeCheck Type -> Annotated TypeCheck Type -> Annotated TypeCheck Type
 removeTypeOp op1 op2  = contractTypeOps (expandTypeOps op1 `Set.difference` expandTypeOps op2)
 
 -- Term normalizer (after a substitution is applied)
-normalize :: Normalizer
+normalize :: Normalizer TypeCheck
 normalize (a :< x) = case typeof x of
 
-  IType -> case x of
+  TypeT -> case x of
 
     TypeApplyOp op ty -> do
       op <- normalize op
@@ -338,7 +338,7 @@ normalize (a :< x) = case typeof x of
 data Truth = Yes | No | Variable | Unknown
   deriving Show
 
-isRef :: Annotated Type -> Truth
+isRef :: Annotated TypeCheck Type -> Truth
 isRef op = case view value op of
   TypeIdentityOp -> No
   TypeRef _      -> Yes
@@ -366,14 +366,14 @@ truthNot Variable = Variable
 truthAnd :: Truth -> Truth -> Truth
 truthAnd a b = truthNot (truthOr (truthNot a) (truthNot b))
 
-isAffine :: Annotated Type -> Praxis Truth
+isAffine :: Annotated TypeCheck Type -> Praxis Truth
 isAffine ty = do
   assumptions' <- use (checkState . typeState . typeSolve . assumptions)
   if copy ty `Set.member` assumptions'
     then return No
     else isAffine' ty
   where
-    isAffine' :: Annotated Type -> Praxis Truth
+    isAffine' :: Annotated TypeCheck Type -> Praxis Truth
     isAffine' (a :< ty) = case ty of
       TypePair ty1 ty2 -> isTypeConAffine "Pair" [ty1, ty2]
       TypeFn ty1 ty2 -> isTypeConAffine "Fn" [ty1, ty2]
@@ -383,7 +383,7 @@ isAffine ty = do
       TypeVar _ _ -> return Variable
       _ | Just (n, tys) <- unapplyTypeCon (a :< ty) -> isTypeConAffine n tys
 
-isTypeConAffine :: Name -> [Annotated Type] -> Praxis Truth
+isTypeConAffine :: Name -> [Annotated TypeCheck Type] -> Praxis Truth
 isTypeConAffine name args = do
   l <- use (checkState . instanceEnv)
   let Just instances = Map.lookup name l
@@ -395,21 +395,21 @@ isTypeConAffine name args = do
 
 
 -- Check for undetermined unification variables, default them where possible
-tryDefault :: Term a => Annotated a -> Praxis (Annotated a)
+tryDefault :: IsTerm a => Annotated TypeCheck a -> Praxis (Annotated TypeCheck a)
 tryDefault term@((src, _) :< _) = do
 
   -- TODO could just be a warning, and default to ()?
   let freeTys = deepTypeUnis (\f -> f == Plain || f == Value) term
-  when (not (null freeTys)) $ throwAt src $ "underdetermined type " <> pretty (Set.elemAt 0 freeTys)
+  when (not (null freeTys)) $ throwAt TypeCheck src $ "underdetermined type " <> pretty (Set.elemAt 0 freeTys)
 
   let
     defaultRef name = do
       ref <- freshRef
-      warnAt src $ "underdetermined reference " <> pretty name <> ", defaulting to " <> pretty ref
+      warnAt TypeCheck src $ "underdetermined reference " <> pretty name <> ", defaulting to " <> pretty ref
       return (name, view value ref)
 
     defaultView name = do
-      warnAt src $ "underdetermined view " <> pretty name <> ", defaulting to " <> pretty (phantom TypeIdentityOp)
+      warnAt TypeCheck src $ "underdetermined view " <> pretty name <> ", defaulting to " <> pretty (phantom TypeIdentityOp :: Annotated TypeCheck Type)
       return (name, TypeIdentityOp)
 
   defaultViews <- mapM defaultView (Set.toList (deepTypeUnis (== View) term))
@@ -424,7 +424,7 @@ tryDefault term@((src, _) :< _) = do
       (normalize . sub resolve) term
 
   where
-    deepTypeUnis :: forall a. Term a => (Flavor -> Bool) -> Annotated a -> Set Name
+    deepTypeUnis :: forall a. IsTerm a => (Flavor -> Bool) -> Annotated TypeCheck a -> Set Name
     deepTypeUnis matchFlavor = deepExtract (embedMonoid f) where
       f = \case
         TypeUni f n -> if matchFlavor f then Set.singleton n else Set.empty
@@ -439,17 +439,17 @@ tryDefault term@((src, _) :< _) = do
 -- We also "expand" the assumptions, e.g. if there is an instance C t => D t, the the assumption D t should also include C t.
 
 -- TODO handle references/views!
-assumeFromQType :: [Annotated TypePat] -> [Annotated TypeConstraint] -> Praxis ()
+assumeFromQType :: [Annotated TypeCheck TypePat] -> [Annotated TypeCheck TypeConstraint] -> Praxis ()
 assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
 
-  assumeConstraint :: Annotated TypeConstraint -> Praxis ()
+  assumeConstraint :: Annotated TypeCheck TypeConstraint -> Praxis ()
   assumeConstraint constraint = do
     constraint <- normalize constraint
     checkConstraint constraint
     constraints <- expandConstraint (view source constraint) (view value constraint)
     checkState . typeState . typeSolve . assumptions %= Set.union (Set.fromList constraints)
 
-  expandConstraint :: Source -> TypeConstraint -> Praxis [TypeConstraint]
+  expandConstraint :: Source -> TypeConstraint TypeCheck -> Praxis [TypeConstraint TypeCheck]
   expandConstraint src constraint = ((constraint:) <$>) $ case constraint of
     TypeIsInstance (a0 :< inst) -> case inst of
       TypeApply (a1 :< TypeCon cls) ty -> case view value ty of
@@ -459,20 +459,20 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
         TypeVar _ _ -> return []
         _ | Just (n, tys) <- unapplyTypeCon ty -> expandTypeConInstance cls n tys
     where
-      expandTypeConInstance :: Name -> Name -> [Annotated Type] -> Praxis [TypeConstraint]
+      expandTypeConInstance :: Name -> Name -> [Annotated TypeCheck Type] -> Praxis [TypeConstraint TypeCheck]
       expandTypeConInstance cls name args = do
         l <- use (checkState . instanceEnv)
         let Just instances = Map.lookup name l
         case Map.lookup cls instances of
           Just resolver -> case resolver args of
-            (_, IsInstance)          -> throwAt src ("redundant constraint: " <> pretty (phantom constraint))
+            (_, IsInstance)          -> throwAt TypeCheck src ("redundant constraint: " <> pretty (phantom constraint))
             (_, IsInstanceOnlyIf cs) -> concat <$> mapM (expandConstraint src) cs
           _ -> return [] -- Note: The instance may be satisfied later (at the call site)
 
-  checkConstraint :: Annotated TypeConstraint -> Praxis ()
+  checkConstraint :: Annotated TypeCheck TypeConstraint -> Praxis ()
   checkConstraint constraint = case view value constraint of
     TypeIsInstance (_ :< TypeApply _ ty) -> checkConstraintType ty where
-      checkConstraintType :: Annotated Type -> Praxis ()
+      checkConstraintType :: Annotated TypeCheck Type -> Praxis ()
       checkConstraintType (a@(src, _) :< ty) = case ty of
         TypePair ty1 ty2
           -> checkConstraintType ty1 >> checkConstraintType ty2
@@ -483,5 +483,5 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
         _ | Just (n, tys@(_:_)) <- unapplyTypeCon (a :< ty)
           -> mapM_ checkConstraintType tys
         _
-          -> throwAt src $ "illegal constraint: " <> pretty constraint
+          -> throwAt TypeCheck src $ "illegal constraint: " <> pretty constraint
         -- TODO RefVar and ViewVar ?

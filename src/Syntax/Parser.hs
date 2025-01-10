@@ -8,6 +8,7 @@ module Syntax.Parser
 
 import           Common
 import           Introspect
+import           Stage
 import           Syntax.Prism
 import qualified Syntax.Syntax       as Syntax
 import           Syntax.Syntax       (Syntax)
@@ -36,5 +37,5 @@ instance Parser f => Syntax (T f) where
   internal = const (T empty)
   annotated (T p) = T $ (\(s :< p) -> (s, Nothing) :< p) <$> sourced p
 
-parse :: forall a f. (Term a, Parser f) => f (Annotated a)
-parse = unT (Syntax.annotated (syntax (witness :: I a)))
+parse :: forall f s a. (Parser f, IsTerm a, IsStage s) => f (Annotated s a)
+parse = unT (Syntax.annotated (syntax (witness :: TermT a)))

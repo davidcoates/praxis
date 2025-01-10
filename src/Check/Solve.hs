@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds            #-}
 {-# LANGUAGE DeriveFoldable       #-}
 {-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE FlexibleContexts     #-}
@@ -7,7 +8,6 @@
 {-# LANGUAGE Rank2Types           #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TupleSections        #-}
-{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -28,11 +28,13 @@ module Check.Solve
   , tautology
   ) where
 
-import           Check.State          (SolveState, assumptions, requirements)
+import           Check.State          (Constraint (..), SolveState, assumptions,
+                                       requirements)
 import           Common
 import           Introspect
 import           Praxis
 import           Print
+import           Stage
 import           Term
 
 import           Control.Monad        (foldM)
@@ -42,62 +44,67 @@ import qualified Data.Monoid.Colorful as Colored
 import qualified Data.Set             as Set
 
 
-type Resolver = forall a. Term a => Annotated a -> Maybe (Annotated a)
+type Resolver s = forall a. IsTerm a => Annotated s a -> Maybe (Annotated s a)
 
-type Normalizer = forall a. Term a => Annotated a -> Praxis (Annotated a)
+type Normalizer s = forall a. IsTerm a => Annotated s a -> Praxis (Annotated s a)
 
-type Solution = (Resolver, Normalizer)
+type Solution s = (Resolver s, Normalizer s)
 
-data Subgoal c = Subgoal c | Implies c c
+data Subgoal s = Subgoal (Constraint s s) | Implies (Constraint s s) (Constraint s s)
 
-data Reduction c = Contradiction | Progress (Maybe Solution) [Subgoal c] | Skip
+data Reduction s = Contradiction | Progress (Maybe (Solution s)) [Subgoal s] | Skip
 
 contradiction = Contradiction
 
 skip = Skip
 
-solution :: Solution -> Reduction c
+solution :: Solution s -> Reduction s
 solution x = Progress (Just x) []
 
-subgoals :: [Subgoal c] -> Reduction c
+subgoals :: [Subgoal s] -> Reduction s
 subgoals x = Progress Nothing x
 
-tautology :: Reduction c
+tautology :: Reduction s
 tautology = Progress Nothing []
 
-type Reducer c = c -> Praxis (Reduction c)
+type Reducer s = (Constraint s s) -> Praxis (Reduction s)
 
-type Disambiguating c = Bool -> c
-
-data Tree c = Branch c [Tree c] | Assume c (Tree c)
-  deriving (Functor, Foldable, Traversable)
-
-data GoalT x c = Goal x (Tree c)
-  deriving (Functor, Foldable, Traversable)
-
-type Crumb c = (Source, Annotation (Requirement c))
-
-type Crumbs c = [Crumb c]
+type Disambiguating a = Bool -> a
 
 -- Note: Goal definition is split like this for "deriving" to work.
-type Goal c = GoalT (Crumbs c) c
+data TreeT c = Branch c [TreeT c] | Assume c (TreeT c)
+  deriving (Functor, Foldable, Traversable)
 
-instance Pretty (Annotated c) => Pretty (Tree c) where
+type Tree s = TreeT (Constraint s s)
+
+data GoalT x c = Goal x (TreeT c)
+  deriving (Functor, Foldable, Traversable)
+
+type Crumb s = (Source, Annotation s (Requirement (Constraint s)))
+
+type Crumbs s = [Crumb s]
+
+-- Note: Goal definition is split like this for "deriving" to work.
+type Goal s = GoalT (Crumbs s) (Constraint s s)
+
+instance (c ~ Constraint s s, Pretty (Annotated s (Constraint s))) => Pretty (TreeT c) where
   pretty (Branch c [])  = pretty (phantom c)
   pretty (Branch c cs)  = pretty (phantom c) <> " (" <> separate ", " cs <> ")" where
   pretty (Assume c1 c2) = pretty (phantom c1) <> " --> " <> pretty c2
 
-instance Pretty (Tree c) => Pretty (GoalT x c) where
+instance Pretty (TreeT c) => Pretty (GoalT x c) where
   pretty (Goal _ tree) = pretty tree
 
-solve :: forall c a.
-  ( Term a
-  , Ord c
-  , Term c
-  , Term (Requirement c)
-  , Pretty (Annotation (Requirement c))
-  , Ord (Annotation (Requirement c))
-  ) => Lens' PraxisState (SolveState c) -> Disambiguating (Reducer c) -> Annotated a -> Praxis (Annotated a)
+solve :: forall s c a.
+  ( IsTerm a
+  , IsStage s
+  , Ord (c s)
+  , IsTerm c
+  , IsTerm (Requirement c)
+  , Pretty (Annotation s (Requirement c))
+  , Ord (Annotation s (Requirement c))
+  , Constraint s ~ c
+  ) => Lens' PraxisState (SolveState s) -> Disambiguating (Reducer s) -> Annotated s a -> Praxis (Annotated s a)
 
 solve state reduce term = do
   requirements' <- Set.toList <$> use (state . requirements)
@@ -105,7 +112,7 @@ solve state reduce term = do
   (term, [], _) <- solve' False (term, goals)
   return term
   where
-    solve' :: Bool -> (Annotated a, [Goal c]) -> Praxis (Annotated a, [Goal c], Bool)
+    solve' :: Bool -> (Annotated s a, [Goal s]) -> Praxis (Annotated s a, [Goal s], Bool)
     solve' _ (term, []) = return (term, [], undefined)
     solve' disambiguate (term, goals) = do
       (goals, reduction) <- reduceGoals state (reduce disambiguate) goals
@@ -117,21 +124,21 @@ solve state reduce term = do
         TreeSolved (resolve, normalize) crumbs2
           -> do
             let
-              rewrite :: forall a. Term a => Annotated a -> Praxis (Annotated a)
+              rewrite :: forall a. (IsTerm a, IsStage s) => Annotated s a -> Praxis (Annotated s a)
               rewrite = normalize . sub resolve
 
-              rewriteCrumbs :: Crumbs c -> Praxis (Crumbs c)
-              rewriteCrumbs = mapM (\(src, reason) -> (src,) <$> (recurseAnnotation (witness :: I (Requirement c)) rewrite reason))
+              rewriteCrumbs :: Crumbs s -> Praxis (Crumbs s)
+              rewriteCrumbs = mapM (\(src, reason) -> (src,) <$> (recurseAnnotation (stageT :: StageT s) (witness :: TermT (Requirement c)) rewrite reason))
 
             crumbs2 <- rewriteCrumbs crumbs2
 
             let
-              affectedByRewrite :: forall a. Term a => Annotated a -> Bool
+              affectedByRewrite :: forall a. IsTerm a => Annotated s a -> Bool
               affectedByRewrite term = getAny (extract f term) where
-                f :: forall a. Term a => a -> Any
+                f :: forall a. IsTerm a => a s -> Any
                 f x = Any (isJust (resolve (phantom x)))
 
-              rewriteGoal :: Goal c -> Praxis (Goal c)
+              rewriteGoal :: Goal s -> Praxis (Goal s)
               rewriteGoal (Goal crumbs1 tree@(Branch constraint _)) = do
                 crumbs1 <- rewriteCrumbs crumbs1
                 if affectedByRewrite (phantom constraint)
@@ -146,21 +153,23 @@ solve state reduce term = do
             solve' False (term, goals)
 
         TreeSkip
-          | disambiguate -> throw $ "unsolved constraints: " <> separate ", " goals
+          | disambiguate -> throw (stage (stageT :: StageT s)) $ "unsolved constraints: " <> separate ", " goals
           | otherwise    -> solve' True (term, goals)
 
 
-data TreeReduction c = TreeContradiction [c] | TreeProgress | TreeSolved Solution (Crumbs c) | TreeSkip
+data TreeReduction s = TreeContradiction [Constraint s s] | TreeProgress | TreeSolved (Solution s) (Crumbs s) | TreeSkip
 
-noskip :: TreeReduction c -> TreeReduction c
+noskip :: TreeReduction s -> TreeReduction s
 noskip TreeSkip = TreeProgress
 noskip r        = r
 
-reduceGoals :: forall c.
-  ( Term c
-  , Ord c
-  , Pretty (Annotation (Requirement c))
-  ) => Lens' PraxisState (SolveState c) -> Reducer c -> [Goal c] -> Praxis ([Goal c], TreeReduction c)
+reduceGoals :: forall s c.
+  ( IsTerm c
+  , IsStage s
+  , Ord (c s)
+  , Pretty (Annotation s (Requirement c))
+  , Constraint s ~ c
+  ) => Lens' PraxisState (SolveState s) -> Reducer s -> [Goal s] -> Praxis ([Goal s], TreeReduction s)
 
 reduceGoals state reduce = \case
 
@@ -174,7 +183,7 @@ reduceGoals state reduce = \case
         Nothing   -> []
     case r1 of
       TreeContradiction trace
-        -> throw (printTrace trace)
+        -> throw (stage (stageT :: StageT s)) (printTrace trace)
       TreeProgress -> do
         (goals, r2) <- reduceGoals state reduce goals
         return (goal ++ goals, noskip r2)
@@ -184,22 +193,24 @@ reduceGoals state reduce = \case
         (goals, r2) <- reduceGoals state reduce goals
         return (goal ++ goals, r2)
     where
-      printTrace :: [c] -> Printable String
+      printTrace :: [c s] -> Colored String
       printTrace trace = "unable to satisfy: "  <> pretty (last (c:cs)) <> derived <> printCrumbs crumbs where
         (c:cs) = map phantom trace
-        derived = if null cs then blank else "\n  | derived from: " <> pretty c
-      printCrumbs :: Crumbs c -> Printable String
-      printCrumbs (crumb:crumbs) = primary <> printCrumb crumb <> (if null crumbs then blank else secondary <> separate "\n  | - " (map printCrumb crumbs)) where
+        derived = if null cs then Colored.Nil else "\n  | derived from: " <> pretty c
+      printCrumbs :: Crumbs s -> Colored String
+      printCrumbs (crumb:crumbs) = primary <> printCrumb crumb <> (if null crumbs then Colored.Nil else secondary <> separate "\n  | - " (map printCrumb crumbs)) where
         primary = "\n  | " <> pretty (Colored.Style Bold ("primary cause: " :: Colored String))
         secondary = "\n  | " <> (if length crumbs > 1 then "secondary causes:\n  | - " else "secondary cause: ")
-      printCrumb :: Crumb c -> Printable String
+      printCrumb :: Crumb s -> Colored String
       printCrumb (src, reason) = pretty reason <> " at " <> pretty (show src)
 
 
-reduceTree :: forall c.
-  ( Ord c
-  , Term c
-  ) => Lens' PraxisState (SolveState c) -> Reducer c -> Tree c -> Praxis (Maybe (Tree c), TreeReduction c)
+reduceTree :: forall s c.
+  ( Ord (c s)
+  , IsTerm c
+  , IsStage s
+  , Constraint s ~ c
+  ) => Lens' PraxisState (SolveState s) -> Reducer s -> Tree s -> Praxis (Maybe (Tree s), TreeReduction s)
 
 -- Note: The supplied assumption may only be used locally (i.e. within 'tree').
 -- This means the assumption state needs to be reverted before exiting, to avoid the local assumption *or any consequents* from escaping the local context.
@@ -245,7 +256,7 @@ reduceTree state reduce tree = case tree of
               _  -> Just (Branch constraint subtrees)
           return (tree, r2)
   where
-    combine :: ([Tree c], TreeReduction c) -> Tree c -> Praxis ([Tree c], TreeReduction c)
+    combine :: ([Tree s], TreeReduction s) -> Tree s -> Praxis ([Tree s], TreeReduction s)
     combine (subtrees, r1) subtree = do
       let abort = case r1 of { TreeContradiction _ -> True; TreeSolved _ _ -> True; _ -> False }
       if abort

@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -19,28 +20,30 @@ import qualified Eval.Value        as Value
 import           Introspect
 import           Praxis
 import           Stage
-import           Term
+import qualified Term
+import           Term              hiding (Annotated (..))
+
 
 import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
 import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
 
+
+type Annotated a = Term.Annotated TypeCheck a
+
 type family Evaluation a where
   Evaluation Exp = Value
   Evaluation _   = ()
 
-run :: Term a => Annotated a -> Praxis (Evaluation a)
-run term = save stage $ do
-  stage .= Evaluate
-  eval term
+run :: IsTerm a => Annotated a -> Praxis (Evaluation a)
+run term = eval term
 
 runMain :: Praxis ()
-runMain = save stage $ do
-  stage .= Evaluate
+runMain = do
   entry <- (checkState . Check.typeState . Check.varRename . Check.renames) `uses` Map.Strict.lookup "main"
   case entry of
-    Nothing -> throw ("missing main function" :: String)
+    Nothing -> throw Evaluate ("missing main function" :: String)
     Just rename -> do
       entry <- (checkState . Check.typeState . Check.varEnv) `uses` Map.Strict.lookup rename
       case entry of
@@ -51,12 +54,12 @@ runMain = save stage $ do
               f Value.Unit
               return ()
           | otherwise
-            -> throwAt (view source qTy) $ "main function has bad type " <> pretty qTy <> ", expected () -> ()"
+            -> throwAt Evaluate (view source qTy) $ "main function has bad type " <> pretty qTy <> ", expected () -> ()"
 
-eval :: Term a => Annotated a -> Praxis (Evaluation a)
+eval :: IsTerm a => Annotated a -> Praxis (Evaluation a)
 eval term = ($ term) $ case typeof (view value term) of
-  IProgram -> evalProgram
-  IExp     -> evalExp
+  ProgramT -> evalProgram
+  ExpT     -> evalExp
 
 evalProgram :: Annotated Program -> Praxis ()
 evalProgram (_ :< Program decls) = traverse evalDecl decls >> return ()
@@ -105,7 +108,7 @@ getValue src name = do
   entry <- (evalState . valueEnv) `uses` Map.lookup name
   case entry of
      Just val -> return val
-     Nothing  -> throwAt src ("unknown variable " <> pretty name)
+     Nothing  -> throwAt Evaluate src ("unknown variable " <> pretty name)
 
 evalExp :: Annotated Exp -> Praxis Value
 evalExp ((src, Just t) :< exp) = case exp of
@@ -117,8 +120,8 @@ evalExp ((src, Just t) :< exp) = case exp of
 
   Capture captures exp -> do
     let names = map fst captures
-    display "captures" (show (map fst captures)) `ifFlag` debug
-    display "exp" exp `ifFlag` debug
+    display Evaluate "captures" (show (map fst captures)) `ifFlag` debug
+    display Evaluate "exp" exp `ifFlag` debug
     values <- mapM (getValue src) names
     Value.Fn fn <- evalExp exp
     return $ Value.Fn $ \val -> save (evalState . valueEnv) $ do
@@ -186,7 +189,7 @@ evalExp ((src, Just t) :< exp) = case exp of
 
 
 evalSwitch :: Source -> [(Annotated Exp, Annotated Exp)] -> Praxis Value
-evalSwitch src [] = throwAt src ("inexhaustive switch" :: String)
+evalSwitch src [] = throwAt Evaluate src ("inexhaustive switch" :: String)
 evalSwitch src ((condExp,bodyExp):alts) = do
   cond <- evalExp condExp
   case cond of
@@ -194,7 +197,7 @@ evalSwitch src ((condExp,bodyExp):alts) = do
     Value.Bool False -> evalSwitch src alts
 
 evalCase :: Source -> Value -> [(Annotated Pat, Annotated Exp)] -> Praxis Value
-evalCase src val [] = throwAt src ("no matching pattern for value " <> pretty (show val))
+evalCase src val [] = throwAt Evaluate src ("no matching pattern for value " <> pretty (show val))
 evalCase src val ((pat,exp):alts) = case tryMatch val pat of
   Just doMatch -> save (evalState . valueEnv) $ do
     doMatch
@@ -205,7 +208,7 @@ evalCase src val ((pat,exp):alts) = case tryMatch val pat of
 forceMatch :: Source -> Value -> Annotated Pat -> Praxis ()
 forceMatch src val pat = case tryMatch val pat of
   Just doMatch -> doMatch
-  Nothing -> throwAt src ("no matching pattern for value " <> pretty (show val))
+  Nothing -> throwAt Evaluate src ("no matching pattern for value " <> pretty (show val))
 
 evalBind :: Annotated Bind -> Praxis ()
 evalBind ((src, _) :< Bind pat exp) = do

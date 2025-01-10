@@ -1,7 +1,12 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures   #-}
+{-# LANGUAGE TemplateHaskell  #-}
+{-# LANGUAGE TypeFamilies     #-}
 
 module Check.State
-  ( SolveState(..)
+  ( Constraint(..)
+  , SolveState(..)
   , requirements
   , assumptions
 
@@ -40,6 +45,7 @@ module Check.State
   ) where
 
 import           Common
+import           Stage
 import           Term
 
 import           Control.Lens    (makeLenses)
@@ -49,14 +55,18 @@ import           Data.Set        (Set)
 import qualified Data.Set        as Set
 
 
-data SolveState c = SolveState
-  { _requirements :: Set (Annotated (Requirement c))
-  , _assumptions  :: Set c
+type family Constraint (s :: Stage) where
+  Constraint TypeCheck = TypeConstraint
+  Constraint KindCheck = KindConstraint
+
+data SolveState (s :: Stage) = SolveState
+  { _requirements :: Set (Annotated s (Requirement (Constraint s)))
+  , _assumptions  :: Set (Constraint s s)
   }
 
 makeLenses ''SolveState
 
-emptySolveState :: Ord c => SolveState c
+emptySolveState :: Ord (Constraint s s) => SolveState s
 emptySolveState = SolveState
   { _requirements = Set.empty
   , _assumptions  = Set.empty
@@ -75,12 +85,12 @@ emptyRenameState = RenameState
   , _renames = Map.empty
   }
 
-type TypeConEnv = Map Name (Annotated Kind) -- ^ Type constructor environment
+type TypeConEnv = Map Name (Annotated KindCheck Kind) -- ^ Type constructor environment
 
-type TypeVarEnv = Map Name (Flavor, Annotated Kind) -- ^ Type variable environment
+type TypeVarEnv = Map Name (Flavor, Annotated KindCheck Kind) -- ^ Type variable environment
 
 data KindState = KindState
-  { _kindSolve     :: SolveState KindConstraint
+  { _kindSolve     :: SolveState KindCheck
   , _typeConEnv    :: TypeConEnv
   , _typeVarEnv    :: TypeVarEnv
   , _typeVarRename :: RenameState
@@ -96,7 +106,7 @@ emptyKindState = KindState
   , _typeVarRename = emptyRenameState
   }
 
-type ConEnv = Map Name (Annotated QType) -- ^ Constructor environment
+type ConEnv = Map Name (Annotated TypeCheck QType) -- ^ Constructor environment
 
 data Usage = Usage { _usedCount :: Int, _readCount :: Int }
 
@@ -108,10 +118,10 @@ instance Semigroup Usage where
 instance Monoid Usage where
   mempty = Usage { _usedCount = 0, _readCount = 0 }
 
-type VarEnv = Map Name (Usage, Annotated QType) -- ^ Variable environment
+type VarEnv = Map Name (Usage, Annotated TypeCheck QType) -- ^ Variable environment
 
 data TypeState = TypeState
-  { _typeSolve :: SolveState TypeConstraint
+  { _typeSolve :: SolveState TypeCheck
   , _conEnv    :: ConEnv
   , _varEnv    :: VarEnv
   , _varRename :: RenameState
@@ -130,9 +140,9 @@ emptyTypeState = TypeState
 data InstanceOrigin = Inbuilt | Trivial | User
   deriving Eq
 
-data Instance = IsInstance | IsInstanceOnlyIf [TypeConstraint]
+data Instance = IsInstance | IsInstanceOnlyIf [TypeConstraint TypeCheck]
 
-type InstanceEnv = Map Name (Map Name ([Annotated Type] -> (InstanceOrigin, Instance))) -- ^ Instance environment
+type InstanceEnv = Map Name (Map Name ([Annotated TypeCheck Type] -> (InstanceOrigin, Instance))) -- ^ Instance environment
 
 data State = State
   { _kindState   :: KindState

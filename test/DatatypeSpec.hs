@@ -18,11 +18,11 @@ spec = do
 datatype Either a b = Left a | Right b
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 datatype unboxed Either a b = Left a | Right b
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 datatype unboxed Either a_0 b_0 = [forall a_0 b_0 . a_0 -> Either a_0 b_0] Left a_0 | [forall a_0 b_0 . b_0 -> Either a_0 b_0] Right b_0
 |]
 
@@ -44,13 +44,13 @@ id_fun : forall a. () -> Fun a a
 id_fun () = Fun (\x -> x)
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 datatype unboxed Fun a b = Fun ( a -> b )
 unbox_fun : forall a b . Fun a b -> a -> b = \ Fun f -> \ x -> f x
 id_fun : forall a . ( ) -> Fun a a = \ ( ) -> Fun ( \ x -> x )
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 datatype unboxed Fun a_0 b_0 = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun a_0 b_0] Fun ( a_0 -> b_0 )
 unbox_fun_0 : forall a_1 b_1 . Fun a_1 b_1 -> a_1 -> b_1 = \ [Fun a_1 b_1] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
 id_fun_0 : forall a_2 . ( ) -> Fun a_2 a_2 = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun a_2 a_2] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
@@ -65,7 +65,7 @@ id_fun_0 : forall a_2 . ( ) -> Fun a_2 a_2 = \ [( )] ( ) -> [( a_2 -> a_2 ) -> F
 datatype unboxed Unboxed a = Unboxed a
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 datatype unboxed Unboxed a_0 = [forall a_0 . a_0 -> Unboxed a_0] Unboxed a_0
 |]
 
@@ -76,7 +76,7 @@ datatype unboxed Unboxed a_0 = [forall a_0 . a_0 -> Unboxed a_0] Unboxed a_0
 datatype boxed Boxed a = Boxed a
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 datatype boxed Boxed a_0 = [forall a_0 . a_0 -> Boxed a_0] Boxed a_0
 |]
 
@@ -87,7 +87,7 @@ datatype boxed Boxed a_0 = [forall a_0 . a_0 -> Boxed a_0] Boxed a_0
 datatype List a = Nil () | Cons (a, List a)
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 kind check error at 2:37: type List is not in scope
 |]
 
@@ -110,7 +110,7 @@ rec
     Cons (x, xs) -> x + sum xs
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 rec
   datatype boxed List a = Nil ( ) | Cons ( a , List a )
 rec
@@ -123,7 +123,7 @@ rec
     Cons ( x , xs ) -> add ( x , sum xs )
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 rec
   datatype boxed List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec

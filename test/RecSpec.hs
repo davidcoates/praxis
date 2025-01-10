@@ -21,14 +21,14 @@ rec
     n -> n * fac (n - 1)
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 rec
   fac = cases
     0 -> 1 : I64
     n -> multiply ( n , fac ( subtract ( n , 1 ) ) )
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 rec
   fac_0 = [I64 -> I64] cases
     [I64] 0 -> [I64] 1 : I64
@@ -54,7 +54,7 @@ rec
     n -> is_even (n - 1)
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 rec
   is_even = cases
     0 -> True
@@ -64,7 +64,7 @@ rec
     n -> is_even ( subtract ( n , 1 ) )
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 rec
   is_even_0 = [I32 -> Bool] cases
     [I32] 0 -> [Bool] True

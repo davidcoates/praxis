@@ -5,6 +5,7 @@ import           Eval               (runMain)
 import           Inbuilts           (runWithPrelude)
 import           Introspect
 import           Praxis
+import           Stage
 import           Term
 import           Util               (eval)
 
@@ -50,12 +51,12 @@ parseOpts args = do
   args <- parseDebug args
   (args, interactive) <- parseInteractive args
   (args, file) <- parseFilename args
-  when (not (null args)) $ throw (pretty "unknown option: " <> pretty (unwords args))
+  when (not (null args)) $ throw Initial (pretty "unknown option: " <> pretty (unwords args))
   if interactive
     then return (Interactive file)
     else case file of
       Just file -> return (Interpret file)
-      Nothing   -> throw (pretty "missing file")
+      Nothing   -> throw Initial (pretty "missing file")
 
 parse :: [String] -> Praxis ()
 parse xs = do
@@ -65,16 +66,16 @@ parse xs = do
       case file of
         Just file -> do
           text <- liftIO (readFile file)
-          eval IProgram text
+          eval ProgramT text
           repl
         Nothing   -> repl
     Interpret file -> do
       text <- liftIO (readFile file)
-      eval IProgram text
+      eval ProgramT text
       runMain
 
 help :: Praxis a
-help = Praxis.abort helpStr where
+help = Praxis.abort (pretty helpStr) where
   helpStr = "usage: praxis [infile] [OPTION]...\n\n" ++ unlines helpOpts
   helpOpts =
     [ "-d debug"
@@ -93,5 +94,5 @@ repl = forever $ do
 evalAndPrint :: String -> Praxis ()
 evalAndPrint s = do
   -- TODO fix this so we can have declarations
-  v <- eval IExp s
+  v <- eval ExpT s
   liftIO $ print v

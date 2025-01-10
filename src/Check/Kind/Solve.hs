@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds            #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE ImpredicativeTypes   #-}
@@ -23,12 +24,12 @@ import           Data.Set    (Set, union)
 import qualified Data.Set    as Set
 
 
-run :: Term a => Annotated a -> Praxis (Annotated a)
+run :: IsTerm a => Annotated KindCheck a -> Praxis (Annotated KindCheck a)
 run term = do
   term <- solve (checkState . kindState . kindSolve) reduce term
   tryDefault term
 
-reduce :: Disambiguating (Reducer KindConstraint)
+reduce :: Disambiguating (Reducer KindCheck)
 reduce disambiguate = \case
 
   KindIsEq kind1 kind2 | kind1 == kind2 -> return tautology
@@ -68,7 +69,7 @@ reduce disambiguate = \case
   _ -> return contradiction
 
   where
-    kindUnis :: forall a. Term a => Annotated a -> Set Name
+    kindUnis :: forall a. IsTerm a => Annotated KindCheck a -> Set Name
     kindUnis = extract (embedMonoid f) where
       f = \case
         KindUni n -> Set.singleton n
@@ -76,29 +77,29 @@ reduce disambiguate = \case
 
 
 -- Rewrite helpers
-solved :: Resolver -> Praxis (Reduction KindConstraint)
+solved :: Resolver KindCheck -> Praxis (Reduction KindCheck)
 solved resolve = do
   checkState . kindState . typeConEnv %%= traverse (pure . sub resolve)
   checkState . kindState . typeVarEnv %%= traverse (second (pure . sub resolve))
   return (solution (resolve, pure))
 
-is :: Name -> Kind -> Resolver
+is :: Name -> Kind KindCheck -> Resolver KindCheck
 is n kind = embedSub f where
   f (a :< x) = case x of
     KindUni n' -> if n == n' then Just (a :< kind) else Nothing
     _          -> Nothing
 
 -- Check for undetermined unification variables, default them where possible
-tryDefault :: Term a => Annotated a -> Praxis (Annotated a)
+tryDefault :: IsTerm a => Annotated KindCheck a -> Praxis (Annotated KindCheck a)
 tryDefault term@((src, _) :< _) = do
 
   -- TODO could just be a warning, and default to Type?
   let freeKinds = deepKindUnis term
-  when (not (null freeKinds)) $ throwAt src $ "underdetermined kind: " <> pretty (Set.elemAt 0 freeKinds)
+  when (not (null freeKinds)) $ throwAt KindCheck src $ "underdetermined kind: " <> pretty (Set.elemAt 0 freeKinds)
   return term
 
   where
-    deepKindUnis :: forall a. Term a => Annotated a -> Set Name
+    deepKindUnis :: forall a. IsTerm a => Annotated KindCheck a -> Set Name
     deepKindUnis = deepExtract (embedMonoid f) where
       f = \case
         KindUni n -> Set.singleton n

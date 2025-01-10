@@ -14,10 +14,12 @@ import           Common
 import           Parse.Parser        (Parser (..))
 import qualified Parse.Parser        as Parser (expected, lookahead, match, run)
 import           Praxis              (Praxis, throw, throwAt)
+import           Stage
 import           Token
 
 import           Control.Applicative (Alternative (..), Applicative (..))
 import           Data.Char.WCWidth   (wcwidth)
+
 
 newtype Tokenizer a = Tokenizer { runTokenizer :: Parser (Sourced Char) (Sourced a) }
 
@@ -45,8 +47,8 @@ run :: Pretty a => Tokenizer (Maybe a) -> String -> Praxis [Sourced a]
 run (Tokenizer t) cs = all (sourced cs) where
   all [] = pure []
   all cs = case Parser.run t cs of
-    (Left e, []) -> throw $ "expected " <> pretty e <> " but found EOF"
-    (Left e, (s :< t):_) -> throwAt s $ "expected " <> pretty e <> " but found '" <> pretty t <> "'"
+    (Left e, []) -> throw Parse $ "expected " <> pretty e <> " but found EOF"
+    (Left e, (s :< t):_) -> throwAt Parse s $ "expected " <> pretty e <> " but found '" <> pretty t <> "'"
     (Right (s :< Just x), cs) -> ((:) <$> pure (s :< x) <*> all cs)
     (Right _, cs) -> all cs
 

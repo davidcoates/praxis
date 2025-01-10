@@ -22,6 +22,7 @@ module Syntax.Syntax
 
 import           Common
 import           Introspect
+import           Stage
 import           Syntax.Prism
 import           Syntax.TH
 import           Term
@@ -50,7 +51,7 @@ class Syntax f where
   pure :: a -> f a
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   expected :: String -> f a
-  annotated :: Term a => f a -> f (Annotated a)
+  annotated :: (IsTerm a, IsStage s) => f (a s) -> f (Annotated s a)
   internal :: f a -> f a -- for internal constructs, supports printing but not parsing
 
 _Cons :: Prism [a] (a, [a])

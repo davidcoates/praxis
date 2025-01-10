@@ -1,7 +1,9 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE QuasiQuotes      #-}
-{-# LANGUAGE Rank2Types       #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE QuasiQuotes         #-}
+{-# LANGUAGE Rank2Types          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Inbuilts
   ( runWithPrelude
@@ -20,7 +22,10 @@ import           Eval.Value                (Value (..), integerToValue,
 import qualified Eval.Value                as Value
 import           Introspect
 import qualified Parse                     (run)
+-- import qualified Check.Kind.Check          as Check.Kind (run)
+-- import qualified Check                     as Check (run)
 import           Praxis
+import           Stage
 import           Term                      hiding (Lit (..), Pair, Unit)
 
 import           Control.Monad.Trans.Class (MonadTrans (..))
@@ -37,8 +42,8 @@ runInternal c = case unsafePerformIO (runPraxis (flags . silent .= True >> c)) o
   Left e  -> error ("internal computation failed: " ++ e)
   Right x -> x
 
-kind :: String -> Annotated Kind
-kind s = runInternal (Parse.run s :: Praxis (Annotated Kind))
+kind :: forall s. IsStage s => String -> Annotated s Kind
+kind s = cast $ runInternal (Parse.run s)
 
 initialTypeConEnv :: TypeConEnv
 initialTypeConEnv = Map.fromList
@@ -71,24 +76,22 @@ initialTypeConEnv = Map.fromList
   ]
 
 
--- TODO do we actually need kinds here?
-
 -- TODO should be replaced with instances in prelude
 
-integral :: Annotated Type -> TypeConstraint
-integral t = TypeIsInstance $ TypeApply (TypeCon "Integral" `as` kind "Type -> Constraint") t `as` kind "Type"
+integral :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
+integral t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Integral")) t))
 
-clone :: Annotated Type -> TypeConstraint
-clone t = TypeIsInstance $ TypeApply (TypeCon "Clone" `as` kind "Type -> Constraint") t `as` kind "Type"
+clone :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
+clone t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Clone")) t))
 
-dispose :: Annotated Type -> TypeConstraint
-dispose t = TypeIsInstance $ TypeApply (TypeCon "Dispose" `as` kind "Type -> Constraint") t `as` kind "Type"
+dispose :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
+dispose t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Dispose")) t))
 
-copy :: Annotated Type -> TypeConstraint
-copy t = TypeIsInstance $ TypeApply (TypeCon "Copy" `as` kind "Type -> Constraint") t `as` kind "Type"
+copy :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
+copy t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Copy")) t))
 
-capture :: Annotated Type -> TypeConstraint
-capture t = TypeIsInstance $ TypeApply (TypeCon "Capture" `as` kind "Type -> Constraint") t `as` kind "Type"
+capture :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
+capture t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Capture")) t))
 
 initialInstanceEnv :: InstanceEnv
 initialInstanceEnv = Map.fromList
@@ -149,7 +152,7 @@ initialInstanceEnv = Map.fromList
 
 -- FIXME: Intiailize "scopes"
 
-inbuilts :: [(Name, Annotated QType, Value)]
+inbuilts :: [(Name, Annotated TypeCheck QType, Value)]
 inbuilts =
   [ ("add"
     , poly "forall a | Integral a. (a, a) -> a" -- TODO should be Num, not Integral
@@ -260,11 +263,11 @@ inbuilts =
     liftBBB :: (Bool -> Bool -> Bool) -> Value
     liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
 
-mono :: String -> Annotated Type
-mono s = runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s :: Praxis (Annotated Type))
+mono :: String -> Annotated TypeCheck Type
+mono s = cast $ runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s)
 
-poly :: String -> Annotated QType
-poly s = runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s :: Praxis (Annotated QType))
+poly :: String -> Annotated TypeCheck QType
+poly s = cast $ runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s)
 
 runWithPrelude :: Praxis a -> IO (Either String a)
 runWithPrelude c = runPraxis (importPrelude >> c) where
@@ -277,7 +280,7 @@ runWithPrelude c = runPraxis (importPrelude >> c) where
     let initialValueEnv = Map.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
     evalState . valueEnv .= initialValueEnv
     flags . silent .= True
-    Parse.run prelude :: Praxis (Annotated Program)
+    Parse.run prelude :: Praxis (Annotated Parse Program)
     flags . silent .= False
 
 

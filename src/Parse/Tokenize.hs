@@ -7,6 +7,7 @@ import           Parse.Tokenize.Tokenizer hiding (run)
 import qualified Parse.Tokenize.Tokenizer as Tokenizer (run)
 import           Parse.Tokenize.Unlayout
 import           Praxis
+import           Stage
 import           Term                     (Lit (..))
 import           Token
 
@@ -18,9 +19,9 @@ import           Data.Maybe               (fromJust)
 run :: Bool -> String -> Praxis [Sourced Token]
 run topLevel text = do
   tokens <- Tokenizer.run token text
-  display "tokens" (separate " " (map (view value) tokens)) `ifFlag` debug
+  display Parse "tokens" (separate " " (map (view value) tokens)) `ifFlag` debug
   let tokens' = unlayout topLevel tokens
-  display "tokens with layout" (separate " " (map (view value) tokens')) `ifFlag` debug
+  display Parse "tokens with layout" (separate " " (map (view value) tokens')) `ifFlag` debug
   return tokens'
 
 -- Helper functions

@@ -20,7 +20,7 @@ fst : forall a. (a, a) -> a
 fst (a, a) = a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 type check error at 2:5: variables are not distinct
 |]
 
@@ -31,28 +31,28 @@ type check error at 2:5: variables are not distinct
 datatype Foo a a = Foo a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
 
 
     let program = trim [r|
 datatype Foo a &a = Foo a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
 
 
     let program = trim [r|
 datatype Foo ?a &a = Foo &a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` "kind check error at 1:1: type variables are not distinct"
 
 
     let program = trim [r|
 datatype Foo !a = Foo a
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 1:23: type variable a has the wrong flavor"
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` "kind check error at 1:23: type variable a has the wrong flavor"
 
 
   describe "type redeclaration" $ do
@@ -62,7 +62,7 @@ datatype Foo = Foo ()
 enum Foo = Bar | Baz
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "kind check error at 2:1: type Foo redeclared"
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` "kind check error at 2:1: type Foo redeclared"
 
 
   describe "constructor redeclaration" $ do
@@ -72,7 +72,7 @@ datatype FooData = Foo ()
 enum FooEnum = Foo | Bar
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:1: constructor Foo redeclared"
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` "type check error at 2:1: constructor Foo redeclared"
 
 
   describe "term redeclaration" $ do
@@ -82,7 +82,7 @@ x = 1
 x = 2
 |]
 
-    it "checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 x_0 = [I32] 1
 x_1 = [I32] 2
 |]
@@ -95,7 +95,7 @@ x = y where y = 1
 z = y
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 2:5: variable y is not in scope"
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` "type check error at 2:5: variable y is not in scope"
 
 
   describe "out of scope non-recursive function" $ do
@@ -104,7 +104,7 @@ z = y
 x () = x ()
 |]
 
-    it "does not check" $ runPretty (check IProgram program) `shouldReturn` "type check error at 1:8: variable x is not in scope"
+    it "does not check" $ runPretty (check ProgramT program) `shouldReturn` "type check error at 1:8: variable x is not in scope"
 
 
   describe "shadowing" $ do
@@ -120,7 +120,7 @@ g x = f x where
     n -> f (n - 1) * n
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 f_1 = \ [I32] x_0 -> [I32] [I32 -> I32] f_0 [I32] x_0 where
   f_0 : I32 -> I32 = \ [I32] x_1 -> [I32] x_1
 g_0 = \ [I32] x_2 -> [I32] [I32 -> I32] f_2 [I32] x_2 where

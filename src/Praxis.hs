@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
@@ -7,11 +8,11 @@ module Praxis
   ( Praxis
   , PraxisState
 
+  , abort
   , warn
   , warnAt
   , throw
   , throwAt
-  , abort
 
   , save
   , try
@@ -29,7 +30,6 @@ module Praxis
   -- | Praxis lenses
   , flags
   , fresh
-  , stage
   , parseState
   , checkState
   , evalState
@@ -84,7 +84,6 @@ data Fresh = Fresh
 data PraxisState = PraxisState
   { _flags      :: Flags               -- ^ Flags
   , _fresh      :: Fresh
-  , _stage      :: Stage               -- ^ Current stage of compilation
   , _parseState :: Parse.State
   , _checkState :: Check.State
   , _evalState  :: Eval.State
@@ -109,7 +108,6 @@ emptyState :: PraxisState
 emptyState = PraxisState
   { _flags      = defaultFlags
   , _fresh      = defaultFresh
-  , _stage      = Unknown
   , _parseState = Parse.emptyState
   , _checkState = Check.emptyState
   , _evalState  = Eval.emptyState
@@ -119,64 +117,50 @@ makeLenses ''Flags
 makeLenses ''Fresh
 makeLenses ''PraxisState
 
-format :: Pretty a => a -> Praxis (Colored String)
-format x = do
-  stage' <- use stage
-  let opt = case stage' of { KindCheck -> Kinds; TypeCheck -> Types; _ -> Simple }
-  return (runPrintable (pretty x) opt)
+abort :: Colored String -> Praxis b
+abort err = do
+  displayLn err
+  ExceptT (return (Left (fold err)))
 
-abort :: Pretty a => a -> Praxis b
-abort x = do
-  displayBare x
-  err <- fold <$> format x
-  ExceptT (return (Left err))
-
-withContext :: Printable String -> Maybe Source -> Praxis (Printable String)
-withContext message src = do
-  stage' <- use stage
+-- <stage> <message> at <src>
+format :: Stage -> Maybe Source -> Colored String -> Colored String
+format stage src message =
   let
-    stageStr = case stage' of
-      Unknown -> blank
-      _       -> pretty (Colored.Value (show stage')) <> " "
-    srcStr = case src of
-      Nothing  -> blank
-      Just src -> " at " <> pretty (Colored.Style Bold (Colored.Value (show src)))
-  return $ stageStr <> message <> srcStr
+    stageMessage = Colored.Value (show stage) <> " " <> message
+  in
+    case src of
+      Nothing  -> stageMessage
+      Just src -> stageMessage <> " at " <> Colored.Style Bold (Colored.Value (show src))
 
-warn' :: Pretty a => Maybe Source -> a -> Praxis ()
-warn' src x = (`ifFlag` debug) $ do
-  message <- pretty (Colored.Style Bold (Colored.Fg Yellow ("warning" :: Colored String))) `withContext` src
-  displayBare (message <> ": " <> pretty x)
+warn' :: Pretty a => Stage -> Maybe Source -> a -> Praxis ()
+warn' stage src x = (`ifFlag` debug) $ do
+  displayLn $ format stage src (Colored.Style Bold (Colored.Fg Yellow ("warning" :: Colored String))) <> ": " <> pretty x
 
-warn :: Pretty a => a -> Praxis ()
-warn = warn' Nothing
+warn :: Pretty a => Stage -> a -> Praxis ()
+warn stage = warn' stage Nothing
 
-warnAt :: Pretty a => Source -> a -> Praxis ()
-warnAt src = warn' (Just src)
+warnAt :: Pretty a => Stage -> Source -> a -> Praxis ()
+warnAt stage src = warn' stage (Just src)
 
-throw' :: Pretty a => Maybe Source -> a -> Praxis b
-throw' src x = do
-  message <- pretty (Colored.Style Bold (Colored.Fg Red ("error" :: Colored String))) `withContext` src
-  abort $ message <> ": " <> pretty x
+throw' :: Pretty a => Stage -> Maybe Source -> a -> Praxis b
+throw' stage src x = do
+  abort $ format stage src (Colored.Style Bold (Colored.Fg Red ("error" :: Colored String))) <> ": " <> pretty x
 
-throw :: Pretty a => a -> Praxis b
-throw = throw' Nothing
+throw :: Pretty a => Stage -> a -> Praxis b
+throw stage = throw' stage Nothing
 
-throwAt :: Pretty a => Source -> a -> Praxis b
-throwAt src = throw' (Just src)
+throwAt :: Pretty a => Stage -> Source -> a -> Praxis b
+throwAt stage src = throw' stage (Just src)
 
-display :: Pretty a => String -> a -> Praxis ()
-display info x = unlessSilent $ do
-  t <- liftIO $ getTerm
-  s <- use stage
-  liftIO $ printColoredS t $ Colored.Fg White (Colored.Bg Green (Colored.Style Bold (Colored.Value (show s ++ " (" ++ info ++ ")")))) <> "\n"
-  displayBare x
+display :: Pretty a => Stage -> String -> a -> Praxis ()
+display stage info x = do
+  displayLn $ format stage Nothing (Colored.Fg White (Colored.Bg Green (Colored.Style Bold (Colored.Value info))))
+  displayLn $ pretty x
 
-displayBare :: Pretty a => a -> Praxis ()
-displayBare x = unlessSilent $ do
-  t <- liftIO $ getTerm
-  x <- format x
-  liftIO $ printColoredS t $ x <> "\n"
+displayLn :: Colored String -> Praxis ()
+displayLn msg = unlessSilent $ do
+  t <- liftIO $ Colored.getTerm
+  liftIO $ Colored.printColoredS t $ msg <> "\n"
 
 clearTerm :: Praxis ()
 clearTerm = unlessSilent $ liftIO $ do
@@ -222,30 +206,30 @@ runPraxis c = fst <$> runPraxis' c emptyState
 ifFlag :: Praxis () -> Lens' Flags Bool -> Praxis ()
 ifFlag c f = use (flags . f) >>= (flip when) c
 
-freshKindUni :: Praxis (Annotated Kind)
+freshKindUni :: Praxis (Annotated KindCheck Kind)
 freshKindUni = do
   (k:ks) <- use (fresh . freshKindUnis)
   fresh . freshKindUnis .= ks
   return (phantom (KindUni k))
 
-freshRef :: Praxis (Annotated Type)
+freshRef :: Praxis (Annotated TypeCheck Type)
 freshRef = do
   (l:ls) <- use (fresh . freshRefs)
   fresh . freshRefs .= ls
-  return (TypeRef l `as` phantom KindType)
+  return $ phantom (TypeRef l)
 
-freshTypeUni :: Flavor -> Praxis (Annotated Type)
+freshTypeUni :: Flavor -> Praxis (Annotated TypeCheck Type)
 freshTypeUni f = case f of
   Plain -> freshTypeUni' freshTypeUniPlains KindType
   Ref   -> freshTypeUni' freshTypeUniRefs KindRef
   Value -> freshTypeUni' freshTypeUniValues KindType
   View  -> freshTypeUni' freshTypeUniViews KindView
   where
-    freshTypeUni' :: Lens' Fresh [String] -> Kind -> Praxis (Annotated Type)
+    freshTypeUni' :: Lens' Fresh [String] -> (Kind TypeCheck) -> Praxis (Annotated TypeCheck Type)
     freshTypeUni' freshTypeUnis kind = do
       (x:xs) <- use (fresh . freshTypeUnis)
       fresh . freshTypeUnis .= xs
-      return (TypeUni f x `as` phantom kind)
+      return (phantom (TypeUni f x))
 
 freshVar :: Name -> Praxis Name
 freshVar var = do

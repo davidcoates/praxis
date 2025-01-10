@@ -35,7 +35,7 @@ operator (_ ++ _) = concat where
   left associative
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 rec
   datatype boxed List a = Nil ( ) | Cons ( a , List a )
 rec
@@ -49,7 +49,7 @@ rec
     ( Nil ( ) , ys ) -> copy ( ys : { ?v , ?w } List a )
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 rec
   datatype boxed List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
 rec

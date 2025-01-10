@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
@@ -13,9 +14,11 @@ import           Common
 import           Data.Foldable        (toList)
 import qualified Data.Monoid.Colorful as Colored
 import           Introspect
+import           Stage
 import           Syntax.Unparser
 import           Term
 import           Token
+
 
 newtype Printer a = Printer { runPrinter :: a -> Maybe [Token] }
 
@@ -42,8 +45,8 @@ instance Unparser Printer where
 indent :: Int -> String
 indent n = replicate (2*n) ' '
 
-layout :: [Token] -> Option -> Colored String
-layout ts o = layout' (-1) Colored.Nil ts where
+layout :: [Token] -> Colored String
+layout ts = layout' (-1) Colored.Nil ts where
 
   layout' :: Int -> Colored String -> [Token] -> Colored String
   layout' depth prefix ts = case ts of
@@ -57,7 +60,7 @@ layout ts o = layout' (-1) Colored.Nil ts where
 
     t : ts ->
       let
-        cs = runPrintable (pretty t) o
+        cs = pretty t
       in
         if null cs
           then layout' depth prefix ts
@@ -66,14 +69,14 @@ layout ts o = layout' (-1) Colored.Nil ts where
     [] -> Colored.Nil
 
 
-instance (Term a, x ~ Annotation a) => Pretty (Tag (Source, Maybe x) a) where
-  pretty x = Printable (layout (force unparse x))
+instance (IsTerm a, IsStage s, x ~ Annotation s a) => Pretty (Tag (Source, Maybe x) (a s)) where
+  pretty x = layout (force unparse x)
 
 -- Do not show the label for compositional structures where the label of the parent is obvious from the label of the children.
 -- I.e. ([a] a, ([b] b, [c] c)) instead of [(a, b, c)] ([a] a, [(b, c)] ([b] b, [c] c))
-hideLabel :: Term a => a -> Bool
+hideLabel :: IsTerm a => a s -> Bool
 hideLabel x = case typeof x of
-  IExp -> case x of
+  ExpT -> case x of
     Pair _ _       -> True
     Apply _ _      -> True
     Capture _ _    -> True
@@ -82,29 +85,64 @@ hideLabel x = case typeof x of
     Specialize _ _ -> True
     Sig _ _        -> True
     _              -> False
-  IPat -> case x of
+  PatT -> case x of
     PatPair _ _ -> True -- Note: Not trivial due to references/views: e.g. [?v (a, b)] (a, b) ~ ([?v a] a, ([?v b] b), but still simple enough to ignore.
     _           -> False
-  IType -> case x of
+  TypeT -> case x of
     TypeApply _ _   -> True
     TypeApplyOp _ _ -> True
     _               -> False
   _ -> False
 
-label :: Term a => Annotated a -> Printable String
+label :: forall a s. (IsTerm a, IsStage s) => Annotated s a -> Colored String
 label ((s, a) :< x) = case a of
   Just a | not (hideLabel x) -> case typeof x of
-    IExp             -> prettyIf Types a
-    IPat             -> prettyIf Types a
-    IDataCon         -> prettyIf Types a
-    ITypePat         -> prettyIf Kinds a
-    IType            -> prettyIf Kinds a
-    ITypeRequirement -> pretty a
-    IKindRequirement -> pretty a
-    _                -> blank
-  _ -> blank
+    ExpT -> ($ a) $ case (stageT :: StageT s) of
+      InitialT   -> absurd
+      ParseT     -> absurd
+      KindCheckT -> absurd
+      TypeCheckT -> pretty
+      EvaluateT  -> absurd
+    DataConT -> ($ a) $ case (stageT :: StageT s) of
+      InitialT   -> absurd
+      ParseT     -> absurd
+      KindCheckT -> absurd
+      TypeCheckT -> pretty
+      EvaluateT  -> absurd
+    KindRequirementT -> ($ a) $ case (stageT :: StageT s) of
+      InitialT   -> absurd
+      ParseT     -> absurd
+      KindCheckT -> pretty
+      TypeCheckT -> absurd
+      EvaluateT  -> absurd
+    PatT -> ($ a) $ case (stageT :: StageT s) of
+      InitialT   -> absurd
+      ParseT     -> absurd
+      KindCheckT -> absurd
+      TypeCheckT -> pretty
+      EvaluateT  -> absurd
+    TypeT -> ($ a) $ case (stageT :: StageT s) of
+      InitialT   -> absurd
+      ParseT     -> absurd
+      KindCheckT -> pretty
+      TypeCheckT -> absurd
+      EvaluateT  -> absurd
+    TypePatT -> ($ a) $ case (stageT :: StageT s) of
+      InitialT   -> absurd
+      ParseT     -> absurd
+      KindCheckT -> pretty
+      TypeCheckT -> absurd
+      EvaluateT  -> absurd
+    TypeRequirementT -> ($ a) $ case (stageT :: StageT s) of
+      InitialT   -> absurd
+      ParseT     -> absurd
+      KindCheckT -> absurd
+      TypeCheckT -> pretty
+      EvaluateT  -> absurd
+    _                -> Colored.Nil
+  _ -> Colored.Nil
 
-instance Pretty TypeReason where
+instance IsStage s => Pretty (TypeReason s) where
   pretty = \case
     TypeReasonApply f x -> "application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
     TypeReasonBind p e -> "binding " <> pretty p <> pretty (Colored.Fg Red (" (<-) " :: Colored String)) <> pretty e
@@ -125,7 +163,7 @@ instance Pretty TypeReason where
     TypeReasonMultiAlias n -> "variable " <> pretty n <> " is not a unique alias"
     TypeReasonMultiUse n -> "variable " <> pretty n <> " used more than once"
 
-instance Pretty KindReason where
+instance IsStage s => Pretty (KindReason s) where
   pretty = \case
     KindReasonTypeApply f x -> "type application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
     KindReasonTypeApplyOp f x -> "type operator application " <> pretty f <> pretty (Colored.Fg Red (" (★) " :: Colored String)) <> pretty x

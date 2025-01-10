@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -20,9 +21,8 @@ import           Term
 
 
 -- | A wrapper which runs tokenise, parse, desugar, and rewrite
-run :: forall a. Term a => String -> Praxis (Annotated a)
-run text = save stage $ do
-  stage .= Parse
-  let topLevel = case witness :: I a of { IProgram -> True; _ -> False }
+run :: forall a. IsTerm a => String -> Praxis (Annotated Parse a)
+run text = do
+  let topLevel = case witness :: TermT a of { ProgramT -> True; _ -> False }
   tokens <- Parse.Tokenize.run topLevel text
   Parse.Parse.run tokens >>= Parse.Desugar.run

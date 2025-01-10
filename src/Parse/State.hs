@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds       #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Parse.State
@@ -16,6 +17,7 @@ module Parse.State
   ) where
 
 import           Common
+import           Stage
 import           Term
 
 import           Control.Lens    (makeLenses)
@@ -32,15 +34,15 @@ data Fixity
   | Closed
   deriving (Eq, Ord)
 
-type OpDefns = Map Op (Name, Fixity)
+type OpDefns = Map (Op Parse) (Name, Fixity)
 
-data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op]], _prec :: Graph }
+data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op Parse]], _prec :: Graph }
 
 makeLenses ''OpContext
 
 data State = State
   { _opContext    :: OpContext
-  , _typeSynonyms :: Map Name (Annotated Type)
+  , _typeSynonyms :: Map Name (Annotated Parse Type)
   }
 
 makeLenses ''State

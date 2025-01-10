@@ -30,12 +30,12 @@ spec = do
 
     forM_ expressions $ \(a, b) -> do
       it (show a ++ " parses like " ++ show b) $ do
-        x <- runPretty (parse IExp a)
-        y <- runPretty (parse IExp b)
+        x <- runPretty (parse ExpT a)
+        y <- runPretty (parse ExpT b)
         x `shouldBe` y
       it (show a ++ " parses idempotently") $ do
-        x <- runPretty (parse IExp a)
-        y <- runPretty (parse IExp x)
+        x <- runPretty (parse ExpT a)
+        y <- runPretty (parse ExpT x)
         x `shouldBe` y
 
 
@@ -52,8 +52,8 @@ spec = do
 
     forM_ types $ \(a, b) -> do
       it (show a ++ " parses like " ++ show b) $ do
-        a <- runPretty (parse IQType a)
-        b <- runPretty (parse IQType b)
+        a <- runPretty (parse QTypeT a)
+        b <- runPretty (parse QTypeT b)
         a `shouldBe` b
 
     let types =
@@ -67,7 +67,7 @@ spec = do
 
     forM_ types $ \t -> do
       it (show t ++ " is not valid") $ do
-        t' <- runPretty (check IQType t)
+        t' <- runPretty (check QTypeT t)
         t' `shouldBe` "kind check error at 1:1: type variables are not distinct"
 
 
@@ -79,7 +79,7 @@ foo = do
   let y = 1
 |]
 
-    it "does not parse" $ runPretty (check IProgram program) `shouldReturn` "parse error at 3:3: do block must end in an expression"
+    it "does not parse" $ runPretty (check ProgramT program) `shouldReturn` "parse error at 3:3: do block must end in an expression"
 
 
   describe "mixfix operators" $ do
@@ -103,7 +103,7 @@ operator (_ <?> _ <:> _) = ifthenelse where
   precedence below (_ <-> _)
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 implies : ( Bool , Bool ) -> Bool = \ ( a , b ) -> or ( b , not a )
 iff : ( Bool , Bool ) -> Bool = \ ( a , b ) -> or ( and ( a , b ) , and ( not a , not b ) )
 ifthenelse : ( Bool , I32 , I32 ) -> I32 = \ ( c , a , b ) -> if c then a else b
@@ -120,11 +120,11 @@ x =
 y = 5
 |]
 
-    it "does not parse" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "does not parse" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 parse error at 2:1: expected expression but found ';'
 |]
 
-    it "does not parse" $ runPretty (parse IProgram "") `shouldReturn` trim [r|
+    it "does not parse" $ runPretty (parse ProgramT "") `shouldReturn` trim [r|
 parse error: expected program but found EOF
 |]
 
@@ -133,6 +133,6 @@ parse error: expected program but found EOF
 
     let program = trim [r|x = "🟧" 🟧|]
 
-    it "does not parse" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "does not parse" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 parse error at 1:10: expected token but found '🟧'
 |]

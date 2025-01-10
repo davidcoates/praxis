@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -23,25 +24,26 @@ import           Introspect
 import qualified Parse
 import           Praxis
 import           Print
+import           Stage
 import           Term
 
 
-parse :: forall a. Term a => I a -> String -> Praxis (Annotated a)
-parse _ term = Parse.run term :: Praxis (Annotated a)
+parse :: forall a. IsTerm a => TermT a -> String -> Praxis (Annotated Parse a)
+parse _ term = Parse.run term :: Praxis (Annotated Parse a)
 
-check :: forall a. Term a => I a -> String -> Praxis (Annotated a)
+check :: forall a. IsTerm a => TermT a -> String -> Praxis (Annotated TypeCheck a)
 check ty term = parse ty term >>= Check.run
 
-eval :: forall a. Term a => I a -> String -> Praxis (Eval.Evaluation a)
+eval :: forall a. IsTerm a => TermT a -> String -> Praxis (Eval.Evaluation a)
 eval ty term = check ty term >>= Eval.run
 
 -- Helpers for tests
 
-runPretty :: (Term a, x ~ Annotation a) => Praxis (Annotated a) -> IO String
-runPretty = runWith (\x -> fold (runPrintable (pretty x) Types))
+runPretty :: (IsTerm a, IsStage s) => Praxis (Annotated s a) -> IO String
+runPretty = runWith (\x -> fold (pretty x))
 
 runEvaluate :: String -> String -> IO String
-runEvaluate program exp = runWith show (eval IProgram program >> eval IExp exp)
+runEvaluate program exp = runWith show (eval ProgramT program >> eval ExpT exp)
 
 runWith :: (a -> String) -> Praxis a -> IO String
 runWith show p = do

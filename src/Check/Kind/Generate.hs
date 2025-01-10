@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
@@ -16,6 +17,7 @@ import           Inbuilts
 import           Introspect
 import           Praxis
 import           Print
+import           Stage
 import           Term
 
 import           Data.List       (nub, sort)
@@ -23,41 +25,41 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set        as Set
 
 
-run :: Term a => Annotated a -> Praxis (Annotated a)
+run :: IsTerm a => Annotated Parse a -> Praxis (Annotated KindCheck a)
 run term = do
   term <- generate term
-  display "annotated term" term `ifFlag` debug
+  display KindCheck "annotated term" term `ifFlag` debug
   requirements' <- use (checkState . kindState . kindSolve . requirements)
-  display "requirements" (separate "\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
+  display KindCheck "requirements" (separate "\n" (nub . sort $ Set.toList requirements')) `ifFlag` debug
   return term
 
-generate :: Term a => Annotated a -> Praxis (Annotated a)
+generate :: IsTerm a => Annotated Parse a -> Praxis (Annotated KindCheck a)
 generate term = ($ term) $ case typeof (view value term) of
-  IBind           -> auto
-  IDataCon        -> generateDataCon
-  IDecl           -> generateDecl
-  IDeclTerm       -> generateDeclTerm
-  IDeclType       -> generateDeclType
-  IExp            -> auto
-  IPat            -> auto
-  IProgram        -> auto
-  IQType          -> generateQType
-  IType           -> generateType
-  ITypeConstraint -> auto
-  ITypePat        -> generateTypePat
+  BindT           -> auto
+  DataConT        -> generateDataCon
+  DeclT           -> generateDecl
+  DeclTermT       -> generateDeclTerm
+  DeclTypeT       -> generateDeclType
+  ExpT            -> auto
+  PatT            -> auto
+  ProgramT        -> auto
+  QTypeT          -> generateQType
+  TypeT           -> generateType
+  TypeConstraintT -> auto
+  TypePatT        -> generateTypePat
   ty              -> error (show ty)
   where
-    auto :: Term a => Annotated a -> Praxis (Annotated a)
+    auto :: (IsTerm a, Annotation Parse a ~ Annotation KindCheck a) => Annotated Parse a -> Praxis (Annotated KindCheck a)
     auto = value (recurseTerm generate)
 
-introCon :: Source -> Name -> Annotated Kind -> Praxis ()
+introCon :: Source -> Name -> Annotated KindCheck Kind -> Praxis ()
 introCon src name kind = do
   entry <- (checkState . kindState . typeConEnv) `uses` Map.lookup name
   case entry of
-    Just _ -> throwAt src $ "type " <> pretty name <> " redeclared"
+    Just _ -> throwAt KindCheck src $ "type " <> pretty name <> " redeclared"
     _      -> checkState . kindState . typeConEnv %= Map.insert name kind
 
-introVar :: Source -> Flavor -> Name -> Annotated Kind -> Praxis Name
+introVar :: Source -> Flavor -> Name -> Annotated KindCheck Kind -> Praxis Name
 introVar src flavor name kind = do
   entry <- (checkState . kindState . typeVarRename . counts) `uses` Map.lookup name
   let count = case entry of { Just count -> count; Nothing -> 0 }
@@ -68,14 +70,14 @@ introVar src flavor name kind = do
   checkState . kindState . typeVarEnv %= Map.insert rename (flavor, kind)
   return rename
 
-lookupCon :: Source -> Name -> Praxis (Annotated Kind)
+lookupCon :: Source -> Name -> Praxis (Annotated KindCheck Kind)
 lookupCon src name = do
   entry <- (checkState . kindState . typeConEnv) `uses` Map.lookup name
   case entry of
     Just kind -> return kind
-    Nothing   -> throwAt src $ "type " <> pretty name <> " is not in scope"
+    Nothing   -> throwAt KindCheck src $ "type " <> pretty name <> " is not in scope"
 
-lookupVar :: Source -> Flavor -> Name -> Praxis (Name, Annotated Kind)
+lookupVar :: Source -> Flavor -> Name -> Praxis (Name, Annotated KindCheck Kind)
 lookupVar src flavor name = do
   entry <- (checkState . kindState . typeVarRename . renames) `uses` Map.lookup name
   let rename = case entry of { Just rename -> rename; Nothing -> name }
@@ -83,24 +85,24 @@ lookupVar src flavor name = do
   case entry of
     Just (flavor', kind)
       | flavor == flavor' -> return (rename, kind)
-      | otherwise         -> throwAt src $ "type variable " <> pretty name <> " has the wrong flavor"
-    Nothing -> throwAt src $ "type variable " <> pretty name <> " is not in scope"
+      | otherwise         -> throwAt KindCheck src $ "type variable " <> pretty name <> " has the wrong flavor"
+    Nothing -> throwAt KindCheck src $ "type variable " <> pretty name <> " is not in scope"
 
-checkDistinct :: Source -> [Annotated TypePat] -> Praxis ()
+checkDistinct :: Source -> [Annotated s TypePat] -> Praxis ()
 checkDistinct src typePats = do
   let names = map (\(_ :< TypePatVar _ name) -> name) typePats
-  unless (isDistinct names) $ throwAt src ("type variables are not distinct" :: String)
+  unless (isDistinct names) $ throwAt KindCheck src ("type variables are not distinct" :: String)
 
 scope :: Praxis a -> Praxis a
 scope block = save (checkState . kindState . typeVarRename . renames) $ block
 
-require :: Tag (Source, KindReason) KindConstraint -> Praxis ()
+require :: Tag (Source, KindReason KindCheck) (KindConstraint KindCheck) -> Praxis ()
 require ((src, reason) :< con) = checkState . kindState . kindSolve . requirements %= Set.insert ((src, Just reason) :< Requirement con)
 
-getKind :: (Term a, Annotation a ~ Annotated Kind) => Annotated a -> Annotated Kind
+getKind :: (IsTerm a, Annotation KindCheck a ~ Annotated KindCheck Kind) => Annotated KindCheck a -> Annotated KindCheck Kind
 getKind term = view (annotation . just) term
 
-generateType :: Annotated Type -> Praxis (Annotated Type)
+generateType :: Annotated Parse Type -> Praxis (Annotated KindCheck Type)
 generateType (a@(src, _) :< ty) = (\(kind :< ty) -> ((src, Just kind) :< ty)) <$> case ty of
 
     TypeApply ty1 ty2 -> do
@@ -137,11 +139,11 @@ generateType (a@(src, _) :< ty) = (\(kind :< ty) -> ((src, Just kind) :< ty)) <$
     TypeSetOp tys -> do
       tys <- mapM generateType (Set.toList tys)
       let
-        checkRefOrView :: Annotated Type -> Praxis ()
+        checkRefOrView :: Annotated KindCheck Type -> Praxis ()
         checkRefOrView ty = case view value (getKind ty) of
           KindRef  -> return ()
           KindView -> return ()
-          _        -> throwAt src $ "type " <> pretty ty <> " is in a type operator set but is not a type operator"
+          _        -> throwAt KindCheck src $ "type " <> pretty ty <> " is in a type operator set but is not a type operator"
       mapM_ checkRefOrView tys
       let
         isRef = all (\op -> case view value (getKind op) of { KindRef -> True; KindView -> False }) tys
@@ -159,31 +161,38 @@ generateType (a@(src, _) :< ty) = (\(kind :< ty) -> ((src, Just kind) :< ty)) <$
       return (kind :< TypeVar flavor var)
 
 
-generateTypePat :: Annotated TypePat -> Praxis (Annotated TypePat)
-generateTypePat typePat@(a@(src, _) :< TypePatVar f var) = (\(var, k) -> (src, Just k) :< TypePatVar f var) <$> case f of
+-- TODO tidy this one up
+generateTypePat :: Annotated Parse TypePat -> Praxis (Annotated KindCheck TypePat)
+generateTypePat typePat@((src, _) :< TypePatVar f var) = case f of
 
   Plain -> do
     kind <- freshKindUni
     var <- introVar src Plain var kind
+    let typePat = (src, Just kind) :< TypePatVar f var
     require $ (src, KindReasonTypePat typePat) :< KindIsPlain kind
-    return (var, kind)
+    return typePat
 
   Ref -> do
-    var <- introVar src Ref var (phantom KindRef)
-    return (var, phantom KindRef)
+    let kind = phantom KindRef
+    var <- introVar src Ref var kind
+    let typePat = (src, Just kind) :< TypePatVar f var
+    return typePat
 
   Value -> do
     kind <- freshKindUni
     var <- introVar src Value var kind
+    let typePat = (src, Just kind) :< TypePatVar f var
     require $ (src, KindReasonTypePat typePat) :< KindIsPlain kind
-    return (var, kind)
+    return typePat
 
   View -> do
-    var <- introVar src View var (phantom KindView)
-    return (var, phantom KindView)
+    let kind = phantom KindView
+    var <- introVar src View var kind
+    let typePat = (src, Just kind) :< TypePatVar f var
+    return typePat
 
 
-generateDataCon :: Annotated DataCon -> Praxis (Annotated DataCon)
+generateDataCon :: Annotated Parse DataCon -> Praxis (Annotated KindCheck DataCon)
 generateDataCon (a@(src, _) :< DataCon name arg) = do
   arg <- generate arg
   let dataCon = (a :< DataCon name arg)
@@ -191,7 +200,7 @@ generateDataCon (a@(src, _) :< DataCon name arg) = do
   return dataCon
 
 
-generateDecl :: Annotated Decl -> Praxis (Annotated Decl)
+generateDecl :: Annotated Parse Decl -> Praxis (Annotated KindCheck Decl)
 generateDecl (a :< decl) = (a :<) <$> case decl of
 
   DeclRec decls -> do
@@ -201,7 +210,7 @@ generateDecl (a :< decl) = (a :<) <$> case decl of
      where
       declTypeName (_ :< DeclTypeData _ name _ _) = name
       declTypeName (_ :< DeclTypeEnum name _)     = name
-      preDeclare :: Annotated DeclRec -> Praxis (Praxis (Annotated DeclRec))
+      preDeclare :: Annotated Parse DeclRec -> Praxis (Praxis (Annotated KindCheck DeclRec))
       preDeclare (a@(src, _) :< decl) = case decl of
         DeclRecTerm declTerm -> return $ (\declTerm -> a :< DeclRecTerm declTerm) <$> generateDeclTerm declTerm
         DeclRecType declType -> do { kind <- freshKindUni; introCon src (declTypeName declType) kind; return ((\declType -> a :< DeclRecType declType) <$> generateDeclType' (Just kind) declType) }
@@ -209,11 +218,11 @@ generateDecl (a :< decl) = (a :<) <$> case decl of
   _ -> recurseTerm generate decl
 
 
-generateDeclType :: Annotated DeclType -> Praxis (Annotated DeclType)
+generateDeclType :: Annotated Parse DeclType -> Praxis (Annotated KindCheck DeclType)
 generateDeclType = generateDeclType' Nothing
 
-generateDeclType' :: Maybe (Annotated Kind) -> Annotated DeclType -> Praxis (Annotated DeclType)
-generateDeclType' forwardKind (a@(src, _) :< ty) = case ty of
+generateDeclType' :: Maybe (Annotated KindCheck Kind) -> Annotated Parse DeclType -> Praxis (Annotated KindCheck DeclType)
+generateDeclType' forwardKind ((src, _) :< ty) = case ty of
 
   DeclTypeData mode name args alts -> do
     (args, alts) <- scope $ do
@@ -228,13 +237,15 @@ generateDeclType' forwardKind (a@(src, _) :< ty) = case ty of
         introCon src name kind
         return kind
     let
+      mkKind :: [Annotated KindCheck TypePat] -> Annotated KindCheck Kind
       mkKind args = case args of
         []         -> phantom KindType
         (arg:args) -> phantom (KindFn (getKind arg) (mkKind args))
     require $ (src, KindReasonData name args) :< (kind `KindIsEq` mkKind args)
     let
-      deduce :: (Annotated Type -> TypeConstraint) -> [Annotated Type] -> (InstanceOrigin, Instance)
-      deduce mkConstraint args' = (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) conType) | (_ :< DataCon _ conType) <- alts ]) where
+      deduce :: (Annotated TypeCheck Type -> TypeConstraint TypeCheck) -> [Annotated TypeCheck Type] -> (InstanceOrigin, Instance)
+      -- FIXME: remove cast
+      deduce mkConstraint args' = (Trivial, IsInstanceOnlyIf [ mkConstraint (sub (embedSub f) (cast conType)) | (_ :< DataCon _ conType) <- alts ]) where
         f (_ :< ty) = case ty of
           TypeVar _  n -> n `lookup` specializedVars
           _            -> Nothing
@@ -269,20 +280,20 @@ generateDeclType' forwardKind (a@(src, _) :< ty) = case ty of
     return $ (src, Just kind) :< DeclTypeEnum name alts
 
 
-generateDeclTerm :: Annotated DeclTerm -> Praxis (Annotated DeclTerm)
-generateDeclTerm (a@(src, _) :< decl) = (a :<) <$> case decl of
+generateDeclTerm :: Annotated Parse DeclTerm -> Praxis (Annotated KindCheck DeclTerm)
+generateDeclTerm (a@(src, _) :< decl) = ((src, Nothing) :<) <$> case decl of
 
-  DeclTermVar name (Just sig@(a :< Forall vs _ _)) exp -> scope $ do
+  DeclTermVar name (Just sig@((src, _) :< qTy@(Forall vs _ _))) exp -> scope $ do
     checkDistinct src vs
-    sig <- recurse generate sig
-    exp <- recurse generate exp
+    sig <- ((src, Nothing) :<) <$> recurseTerm generate qTy
+    exp <- generate exp
     return $ DeclTermVar name (Just sig) exp
 
-  _                        -> recurseTerm generate decl
+  _ -> recurseTerm generate decl
 
 
-generateQType :: Annotated QType -> Praxis (Annotated QType)
-generateQType (a@(src, _) :< qTy) = (a :<) <$> case qTy of
+generateQType :: Annotated Parse QType -> Praxis (Annotated KindCheck  QType)
+generateQType (a@(src, _) :< qTy) = ((src, Nothing) :<) <$> case qTy of
 
   Forall vs _ _ -> checkDistinct src vs >> (scope $ recurseTerm generate qTy)
 

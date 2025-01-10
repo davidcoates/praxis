@@ -19,11 +19,11 @@ view : forall ?v a b. ?v (a, b) -> (?v b, ?v a)
 view (x, y) = (y, x)
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 view : forall ?v a b . ?v ( a , b ) -> ( ?v b , ?v a ) = \ ( x , y ) -> ( y , x )
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 view_0 : forall ?v_0 a_0 b_0 . ?v_0 ( a_0 , b_0 ) -> ( ?v_0 b_0 , ?v_0 a_0 ) = \ ( [?v_0 a_0] x_0 , [?v_0 b_0] y_0 ) -> ( [?v_0 b_0] y_0 , [?v_0 a_0] x_0 )
 |]
 
@@ -38,14 +38,14 @@ rec datatype List a = Nil () | Cons (a, List a)
 box = Box "x"
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 datatype unboxed Box &v !a = Box &v !a
 rec
   datatype boxed List a = Nil ( ) | Cons ( a , List a )
 box = Box "x"
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 datatype unboxed Box &v_0 !a_0 = [forall &v_0 !a_0 . &v_0 !a_0 -> Box &v_0 !a_0] Box &v_0 !a_0
 rec
   datatype boxed List a_1 = [forall a_1 . ( ) -> List a_1] Nil ( ) | [forall a_1 . ( a_1 , List a_1 ) -> List a_1] Cons ( a_1 , List a_1 )
@@ -56,7 +56,7 @@ box_0 = [&'l0 String -> Box &'l0 String] Box [&'l0 String] "x"
     describe "construct with non-reference" $
 
       it "does not type check" $ do
-        runPretty (check IProgram program >> check IExp "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs") `shouldReturn` trim [r|
+        runPretty (check ProgramT program >> check ExpT "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs") `shouldReturn` trim [r|
 type check error: unable to satisfy: Ref @
   | derived from: List ^t2 = List ^t2
   | primary cause: binding [List ^t2] xs_0 (<-) [( ^t2 , List ^t2 ) -> List ^t2] Cons ( [^t2] 1 , [( ^t2 , List ^t2 ) -> List ^t2] Cons ( [^t2] 2 , [( ^t2 , List ^t2 ) -> List ^t2] Cons ( [^t2] 3 , [( ) -> List ^t2] Nil [( )] ( ) ) ) ) at 1:5
@@ -68,7 +68,7 @@ type check error: unable to satisfy: Ref @
     describe "construct with reference" $
 
       it "type checks" $ do
-        runPretty (check IProgram program >> check IExp [r|
+        runPretty (check ProgramT program >> check ExpT [r|
 do
   let xs = Cons (1, Cons (2, Cons (3, Nil ())))
   read xs in do
@@ -88,14 +88,14 @@ y = read x in (1, x)
 
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 rec
   datatype boxed List a = Nil ( ) | Cons ( a , List a )
 x = Cons ( 1 , Cons ( 2 , Cons ( 3 , Nil ( ) ) ) )
 y = read x in ( 1 , x )
 |]
 
-    it "does not type check" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 type check error: unable to satisfy: 'l0 ∉ ( I32 , &'l0 List I32 )
   | primary cause: read of x at 5:5
   | secondary causes:

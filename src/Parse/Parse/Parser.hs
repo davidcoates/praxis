@@ -9,11 +9,13 @@ module Parse.Parse.Parser
 import           Common
 import qualified Parse.Parser        as Parser
 import           Praxis
+import           Stage
 import qualified Syntax.Parser       as Syntax
 import           Term
 import           Token
 
 import           Control.Applicative (Alternative (..))
+
 
 newtype Parser a = Parser { runParser :: Parser.Parser (Sourced Token) (Sourced a) }
 
@@ -35,7 +37,7 @@ instance Syntax.Parser Parser where
 
 run :: Pretty a => Parser a -> [Sourced Token] -> Praxis a
 run (Parser p) ts = case Parser.run (view value <$> p) ts of
-  (Left e, []) -> throw $ "expected " <> pretty e <> " but found EOF"
-  (Left e, (s :< t):_) -> throwAt s $ "expected " <> pretty e <> " but found '" <> pretty t <> "'"
-  (Right x, ((s :< t):_)) -> throwAt s $ "unexpected " <> pretty t
+  (Left e, []) -> throw Parse $ "expected " <> pretty e <> " but found EOF"
+  (Left e, (s :< t):_) -> throwAt Parse s $ "expected " <> pretty e <> " but found '" <> pretty t <> "'"
+  (Right x, ((s :< t):_)) -> throwAt Parse s $ "unexpected " <> pretty t
   (Right x, []) -> return x

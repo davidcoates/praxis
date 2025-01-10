@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+
 module Eval.Value
   ( Value(..)
   , integerToValue
@@ -9,6 +11,7 @@ module Eval.Value
   ) where
 
 import {-# SOURCE #-}           Praxis           (Praxis, liftIOUnsafe)
+import                          Stage
 import                          Term             (Specialization)
 
 import                          Common
@@ -32,7 +35,7 @@ data Value
   | I64 I64
   | ISize ISize
   | Pair Value Value
-  | Polymorphic (Specialization -> Value)
+  | Polymorphic (Specialization TypeCheck -> Value)
   | String String
   | U8 U8
   | U16 U16

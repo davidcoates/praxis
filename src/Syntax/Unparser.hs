@@ -10,6 +10,7 @@ module Syntax.Unparser
 
 import           Common
 import           Introspect
+import           Stage
 import           Syntax.Prism
 import qualified Syntax.Syntax
 import qualified Syntax.Syntax as Syntax
@@ -24,7 +25,7 @@ class Unparser f where
   empty :: f a
   (<|>) :: f a -> f a -> f a
   token :: f Token
-  annotated :: Term a => f a -> f (Annotated a)
+  annotated :: (IsTerm a, IsStage s) => f (a s) -> f (Annotated s a)
   expected :: String -> f a
 
 newtype T f a = T { unT :: f a }
@@ -40,5 +41,5 @@ instance Unparser f => Syntax (T f) where
   internal = id
   annotated (T p) = T (annotated p)
 
-unparse :: forall a f. (Term a, Unparser f) => f (Annotated a)
-unparse = unT (Syntax.annotated (syntax (witness :: I a)))
+unparse :: forall f a s. (Unparser f, IsTerm a, IsStage s) => f (Annotated s a)
+unparse = unT (Syntax.annotated (syntax (witness :: TermT a)))

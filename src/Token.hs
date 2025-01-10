@@ -11,7 +11,7 @@ import           Term                 (Lit (..))
 
 
 data Token
-  = Annotation (Printable String)
+  = Annotation (Colored String)
   | ConId Name
   | Layout Char
   | Lit Lit
@@ -39,16 +39,15 @@ unstyle x = case x of
 highlight = RGB 216 213 199
 
 instance Pretty Token where
-  pretty (Annotation (Printable p)) = Printable $ \opt ->
-    let s = p opt in
-      if null s
+  pretty (Annotation str) =
+    if null str
+      then Colored.Nil
+      else Colored.Fg Black (Colored.Bg highlight ("[" <> unstyle str <> "]"))
+  pretty (Uni t) =
+    let str = pretty t in
+      if null str
         then Colored.Nil
-        else Colored.Fg Black (Colored.Bg highlight ("[" <> unstyle s <> "]"))
-  pretty (Uni t) = Printable $ \opt ->
-    let s = runPrintable (pretty t) opt in
-      if null s
-        then Colored.Nil
-        else Colored.Style Underline (unstyle s)
+        else Colored.Style Underline (unstyle str)
   pretty x = pretty $ case x of
     ConId s       -> Colored.Value $ s
     Layout c      -> Colored.Fg Red $ Colored.Value [c]

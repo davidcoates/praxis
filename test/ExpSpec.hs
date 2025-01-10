@@ -22,11 +22,11 @@ foo = do
   x + y
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 foo = let x = 1 in ( ) seq let y = 2 in add ( x , y )
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 foo_0 = [I32] let [I32] x_0 = [I32] 1 in [I32] [( )] ( ) seq [I32] let [I32] y_0 = [I32] 2 in [( I32 , I32 ) -> I32] add ( [I32] x_0 , [I32] y_0 )
 |]
 
@@ -36,11 +36,11 @@ foo_0 = [I32] let [I32] x_0 = [I32] 1 in [I32] [( )] ( ) seq [I32] let [I32] y_0
   describe "tuple" $ do
 
     let program = "x = (1, True, \"abc\")"
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 x = ( 1 , True , "abc" )
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 x_0 = ( [I32] 1 , [Bool] True , [String] "abc" )
 |]
 
@@ -49,11 +49,11 @@ x_0 = ( [I32] 1 , [Bool] True , [String] "abc" )
 
     let program = "min (x, y) = if x < y then x else y"
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 min = \ ( x , y ) -> if lt ( x , y ) then x else y
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 min_0 = \ ( [I32] x_0 , [I32] y_0 ) -> [I32] if [( I32 , I32 ) -> Bool] lt ( [I32] x_0 , [I32] y_0 ) then [I32] x_0 else [I32] y_0
 |]
 
@@ -73,14 +73,14 @@ sign n = switch
   n  > 0 ->  1
 |]
 
-    it "parses" $ runPretty (parse IProgram program) `shouldReturn` trim [r|
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
 sign : I32 -> I32 = \ n -> switch
   lt ( n , 0 ) -> -1
   eq ( n , 0 ) -> 0
   gt ( n , 0 ) -> 1
 |]
 
-    it "type checks" $ runPretty (check IProgram program) `shouldReturn` trim [r|
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 sign_0 : I32 -> I32 = \ [I32] n_0 -> [I32] switch
   [( I32 , I32 ) -> Bool] lt ( [I32] n_0 , [I32] 0 ) -> [I32] -1
   [( I32 , I32 ) -> Bool] eq ( [I32] n_0 , [I32] 0 ) -> [I32] 0

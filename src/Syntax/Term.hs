@@ -13,6 +13,7 @@ module Syntax.Term
 
 import           Common
 import           Introspect
+import           Stage
 import           Syntax.Prism
 import           Syntax.Syntax
 import           Syntax.TH
@@ -160,40 +161,39 @@ definePrisms ''TypeConstraint
 definePrisms ''Requirement
 
 -- | The syntax for a given term type.
-syntax :: (Term a, Syntax f) => I a -> f a
+syntax :: (Syntax f, IsTerm a, IsStage s) => TermT a -> f (a s)
 syntax = \case
   -- | Operators
-  IOp             -> op
-  IOpRules        -> opRules
+  OpRulesT        -> opRules
   -- | T0
-  IDataCon        -> dataCon
-  IDecl           -> decl
-  IDeclRec        -> declRec
-  IDeclTerm       -> declTerm
-  IDeclType       -> declType
-  IExp            -> exp
-  IPat            -> pat
-  IProgram        -> program
-  IStmt           -> stmt
-  ITok            -> tok
+  DataConT        -> dataCon
+  DeclT           -> decl
+  DeclRecT        -> declRec
+  DeclTermT       -> declTerm
+  DeclTypeT       -> declType
+  ExpT            -> exp
+  PatT            -> pat
+  ProgramT        -> program
+  StmtT           -> stmt
+  TokT            -> tok
   -- | T1
-  IQType          -> qTy
-  ITypeConstraint -> typeConstraint
-  IType           -> ty
-  ITypePat        -> typePat
+  QTypeT          -> qTy
+  TypeConstraintT -> typeConstraint
+  TypeT           -> ty
+  TypePatT        -> typePat
   -- | T2
-  IKind           -> kind
-  IKindConstraint -> kindConstraint
+  KindT           -> kind
+  KindConstraintT -> kindConstraint
   -- | Solver
-  ITypeRequirement -> typeRequirement
-  IKindRequirement -> kindRequirement
+  TypeRequirementT -> typeRequirement
+  KindRequirementT -> kindRequirement
 
 
-tuple :: (Syntax f, Term a) => Prism a () -> Prism a (Annotated a, Annotated a) -> f a -> f a
+tuple :: (Syntax f, IsTerm a, IsStage s) => Prism (a s) () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
 tuple unit pair p = special '(' *> tuple' where
   tuple' = unit <$> special ')' *> pure () <|> rightWithSep (special ',') pair p <* special ')'
 
-join :: (Syntax f, Term a) => f a -> (Prism a (Annotated a, b), f b) -> f a
+join :: (Syntax f, IsTerm a, IsStage s) => f (a s) -> (Prism (a s) (Annotated s a, b), f b) -> f (a s)
 join p (_P, q) = Prism f g <$> annotated p <*> optional q where
   f (_ :< p, Nothing) = p
   f (p, Just q)       = construct _P (p, q)
@@ -201,7 +201,7 @@ join p (_P, q) = Prism f g <$> annotated p <*> optional q where
     Just (x, y) -> Just (x, Just y)
     Nothing     -> Just (phantom x, Nothing)
 
-foldRight :: Prism a (Annotated a, Annotated a) -> Prism a [Annotated a]
+foldRight :: Prism (a s) (Annotated s a, Annotated s a) -> Prism (a s) [Annotated s a]
 foldRight _P = Prism (view value . fold) (Just . unfold . phantom) where
   fold [x]    = x
   fold (x:xs) = let y = fold xs in (view source x <> view source y, Nothing) :< construct _P (x, y)
@@ -209,7 +209,7 @@ foldRight _P = Prism (view value . fold) (Just . unfold . phantom) where
     Just (x, y) -> x : unfold y
     Nothing     -> [x]
 
-foldLeft :: Prism a (Annotated a, Annotated a) -> Prism a [Annotated a]
+foldLeft :: Prism (a s) (Annotated s a, Annotated s a) -> Prism (a s) [Annotated s a]
 foldLeft _P = Prism (view value . fold) (Just . unfold . phantom) where
   fold [x]      = x
   fold (x:y:ys) = fold ((view source x <> view source y, Nothing) :< construct _P (x, y) : ys)
@@ -217,16 +217,16 @@ foldLeft _P = Prism (view value . fold) (Just . unfold . phantom) where
     Just (x, y) -> unfold x ++ [y]
     Nothing     -> [x]
 
-right :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+right :: (Syntax f, IsTerm a, IsStage s) => Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
 right = rightWithSep (pure ())
 
-rightWithSep :: (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
+rightWithSep :: (Syntax f, IsTerm a, IsStage s) => f () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
 rightWithSep s _P p = foldRight _P <$> (_Cons <$> annotated p <*> many (s *> annotated p))
 
-left :: (Syntax f, Term a) => Prism a (Annotated a, Annotated a) -> f a -> f a
+left :: (Syntax f, IsTerm a, IsStage s) => Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
 left = leftWithSep (pure ())
 
-leftWithSep :: (Syntax f, Term a) => f () -> Prism a (Annotated a, Annotated a) -> f a -> f a
+leftWithSep :: (Syntax f, IsTerm a, IsStage s) => f () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
 leftWithSep s _P p = foldLeft _P <$> (_Cons <$> annotated p <*> many (s *> annotated p))
 
 integer :: Syntax f => f Integer
@@ -235,7 +235,7 @@ integer = match f (Token.Lit . Integer) where
     Token.Lit (Integer n) -> Just n
     _                     -> Nothing
 
-typeConstraint :: Syntax f => f TypeConstraint
+typeConstraint :: (Syntax f, IsStage s) => f (TypeConstraint s)
 typeConstraint =
   _TypeIsInstance <$> annotated ty <|>
   internal (_TypeIsEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
@@ -248,17 +248,17 @@ typeConstraint =
   internal (_TypeIsValue <$> reservedCon "Value" *> annotated ty) <|>
   expected "type constraint"
 
-kindConstraint :: Syntax f => f KindConstraint
+kindConstraint :: (Syntax f, IsStage s) => f (KindConstraint s)
 kindConstraint =
   internal (_KindIsEq <$> annotated kind <*> reservedSym "=" *> annotated kind) <|>
   internal (_KindIsPlain <$> reservedCon "Plain" *> annotated kind) <|>
   internal (_KindIsSub <$> annotated kind <*> reservedSym "≤" *> annotated kind) <|>
   expected "kind constraint"
 
-program :: Syntax f => f Program
+program :: (Syntax f, IsStage s) => f (Program s)
 program = _Program <$> block (annotated decl) <|> expected "program"
 
-decl :: Syntax f => f Decl
+decl :: (Syntax f, IsStage s) => f (Decl s)
 decl =
   _DeclRec <$> reservedId "rec" *> blockOrLine (annotated declRec) <|>
   declSyn <|>
@@ -267,20 +267,20 @@ decl =
   _DeclType <$> annotated declType <|>
   expected "declaration"
 
-declRec :: Syntax f => f DeclRec
+declRec :: (Syntax f, IsStage s) => f (DeclRec s)
 declRec =
   _DeclRecTerm <$> annotated declTerm <|>
   _DeclRecType <$> annotated declType <|>
   expected "recursive declaration"
 
-declOp :: Syntax f => f Decl
+declOp :: (Syntax f, IsStage s) => f (Decl s)
 declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
 
-op :: Syntax f => f Op
+op :: (Syntax f, IsStage s) => f (Op s)
 op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator section"  where
   atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> expected "operator or hole"
 
-opRules :: Syntax f => f OpRules
+opRules :: (Syntax f, IsStage s) => f (OpRules s)
 opRules = _OpRules <$> blockLike (reservedId "where") (_Left <$> assoc <|> _Right <$> precs) <|> expected "operator rules"
 
 assoc :: Syntax f => f Assoc
@@ -289,56 +289,57 @@ assoc = assoc' <* contextualId "associative" where
     _AssocLeft <$> contextualId "left" <|>
     _AssocRight <$> contextualId "right"
 
-precs :: Syntax f => f [Prec]
-precs = blockLike (contextualId "precedence") prec
+precs :: (Syntax f, IsStage s) => f [Annotated s Prec]
+precs = blockLike (contextualId "precedence") (annotated prec)
 
-prec :: Syntax f => f Prec
-prec = _Prec <$> ordering <*> op where
+prec :: (Syntax f, IsStage s) => f (Prec s)
+prec = _Prec <$> ordering <*> annotated op where
   ordering =
     _GT <$> contextualId "above" <|>
     _LT <$> contextualId "below" <|>
     _EQ <$> contextualId "equal"
 
-declSyn :: Syntax f => f Decl
+declSyn :: (Syntax f, IsStage s) => f (Decl s)
 declSyn = _DeclSynSugar <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
 
-declType :: Syntax f => f DeclType
+declType :: (Syntax f, IsStage s) => f (DeclType s)
 declType = declTypeDataSugar <|> internal declTypeData <|> declTypeEnum where
 
-  declTypeData :: Syntax f => f DeclType
+  declTypeData :: (Syntax f, IsStage s) => f (DeclType s)
   declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated typePat) <*> reservedSym "=" *> dataCons
 
-  declTypeDataSugar :: Syntax f => f DeclType
+  declTypeDataSugar :: (Syntax f, IsStage s) => f (DeclType s)
   declTypeDataSugar = _DeclTypeDataSugar <$> reservedId "datatype" *> optional dataMode <*> conId <*> many (annotated typePat) <*> reservedSym "=" *> dataCons
 
-  dataCons :: Syntax f => f [Annotated DataCon]
+  dataCons :: (Syntax f, IsStage s) => f [Annotated s DataCon]
   dataCons = _Cons <$> annotated dataCon <*> many (contextualOp "|" *> annotated dataCon)
 
   dataMode :: Syntax f => f DataMode
   dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataUnboxed <$> reservedId "unboxed")
 
-  declTypeEnum :: Syntax f => f DeclType
+  declTypeEnum :: (Syntax f, IsStage s) => f (DeclType s)
   declTypeEnum = _DeclTypeEnum <$> reservedId "enum" *> conId <*> reservedSym "=" *> alts where
     alts = _Cons <$> conId <*> many (contextualOp "|" *> conId)
 
 
-dataCon :: Syntax f => f DataCon
+dataCon :: (Syntax f, IsStage s) => f (DataCon s)
 dataCon = _DataCon <$> conId <*> annotated ty1
 
-typePat :: Syntax f => f TypePat
-typePat = _TypePatVar <$> flavoredVarId <|>
-          expected "type variable"
+typePat :: (Syntax f, IsStage s) => f (TypePat s)
+typePat =
+  _TypePatVar <$> flavoredVarId <|>
+  expected "type variable"
 
-declTerm :: Syntax f => f DeclTerm
+declTerm :: (Syntax f, IsStage s) => f (DeclTerm s)
 declTerm = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> expected "term declaration" where
   declTermSig = reservedSym ":" *> annotated qTy
   declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
   declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
 
-bind :: Syntax f => f Bind
+bind :: (Syntax f, IsStage s) => f (Bind s)
 bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> expected "binding"
 
-pat :: Syntax f => f Pat
+pat :: (Syntax f, IsStage s) => f (Pat s)
 pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> expected "pattern" where
   pat0 =
     _PatHole <$> special '_' <|>
@@ -347,7 +348,7 @@ pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> expected "p
     tuple _PatUnit _PatPair pat <|>
     expected "pattern(0)"
 
-kind :: Syntax f => f Kind
+kind :: (Syntax f, IsStage s) => f (Kind s)
 kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> expected "kind" where
   kind0 =
     _KindRef <$> reservedCon "Ref" <|>
@@ -357,19 +358,19 @@ kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> expected "
     _KindConstraint <$> reservedCon "Constraint" <|>
     expected "kind(0)"
 
-qTy :: Syntax f => f QType
+qTy :: (Syntax f, IsStage s) => f (QType s)
 qTy = poly <|> mono <|> expected "quantified type" where
   poly = _Forall <$> reservedId "forall" *> some (annotated typePat) <*> typeConstraints <*> (contextualOp "." *> annotated ty)
   mono = _Mono <$> annotated ty
-  typeConstraints :: Syntax f => f [Annotated TypeConstraint]
+  typeConstraints :: (Syntax f, IsStage s) => f [Annotated s TypeConstraint]
   typeConstraints = _Cons <$> (contextualOp "|" *> annotated typeConstraint) <*> many (special ',' *> annotated typeConstraint) <|> _Nil <$> pure ()
 
-ty :: Syntax f => f Type
+ty :: (Syntax f, IsStage s) => f (Type s)
 ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> expected "type"
 
 -- special sauce to make op applications right associative, but normal applications left associative
 -- &r ?v C t &r ?v t -> &r (?v ((((C t) &r) ?v) t))
-foldTy :: Prism Type [Annotated Type]
+foldTy :: IsStage s => Prism (Type s) [Annotated s Type]
 foldTy = Prism (view value . fold) (Just . unfold . phantom) where
   fold [x] = x
   fold (x:xs)
@@ -384,7 +385,7 @@ foldTy = Prism (view value . fold) (Just . unfold . phantom) where
   unfoldLeft x = case view value x of
     TypeApply x y -> unfoldLeft x ++ [y]
     _             -> [x]
-  isTypeOp :: Annotated Type -> Bool
+  isTypeOp :: Annotated s Type -> Bool
   isTypeOp t = case view value t of
     TypeIdentityOp -> True
     TypeRef _      -> True
@@ -395,7 +396,7 @@ foldTy = Prism (view value . fold) (Just . unfold . phantom) where
     TypeVar View _ -> True
     _              -> False
 
-ty1 :: Syntax f => f Type
+ty1 :: (Syntax f, IsStage s) => f (Type s)
 ty1 = foldTy <$> some (annotated ty0) <|> expected "type(1)" where
   ty0 =
     _TypeCon <$> conId <|>
@@ -407,10 +408,10 @@ ty1 = foldTy <$> some (annotated ty0) <|> expected "type(1)" where
     tuple _TypeUnit _TypePair ty <|>
     expected "type(0)"
 
-tok :: Syntax f => f Tok
+tok :: (Syntax f, IsStage s) => f (Tok s)
 tok = internal (_TokOp <$> varSym <|> _TokExp <$> annotated exp) <|> expected "token"
 
-exp :: Syntax f => f Exp
+exp :: (Syntax f, IsStage s) => f (Exp s)
 exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expression" where
   exp6 = optWhere <$> annotated exp5 <*> blockLike (reservedId "where") (annotated declTerm) <|> internal exp5 <|> expected "expression(6)"
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
@@ -439,18 +440,18 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
     tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
     expected "expression(0)"
 
-switch :: Syntax f => f (Annotated Exp, Annotated Exp)
+switch :: (Syntax f, IsStage s) => f (Annotated s Exp, Annotated s Exp)
 switch = annotated exp <*> reservedSym "->" *> annotated exp <|> expected "switch alternative"
 
 -- TODO allow "let ... in" in expression?
-stmt :: Syntax f => f Stmt
+stmt :: (Syntax f, IsStage s) => f (Stmt s)
 stmt = _StmtBind <$> reservedId "let" *> annotated bind <|> _StmtExp <$> annotated exp <|> expected "statement"
 
-alt :: Syntax f => f (Annotated Pat, Annotated Exp)
+alt :: (Syntax f, IsStage s) => f (Annotated s Pat, Annotated s Exp)
 alt = annotated pat <*> reservedSym "->" *> annotated exp <|> expected "case alternative"
 
-typeRequirement :: Syntax f => f TypeRequirement
+typeRequirement :: (Syntax f, IsStage s) => f (Requirement TypeConstraint s)
 typeRequirement = _Requirement <$> typeConstraint
 
-kindRequirement :: Syntax f => f KindRequirement
+kindRequirement :: (Syntax f, IsStage s) => f (Requirement KindConstraint s)
 kindRequirement = _Requirement <$> kindConstraint

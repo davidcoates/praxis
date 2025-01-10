@@ -163,10 +163,8 @@ definePrisms ''Requirement
 syntax :: (Term a, Syntax f) => I a -> f a
 syntax = \case
   -- | Operators
-  IAssoc          -> assoc
   IOp             -> op
   IOpRules        -> opRules
-  IPrec           -> prec
   -- | T0
   IDataCon        -> dataCon
   IDecl           -> decl
@@ -283,7 +281,7 @@ op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator
   atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> expected "operator or hole"
 
 opRules :: Syntax f => f OpRules
-opRules = _OpRules <$> blockLike (reservedId "where") (_Left <$> annotated assoc <|> _Right <$> precs) <|> expected "operator rules"
+opRules = _OpRules <$> blockLike (reservedId "where") (_Left <$> assoc <|> _Right <$> precs) <|> expected "operator rules"
 
 assoc :: Syntax f => f Assoc
 assoc = assoc' <* contextualId "associative" where
@@ -291,8 +289,8 @@ assoc = assoc' <* contextualId "associative" where
     _AssocLeft <$> contextualId "left" <|>
     _AssocRight <$> contextualId "right"
 
-precs :: Syntax f => f [Annotated Prec]
-precs = blockLike (contextualId "precedence") (annotated prec)
+precs :: Syntax f => f [Prec]
+precs = blockLike (contextualId "precedence") prec
 
 prec :: Syntax f => f Prec
 prec = _Prec <$> ordering <*> op where

@@ -42,10 +42,8 @@ recurse f ((src, a) :< x) = (\a x -> (src, a) :< x) <$> traverse (recurseAnnotat
 -- TODO Lit? Fixity?
 data I a where
   -- | Operators
-  IAssoc    :: I Assoc
   IOp       :: I Op
   IOpRules  :: I OpRules
-  IPrec     :: I Prec
   -- | T0
   IBind     :: I Bind
   IDataCon  :: I DataCon
@@ -78,10 +76,8 @@ typeof _ = witness :: I a
 switch :: forall a b c. (Term a, Term b) => I a -> I b -> ((a ~ b) => c) -> c -> c
 switch a b eq neq = case (a, b) of
   -- | Operators
-  (IAssoc, IAssoc)                     -> eq
   (IOp, IOp)                           -> eq
   (IOpRules, IOpRules)                 -> eq
-  (IPrec, IPrec)                       -> eq
   -- | T0
   (IBind, IBind)                       -> eq
   (IDataCon, IDataCon)                 -> eq
@@ -140,11 +136,6 @@ trivial _ _ = absurd
 
 -- | Operators
 
-instance Term Assoc where
-  witness = IAssoc
-  recurseAnnotation = trivial
-  recurseTerm _ = pure
-
 instance Term Op where
   witness = IOp
   recurseAnnotation = trivial
@@ -154,12 +145,7 @@ instance Term OpRules where
   witness = IOpRules
   recurseAnnotation = trivial
   recurseTerm f = \case
-    OpRules rs -> OpRules <$> traverse (bitraverse f (traverse f)) rs
-
-instance Term Prec where
-  witness = IPrec
-  recurseAnnotation = trivial
-  recurseTerm _ = pure
+    OpRules rs -> pure (OpRules rs)
 
 -- | T0
 

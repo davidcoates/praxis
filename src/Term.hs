@@ -67,7 +67,7 @@ data Assoc = AssocLeft | AssocRight
 data Op = Op [Maybe Name] -- TDO qualification over this
   deriving (Eq, Ord)
 
-data OpRules = OpRules [Either (Annotated Assoc) [Annotated Prec]]
+data OpRules = OpRules [Either Assoc [Prec]]
   deriving (Eq, Ord)
 
 data Prec = Prec Ordering Op

@@ -160,7 +160,7 @@ desugarOp op@((src, _) :< Op parts) = do
   return op
 
 
-desugarOpRules :: Annotated Op -> Annotated OpRules -> Praxis (Maybe (Annotated Assoc), [Annotated Prec])
+desugarOpRules :: Annotated Op -> Annotated OpRules -> Praxis (Maybe Assoc, [Prec])
 desugarOpRules op ((src, _) :< OpRules rules) = do
 
     -- FIXME check the precedence operators exist?
@@ -182,14 +182,14 @@ desugarDecl (a@(src, _) :< decl) = case decl of
     (assoc, precs) <- desugarOpRules op rules
 
     -- For simplicity of managing the op table, allow only one equal precedence relation
-    let (eqPrecs, precs') = partition (\(_ :< Prec ord _) -> ord == EQ) precs
+    let (eqPrecs, precs') = partition (\(Prec ord _) -> ord == EQ) precs
     unless (length eqPrecs <= 1) $ throwAt src ("more than one equal precedence specified for op " <> pretty op)
     let eq = listToMaybe eqPrecs
 
     -- Add operator to levels
     opLevels <- use (parseState . opContext . levels)
-    let opLevels' = case eq of Nothing                 -> opLevels ++ [[view value op]]
-                               Just (_ :< Prec EQ op') -> map (\ops -> if op' `elem` ops then view value op : ops else ops) opLevels
+    let opLevels' = case eq of Nothing            -> opLevels ++ [[view value op]]
+                               Just (Prec EQ op') -> map (\ops -> if op' `elem` ops then view value op : ops else ops) opLevels
 
     let levelOf = Map.fromList (zip [0..] opLevels')
         indexOf = Map.fromList [ (op, i) | (i, ops) <- zip [0..] opLevels', op <- ops ]
@@ -197,7 +197,7 @@ desugarDecl (a@(src, _) :< decl) = case decl of
     -- Determine fixity
     let noAssoc = unless (isNothing assoc) $ throwAt src ("associativity can not be specified for non-infix op " <> pretty op)
     fixity <- case (head parts, last parts) of
-      (Nothing, Nothing) -> return (Infix (view value <$> assoc))
+      (Nothing, Nothing) -> return (Infix assoc)
       (Nothing,  Just _) -> noAssoc >> return Postfix
       (Just _,  Nothing) -> noAssoc >> return Prefix
       (Just _,   Just _) -> noAssoc >> return Closed
@@ -209,7 +209,7 @@ desugarDecl (a@(src, _) :< decl) = case decl of
 
     -- Add operator to precedence graph
     opPrec <- use (parseState . opContext . prec)
-    let opPrec' = addOp (view value op) (map (view value) precs') indexOf opPrec
+    let opPrec' = addOp (view value op) precs' indexOf opPrec
     unless (isAcyclic opPrec') $ throwAt src ("operator precedence forms a cycle" :: String)
 
     parseState . opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }

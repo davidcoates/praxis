@@ -50,12 +50,14 @@ block :: Syntax f => f a -> f [a]
 block p = layout '{' *> _Cons <$> p <*> (layout ';' *> p) `until` layout '}'
 
 blockOrLine :: Syntax f => f a -> f [a]
-blockOrLine f = _Cons <$> layout '{' *> f <*> (layout ';' *> f) `until` layout '}' <|>
-                _Cons <$> f <*> _Nil <$> pure ()
+blockOrLine f =
+  _Cons <$> layout '{' *> f <*> (layout ';' *> f) `until` layout '}' <|>
+  _Cons <$> f <*> _Nil <$> pure ()
 
 blockLike :: Syntax f => f () -> f a -> f [a]
-blockLike f g = f *> blockOrLine g <|>
-                _Nil <$> pure ()
+blockLike f g =
+  f *> blockOrLine g <|>
+  _Nil <$> pure ()
 
 conId :: Syntax f => f Name
 conId = match f ConId where
@@ -236,38 +238,42 @@ integer = match f (Token.Lit . Integer) where
     _                     -> Nothing
 
 typeConstraint :: Syntax f => f TypeConstraint
-typeConstraint = _TypeIsInstance <$> annotated ty <|>
-                 internal (_TypeIsEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
-                 internal (_TypeIsEqIfAffine <$> annotated ty <*> reservedSym "=" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
-                 internal (_TypeIsIntegralOver <$> swap <$> integer <*> reservedSym "∈" *> annotated ty) <|>
-                 internal (_TypeIsRef <$> reservedCon "Ref" *> annotated ty) <|>
-                 internal (_TypeIsRefFree <$> swap <$> varId <*> reservedSym "∉" *> annotated ty) <|>
-                 internal (_TypeIsSub <$> annotated ty <*> reservedSym "≤" *> annotated ty) <|>
-                 internal (_TypeIsSubIfAffine <$> annotated ty <*> reservedSym "≤" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
-                 internal (_TypeIsValue <$> reservedCon "Value" *> annotated ty) <|>
-                 expected "type constraint"
+typeConstraint =
+  _TypeIsInstance <$> annotated ty <|>
+  internal (_TypeIsEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
+  internal (_TypeIsEqIfAffine <$> annotated ty <*> reservedSym "=" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
+  internal (_TypeIsIntegralOver <$> swap <$> integer <*> reservedSym "∈" *> annotated ty) <|>
+  internal (_TypeIsRef <$> reservedCon "Ref" *> annotated ty) <|>
+  internal (_TypeIsRefFree <$> swap <$> varId <*> reservedSym "∉" *> annotated ty) <|>
+  internal (_TypeIsSub <$> annotated ty <*> reservedSym "≤" *> annotated ty) <|>
+  internal (_TypeIsSubIfAffine <$> annotated ty <*> reservedSym "≤" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
+  internal (_TypeIsValue <$> reservedCon "Value" *> annotated ty) <|>
+  expected "type constraint"
 
 kindConstraint :: Syntax f => f KindConstraint
-kindConstraint = internal (_KindIsEq <$> annotated kind <*> reservedSym "=" *> annotated kind) <|>
-                 internal (_KindIsPlain <$> reservedCon "Plain" *> annotated kind) <|>
-                 internal (_KindIsSub <$> annotated kind <*> reservedSym "≤" *> annotated kind) <|>
-                 expected "kind constraint"
+kindConstraint =
+  internal (_KindIsEq <$> annotated kind <*> reservedSym "=" *> annotated kind) <|>
+  internal (_KindIsPlain <$> reservedCon "Plain" *> annotated kind) <|>
+  internal (_KindIsSub <$> annotated kind <*> reservedSym "≤" *> annotated kind) <|>
+  expected "kind constraint"
 
 program :: Syntax f => f Program
 program = _Program <$> block (annotated decl) <|> expected "program"
 
 decl :: Syntax f => f Decl
-decl = _DeclRec <$> reservedId "rec" *> blockOrLine (annotated declRec) <|>
-       declSyn <|>
-       declOp <|>
-       _DeclTerm <$> annotated declTerm <|>
-       _DeclType <$> annotated declType <|>
-       expected "declaration"
+decl =
+  _DeclRec <$> reservedId "rec" *> blockOrLine (annotated declRec) <|>
+  declSyn <|>
+  declOp <|>
+  _DeclTerm <$> annotated declTerm <|>
+  _DeclType <$> annotated declType <|>
+  expected "declaration"
 
 declRec :: Syntax f => f DeclRec
-declRec = _DeclRecTerm <$> annotated declTerm <|>
-          _DeclRecType <$> annotated declType <|>
-          expected "recursive declaration"
+declRec =
+  _DeclRecTerm <$> annotated declTerm <|>
+  _DeclRecType <$> annotated declType <|>
+  expected "recursive declaration"
 
 declOp :: Syntax f => f Decl
 declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
@@ -281,17 +287,19 @@ opRules = _OpRules <$> blockLike (reservedId "where") (_Left <$> annotated assoc
 
 assoc :: Syntax f => f Assoc
 assoc = assoc' <* contextualId "associative" where
-  assoc' = _AssocLeft <$> contextualId "left" <|>
-           _AssocRight <$> contextualId "right"
+  assoc' =
+    _AssocLeft <$> contextualId "left" <|>
+    _AssocRight <$> contextualId "right"
 
 precs :: Syntax f => f [Annotated Prec]
 precs = blockLike (contextualId "precedence") (annotated prec)
 
 prec :: Syntax f => f Prec
 prec = _Prec <$> ordering <*> op where
-  ordering = _GT <$> contextualId "above" <|>
-             _LT <$> contextualId "below" <|>
-             _EQ <$> contextualId "equal"
+  ordering =
+    _GT <$> contextualId "above" <|>
+    _LT <$> contextualId "below" <|>
+    _EQ <$> contextualId "equal"
 
 declSyn :: Syntax f => f Decl
 declSyn = _DeclSynSugar <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
@@ -334,20 +342,22 @@ bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> expected
 
 pat :: Syntax f => f Pat
 pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> expected "pattern" where
-  pat0 = _PatHole <$> special '_' <|>
-         _PatLit <$> litNoString <|> -- TODO allow string literals
-         prefix' varId (_PatAt, reservedSym "@" *> annotated pat) _PatVar <|>
-         tuple _PatUnit _PatPair pat <|>
-         expected "pattern(0)"
+  pat0 =
+    _PatHole <$> special '_' <|>
+    _PatLit <$> litNoString <|> -- TODO allow string literals
+    prefix' varId (_PatAt, reservedSym "@" *> annotated pat) _PatVar <|>
+    tuple _PatUnit _PatPair pat <|>
+    expected "pattern(0)"
 
 kind :: Syntax f => f Kind
 kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> expected "kind" where
-  kind0 = _KindRef <$> reservedCon "Ref" <|>
-          _KindType <$> reservedCon "Type" <|>
-          _KindView <$> reservedCon "View" <|>
-          internal (_KindUni <$> uni) <|>
-          _KindConstraint <$> reservedCon "Constraint" <|>
-          expected "kind(0)"
+  kind0 =
+    _KindRef <$> reservedCon "Ref" <|>
+    _KindType <$> reservedCon "Type" <|>
+    _KindView <$> reservedCon "View" <|>
+    internal (_KindUni <$> uni) <|>
+    _KindConstraint <$> reservedCon "Constraint" <|>
+    expected "kind(0)"
 
 qTy :: Syntax f => f QType
 qTy = poly <|> mono <|> expected "quantified type" where
@@ -389,14 +399,15 @@ foldTy = Prism (view value . fold) (Just . unfold . phantom) where
 
 ty1 :: Syntax f => f Type
 ty1 = foldTy <$> some (annotated ty0) <|> expected "type(1)" where
-  ty0 = _TypeCon <$> conId <|>
-        _TypeIdentityOp <$> reservedSym "@" <|>
-        internal (_TypeRef <$> varIdRef) <|>
-        _TypeSetOp <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
-        internal (_TypeUni <$> flavoredUni) <|>
-        _TypeVar <$> flavoredVarId <|>
-        tuple _TypeUnit _TypePair ty <|>
-        expected "type(0)"
+  ty0 =
+    _TypeCon <$> conId <|>
+    _TypeIdentityOp <$> reservedSym "@" <|>
+    internal (_TypeRef <$> varIdRef) <|>
+    _TypeSetOp <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
+    internal (_TypeUni <$> flavoredUni) <|>
+    _TypeVar <$> flavoredVarId <|>
+    tuple _TypeUnit _TypePair ty <|>
+    expected "type(0)"
 
 tok :: Syntax f => f Tok
 tok = internal (_TokOp <$> varSym <|> _TokExp <$> annotated exp) <|> expected "token"
@@ -407,26 +418,28 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
   exp5 = rightWithSep (reservedId "defer") _Defer exp4 <|> expected "expression(5)"
   exp4 = rightWithSep (reservedId "seq") _Seq exp3 <|> expected "expression(4)"
-  exp3 = _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
-         _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
-         _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
-         _Cases <$> reservedId "cases" *> block alt <|>
-         _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
-         _Lambda <$> reservedSym "\\" *> alt <|>
-         internal (_Capture <$> empty <*> annotated exp3) <|>
-         _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
-         _Switch <$> reservedId "switch" *> block switch <|>
-         exp2 <|> expected "expression(3)"
+  exp3 =
+    _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
+    _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
+    _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
+    _Cases <$> reservedId "cases" *> block alt <|>
+    _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
+    _Lambda <$> reservedSym "\\" *> alt <|>
+    internal (_Capture <$> empty <*> annotated exp3) <|>
+    _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
+    _Switch <$> reservedId "switch" *> block switch <|>
+    exp2 <|> expected "expression(3)"
   exp2 = mixfix <$> some (annotated (_TokOp <$> varSym <|> _TokExp <$> annotated exp1)) <|> internal exp1 <|> expected "expression(2)"
   mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> MixfixSugar ts }) (\case { MixfixSugar ts -> Just ts; _ -> Nothing })
   exp1 = left _Apply exp0 <|> expected "expression(1)"
-  exp0 = _VarRefSugar <$> varIdRef <|>
-         _Var <$> varId <|>
-         _Con <$> conId <|>
-         _Lit <$> lit <|>
-         internal (_Specialize <$> annotated exp0 <*> empty) <|>
-         tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
-         expected "expression(0)"
+  exp0 =
+    _VarRefSugar <$> varIdRef <|>
+    _Var <$> varId <|>
+    _Con <$> conId <|>
+    _Lit <$> lit <|>
+    internal (_Specialize <$> annotated exp0 <*> empty) <|>
+    tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
+    expected "expression(0)"
 
 switch :: Syntax f => f (Annotated Exp, Annotated Exp)
 switch = annotated exp <*> reservedSym "->" *> annotated exp <|> expected "switch alternative"

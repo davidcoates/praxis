@@ -10,20 +10,21 @@ import qualified Data.Monoid.Colorful as Colored
 import           Term                 (Lit (..))
 
 
-data Token = Annotation (Printable String)
-           | ConId Name
-           | Layout Char
-           | Lit Lit
-           | ReservedCon Name
-           | ReservedSym Name
-           | ReservedId Name
-           | Special Char
-           | Uni Token
-           | VarId Name
-           | VarIdRef Name
-           | VarIdValue Name
-           | VarIdView Name
-           | VarSym Name
+data Token
+  = Annotation (Printable String)
+  | ConId Name
+  | Layout Char
+  | Lit Lit
+  | ReservedCon Name
+  | ReservedSym Name
+  | ReservedId Name
+  | Special Char
+  | Uni Token
+  | VarId Name
+  | VarIdRef Name
+  | VarIdValue Name
+  | VarIdView Name
+  | VarSym Name
   deriving Eq
 
 unstyle :: Colored a -> Colored a

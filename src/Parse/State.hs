@@ -25,10 +25,11 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 
-data Fixity = Infix (Maybe Assoc)
-            | Prefix
-            | Postfix
-            | Closed
+data Fixity
+  = Infix (Maybe Assoc)
+  | Prefix
+  | Postfix
+  | Closed
   deriving (Eq, Ord)
 
 type OpDefns = Map Op (Name, Fixity)

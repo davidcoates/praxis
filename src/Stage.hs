@@ -2,11 +2,12 @@ module Stage
   ( Stage(..)
   ) where
 
-data Stage = Unknown
-           | Parse
-           | KindCheck
-           | TypeCheck
-           | Evaluate
+data Stage
+  = Unknown
+  | Parse
+  | KindCheck
+  | TypeCheck
+  | Evaluate
 
 instance Show Stage where
   show = \case

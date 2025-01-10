@@ -85,59 +85,65 @@ data DataCon = DataCon Name (Annotated Type)
 data DataMode = DataUnboxed | DataBoxed
   deriving (Eq, Ord)
 
-data Decl = DeclOpSugar (Annotated Op) Name (Annotated OpRules)
-          | DeclRec [Annotated DeclRec]
-          | DeclSynSugar Name (Annotated Type)
-          | DeclTerm (Annotated DeclTerm)
-          | DeclType (Annotated DeclType)
+data Decl
+  = DeclOpSugar (Annotated Op) Name (Annotated OpRules)
+  | DeclRec [Annotated DeclRec]
+  | DeclSynSugar Name (Annotated Type)
+  | DeclTerm (Annotated DeclTerm)
+  | DeclType (Annotated DeclType)
   deriving (Eq, Ord)
 
-data DeclRec = DeclRecTerm (Annotated DeclTerm)
-             | DeclRecType (Annotated DeclType)
+data DeclRec
+  = DeclRecTerm (Annotated DeclTerm)
+  | DeclRecType (Annotated DeclType)
   deriving (Eq, Ord)
 
-data DeclType = DeclTypeData DataMode Name [Annotated TypePat] [Annotated DataCon]
-              | DeclTypeDataSugar (Maybe DataMode) Name [Annotated TypePat] [Annotated DataCon]
-              | DeclTypeEnum Name [Name]
+data DeclType
+  = DeclTypeData DataMode Name [Annotated TypePat] [Annotated DataCon]
+  | DeclTypeDataSugar (Maybe DataMode) Name [Annotated TypePat] [Annotated DataCon]
+  | DeclTypeEnum Name [Name]
   deriving  (Eq, Ord)
 
-data DeclTerm = DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
-              | DeclTermDefSugar Name [Annotated Pat] (Annotated Exp)
-              | DeclTermSigSugar Name (Annotated QType)
+data DeclTerm
+  = DeclTermVar Name (Maybe (Annotated QType)) (Annotated Exp)
+  | DeclTermDefSugar Name [Annotated Pat] (Annotated Exp)
+  | DeclTermSigSugar Name (Annotated QType)
   deriving (Eq, Ord)
 
 -- TODO constraints
 type Specialization = [(Annotated TypePat, Annotated Type)]
 
-data Exp = Apply (Annotated Exp) (Annotated Exp)
-         | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
-         | Cases [(Annotated Pat, Annotated Exp)]
-         | Capture [(Name, Annotated QType)] (Annotated Exp)
-         | Con Name
-         | Defer (Annotated Exp) (Annotated Exp)
-         | DoSugar [Annotated Stmt]
-         | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
-         | Lambda (Annotated Pat) (Annotated Exp)
-         | Let (Annotated Bind) (Annotated Exp)
-         | Lit Lit
-         | MixfixSugar [Annotated Tok]
-         | Read Name (Annotated Exp)
-         | Pair (Annotated Exp) (Annotated Exp)
-         | Seq (Annotated Exp) (Annotated Exp)
-         | Sig (Annotated Exp) (Annotated Type)
-         | Specialize (Annotated Exp) Specialization
-         | Switch [(Annotated Exp, Annotated Exp)]
-         | Unit
-         | Var Name
-         | VarRefSugar Name
-         | Where (Annotated Exp) [Annotated DeclTerm]
+data Exp
+  = Apply (Annotated Exp) (Annotated Exp)
+  | Case (Annotated Exp) [(Annotated Pat, Annotated Exp)]
+  | Cases [(Annotated Pat, Annotated Exp)]
+  | Capture [(Name, Annotated QType)] (Annotated Exp)
+  | Con Name
+  | Defer (Annotated Exp) (Annotated Exp)
+  | DoSugar [Annotated Stmt]
+  | If (Annotated Exp) (Annotated Exp) (Annotated Exp)
+  | Lambda (Annotated Pat) (Annotated Exp)
+  | Let (Annotated Bind) (Annotated Exp)
+  | Lit Lit
+  | MixfixSugar [Annotated Tok]
+  | Read Name (Annotated Exp)
+  | Pair (Annotated Exp) (Annotated Exp)
+  | Seq (Annotated Exp) (Annotated Exp)
+  | Sig (Annotated Exp) (Annotated Type)
+  | Specialize (Annotated Exp) Specialization
+  | Switch [(Annotated Exp, Annotated Exp)]
+  | Unit
+  | Var Name
+  | VarRefSugar Name
+  | Where (Annotated Exp) [Annotated DeclTerm]
   deriving (Eq, Ord)
 
 -- TODO: Array literals?
-data Lit = Bool Bool
-         | Char Char
-         | Integer Integer
-         | String String
+data Lit
+  = Bool Bool
+  | Char Char
+  | Integer Integer
+  | String String
   deriving (Eq, Ord)
 
 -- TODO remove?
@@ -148,25 +154,28 @@ instance Show Lit where
     Integer i -> show i
     String s  -> show s
 
-data Pat = PatAt Name (Annotated Pat)
-         | PatData Name (Annotated Pat)
-         | PatEnum Name
-         | PatHole
-         | PatLit Lit
-         | PatPair (Annotated Pat) (Annotated Pat)
-         | PatUnit
-         | PatVar Name
+data Pat
+  = PatAt Name (Annotated Pat)
+  | PatData Name (Annotated Pat)
+  | PatEnum Name
+  | PatHole
+  | PatLit Lit
+  | PatPair (Annotated Pat) (Annotated Pat)
+  | PatUnit
+  | PatVar Name
   deriving (Eq, Ord)
 
 data Program = Program [Annotated Decl]
   deriving (Eq, Ord)
 
-data Stmt = StmtBind (Annotated Bind)
-          | StmtExp (Annotated Exp)
+data Stmt
+  = StmtBind (Annotated Bind)
+  | StmtExp (Annotated Exp)
   deriving (Eq, Ord)
 
-data Tok = TokExp (Annotated Exp)
-         | TokOp Name
+data Tok
+  = TokExp (Annotated Exp)
+  | TokOp Name
   deriving (Eq, Ord)
 
 data Flavor = Plain | Ref | Value | View
@@ -175,48 +184,53 @@ data Flavor = Plain | Ref | Value | View
 data TypePat = TypePatVar Flavor Name
   deriving (Eq, Ord)
 
-data Type = TypeApply (Annotated Type) (Annotated Type)
-          | TypeApplyOp (Annotated Type) (Annotated Type)
-          | TypeCon Name
-          | TypeFn (Annotated Type) (Annotated Type)
-          | TypeIdentityOp
-          | TypePair (Annotated Type) (Annotated Type)
-          | TypeRef Name
-          | TypeSetOp (Set (Annotated Type))
-          | TypeUni Flavor Name
-          | TypeUnit
-          | TypeVar Flavor Name
+data Type
+  = TypeApply (Annotated Type) (Annotated Type)
+  | TypeApplyOp (Annotated Type) (Annotated Type)
+  | TypeCon Name
+  | TypeFn (Annotated Type) (Annotated Type)
+  | TypeIdentityOp
+  | TypePair (Annotated Type) (Annotated Type)
+  | TypeRef Name
+  | TypeSetOp (Set (Annotated Type))
+  | TypeUni Flavor Name
+  | TypeUnit
+  | TypeVar Flavor Name
   deriving (Eq, Ord)
 
-data QType = Forall [Annotated TypePat] [Annotated TypeConstraint] (Annotated Type)
-           | Mono (Annotated Type)
+data QType
+  = Forall [Annotated TypePat] [Annotated TypeConstraint] (Annotated Type)
+  | Mono (Annotated Type)
   deriving (Eq, Ord)
 
-data Kind = KindUni Name
-          | KindConstraint
-          | KindFn (Annotated Kind) (Annotated Kind)
-          | KindRef
-          | KindType
-          | KindView
+data Kind
+  = KindUni Name
+  | KindConstraint
+  | KindFn (Annotated Kind) (Annotated Kind)
+  | KindRef
+  | KindType
+  | KindView
   deriving (Eq, Ord)
 
-data TypeConstraint = TypeIsEq (Annotated Type) (Annotated Type)
-                    | TypeIsEqIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
-                    | TypeIsInstance (Annotated Type)
-                    | TypeIsIntegralOver (Annotated Type) Integer
-                    | TypeIsRef (Annotated Type)
-                    | TypeIsRefFree (Annotated Type) Name
-                    | TypeIsSub (Annotated Type) (Annotated Type)
-                    | TypeIsSubIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
-                    | TypeIsValue (Annotated Type)
+data TypeConstraint
+  = TypeIsEq (Annotated Type) (Annotated Type)
+  | TypeIsEqIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
+  | TypeIsInstance (Annotated Type)
+  | TypeIsIntegralOver (Annotated Type) Integer
+  | TypeIsRef (Annotated Type)
+  | TypeIsRefFree (Annotated Type) Name
+  | TypeIsSub (Annotated Type) (Annotated Type)
+  | TypeIsSubIfAffine (Annotated Type) (Annotated Type) (Annotated Type)
+  | TypeIsValue (Annotated Type)
   deriving (Eq, Ord)
 
 infixl 8 `TypeIsEq`
 infixl 8 `TypeIsSub`
 
-data KindConstraint = KindIsEq (Annotated Kind) (Annotated Kind)
-                    | KindIsPlain (Annotated Kind)
-                    | KindIsSub (Annotated Kind) (Annotated Kind)
+data KindConstraint
+  = KindIsEq (Annotated Kind) (Annotated Kind)
+  | KindIsPlain (Annotated Kind)
+  | KindIsSub (Annotated Kind) (Annotated Kind)
   deriving (Eq, Ord)
 
 infixl 8 `KindIsEq`
@@ -229,12 +243,12 @@ type TypeRequirement = Requirement TypeConstraint
 type KindRequirement = Requirement KindConstraint
 
 type family Annotation a where
-  Annotation Exp      = Annotated Type
-  Annotation Pat      = Annotated Type
-  Annotation Type     = Annotated Kind
-  Annotation TypePat  = Annotated Kind
-  Annotation DataCon  = Annotated QType
-  Annotation DeclType = Annotated Kind
+  Annotation Exp             = Annotated Type
+  Annotation Pat             = Annotated Type
+  Annotation Type            = Annotated Kind
+  Annotation TypePat         = Annotated Kind
+  Annotation DataCon         = Annotated QType
+  Annotation DeclType        = Annotated Kind
   Annotation TypeRequirement = TypeReason
   Annotation KindRequirement = KindReason
   Annotation a               = Void
@@ -253,30 +267,32 @@ phantom x = (Phantom, Nothing) :< x
 as :: a -> Annotation a -> Annotated a
 as x a = (Phantom, Just a) :< x
 
-data TypeReason = TypeReasonApply (Annotated Exp) (Annotated Exp)
-                | TypeReasonBind (Annotated Pat) (Annotated Exp)
-                | TypeReasonCaptured Name
-                | TypeReasonCaseCongruence
-                | TypeReasonConstructor Name
-                | TypeReasonFunctionCongruence Name (Maybe (Annotated QType))
-                | TypeReasonRead Name
-                | TypeReasonIfCondition
-                | TypeReasonIfCongruence
-                | TypeReasonIntegerLiteral Integer
-                | TypeReasonMultiAlias Name
-                | TypeReasonMultiUse Name
-                | TypeReasonSignature (Annotated Type)
-                | TypeReasonSpecialization Name
-                | TypeReasonSwitchCondition
-                | TypeReasonSwitchCongruence
+data TypeReason
+  = TypeReasonApply (Annotated Exp) (Annotated Exp)
+  | TypeReasonBind (Annotated Pat) (Annotated Exp)
+  | TypeReasonCaptured Name
+  | TypeReasonCaseCongruence
+  | TypeReasonConstructor Name
+  | TypeReasonFunctionCongruence Name (Maybe (Annotated QType))
+  | TypeReasonRead Name
+  | TypeReasonIfCondition
+  | TypeReasonIfCongruence
+  | TypeReasonIntegerLiteral Integer
+  | TypeReasonMultiAlias Name
+  | TypeReasonMultiUse Name
+  | TypeReasonSignature (Annotated Type)
+  | TypeReasonSpecialization Name
+  | TypeReasonSwitchCondition
+  | TypeReasonSwitchCongruence
   deriving (Eq, Ord)
 
-data KindReason = KindReasonData Name [Annotated TypePat]
-                | KindReasonDataCon (Annotated DataCon)
-                | KindReasonQType (Annotated QType)
-                | KindReasonTypeApply (Annotated Type) (Annotated Type)
-                | KindReasonTypeApplyOp (Annotated Type) (Annotated Type)
-                | KindReasonType (Annotated Type)
-                | KindReasonTypePat (Annotated TypePat)
+data KindReason
+  = KindReasonData Name [Annotated TypePat]
+  | KindReasonDataCon (Annotated DataCon)
+  | KindReasonQType (Annotated QType)
+  | KindReasonTypeApply (Annotated Type) (Annotated Type)
+  | KindReasonTypeApplyOp (Annotated Type) (Annotated Type)
+  | KindReasonType (Annotated Type)
+  | KindReasonTypePat (Annotated TypePat)
   deriving (Eq, Ord)
 

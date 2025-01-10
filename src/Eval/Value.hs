@@ -19,26 +19,27 @@ import                          System.IO.Unsafe (unsafePerformIO)
 
 type Array = IOArray USize Value
 
-data Value = Array Array
-           | Bool Bool
-           | Char Char
-           | Data Name Value
-           | Enum Name
-           | Fn (Value -> Praxis Value)
-           | I8 I8
-           | I16 I16
-           | I32 I32
-           | I64 I64
-           | ISize ISize
-           | Pair Value Value
-           | Polymorphic (Specialization -> Value)
-           | String String
-           | U8 U8
-           | U16 U16
-           | U32 U32
-           | U64 U64
-           | USize USize
-           | Unit
+data Value
+  = Array Array
+  | Bool Bool
+  | Char Char
+  | Data Name Value
+  | Enum Name
+  | Fn (Value -> Praxis Value)
+  | I8 I8
+  | I16 I16
+  | I32 I32
+  | I64 I64
+  | ISize ISize
+  | Pair Value Value
+  | Polymorphic (Specialization -> Value)
+  | String String
+  | U8 U8
+  | U16 U16
+  | U32 U32
+  | U64 U64
+  | USize USize
+  | Unit
 
 integerToValue :: Name -> Integer -> Value
 integerToValue n = case n of

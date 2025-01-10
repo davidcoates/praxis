@@ -81,10 +81,11 @@ mixfix defns levels prec = exp where
   exp = asum (map top nodes) <|> anyExp
 
   top :: Int -> Parser (Annotated Exp)
-  top n = (op n Closed <*> pure []) <|>
-          ((\a f b -> f [a, b]) <$> higher n <*> op n (Infix Nothing) <*> higher n) <|>
-          (foldRight <$> some (right n) <*> higher n) <|>
-          (foldLeft <$> higher n <*> some (left n))
+  top n =
+    (op n Closed <*> pure []) <|>
+    ((\a f b -> f [a, b]) <$> higher n <*> op n (Infix Nothing) <*> higher n) <|>
+    (foldRight <$> some (right n) <*> higher n) <|>
+    (foldLeft <$> higher n <*> some (left n))
 
   foldRight :: [Annotated Exp -> Annotated Exp] -> Annotated Exp -> Annotated Exp
   foldRight [f] e    = f e
@@ -95,12 +96,14 @@ mixfix defns levels prec = exp where
   foldLeft e (f:fs) = foldLeft (f e) fs
 
   right :: Int -> Parser (Annotated Exp -> Annotated Exp)
-  right n = ((\f x -> f [x]) <$> op n Prefix) <|>
-            ((\x f y -> f [x, y]) <$> higher n <*> op n (Infix (Just AssocRight)))
+  right n =
+    ((\f x -> f [x]) <$> op n Prefix) <|>
+    ((\x f y -> f [x, y]) <$> higher n <*> op n (Infix (Just AssocRight)))
 
   left :: Int -> Parser (Annotated Exp -> Annotated Exp)
-  left n = ((\f x -> f [x]) <$> op n Postfix) <|>
-           ((\f x y -> f [y, x]) <$> op n (Infix (Just AssocLeft)) <*> higher n)
+  left n =
+    ((\f x -> f [x]) <$> op n Postfix) <|>
+    ((\f x y -> f [y, x]) <$> op n (Infix (Just AssocLeft)) <*> higher n)
 
   higher :: Int -> Parser (Annotated Exp)
   higher n = asum (map top (prec Array.! n)) <|> anyExp

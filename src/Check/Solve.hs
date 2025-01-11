@@ -128,7 +128,7 @@ solve state reduce term = do
               rewrite = normalize . sub resolve
 
               rewriteCrumbs :: Crumbs s -> Praxis (Crumbs s)
-              rewriteCrumbs = mapM (\(src, reason) -> (src,) <$> (recurseAnnotation (stageT :: StageT s) (witness :: TermT (Requirement c)) rewrite reason))
+              rewriteCrumbs = mapM (\(src, reason) -> (src,) <$> (recurseAnnotation (stageT :: StageT s) (termT :: TermT (Requirement c)) rewrite reason))
 
             crumbs2 <- rewriteCrumbs crumbs2
 
@@ -153,7 +153,7 @@ solve state reduce term = do
             solve' False (term, goals)
 
         TreeSkip
-          | disambiguate -> throw (stage (stageT :: StageT s)) $ "unsolved constraints: " <> separate ", " goals
+          | disambiguate -> throw (stageToEnum (stageT :: StageT s)) $ "unsolved constraints: " <> separate ", " goals
           | otherwise    -> solve' True (term, goals)
 
 
@@ -183,7 +183,7 @@ reduceGoals state reduce = \case
         Nothing   -> []
     case r1 of
       TreeContradiction trace
-        -> throw (stage (stageT :: StageT s)) (printTrace trace)
+        -> throw (stageToEnum (stageT :: StageT s)) (printTrace trace)
       TreeProgress -> do
         (goals, r2) <- reduceGoals state reduce goals
         return (goal ++ goals, noskip r2)

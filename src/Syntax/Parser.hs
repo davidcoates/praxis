@@ -38,4 +38,4 @@ instance Parser f => Syntax (T f) where
   annotated (T p) = T $ (\(s :< p) -> (s, Nothing) :< p) <$> sourced p
 
 parse :: forall f s a. (Parser f, IsTerm a, IsStage s) => f (Annotated s a)
-parse = unT (Syntax.annotated (syntax (witness :: TermT a)))
+parse = unT (Syntax.annotated (syntax (termT :: TermT a)))

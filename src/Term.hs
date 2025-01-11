@@ -52,7 +52,6 @@ module Term
   , source
   , annotation
   , phantom
-  , as
   ) where
 
 import           Common
@@ -264,9 +263,6 @@ annotation = tag . second
 
 phantom :: (a s) -> Annotated s a
 phantom x = (Phantom, Nothing) :< x
-
-as :: (a s) -> Annotation s a -> Annotated s a
-as x a = (Phantom, Just a) :< x
 
 data TypeReason (s :: Stage)
   = TypeReasonApply (Annotated s Exp) (Annotated s Exp)

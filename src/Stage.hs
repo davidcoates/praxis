@@ -6,7 +6,7 @@ module Stage
   ( Stage(..)
   , StageT(..)
   , IsStage(..)
-  , stage
+  , stageToEnum
   ) where
 
 data Stage
@@ -50,8 +50,8 @@ instance IsStage TypeCheck where
 instance IsStage Evaluate where
   stageT = EvaluateT
 
-stage :: StageT s -> Stage
-stage = \case
+stageToEnum :: StageT s -> Stage
+stageToEnum = \case
   InitialT   -> Initial
   ParseT     -> Parse
   KindCheckT -> KindCheck

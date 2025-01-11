@@ -42,7 +42,7 @@ runInternal c = case unsafePerformIO (runPraxis (flags . silent .= True >> c)) o
   Left e  -> error ("internal computation failed: " ++ e)
   Right x -> x
 
-kind :: forall s. IsStage s => String -> Annotated s Kind
+kind :: String -> Annotated KindCheck Kind
 kind s = cast $ runInternal (Parse.run s)
 
 initialTypeConEnv :: TypeConEnv

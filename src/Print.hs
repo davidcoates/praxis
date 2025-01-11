@@ -96,50 +96,50 @@ hideLabel x = case typeof x of
 
 label :: forall a s. (IsTerm a, IsStage s) => Annotated s a -> Colored String
 label ((s, a) :< x) = case a of
-  Just a | not (hideLabel x) -> case typeof x of
-    ExpT -> ($ a) $ case (stageT :: StageT s) of
+  Just a | not (hideLabel x) -> let stage = (stageT :: StageT s) in case termT :: TermT a of
+    ExpT -> ($ a) $ case stage of
       InitialT   -> absurd
       ParseT     -> absurd
       KindCheckT -> absurd
       TypeCheckT -> pretty
       EvaluateT  -> absurd
-    DataConT -> ($ a) $ case (stageT :: StageT s) of
+    DataConT -> ($ a) $ case stage of
       InitialT   -> absurd
       ParseT     -> absurd
       KindCheckT -> absurd
       TypeCheckT -> pretty
       EvaluateT  -> absurd
-    KindRequirementT -> ($ a) $ case (stageT :: StageT s) of
+    KindRequirementT -> ($ a) $ case stage of
       InitialT   -> absurd
       ParseT     -> absurd
       KindCheckT -> pretty
       TypeCheckT -> absurd
       EvaluateT  -> absurd
-    PatT -> ($ a) $ case (stageT :: StageT s) of
+    PatT -> ($ a) $ case stage of
       InitialT   -> absurd
       ParseT     -> absurd
       KindCheckT -> absurd
       TypeCheckT -> pretty
       EvaluateT  -> absurd
-    TypeT -> ($ a) $ case (stageT :: StageT s) of
+    TypeT -> ($ a) $ case stage of
       InitialT   -> absurd
       ParseT     -> absurd
       KindCheckT -> pretty
       TypeCheckT -> absurd
       EvaluateT  -> absurd
-    TypePatT -> ($ a) $ case (stageT :: StageT s) of
+    TypePatT -> ($ a) $ case stage of
       InitialT   -> absurd
       ParseT     -> absurd
       KindCheckT -> pretty
       TypeCheckT -> absurd
       EvaluateT  -> absurd
-    TypeRequirementT -> ($ a) $ case (stageT :: StageT s) of
+    TypeRequirementT -> ($ a) $ case stage of
       InitialT   -> absurd
       ParseT     -> absurd
       KindCheckT -> absurd
       TypeCheckT -> pretty
       EvaluateT  -> absurd
-    _                -> Colored.Nil
+    _ -> Colored.Nil
   _ -> Colored.Nil
 
 instance IsStage s => Pretty (TypeReason s) where

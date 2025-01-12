@@ -26,7 +26,7 @@ import           Control.Monad       (unless)
 import           Data.Array          (array, assocs, bounds, elems, indices,
                                       listArray, (!), (//))
 import           Data.Either         (partitionEithers)
-import           Data.Graph          (Graph, reachable)
+import           Data.Graph          (Graph, Vertex, reachable, vertices)
 import           Data.List           (intersect, intersperse, nub, partition,
                                       (\\))
 import           Data.Map.Strict     (Map)
@@ -170,8 +170,8 @@ desugarPrec (a@(src, _) :< Prec ord op) = do
   op <- desugarOp op
 
   -- check the op exists
-  opDefns <- use (parseState . opContext . defns)
-  unless (view value op `Map.member` opDefns) $ throwAt Parse src $ "unknown op " <> pretty op
+  opDefinitions <- use (parseState . opState . definitions)
+  unless (op `Map.member` opDefinitions) $ throwAt Parse src $ "unknown op " <> pretty op
 
   return (a :< Prec ord op)
 
@@ -196,40 +196,17 @@ desugarDecl (a@(src, _) :< decl) = case decl of
     op@(_ :< Op parts) <- desugarOp op
     (assoc, precs) <- desugarOpRules op rules
 
-    -- For simplicity of managing the op table, allow only one equal precedence relation
-    let (eqPrecs, precs') = partition (\(_ :< Prec ord _) -> ord == EQ) precs
-    unless (length eqPrecs <= 1) $ throwAt Parse src $ "more than one equal precedence specified for op " <> pretty op
-    let eq = listToMaybe eqPrecs
-
-    -- Add operator to levels
-    opLevels <- use (parseState . opContext . levels)
-    let opLevels' = case eq of Nothing                 -> opLevels ++ [[view value op]]
-                               Just (_ :< Prec EQ op') -> map (\ops -> if view value op' `elem` ops then view value op : ops else ops) opLevels
-
-    let levelOf = Map.fromList (zip [0..] opLevels')
-        indexOf = Map.fromList [ (op, i) | (i, ops) <- zip [0..] opLevels', op <- ops ]
-
-    -- Determine fixity
-    let noAssoc = unless (isNothing assoc) $ throwAt Parse src $ "associativity can not be specified for non-infix op " <> pretty op
+    let checkNoAssoc = unless (isNothing assoc) $ throwAt Parse src $ "associativity can not be specified for non-infix op " <> pretty op
     fixity <- case (head parts, last parts) of
       (Nothing, Nothing) -> return (Infix assoc)
-      (Nothing,  Just _) -> noAssoc >> return Postfix
-      (Just _,  Nothing) -> noAssoc >> return Prefix
-      (Just _,   Just _) -> noAssoc >> return Closed
+      (Nothing,  Just _) -> checkNoAssoc >> return Postfix
+      (Just _,  Nothing) -> checkNoAssoc >> return Prefix
+      (Just _,   Just _) -> checkNoAssoc >> return Closed
 
-    -- Add operator to definitions
-    opDefns <- use (parseState . opContext . defns)
-    when (view value op `Map.member` opDefns) $ throwAt Parse src ("operator already defined" :: String)
-    let opDefns' = Map.insert (view value op) (name, fixity) opDefns
-
-    -- Add operator to precedence graph
-    opPrec <- use (parseState . opContext . prec)
-    let opPrec' = addOp (view value op) (map (view value) precs') indexOf opPrec
-    unless (isAcyclic opPrec') $ throwAt Parse src ("operator precedence forms a cycle" :: String)
-
-    parseState . opContext .= OpContext { _defns = opDefns', _levels = opLevels', _prec = opPrec' }
+    registerOp src op (name, fixity) precs
 
     return Nothing
+
 
   DeclRec decls -> do
     decls <- traverse desugarDeclRec decls >>= coalesceDeclRecs
@@ -364,17 +341,46 @@ isAcyclic g = isAcyclic' (map fst (assocs g)) where
   isAcyclic' ns = if null leaves then False else isAcyclic' (ns \\ leaves) where
     leaves = filter (\n -> null (g ! n `intersect` ns)) ns
 
-addVertex :: Op Parse -> Int -> Graph -> Graph
-addVertex op n g = if n `elem` indices g then g else array (0, n) ((n, []) : assocs g)
+registerOp :: Source -> Annotated Parse Op -> (Name, Fixity) -> [Annotated Parse Prec] -> Praxis ()
+registerOp src op (name, fixity) precs = do
 
-addEdges :: [(Int, Int)] -> Graph -> Graph
-addEdges []     g = g
-addEdges (e:es) g = addEdges es (addEdge e g)
+    -- definition
+    opDefinitions <- use (parseState . opState . definitions)
+    when (op `Map.member` opDefinitions) $ throwAt Parse src ("operator already defined" :: String)
+    parseState . opState . definitions %= Map.insert op (name, fixity)
 
-addEdge :: (Int, Int) -> Graph -> Graph
-addEdge (a, b) g = g // [(a, nub (b : g ! a))]
+    -- node
+    case filter (\(_ :< Prec ord _) -> ord == EQ) precs of
+      [] -> do
+        parseState . opState . nodes %= (++ [[op]])
+        parseState . opState . precedence %= \graph -> let n = length (vertices graph) in array (0, n) ((n, []) : assocs graph)
+      [_ :< Prec _ refOp] ->
+        parseState . opState . nodes %= map (\ops -> if refOp `elem` ops then op : ops else ops)
+      _ ->
+        throwAt Parse src $ "more than one equal precedence specified for op " <> pretty op
 
-addOp :: Op Parse -> [Prec Parse] -> Map (Op Parse) Int -> Graph -> Graph
-addOp op ps indexOf prec = addEdges (map edge ps) (addVertex op (indexOf Map.! op) prec) where
-  edge (Prec LT (_ :< gt)) = (indexOf Map.! op, indexOf Map.! gt)
-  edge (Prec GT (_ :< lt)) = (indexOf Map.! lt, indexOf Map.! op)
+    -- edges (precedence relations)
+    opNodes <- use (parseState . opState . nodes)
+    let
+      nodeToIndex = Map.fromList [ (op, i) | (i, ops) <- zip [0..] opNodes, op <- ops ]
+      indexToNode = Map.fromList $ zip [0..] opNodes
+
+    let
+      edges =
+        [ (op, refOp) | (_ :< Prec LT refOp) <- precs ] ++
+        [ (refOp, op) | (_ :< Prec GT refOp) <- precs ]
+
+      addEdge :: (Annotated Parse Op, Annotated Parse Op) -> Graph -> Graph
+      addEdge (a, b) graph =
+        let
+          (a', b') = (nodeToIndex Map.! a, nodeToIndex Map.! b)
+        in
+          graph // [(a', nub (b' : graph ! a'))]
+
+    traverse (\edge -> parseState . opState . precedence %= addEdge edge) edges
+
+    -- check precedence is acyclic
+    opPrecedence <- use (parseState . opState . precedence)
+    unless (isAcyclic opPrecedence) $ throwAt Parse src ("operator precedence forms a cycle" :: String)
+
+    return ()

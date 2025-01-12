@@ -3,16 +3,17 @@
 
 module Parse.State
   ( State(..)
-  , opContext
+  , opState
   , typeSynonyms
   , emptyState
 
   , Fixity(..)
-  , OpDefns
-  , OpContext(..)
-  , defns
-  , levels
-  , prec
+  , OpDefinitions
+  , OpNodes
+  , OpState(..)
+  , definitions
+  , nodes
+  , precedence
 
   ) where
 
@@ -34,14 +35,27 @@ data Fixity
   | Closed
   deriving (Eq, Ord)
 
-type OpDefns = Map (Op Parse) (Name, Fixity)
+type OpDefinitions = Map (Annotated Parse Op) (Name, Fixity)
 
-data OpContext = OpContext { _defns :: OpDefns, _levels :: [[Op Parse]], _prec :: Graph }
+type OpNodes = [[Annotated Parse Op]]
 
-makeLenses ''OpContext
+data OpState = OpState
+  { _definitions :: OpDefinitions
+  , _nodes       :: OpNodes
+  , _precedence  :: Graph
+  }
+
+makeLenses ''OpState
+
+emptyOpState :: OpState
+emptyOpState = OpState
+  { _definitions = Map.empty
+  , _nodes = []
+  , _precedence = array (0, -1) []
+  }
 
 data State = State
-  { _opContext    :: OpContext
+  { _opState      :: OpState
   , _typeSynonyms :: Map Name (Annotated Parse Type)
   }
 
@@ -49,6 +63,6 @@ makeLenses ''State
 
 emptyState :: State
 emptyState = State
-  { _opContext    = OpContext { _defns = Map.empty, _prec = array (0, -1) [], _levels = [] }
+  { _opState      = emptyOpState
   , _typeSynonyms = Map.empty
   }

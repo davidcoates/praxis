@@ -14,7 +14,7 @@ import           Term
 import           Data.Array          (bounds, elems, listArray)
 import qualified Data.Array          as Array
 import           Data.Foldable       (asum)
-import           Data.Graph          (Graph, reachable)
+import           Data.Graph          (Graph, Vertex, reachable, vertices)
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
 
@@ -60,10 +60,10 @@ closure g = listArray (bounds g) (map (concatMap (reachable g)) (elems g))
 
 parse :: Source -> [Annotated Initial Tok] -> Praxis (Annotated Initial Exp)
 parse src ts = do
-  opLevels <- use (parseState . opContext . levels)
-  opDefns <- use (parseState . opContext . defns)
-  opPrec <- use (parseState . opContext . prec)
-  run src (mixfix opDefns opLevels (closure opPrec)) ts -- TODO skip the closure?
+  opNodes <- use (parseState . opState . nodes)
+  opDefinitions <- use (parseState . opState . definitions)
+  opPrecedence <- use (parseState . opState . precedence)
+  run src (mixfix opDefinitions opNodes (closure opPrecedence)) ts -- TODO skip the closure?
 
 anyExp :: Parser (Annotated Initial Exp)
 anyExp = match f where
@@ -75,15 +75,13 @@ namedOp n = match f where
   f ((src, _) :< TokOp m) = if m == n then Just src else Nothing
   f _                     = Nothing
 
-mixfix :: OpDefns -> [[Op Parse]] -> Graph -> Parser (Annotated Initial Exp)
-mixfix defns levels prec = exp where
-
-  nodes = [0 .. length levels - 1]
+mixfix :: OpDefinitions -> OpNodes -> Graph -> Parser (Annotated Initial Exp)
+mixfix definitions nodes precedence = exp where
 
   exp :: Parser (Annotated Initial Exp)
-  exp = asum (map top nodes) <|> anyExp
+  exp = asum (map top (vertices precedence)) <|> anyExp
 
-  top :: Int -> Parser (Annotated Initial Exp)
+  top :: Vertex -> Parser (Annotated Initial Exp)
   top n =
     (op n Closed <*> pure []) <|>
     ((\a f b -> f [a, b]) <$> higher n <*> op n (Infix Nothing) <*> higher n) <|>
@@ -98,24 +96,24 @@ mixfix defns levels prec = exp where
   foldLeft e [f]    = f e
   foldLeft e (f:fs) = foldLeft (f e) fs
 
-  right :: Int -> Parser (Annotated Initial Exp -> Annotated Initial Exp)
+  right :: Vertex -> Parser (Annotated Initial Exp -> Annotated Initial Exp)
   right n =
     ((\f x -> f [x]) <$> op n Prefix) <|>
     ((\x f y -> f [x, y]) <$> higher n <*> op n (Infix (Just AssocRight)))
 
-  left :: Int -> Parser (Annotated Initial Exp -> Annotated Initial Exp)
+  left :: Vertex -> Parser (Annotated Initial Exp -> Annotated Initial Exp)
   left n =
     ((\f x -> f [x]) <$> op n Postfix) <|>
     ((\f x y -> f [y, x]) <$> op n (Infix (Just AssocLeft)) <*> higher n)
 
-  higher :: Int -> Parser (Annotated Initial Exp)
-  higher n = asum (map top (prec Array.! n)) <|> anyExp
+  higher :: Vertex -> Parser (Annotated Initial Exp)
+  higher n = asum (map top (precedence Array.! n)) <|> anyExp
 
-  op :: Int -> Fixity -> Parser ([Annotated Initial Exp] -> Annotated Initial Exp)
-  op n fixity = asum [ middle op | op <- levels !! n, fixity == snd (defns Map.! op) ]
+  op :: Vertex -> Fixity -> Parser ([Annotated Initial Exp] -> Annotated Initial Exp)
+  op n fixity = asum [ middle op | op <- nodes !! n, fixity == snd (definitions Map.! op) ]
 
-  middle :: Op Parse -> Parser ([Annotated Initial Exp] -> Annotated Initial Exp)
-  middle op@(Op ps) = let (name, fixity) = defns Map.! op in (<$> parts (trim fixity ps)) $ \(src, ps) -> case fixity of
+  middle :: Annotated Parse Op -> Parser ([Annotated Initial Exp] -> Annotated Initial Exp)
+  middle op@(_ :< Op ps) = let (name, fixity) = definitions Map.! op in (<$> parts (trim fixity ps)) $ \(src, ps) -> case fixity of
     Infix _ -> \[x,y] -> build src name (x : ps ++ [y])
     Prefix  -> \[y]   -> build src name (ps ++ [y])
     Postfix -> \[x]   -> build src name (x : ps)

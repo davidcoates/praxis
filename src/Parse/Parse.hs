@@ -6,17 +6,16 @@ module Parse.Parse
 
 import           Common
 import           Introspect
-import qualified Parse.Parse.Parser as Parser (run)
+import           Parse.Parse.Parser (parse)
 import           Praxis
 import           Print
 import           Stage
-import           Syntax.Parser
 import           Term
 import           Token
 
 
 run :: IsTerm a => [Sourced Token] -> Praxis (Annotated Initial a)
 run tokens = do
-  term <- Parser.run parse tokens
+  term <- parse tokens
   display Parse "parsed term" term `ifFlag` debug
   return term

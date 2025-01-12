@@ -43,7 +43,10 @@ runInternal c = case unsafePerformIO (runPraxis (flags . silent .= True >> c)) o
   Right x -> x
 
 kind :: String -> Annotated KindCheck Kind
-kind s = cast $ runInternal (Parse.run s)
+kind s = cast $ runInternal (Parse.run s) where
+  cast :: forall a. IsTerm a => Annotated Parse a -> Annotated KindCheck a
+  cast ((src, _) :< term) = case termT :: TermT a of
+    KindT -> (src, ()) :< runIdentity (recurseTerm (Identity . cast) term)
 
 initialTypeConEnv :: TypeConEnv
 initialTypeConEnv = Map.fromList
@@ -78,20 +81,20 @@ initialTypeConEnv = Map.fromList
 
 -- TODO should be replaced with instances in prelude
 
-integral :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
-integral t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Integral")) t))
+integral :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
+integral t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Integral")) t)))
 
-clone :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
-clone t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Clone")) t))
+clone :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
+clone t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Clone")) t)))
 
-dispose :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
-dispose t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Dispose")) t))
+dispose :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
+dispose t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Dispose")) t)))
 
-copy :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
-copy t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Copy")) t))
+copy :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
+copy t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Copy")) t)))
 
-capture :: Annotated TypeCheck Type -> TypeConstraint TypeCheck
-capture t = TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Capture")) t))
+capture :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
+capture t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Capture")) t)))
 
 initialInstanceEnv :: InstanceEnv
 initialInstanceEnv = Map.fromList
@@ -264,10 +267,19 @@ inbuilts =
     liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
 
 mono :: String -> Annotated TypeCheck Type
-mono s = cast $ runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s)
+mono s = cast $ runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s) where
+  cast :: forall a. IsTerm a => Annotated Parse a -> Annotated TypeCheck a
+  cast ((src, _) :< term) = case termT :: TermT a of
+    TypeT -> (src, ()) :< runIdentity (recurseTerm (Identity . cast) term)
 
 poly :: String -> Annotated TypeCheck QType
-poly s = cast $ runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s)
+poly s = cast $ runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s) where
+  cast :: forall a. IsTerm a => Annotated Parse a -> Annotated TypeCheck a
+  cast ((src, _) :< term) = case termT :: TermT a of
+    TypeT           -> (src, ()) :< runIdentity (recurseTerm (Identity . cast) term)
+    QTypeT          -> (src, ()) :< runIdentity (recurseTerm (Identity . cast) term)
+    TypePatT        -> (src, ()) :< runIdentity (recurseTerm (Identity . cast) term)
+    TypeConstraintT -> (src, ()) :< runIdentity (recurseTerm (Identity . cast) term)
 
 runWithPrelude :: Praxis a -> IO (Either String a)
 runWithPrelude c = runPraxis (importPrelude >> c) where

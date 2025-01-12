@@ -61,12 +61,12 @@ type family Constraint (s :: Stage) where
 
 data SolveState (s :: Stage) = SolveState
   { _requirements :: Set (Annotated s (Requirement (Constraint s)))
-  , _assumptions  :: Set (Constraint s s)
+  , _assumptions  :: Set (Annotated s (Constraint s))
   }
 
 makeLenses ''SolveState
 
-emptySolveState :: Ord (Constraint s s) => SolveState s
+emptySolveState :: Ord (Annotated s (Constraint s)) => SolveState s
 emptySolveState = SolveState
   { _requirements = Set.empty
   , _assumptions  = Set.empty
@@ -140,7 +140,7 @@ emptyTypeState = TypeState
 data InstanceOrigin = Inbuilt | Trivial | User
   deriving Eq
 
-data Instance = IsInstance | IsInstanceOnlyIf [TypeConstraint TypeCheck]
+data Instance = IsInstance | IsInstanceOnlyIf [Annotated TypeCheck TypeConstraint]
 
 type InstanceEnv = Map Name (Map Name ([Annotated TypeCheck Type] -> (InstanceOrigin, Instance))) -- ^ Instance environment
 

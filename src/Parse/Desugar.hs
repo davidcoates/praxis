@@ -125,12 +125,12 @@ desugarExp (a@(src, _) :< exp) = case exp of
       | (_ :< StmtExp exp) <- stmt = do
         exp1 <- desugarExp exp
         exp2 <- desugarStmts stmts
-        let a = (view source exp1 <> view source exp2, Nothing)
+        let a = (view source exp1 <> view source exp2, ())
         return (a :< Seq exp1 exp2)
       | (_ :< StmtBind bind) <- stmt = do
         bind <- desugar bind
         exp <- desugarStmts stmts
-        let a = (view source bind <> view source exp, Nothing)
+        let a = (view source bind <> view source exp, ())
         return (a :< Let bind exp)
 
   -- Call Mixfix.parse to fold the token sequence into a single expression, then desugar that expression
@@ -249,7 +249,7 @@ desugarDeclTerm recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
     let
       curry :: [Annotated Parse Pat] -> Annotated Parse Exp -> Annotated Parse Exp
       curry []     e = e
-      curry (p:ps) e = (view source p <> view source e, Nothing) :< Lambda p (curry ps e)
+      curry (p:ps) e = (view source p <> view source e, ()) :< Lambda p (curry ps e)
     exp <- curry args <$> desugarExp exp
     when (recursive && not (expIsFunction exp)) $ throwAt Parse src $ "non-function " <> pretty name <> " can not be recursive"
     return $ DeclTermVar name Nothing exp

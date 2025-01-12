@@ -16,7 +16,6 @@ module Introspect
   ( TermT(..)
   , IsTerm(..)
   , recurse
-  , cast
   , typeof
   , embedSub
   , embedMonoid
@@ -42,10 +41,7 @@ class IsTerm a where
   recurseAnnotation :: (Applicative f, IsTerm a, IsStage s) => StageT s -> TermT a -> TermAction f s s -> Annotation s a -> f (Annotation s a)
 
 recurse :: forall a f s t. (Applicative f, IsTerm a, IsStage s) => TermAction f s s -> Annotated s a -> f (Annotated s a)
-recurse f ((src, a) :< x) = (\a x -> (src, a) :< x) <$> traverse (recurseAnnotation (stageT :: StageT s) (termT :: TermT a) f) a <*> recurseTerm f x
-
-cast :: forall a s t. IsTerm a => Annotated s a -> Annotated t a
-cast ((src, _) :< term) = (src, Nothing) :< runIdentity (recurseTerm (Identity . cast) term)
+recurse f ((src, a) :< x) = (\a x -> (src, a) :< x) <$> recurseAnnotation (stageT :: StageT s) (termT :: TermT a) f a <*> recurseTerm f x
 
 -- TODO Lit? Fixity?
 data TermT a where
@@ -120,20 +116,20 @@ sub f x = case f x of
   Just y  -> y
   Nothing -> runIdentity $ recurse (Identity . sub f) x
 
-extract :: forall m a s. (Monoid m, IsTerm a, IsStage s) => (forall b. IsTerm b => b s -> m) -> Annotated s a -> m
-extract f (_ :< x) = f x <> (getConst $ recurseTerm (Const . extract f) x)
+extract :: forall m a s. (Monoid m, IsTerm a, IsStage s) => (forall b. IsTerm b => Annotated s b -> m) -> Annotated s a -> m
+extract f x = f x <> (getConst $ recurse (Const . extract f) x)
 
-deepExtract :: forall m a s. (Monoid m, IsTerm a, IsStage s) => (forall b. IsTerm b => b s -> m) -> Annotated s a -> m
-deepExtract f x = f (view value x) <> (getConst $ recurse (Const . deepExtract f :: TermAction (Const m) s s) x)
+deepExtract :: forall m a s. (Monoid m, IsTerm a, IsStage s) => (forall b. IsTerm b => Annotated s b -> m) -> Annotated s a -> m
+deepExtract f x = f x <> (getConst $ recurse (Const . deepExtract f :: TermAction (Const m) s s) x)
 
 embedSub :: forall a s. (IsTerm a, IsStage s) => (Annotated s a -> Maybe (Annotated s a)) -> (forall b. IsTerm b => Annotated s b -> Maybe (Annotated s b))
 embedSub f x = transferM f x where
   transferM :: forall f a b s. (IsTerm a, IsTerm b, IsStage s) => (Annotated s a -> Maybe (Annotated s a)) -> Annotated s b -> Maybe (Annotated s b)
   transferM f x = switch (termT :: TermT a) (termT :: TermT b) (f x) Nothing
 
-embedMonoid :: forall a b s. (Monoid b, IsTerm a, IsStage s) => (a s -> b) -> (forall a. IsTerm a => a s -> b)
+embedMonoid :: forall a b s. (Monoid b, IsTerm a, IsStage s) => (Annotated s a -> b) -> (forall a. IsTerm a => Annotated s a -> b)
 embedMonoid f x = getConst $ transferA (Const . f) x where
-  transferA :: forall f a b s. (Applicative f, IsTerm a, IsTerm b, IsStage s) => (a s -> f (a s)) -> b s -> f (b s)
+  transferA :: forall f a b s. (Applicative f, IsTerm a, IsTerm b, IsStage s) => (Annotated s a -> f (Annotated s a)) -> Annotated s b -> f (Annotated s b)
   transferA f x = switch (termT :: TermT a) (termT :: TermT b) (f x) (pure x)
 
 
@@ -141,23 +137,26 @@ embedMonoid f x = getConst $ transferA (Const . f) x where
 
 -- TODO use template haskell to generate recurseTerm
 
+trivial :: Applicative f => () -> f ()
+trivial () = pure ()
+
 -- | Operators
 
 instance IsTerm Op where
   termT = OpT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm _ = \case
     Op ns -> pure (Op ns)
 
 instance IsTerm OpRules where
   termT = OpRulesT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     OpRules rs -> OpRules <$> traverse (\case { Left assoc -> Left <$> pure assoc; Right precs -> Right <$> traverse f precs }) rs
 
 instance IsTerm Prec where
   termT = PrecT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     Prec ord op -> Prec ord <$> f op
 
@@ -165,23 +164,23 @@ instance IsTerm Prec where
 
 instance IsTerm Bind where
   termT = BindT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     Bind a b -> Bind <$> f a <*> f b
 
 instance IsTerm DataCon where
   termT = DataConT
   recurseAnnotation s _ f = case s of
-    InitialT   -> absurd
-    ParseT     -> absurd
-    KindCheckT -> absurd
+    InitialT   -> trivial
+    ParseT     -> trivial
+    KindCheckT -> trivial
     TypeCheckT -> f
   recurseTerm f = \case
     DataCon n t -> DataCon n <$> f t
 
 instance IsTerm Decl where
   termT = DeclT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     DeclOpSugar o d rs -> DeclOpSugar <$> f o <*> pure d <*> f rs
     DeclRec ds         -> DeclRec <$> traverse f ds
@@ -191,14 +190,14 @@ instance IsTerm Decl where
 
 instance IsTerm DeclRec where
   termT = DeclRecT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     DeclRecType d         -> DeclRecType <$> f d
     DeclRecTerm d         -> DeclRecTerm <$> f d
 
 instance IsTerm DeclTerm where
   termT = DeclTermT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     DeclTermVar n t e       -> DeclTermVar n <$> traverse f t <*> f e
     DeclTermDefSugar n ps e -> DeclTermDefSugar n <$> traverse f ps <*> f e
@@ -207,10 +206,10 @@ instance IsTerm DeclTerm where
 instance IsTerm DeclType where
   termT = DeclTypeT
   recurseAnnotation s _ f = case s of
-    InitialT   -> absurd
-    ParseT     -> absurd
+    InitialT   -> trivial
+    ParseT     -> trivial
     KindCheckT -> f
-    TypeCheckT -> absurd
+    TypeCheckT -> trivial
   recurseTerm f = \case
     DeclTypeData m n t as      -> DeclTypeData m n <$> traverse f t <*> traverse f as
     DeclTypeDataSugar m n t as -> DeclTypeDataSugar m n <$> traverse f t <*> traverse f as
@@ -226,9 +225,9 @@ pairs f = traverse (pair f)
 instance IsTerm Exp where
   termT = ExpT
   recurseAnnotation s _ f = case s of
-    InitialT   -> absurd
-    ParseT     -> absurd
-    KindCheckT -> absurd
+    InitialT   -> trivial
+    ParseT     -> trivial
+    KindCheckT -> trivial
     TypeCheckT -> f
   recurseTerm f = \case
     Apply a b       -> Apply <$> f a <*> f b
@@ -257,9 +256,9 @@ instance IsTerm Exp where
 instance IsTerm Pat where
   termT = PatT
   recurseAnnotation s _ f = case s of
-    InitialT   -> absurd
-    ParseT     -> absurd
-    KindCheckT -> absurd
+    InitialT   -> trivial
+    ParseT     -> trivial
+    KindCheckT -> trivial
     TypeCheckT -> f
   recurseTerm f = \case
     PatAt n a   -> PatAt n <$> f a
@@ -273,20 +272,20 @@ instance IsTerm Pat where
 
 instance IsTerm Program where
   termT = ProgramT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     Program ds -> Program <$> traverse f ds
 
 instance IsTerm Stmt where
   termT = StmtT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     StmtBind b -> StmtBind <$> f b
     StmtExp e  -> StmtExp <$> f e
 
 instance IsTerm Tok where
   termT = TokT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     TokExp e -> TokExp <$> f e
     TokOp o  -> pure (TokOp o)
@@ -295,14 +294,14 @@ instance IsTerm Tok where
 
 instance IsTerm QType where
   termT = QTypeT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     Forall vs cs t -> Forall <$> traverse f vs <*> traverse f cs <*> f t
     Mono t         -> Mono <$> f t
 
 instance IsTerm TypeConstraint where
   termT = TypeConstraintT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     TypeIsEq a b            -> TypeIsEq <$> f a <*> f b
     TypeIsEqIfAffine a b t  -> TypeIsEqIfAffine <$> f a <*> f b <*> f t
@@ -317,10 +316,10 @@ instance IsTerm TypeConstraint where
 instance IsTerm Type where
   termT = TypeT
   recurseAnnotation s _ f = case s of
-    InitialT   -> absurd
-    ParseT     -> absurd
+    InitialT   -> trivial
+    ParseT     -> trivial
     KindCheckT -> f
-    TypeCheckT -> absurd
+    TypeCheckT -> trivial
   recurseTerm f = \case
     TypeApply a b   -> TypeApply <$> f a <*> f b
     TypeApplyOp a b -> TypeApplyOp <$> f a <*> f b
@@ -337,10 +336,10 @@ instance IsTerm Type where
 instance IsTerm TypePat where
   termT = TypePatT
   recurseAnnotation s _ f = case s of
-    InitialT   -> absurd
-    ParseT     -> absurd
+    InitialT   -> trivial
+    ParseT     -> trivial
     KindCheckT -> f
-    TypeCheckT -> absurd
+    TypeCheckT -> trivial
   recurseTerm _ = \case
     TypePatVar f n -> pure (TypePatVar f n)
 
@@ -348,7 +347,7 @@ instance IsTerm TypePat where
 
 instance IsTerm Kind where
   termT = KindT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     KindConstraint -> pure KindConstraint
     KindFn a b     -> KindFn <$> f a <*> f b
@@ -359,7 +358,7 @@ instance IsTerm Kind where
 
 instance IsTerm KindConstraint where
   termT = KindConstraintT
-  recurseAnnotation _ _ _ = absurd
+  recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
     KindIsEq k l  -> KindIsEq <$> f k <*> f l
     KindIsPlain k -> KindIsPlain <$> f k
@@ -370,9 +369,9 @@ instance IsTerm KindConstraint where
 instance IsTerm (Requirement TypeConstraint) where
   termT = TypeRequirementT
   recurseAnnotation s _ f = case s of
-    InitialT   -> absurd
-    ParseT     -> absurd
-    KindCheckT -> absurd
+    InitialT   -> trivial
+    ParseT     -> trivial
+    KindCheckT -> trivial
     TypeCheckT -> \case
       TypeReasonApply a b              -> TypeReasonApply <$> f a <*> f b
       TypeReasonBind p e               -> TypeReasonBind <$> f p <*> f e
@@ -391,13 +390,13 @@ instance IsTerm (Requirement TypeConstraint) where
       TypeReasonSwitchCondition        -> pure TypeReasonSwitchCondition
       TypeReasonSwitchCongruence       -> pure TypeReasonSwitchCongruence
   recurseTerm f = \case
-    Requirement c -> Requirement <$> recurseTerm f c
+    Requirement c -> Requirement <$> f c
 
 instance IsTerm (Requirement KindConstraint) where
   termT = KindRequirementT
   recurseAnnotation s _ f = case s of
-    InitialT   -> absurd
-    ParseT     -> absurd
+    InitialT   -> trivial
+    ParseT     -> trivial
     KindCheckT -> \case
       KindReasonData n a        -> KindReasonData n <$> traverse f a
       KindReasonDataCon c       -> KindReasonDataCon <$> f c
@@ -406,6 +405,6 @@ instance IsTerm (Requirement KindConstraint) where
       KindReasonTypeApplyOp a b -> KindReasonTypeApplyOp <$> f a <*> f b
       KindReasonType t          -> KindReasonType <$> f t
       KindReasonTypePat t       -> KindReasonTypePat <$> f t
-    TypeCheckT -> absurd
+    TypeCheckT -> trivial
   recurseTerm f = \case
-    Requirement c -> Requirement <$> recurseTerm f c
+    Requirement c -> Requirement <$> f c

@@ -30,15 +30,15 @@ run term = do
   tryDefault term
 
 reduce :: Disambiguating (Reducer KindCheck)
-reduce disambiguate = \case
+reduce disambiguate (a :< constraint) = case constraint of
 
   KindIsEq kind1 kind2 | kind1 == kind2 -> return tautology
 
   KindIsEq (_ :< KindUni x) kind -> if x `Set.member` kindUnis kind then return contradiction else solved (x `is` view value kind) -- Note: Occurs check here
 
-  KindIsEq kind1 kind2@(_ :< KindUni _) -> reduce disambiguate (kind2 `KindIsEq` kind1) -- handled by the above case
+  KindIsEq kind1 kind2@(_ :< KindUni _) -> reduce disambiguate (a :< KindIsEq kind2 kind1) -- handled by the above case
 
-  KindIsEq (_ :< KindFn kind1 kind2) (_ :< KindFn kind3 kind4) -> return $ subgoals [ Subgoal (KindIsEq kind1 kind3), Subgoal (KindIsEq kind2 kind4) ]
+  KindIsEq (_ :< KindFn kind1 kind2) (_ :< KindFn kind3 kind4) -> return $ subgoals [ Subgoal (a :< KindIsEq kind1 kind3), Subgoal (a :< KindIsEq kind2 kind4) ]
 
   KindIsPlain (_ :< kind) -> case kind of
     KindUni _ -> return skip
@@ -64,14 +64,14 @@ reduce disambiguate = \case
 
   KindIsSub (_ :< KindView) _ -> return contradiction
 
-  KindIsSub kind1 kind2 -> return $ subgoals [ Subgoal (KindIsEq kind1 kind2) ]
+  KindIsSub kind1 kind2 -> return $ subgoals [ Subgoal (a :< KindIsEq kind1 kind2) ]
 
   _ -> return contradiction
 
   where
     kindUnis :: forall a. IsTerm a => Annotated KindCheck a -> Set Name
     kindUnis = extract (embedMonoid f) where
-      f = \case
+      f (_ :< kind)= case kind of
         KindUni n -> Set.singleton n
         _         -> Set.empty
 
@@ -101,7 +101,7 @@ tryDefault term@((src, _) :< _) = do
   where
     deepKindUnis :: forall a. IsTerm a => Annotated KindCheck a -> Set Name
     deepKindUnis = deepExtract (embedMonoid f) where
-      f = \case
+      f (_ :< kind) = case kind of
         KindUni n -> Set.singleton n
         _         -> Set.empty
 

@@ -50,7 +50,7 @@ type Normalizer s = forall a. IsTerm a => Annotated s a -> Praxis (Annotated s a
 
 type Solution s = (Resolver s, Normalizer s)
 
-data Subgoal s = Subgoal (Constraint s s) | Implies (Constraint s s) (Constraint s s)
+data Subgoal s = Subgoal (Annotated s (Constraint s)) | Implies (Annotated s (Constraint s)) (Annotated s (Constraint s))
 
 data Reduction s = Contradiction | Progress (Maybe (Solution s)) [Subgoal s] | Skip
 
@@ -67,7 +67,7 @@ subgoals x = Progress Nothing x
 tautology :: Reduction s
 tautology = Progress Nothing []
 
-type Reducer s = (Constraint s s) -> Praxis (Reduction s)
+type Reducer s = (Annotated s (Constraint s)) -> Praxis (Reduction s)
 
 type Disambiguating a = Bool -> a
 
@@ -75,7 +75,7 @@ type Disambiguating a = Bool -> a
 data TreeT c = Branch c [TreeT c] | Assume c (TreeT c)
   deriving (Functor, Foldable, Traversable)
 
-type Tree s = TreeT (Constraint s s)
+type Tree s = TreeT (Annotated s (Constraint s))
 
 data GoalT x c = Goal x (TreeT c)
   deriving (Functor, Foldable, Traversable)
@@ -85,12 +85,12 @@ type Crumb s = (Source, Annotation s (Requirement (Constraint s)))
 type Crumbs s = [Crumb s]
 
 -- Note: Goal definition is split like this for "deriving" to work.
-type Goal s = GoalT (Crumbs s) (Constraint s s)
+type Goal s = GoalT (Crumbs s) (Annotated s (Constraint s))
 
-instance (c ~ Constraint s s, Pretty (Annotated s (Constraint s))) => Pretty (TreeT c) where
-  pretty (Branch c [])  = pretty (phantom c)
-  pretty (Branch c cs)  = pretty (phantom c) <> " (" <> separate ", " cs <> ")" where
-  pretty (Assume c1 c2) = pretty (phantom c1) <> " --> " <> pretty c2
+instance Pretty c => Pretty (TreeT c) where
+  pretty (Branch c [])  = pretty c
+  pretty (Branch c cs)  = pretty c <> " (" <> separate ", " cs <> ")" where
+  pretty (Assume c1 c2) = pretty c1 <> " --> " <> pretty c2
 
 instance Pretty (TreeT c) => Pretty (GoalT x c) where
   pretty (Goal _ tree) = pretty tree
@@ -108,7 +108,7 @@ solve :: forall s c a.
 
 solve state reduce term = do
   requirements' <- Set.toList <$> use (state . requirements)
-  let goals = [ Goal [(src, reason)] (Branch constraint []) | ((src, Just reason) :< Requirement constraint) <- requirements' ]
+  let goals = [ Goal [(src, reason)] (Branch constraint []) | ((src, reason) :< Requirement constraint) <- requirements' ]
   (term, [], _) <- solve' False (term, goals)
   return term
   where
@@ -135,15 +135,15 @@ solve state reduce term = do
             let
               affectedByRewrite :: forall a. IsTerm a => Annotated s a -> Bool
               affectedByRewrite term = getAny (extract f term) where
-                f :: forall a. IsTerm a => a s -> Any
-                f x = Any (isJust (resolve (phantom x)))
+                f :: forall a. IsTerm a => Annotated s a -> Any
+                f x = Any (isJust (resolve x))
 
               rewriteGoal :: Goal s -> Praxis (Goal s)
               rewriteGoal (Goal crumbs1 tree@(Branch constraint _)) = do
                 crumbs1 <- rewriteCrumbs crumbs1
-                if affectedByRewrite (phantom constraint)
+                if affectedByRewrite constraint
                   then do
-                    tree <- traverse (recurseTerm rewrite) tree
+                    tree <- traverse (recurse rewrite) tree
                     let crumbs = crumbs1 ++ [ crumb | crumb <- crumbs2, not (crumb `elem` crumbs1) ]
                     return $ Goal crumbs tree
                   else return (Goal crumbs1 tree)
@@ -157,7 +157,7 @@ solve state reduce term = do
           | otherwise    -> solve' True (term, goals)
 
 
-data TreeReduction s = TreeContradiction [Constraint s s] | TreeProgress | TreeSolved (Solution s) (Crumbs s) | TreeSkip
+data TreeReduction s = TreeContradiction [Annotated s (Constraint s)] | TreeProgress | TreeSolved (Solution s) (Crumbs s) | TreeSkip
 
 noskip :: TreeReduction s -> TreeReduction s
 noskip TreeSkip = TreeProgress
@@ -193,9 +193,8 @@ reduceGoals state reduce = \case
         (goals, r2) <- reduceGoals state reduce goals
         return (goal ++ goals, r2)
     where
-      printTrace :: [c s] -> Colored String
-      printTrace trace = "unable to satisfy: "  <> pretty (last (c:cs)) <> derived <> printCrumbs crumbs where
-        (c:cs) = map phantom trace
+      printTrace :: [Annotated s c] -> Colored String
+      printTrace (c:cs) = "unable to satisfy: "  <> pretty (last (c:cs)) <> derived <> printCrumbs crumbs where
         derived = if null cs then Colored.Nil else "\n  | derived from: " <> pretty c
       printCrumbs :: Crumbs s -> Colored String
       printCrumbs (crumb:crumbs) = primary <> printCrumb crumb <> (if null crumbs then Colored.Nil else secondary <> separate "\n  | - " (map printCrumb crumbs)) where

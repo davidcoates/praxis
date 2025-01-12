@@ -194,40 +194,18 @@ tuple unit pair p = special '(' *> tuple' where
   tuple' = unit <$> special ')' *> pure () <|> rightWithSep (special ',') pair p <* special ')'
 
 join :: (Syntax f, IsTerm a, IsStage s) => f (a s) -> (Prism (a s) (Annotated s a, b), f b) -> f (a s)
-join p (_P, q) = Prism f g <$> annotated p <*> optional q where
+join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> internal p where
   f (_ :< p, Nothing) = p
   f (p, Just q)       = construct _P (p, q)
   g x = case destruct _P x of
     Just (x, y) -> Just (x, Just y)
-    Nothing     -> Just (phantom x, Nothing)
-
-foldRight :: Prism (a s) (Annotated s a, Annotated s a) -> Prism (a s) [Annotated s a]
-foldRight _P = Prism (view value . fold) (Just . unfold . phantom) where
-  fold [x]    = x
-  fold (x:xs) = let y = fold xs in (view source x <> view source y, Nothing) :< construct _P (x, y)
-  unfold x = case destruct _P (view value x) of
-    Just (x, y) -> x : unfold y
-    Nothing     -> [x]
-
-foldLeft :: Prism (a s) (Annotated s a, Annotated s a) -> Prism (a s) [Annotated s a]
-foldLeft _P = Prism (view value . fold) (Just . unfold . phantom) where
-  fold [x]      = x
-  fold (x:y:ys) = fold ((view source x <> view source y, Nothing) :< construct _P (x, y) : ys)
-  unfold x = case destruct _P (view value x) of
-    Just (x, y) -> unfold x ++ [y]
-    Nothing     -> [x]
+    Nothing     -> Nothing
 
 right :: (Syntax f, IsTerm a, IsStage s) => Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
 right = rightWithSep (pure ())
 
-rightWithSep :: (Syntax f, IsTerm a, IsStage s) => f () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
-rightWithSep s _P p = foldRight _P <$> (_Cons <$> annotated p <*> many (s *> annotated p))
-
 left :: (Syntax f, IsTerm a, IsStage s) => Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
 left = leftWithSep (pure ())
-
-leftWithSep :: (Syntax f, IsTerm a, IsStage s) => f () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
-leftWithSep s _P p = foldLeft _P <$> (_Cons <$> annotated p <*> many (s *> annotated p))
 
 integer :: Syntax f => f Integer
 integer = match f (Token.Lit . Integer) where
@@ -368,36 +346,8 @@ qTy = poly <|> mono <|> expected "quantified type" where
 ty :: (Syntax f, IsStage s) => f (Type s)
 ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> expected "type"
 
--- special sauce to make op applications right associative, but normal applications left associative
--- &r ?v C t &r ?v t -> &r (?v ((((C t) &r) ?v) t))
-foldTy :: IsStage s => Prism (Type s) [Annotated s Type]
-foldTy = Prism (view value . fold) (Just . unfold . phantom) where
-  fold [x] = x
-  fold (x:xs)
-    | isTypeOp x  = let y = fold xs in (view source x <> view source y, Nothing) :< TypeApplyOp x y
-    | otherwise = foldLeft (x:xs)
-  foldLeft [x] = x
-  foldLeft (x:y:ys) = fold ((view source x <> view source y, Nothing) :< TypeApply x y : ys)
-  unfold x = case view value x of
-    TypeApplyOp x y -> x : unfold y
-    TypeApply _   _ -> unfoldLeft x
-    _               -> [x]
-  unfoldLeft x = case view value x of
-    TypeApply x y -> unfoldLeft x ++ [y]
-    _             -> [x]
-  isTypeOp :: Annotated s Type -> Bool
-  isTypeOp t = case view value t of
-    TypeIdentityOp -> True
-    TypeRef _      -> True
-    TypeSetOp _    -> True
-    TypeUni Ref _  -> True
-    TypeUni View _ -> True
-    TypeVar Ref _  -> True
-    TypeVar View _ -> True
-    _              -> False
-
 ty1 :: (Syntax f, IsStage s) => f (Type s)
-ty1 = foldTy <$> some (annotated ty0) <|> expected "type(1)" where
+ty1 = foldType ty0 <|> expected "type(1)" where
   ty0 =
     _TypeCon <$> conId <|>
     _TypeIdentityOp <$> reservedSym "@" <|>
@@ -451,7 +401,7 @@ alt :: (Syntax f, IsStage s) => f (Annotated s Pat, Annotated s Exp)
 alt = annotated pat <*> reservedSym "->" *> annotated exp <|> expected "case alternative"
 
 typeRequirement :: (Syntax f, IsStage s) => f (Requirement TypeConstraint s)
-typeRequirement = _Requirement <$> typeConstraint
+typeRequirement = _Requirement <$> annotated typeConstraint
 
 kindRequirement :: (Syntax f, IsStage s) => f (Requirement KindConstraint s)
-kindRequirement = _Requirement <$> kindConstraint
+kindRequirement = _Requirement <$> annotated kindConstraint

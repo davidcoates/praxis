@@ -120,13 +120,13 @@ mixfix definitions nodes precedence = exp where
     Closed  -> \[]    -> build src name ps
 
   build :: Source -> Name -> [Annotated Initial Exp] -> Annotated Initial Exp
-  build src name es = let es' = fold src es in (view source es', Nothing) :< Apply ((src, Nothing) :< Var name) es'
+  build src name es = let es' = fold src es in (view source es', ()) :< Apply ((src, ()) :< Var name) es'
 
   fold :: Source -> [Annotated Initial Exp] -> Annotated Initial Exp
   fold src = \case
-    []     -> (src, Nothing) :< Unit
+    []     -> (src, ()) :< Unit
     [e]    -> e
-    (e:es) -> let es' = fold src es in (view source e <> view source es', Nothing) :< Pair e es'
+    (e:es) -> let es' = fold src es in (view source e <> view source es', ()) :< Pair e es'
 
   trim :: Fixity -> [Maybe Name] -> [Maybe Name]
   trim = \case

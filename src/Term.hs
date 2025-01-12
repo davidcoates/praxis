@@ -6,6 +6,7 @@
 {-# LANGUAGE StrictData           #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeOperators        #-}
 
 
 module Term
@@ -52,6 +53,8 @@ module Term
   , source
   , annotation
   , phantom
+
+  , isTypeOp
   ) where
 
 import           Common
@@ -224,24 +227,16 @@ data TypeConstraint (s :: Stage)
   | TypeIsValue (Annotated s Type)
   deriving (Eq, Ord)
 
-infixl 8 `TypeIsEq`
-infixl 8 `TypeIsSub`
-
 data KindConstraint (s :: Stage)
   = KindIsEq (Annotated s Kind) (Annotated s Kind)
   | KindIsPlain (Annotated s Kind)
   | KindIsSub (Annotated s Kind) (Annotated s Kind)
   deriving (Eq, Ord)
 
-infixl 8 `KindIsEq`
-infixl 8 `KindIsSub`
-
-newtype Requirement a (s :: Stage) = Requirement (a s)
+newtype Requirement a (s :: Stage) = Requirement (Annotated s a)
   deriving (Eq, Ord)
 
 type family Annotation (s :: Stage) a where
-  Annotation Initial a = Void -- TODO remove?
-  Annotation Parse a = Void -- TODO remove?
   Annotation KindCheck Type = Annotated KindCheck Kind
   Annotation KindCheck TypePat = Annotated KindCheck Kind
   Annotation KindCheck DeclType = Annotated KindCheck Kind
@@ -250,19 +245,19 @@ type family Annotation (s :: Stage) a where
   Annotation TypeCheck Exp = Annotated TypeCheck Type
   Annotation TypeCheck Pat = Annotated TypeCheck Type
   Annotation TypeCheck (Requirement TypeConstraint) = TypeReason
-  Annotation s a = Void
+  Annotation s a = ()
 
 
-type Annotated (s :: Stage) a = Tag (Source, Maybe (Annotation s a)) (a s)
+type Annotated (s :: Stage) a = Tag (Source, Annotation s a) (a s)
 
 source :: Functor f => (Source -> f Source) -> Annotated s a -> f (Annotated s a)
 source = tag . first
 
-annotation :: Functor f => (Maybe (Annotation s a) -> f (Maybe (Annotation s a))) -> Annotated s a -> f (Annotated s a)
+annotation :: Functor f => (Annotation s a -> f (Annotation s a)) -> Annotated s a -> f (Annotated s a)
 annotation = tag . second
 
-phantom :: (a s) -> Annotated s a
-phantom x = (Phantom, Nothing) :< x
+phantom :: (Annotation s a ~ ()) => (a s) -> Annotated s a
+phantom x = (Phantom, ()) :< x
 
 data TypeReason
   = TypeReasonApply (Annotated TypeCheck Exp) (Annotated TypeCheck Exp)
@@ -292,3 +287,15 @@ data KindReason
   | KindReasonType (Annotated KindCheck Type)
   | KindReasonTypePat (Annotated KindCheck TypePat)
   deriving (Eq, Ord)
+
+-- TODO what about TypeApply?
+isTypeOp :: Annotated s Type -> Bool
+isTypeOp t = case view value t of
+  TypeIdentityOp -> True
+  TypeRef _      -> True
+  TypeSetOp _    -> True
+  TypeUni Ref _  -> True
+  TypeUni View _ -> True
+  TypeVar Ref _  -> True
+  TypeVar View _ -> True
+  _              -> False

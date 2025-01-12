@@ -53,9 +53,6 @@ module Common
 
   , PairT(..)
 
-  , Void
-  , absurd
-
   , fold
   , foldMapA
 
@@ -80,7 +77,6 @@ import           Data.Functor.Identity      (Identity (..))
 import           Data.Int
 import           Data.List                  (intercalate, intersperse, nub)
 import           Data.Traversable           (sequenceA)
-import           Data.Void                  (Void, absurd)
 import           Data.Word
 
 type Name  = String

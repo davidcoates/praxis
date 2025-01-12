@@ -111,7 +111,7 @@ getValue src name = do
      Nothing  -> throwAt Evaluate src ("unknown variable " <> pretty name)
 
 evalExp :: Annotated Exp -> Praxis Value
-evalExp ((src, Just t) :< exp) = case exp of
+evalExp ((src, t) :< exp) = case exp of
 
   Apply f x -> do
     Value.Fn f <- evalExp f
@@ -216,7 +216,7 @@ evalBind ((src, _) :< Bind pat exp) = do
   forceMatch src exp pat
 
 tryMatch :: Value -> Annotated Pat -> Maybe (Praxis ())
-tryMatch val ((_, Just t) :< pat) = case pat of
+tryMatch val ((_, t) :< pat) = case pat of
 
   PatAt name pat
     -> (\doMatch -> do { evalState . valueEnv %= Map.insert name val; doMatch }) <$> tryMatch val pat

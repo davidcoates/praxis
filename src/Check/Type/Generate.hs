@@ -55,8 +55,8 @@ generate term = ($ term) $ case typeof (view value term) of
   TypeConstraintT -> auto
   ty              -> error (show ty)
   where
-    auto :: (IsTerm a, Annotation TypeCheck a ~ Void) => Annotated KindCheck a -> Praxis (Annotated TypeCheck a)
-    auto ((src, _) :< term) = ((src, Nothing) :<) <$> recurseTerm generate term
+    auto :: (IsTerm a, Annotation TypeCheck a ~ ()) => Annotated KindCheck a -> Praxis (Annotated TypeCheck a)
+    auto ((src, _) :< term) = ((src, ()) :<) <$> recurseTerm generate term
 
 introCon :: Source -> Name -> Annotated TypeCheck QType -> Praxis ()
 introCon src name qTy = do
@@ -106,7 +106,7 @@ useVar src name = do
   (rename, usage, qTy) <- lookupVar src name
   (ty, specialization) <- specializeQType src name qTy
   unless (isJust specialization) $ do
-    requires [ (src, TypeReasonMultiUse name) :< copy ty | view usedCount usage > 0 ]
+    requires [ (src, TypeReasonMultiUse name) :< Requirement (copy ty) | view usedCount usage > 0 ]
   checkState . typeState . varEnv %= Map.adjust (\(usage, qTy) -> (over usedCount (+ 1) usage, qTy)) rename
   return (rename, ty, specialization)
 
@@ -134,17 +134,14 @@ scope src block = save (checkState . typeState . varRename . renames) $ do
   series [ throwAt TypeCheck src ("variable " <> pretty name <> " is not used") | name <- unusedVars ]
   return x
 
-require :: Tag (Source, TypeReason) (TypeConstraint TypeCheck) -> Praxis ()
-require ((src, reason) :< con) = checkState . typeState . typeSolve . requirements %= Set.insert ((src, Just reason) :< Requirement con)
+require :: Annotated TypeCheck (Requirement TypeConstraint) -> Praxis ()
+require requirement = checkState . typeState . typeSolve . requirements %= Set.insert requirement
 
-requires :: [Tag (Source, TypeReason) (TypeConstraint TypeCheck)] -> Praxis ()
+requires :: [Annotated TypeCheck (Requirement TypeConstraint)] -> Praxis ()
 requires = mapM_ require
 
-getType :: (IsTerm a, Annotation TypeCheck a ~ Annotated TypeCheck Type) => Annotated TypeCheck a -> Annotated TypeCheck Type
-getType term = view (annotation . just) term
-
 mono :: Annotated TypeCheck Type -> Annotated TypeCheck QType
-mono ty = (view source ty, Nothing) :< Mono ty
+mono ty = (view source ty, ()) :< Mono ty
 
 specializeTypePat :: Annotated TypeCheck TypePat -> Praxis (Name, Annotated TypeCheck Type)
 specializeTypePat (a :< TypePatVar f n) = (\ty -> (n, a :< view value ty)) <$> freshTypeUni f
@@ -161,7 +158,7 @@ specializeQType src name (_ :< qTy) = case qTy of
         TypeVar _  n -> n `lookup` vs'
         _            -> Nothing
     let specialization = zip vs (map snd vs')
-    requires [ (src, TypeReasonSpecialization name) :< view value (typeRewrite c) | c <- cs ]
+    requires [ (src, TypeReasonSpecialization name) :< Requirement (typeRewrite c) | c <- cs ]
     return (typeRewrite ty, Just specialization)
   Mono ty -> return (ty, Nothing)
 
@@ -187,8 +184,8 @@ closure src exp = do
   let captures = Map.toList $ Map.map (\((_, qTy), _) -> qTy) $ Map.filter (\((u1, _), (u2, _)) -> view usedCount u2 > view usedCount u1 || view readCount u2 > view readCount u1) $ Map.intersectionWith (,) env1 env2
 --  display "captures" (show (map fst captures)) `ifFlag` debug
   -- Note: copy restrictions do not apply to polymorphic terms
-  requires [ (src, TypeReasonCaptured name) :< capture ty | (name, (_ :< Mono t)) <- captures ]
-  return $ ty :< Capture captures ((src, Just ty) :< x)
+  requires [ (src, TypeReasonCaptured name) :< Requirement (capture ty) | (name, (_ :< Mono t)) <- captures ]
+  return $ ty :< Capture captures ((src, ty) :< x)
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc
@@ -228,7 +225,7 @@ generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
 
 
 generateDeclType :: Annotated KindCheck DeclType -> Praxis (Annotated TypeCheck DeclType)
-generateDeclType (a@(src, Just kind) :< ty) = ((src, Nothing) :<) <$> case ty of
+generateDeclType (a@(src, kind) :< ty) = ((src, ()) :<) <$> case ty of
 
   DeclTypeData mode name typePats alts -> do
     typePats <- traverse generate typePats
@@ -236,7 +233,7 @@ generateDeclType (a@(src, Just kind) :< ty) = ((src, Nothing) :<) <$> case ty of
       -- The return type of the constructors
       retTy :: Annotated TypeCheck Type
       retTy = foldl (\t1 t2 -> phantom (TypeApply t1 t2)) (phantom (TypeCon name)) (map typePatToType typePats) where
-        typePatToType ((src, _) :< TypePatVar flavor name) = (src, Nothing) :< TypeVar flavor name
+        typePatToType ((src, _) :< TypePatVar flavor name) = (src, ()) :< TypeVar flavor name
 
       buildConType :: Annotated TypeCheck Type -> Annotated TypeCheck QType
       buildConType argTy = case typePats of
@@ -244,11 +241,11 @@ generateDeclType (a@(src, Just kind) :< ty) = ((src, Nothing) :<) <$> case ty of
         _  -> phantom (Forall typePats [] (phantom (TypeFn argTy retTy)))
 
       generateDataCon :: Annotated KindCheck DataCon -> Praxis (Annotated TypeCheck DataCon)
-      generateDataCon ((src, Nothing) :< DataCon name argTy) = do
+      generateDataCon ((src, ()) :< DataCon name argTy) = do
         argTy <- generate argTy
         let qTy = buildConType argTy
         introCon src name qTy
-        return ((src, Just qTy) :< DataCon name argTy)
+        return ((src, qTy) :< DataCon name argTy)
 
     alts <- traverse generateDataCon alts
     return $ DeclTypeData mode name typePats alts
@@ -263,7 +260,7 @@ generateDeclTerm ::Annotated KindCheck DeclTerm -> Praxis (Annotated TypeCheck D
 generateDeclTerm = generateDeclTerm' Nothing
 
 generateDeclTerm' :: Maybe (Annotated TypeCheck QType) -> Annotated KindCheck DeclTerm -> Praxis (Annotated TypeCheck DeclTerm)
-generateDeclTerm' forwardTy (a@(src, _) :< decl) = ((src, Nothing) :<) <$> case decl of
+generateDeclTerm' forwardTy (a@(src, _) :< decl) = ((src, ()) :<) <$> case decl of
 
   DeclTermVar name sig exp -> do
       sig <- traverse generate sig
@@ -273,15 +270,15 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = ((src, Nothing) :<) <$> case 
           exp <- generate exp
           case forwardTy of
             Just (_ :< Mono ty) -> do
-              require $ (src, TypeReasonFunctionCongruence name sig) :< (ty `TypeIsEq` getType exp)
+              require $ (src, TypeReasonFunctionCongruence name sig) :< Requirement (phantom (TypeIsEq ty (view annotation exp)))
               return $ DeclTermVar name Nothing exp
             Nothing             -> do
-              rename <- introVar src name (mono (getType exp))
+              rename <- introVar src name (mono (view annotation exp))
               return $ DeclTermVar rename Nothing exp
 
         Just sig'@(_ :< Mono ty) -> do
           exp <- generateExp exp
-          require $ (src, TypeReasonFunctionCongruence name sig) :< (ty `TypeIsEq` getType exp)
+          require $ (src, TypeReasonFunctionCongruence name sig) :< Requirement (phantom (TypeIsEq ty (view annotation exp)))
           case forwardTy of
             Just _  -> do
               -- forwardTy is sig, so a FnCongruence constraint is redundant (covered by the above FnSignature constraint)
@@ -293,7 +290,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = ((src, Nothing) :<) <$> case 
         Just sig'@(_ :< Forall vs cs ty) -> do
           assumeFromQType vs cs -- constraints in the signature are added as assumptions
           exp <- generateExp exp
-          require $ (src, TypeReasonFunctionCongruence name sig) :< (ty `TypeIsEq` getType exp)
+          require $ (src, TypeReasonFunctionCongruence name sig) :< Requirement (phantom (TypeIsEq ty (view annotation exp)))
           case forwardTy of
             Just _  -> do
               -- forwardTy is sig, so a FnCongruence constraint is redundant (covered by the above FnSignature constraint)
@@ -306,27 +303,26 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = ((src, Nothing) :<) <$> case 
 generateInteger :: Source -> Integer -> Praxis (Annotated TypeCheck Type)
 generateInteger src n = do
   ty <- freshTypeUni Value
-  require $ (src, TypeReasonIntegerLiteral n) :< integral ty
-  require $ (src, TypeReasonIntegerLiteral n) :< TypeIsIntegralOver ty n
+  require $ (src, TypeReasonIntegerLiteral n) :< Requirement (integral ty)
+  require $ (src, TypeReasonIntegerLiteral n) :< Requirement (phantom (TypeIsIntegralOver ty n))
   return $ ty
 
 generateExp :: Annotated KindCheck Exp -> Praxis (Annotated TypeCheck Exp)
-generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, Just ty) :< exp) <$> case exp of
+generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case exp of
 
   Apply exp1 exp2 -> do
     retTy <- freshTypeUni Plain
     exp1 <- generateExp exp1
     exp2 <- generateExp exp2
-    require $ (src, TypeReasonApply exp1 exp2) :< (getType exp1 `TypeIsEq` (phantom (TypeFn (getType exp2) retTy)))
+    require $ (src, TypeReasonApply exp1 exp2) :< Requirement (phantom (TypeIsEq (view annotation exp1) (phantom (TypeFn (view annotation exp2) retTy))))
     return (retTy :< Apply exp1 exp2)
 
   Case exp alts -> do
     exp <- generateExp exp
-    let expTy = getType exp
     alts <- parallel src (map generateAlt alts)
     ty1 <- equals (map fst alts) TypeReasonCaseCongruence
     ty2 <- equals (map snd alts) TypeReasonCaseCongruence
-    require $ (src, TypeReasonCaseCongruence) :< (expTy `TypeIsEq` ty1) -- TODO probably should pick a better name for this
+    require $ (src, TypeReasonCaseCongruence) :< Requirement (phantom (TypeIsEq (view annotation exp) ty1)) -- TODO probably should pick a better name for this
     return (ty2 :< Case exp alts)
 
   Cases alts -> closure src $ do
@@ -340,31 +336,31 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, Just ty) :< exp) <$> ca
     qTy <- lookupCon src name
     (ty, specialization) <- specializeQType src name qTy
     case specialization of
-      Just specialization -> return (ty :< Specialize ((src, Just ty) :< Con name) specialization)
+      Just specialization -> return (ty :< Specialize ((src, ty) :< Con name) specialization)
       Nothing             -> return (ty :< Con name)
 
   Defer exp1 exp2 -> do
     exp1 <- generateExp exp1
     exp2 <- generateExp exp2
-    return (getType exp1 :< Defer exp1 exp2)
+    return (view annotation exp1 :< Defer exp1 exp2)
 
   If condExp thenExp elseExp -> do
     condExp <- generateExp condExp
     (thenExp, elseExp) <- join src (generateExp thenExp) (generateExp elseExp)
-    require $ (src, TypeReasonIfCondition) :< (getType condExp `TypeIsEq` phantom (TypeCon "Bool"))
-    require $ (src, TypeReasonIfCongruence) :< (getType thenExp `TypeIsEq` getType elseExp)
-    return (getType thenExp :< If condExp thenExp elseExp)
+    require $ (src, TypeReasonIfCondition) :< Requirement (phantom (TypeIsEq (view annotation condExp) (phantom (TypeCon "Bool"))))
+    require $ (src, TypeReasonIfCongruence) :< Requirement (phantom (TypeIsEq (view annotation thenExp) (view annotation elseExp)))
+    return (view annotation thenExp :< If condExp thenExp elseExp)
 
   Lambda pat exp -> closure src $ do
     pat <- generatePat pat
     exp <- generateExp exp
-    let ty = phantom (TypeFn (getType pat) (getType exp))
+    let ty = phantom (TypeFn (view annotation pat) (view annotation exp))
     return (ty :< Lambda pat exp)
 
   Let bind exp -> scope src $ do
     bind <- generateBind bind
     exp <- generateExp exp
-    return (getType exp :< Let bind exp)
+    return (view annotation exp :< Let bind exp)
 
   -- TODO pull from environment?
   Lit lit -> ((\ty -> ty :< Lit lit) <$>) $ case lit of
@@ -386,30 +382,30 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, Just ty) :< exp) <$> ca
     Just (usage, _) <- (checkState . typeState . varEnv) `uses` Map.lookup rename
     unless (view usedCount usage > 0) $ throwAt TypeCheck src ("variable " <> pretty name <> " is not used in read")
     checkState . typeState . varEnv %= Map.adjust (const (usage, qTy)) rename
-    let ty = getType exp
-    require $ (src, TypeReasonRead name) :< TypeIsRefFree ty refName
+    let ty = view annotation exp
+    require $ (src, TypeReasonRead name) :< Requirement (phantom (TypeIsRefFree ty refName))
     return (ty :< Read rename exp)
 
   Pair exp1 exp2 -> do
     exp1 <- generateExp exp1
     exp2 <- generateExp exp2
-    let ty = phantom (TypePair (getType exp1) (getType exp2))
+    let ty = phantom (TypePair (view annotation exp1) (view annotation exp2))
     return (ty :< Pair exp1 exp2)
 
   Seq exp1 exp2 -> do
     exp1 <- generateExp exp1
     exp2 <- generateExp exp2
-    return (getType exp2 :< Seq exp1 exp2)
+    return (view annotation exp2 :< Seq exp1 exp2)
 
   Sig exp ty -> do
     exp <- generateExp exp
     ty <- generate ty
-    require $ (src, TypeReasonSignature ty) :< (getType exp `TypeIsSub` ty)
+    require $ (src, TypeReasonSignature ty) :< Requirement (phantom (TypeIsSub (view annotation exp) ty))
     return (ty :< Sig exp ty)
 
   Switch alts -> do
     conditions <- sequence (map (generateExp . fst) alts)
-    requires [ (view source condition, TypeReasonSwitchCondition) :< (getType condition `TypeIsEq` phantom (TypeCon "Bool"))  | condition <- conditions ]
+    requires [ (src, TypeReasonSwitchCondition) :< Requirement (phantom (TypeIsEq ty (phantom (TypeCon "Bool")))) | ((src, ty) :< _) <- conditions ]
     exps <- parallel src (map (generateExp . snd) alts)
     ty <- equals exps TypeReasonSwitchCongruence
     return (ty :< Switch (zip conditions exps))
@@ -421,25 +417,25 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, Just ty) :< exp) <$> ca
   Var name -> do
     (rename, ty, specialization) <- useVar src name
     case specialization of
-      Just specialization -> return (ty :< Specialize ((src, Just ty) :< Var rename) specialization)
+      Just specialization -> return (ty :< Specialize ((src, ty) :< Var rename) specialization)
       Nothing             -> return (ty :< Var rename)
 
   Where exp decls -> scope src $ do
     decls <- traverse generateDeclTerm decls
     exp <- generateExp exp
-    return (getType exp :< Where exp decls)
+    return (view annotation exp :< Where exp decls)
 
 
 equals :: (IsTerm a, Annotation TypeCheck a ~ Annotated TypeCheck Type) => [Annotated TypeCheck a] -> TypeReason -> Praxis (Annotated TypeCheck Type)
-equals exps = equals' $ map (\((src, Just ty) :< _) -> (src, ty)) exps where
+equals exps = equals' $ map (\((src, ty) :< _) -> (src, ty)) exps where
   equals' :: [(Source, Annotated TypeCheck Type)] -> TypeReason -> Praxis (Annotated TypeCheck Type)
-  equals' ((_, ty):tys) reason = requires [ (src, reason) :< (ty `TypeIsEq` ty') | (src, ty') <- tys ] >> return ty
+  equals' ((_, ty):tys) reason = requires [ (src, reason) :< Requirement (phantom (TypeIsEq ty ty')) | (src, ty') <- tys ] >> return ty
 
 generateBind :: Annotated KindCheck Bind -> Praxis (Annotated TypeCheck Bind)
 generateBind (a@(src, _) :< Bind pat exp) = do
   exp <- generateExp exp
   pat <- generatePat pat
-  require $ (src, TypeReasonBind pat exp) :< (getType pat `TypeIsEq` getType exp)
+  require $ (src, TypeReasonBind pat exp) :< Requirement (phantom (TypeIsEq (view annotation pat) (view annotation exp)))
   return (a :< Bind pat exp)
 
 generateAlt ::  (Annotated KindCheck Pat, Annotated KindCheck Exp) -> Praxis (Annotated TypeCheck Pat, Annotated TypeCheck Exp)
@@ -451,7 +447,7 @@ generateAlt (pat, exp) = scope (view source pat) $ do
 generatePat :: Annotated KindCheck Pat -> Praxis (Annotated TypeCheck Pat)
 generatePat pat = do
   let names = extract (embedMonoid f) pat
-      f = \case
+      f (_ :< pat) = case pat of
         PatVar n  -> [n]
         PatAt n _ -> [n]
         _         -> []
@@ -460,12 +456,12 @@ generatePat pat = do
   return pat
 
 generatePat' :: (Annotated TypeCheck Type -> Annotated TypeCheck Type) -> Annotated KindCheck Pat -> Praxis (Annotated TypeCheck Type, Annotated TypeCheck Pat, Bool)
-generatePat' wrap ((src, _) :< pat) = (\(ty, pat, aliased) -> (ty, (src, Just (wrap ty)) :< pat, aliased)) <$> case pat of
+generatePat' wrap ((src, _) :< pat) = (\(ty, pat, aliased) -> (ty, (src, wrap ty) :< pat, aliased)) <$> case pat of
 
   PatAt name pat -> do
     (ty, pat, aliased) <- generatePat' wrap pat
     rename <- introVar src name (mono ty)
-    when aliased $ require $ (src, TypeReasonMultiAlias name) :< copy ty
+    when aliased $ require $ (src, TypeReasonMultiAlias name) :< Requirement (copy ty)
     return (ty, PatAt rename pat, True)
 
   PatData name pat -> do
@@ -474,8 +470,8 @@ generatePat' wrap ((src, _) :< pat) = (\(ty, pat, aliased) -> (ty, (src, Just (w
     case conTy of
       (_ :< TypeFn argTy retTy) -> do
         layer <- freshLayer
-        (patArgType, pat, aliased) <- generatePat' (wrap . layer) pat
-        require $ (src, TypeReasonConstructor name) :< (patArgType `TypeIsEq` argTy)
+        (patArgTy, pat, aliased) <- generatePat' (wrap . layer) pat
+        require $ (src, TypeReasonConstructor name) :< Requirement (phantom (TypeIsEq patArgTy argTy))
         return (layer retTy, PatData name pat, aliased)
       _ -> throwAt TypeCheck src $ "missing argument in constructor pattern " <> pretty name
 

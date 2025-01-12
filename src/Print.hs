@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE InstanceSigs          #-}
 
 module Print
   (
@@ -47,6 +48,30 @@ instance Syntax Printer where
     Just xs -> Just (Annotation (label x) : xs)
   internal = id
 
+  rightWithSep :: forall a s. (IsTerm a, IsStage s) => Printer () -> Prism (a s) (Annotated s a, Annotated s a) -> Printer (a s) -> Printer (a s)
+  rightWithSep s _P p = Printer unfold Syntax.<|> p where
+    unfold x = case destruct _P x of
+      Just (a1 :< x1, a2 :< x2) -> Just $ (Annotation (label (a1 :< x1)) : force p x1) ++ force s () ++ (Annotation (label (a2 :< x2)) : force (Syntax.rightWithSep s _P p) x2)
+      Nothing -> Nothing
+
+  leftWithSep :: forall a s. (IsTerm a, IsStage s) => Printer () -> Prism (a s) (Annotated s a, Annotated s a) -> Printer (a s) -> Printer (a s)
+  leftWithSep s _P p = Printer unfold Syntax.<|> p where
+    unfold x = case destruct _P x of
+      Just (a1 :< x1, a2 :< x2) -> Just $ (Annotation (label (a1 :< x1)) : force (Syntax.leftWithSep s _P p) x1) ++ force s () ++ (Annotation (label (a2 :< x2)) : force p x2)
+      Nothing -> Nothing
+
+  foldType :: forall s. (IsStage s) => Printer (Type s) -> Printer (Type s)
+  foldType p = Printer (Just . unfold) where
+    unfold :: Type s -> [Token]
+    unfold x = case x of
+      TypeApplyOp (a1 :< x1) (a2 :< x2) -> (Annotation (label (a1 :< x1)) : force p x1) ++ (Annotation (label (a2 :< x2)) : unfold x2)
+      TypeApply _ _ -> unfoldLeft x
+      _ -> force p x
+    unfoldLeft :: Type s -> [Token]
+    unfoldLeft x = case x of
+      TypeApply (a1 :< x1) (a2 :< x2) -> (Annotation (label (a1 :< x1)) : unfoldLeft x1) ++ (Annotation (label (a2 :< x2)) : force p x2)
+      _ -> force p x
+
 
 indent :: Int -> String
 indent n = replicate (2*n) ' '
@@ -75,7 +100,7 @@ layout ts = layout' (-1) Colored.Nil ts where
     [] -> Colored.Nil
 
 
-instance (IsTerm a, IsStage s, x ~ Annotation s a) => Pretty (Tag (Source, Maybe x) (a s)) where
+instance (IsTerm a, IsStage s, x ~ Annotation s a) => Pretty (Tag (Source, x) (a s)) where
   pretty x = layout (force (Syntax.annotated (syntax (termT :: TermT a))) x)
 
 -- Do not show the label for compositional structures where the label of the parent is obvious from the label of the children.
@@ -101,52 +126,24 @@ hideLabel x = case typeof x of
   _ -> False
 
 label :: forall a s. (IsTerm a, IsStage s) => Annotated s a -> Colored String
-label ((s, a) :< x) = case a of
-  Just a | not (hideLabel x) -> let stage = (stageT :: StageT s) in case termT :: TermT a of
-    ExpT -> ($ a) $ case stage of
-      InitialT   -> absurd
-      ParseT     -> absurd
-      KindCheckT -> absurd
-      TypeCheckT -> pretty
-      EvaluateT  -> absurd
-    DataConT -> ($ a) $ case stage of
-      InitialT   -> absurd
-      ParseT     -> absurd
-      KindCheckT -> absurd
-      TypeCheckT -> pretty
-      EvaluateT  -> absurd
-    KindRequirementT -> ($ a) $ case stage of
-      InitialT   -> absurd
-      ParseT     -> absurd
-      KindCheckT -> pretty
-      TypeCheckT -> absurd
-      EvaluateT  -> absurd
-    PatT -> ($ a) $ case stage of
-      InitialT   -> absurd
-      ParseT     -> absurd
-      KindCheckT -> absurd
-      TypeCheckT -> pretty
-      EvaluateT  -> absurd
-    TypeT -> ($ a) $ case stage of
-      InitialT   -> absurd
-      ParseT     -> absurd
-      KindCheckT -> pretty
-      TypeCheckT -> absurd
-      EvaluateT  -> absurd
-    TypePatT -> ($ a) $ case stage of
-      InitialT   -> absurd
-      ParseT     -> absurd
-      KindCheckT -> pretty
-      TypeCheckT -> absurd
-      EvaluateT  -> absurd
-    TypeRequirementT -> ($ a) $ case stage of
-      InitialT   -> absurd
-      ParseT     -> absurd
-      KindCheckT -> absurd
-      TypeCheckT -> pretty
-      EvaluateT  -> absurd
+label ((s, a) :< x)
+  | hideLabel x = Colored.Nil
+  | otherwise = let stage = (stageT :: StageT s) in case termT :: TermT a of
+    ExpT
+      | TypeCheckT <- stage -> pretty a
+    DataConT
+      | TypeCheckT <- stage -> pretty a
+    KindRequirementT
+      | KindCheckT <- stage -> pretty a
+    PatT
+      | TypeCheckT <- stage -> pretty a
+    TypeT
+      | KindCheckT <- stage -> pretty a
+    TypePatT
+      | KindCheckT <- stage -> pretty a
+    TypeRequirementT
+      | TypeCheckT <- stage -> pretty a
     _ -> Colored.Nil
-  _ -> Colored.Nil
 
 instance Pretty TypeReason where
   pretty = \case

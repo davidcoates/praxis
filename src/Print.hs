@@ -1,11 +1,11 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE InstanceSigs          #-}
 
 module Print
   (
@@ -31,6 +31,9 @@ force (Printer f) x = case f x of
   Nothing -> []
   Just xs -> xs
 
+noLabel :: Source
+noLabel = Source (Pos (-1) (-1)) (Pos (-1) (-1))
+
 instance Syntax Printer where
   f <$> g = Printer $ \x -> case destruct f x of
     Nothing -> Nothing
@@ -45,33 +48,9 @@ instance Syntax Printer where
   expected err = Printer (error err)
   annotated (Printer f) = Printer $ \x -> case f (view value x) of
     Nothing -> Nothing
-    Just xs -> Just (Annotation (label x) : xs)
+    Just xs -> if view source x == noLabel then Just xs else Just (Annotation (label x) : xs)
+  unannotated (Printer f) = Printer $ \x -> f ((noLabel, undefined) :< x) -- FIXME very hacky!
   internal = id
-
-  rightWithSep :: forall a s. (IsTerm a, IsStage s) => Printer () -> Prism (a s) (Annotated s a, Annotated s a) -> Printer (a s) -> Printer (a s)
-  rightWithSep s _P p = Printer unfold Syntax.<|> p where
-    unfold x = case destruct _P x of
-      Just (a1 :< x1, a2 :< x2) -> Just $ (Annotation (label (a1 :< x1)) : force p x1) ++ force s () ++ (Annotation (label (a2 :< x2)) : force (Syntax.rightWithSep s _P p) x2)
-      Nothing -> Nothing
-
-  leftWithSep :: forall a s. (IsTerm a, IsStage s) => Printer () -> Prism (a s) (Annotated s a, Annotated s a) -> Printer (a s) -> Printer (a s)
-  leftWithSep s _P p = Printer unfold Syntax.<|> p where
-    unfold x = case destruct _P x of
-      Just (a1 :< x1, a2 :< x2) -> Just $ (Annotation (label (a1 :< x1)) : force (Syntax.leftWithSep s _P p) x1) ++ force s () ++ (Annotation (label (a2 :< x2)) : force p x2)
-      Nothing -> Nothing
-
-  foldType :: forall s. (IsStage s) => Printer (Type s) -> Printer (Type s)
-  foldType p = Printer (Just . unfold) where
-    unfold :: Type s -> [Token]
-    unfold x = case x of
-      TypeApplyOp (a1 :< x1) (a2 :< x2) -> (Annotation (label (a1 :< x1)) : force p x1) ++ (Annotation (label (a2 :< x2)) : unfold x2)
-      TypeApply _ _ -> unfoldLeft x
-      _ -> force p x
-    unfoldLeft :: Type s -> [Token]
-    unfoldLeft x = case x of
-      TypeApply (a1 :< x1) (a2 :< x2) -> (Annotation (label (a1 :< x1)) : unfoldLeft x1) ++ (Annotation (label (a2 :< x2)) : force p x2)
-      _ -> force p x
-
 
 indent :: Int -> String
 indent n = replicate (2*n) ' '

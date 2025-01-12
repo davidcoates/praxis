@@ -5,8 +5,8 @@
 {-# LANGUAGE Strict               #-}
 {-# LANGUAGE StrictData           #-}
 {-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 
 module Term

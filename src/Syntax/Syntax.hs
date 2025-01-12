@@ -52,13 +52,8 @@ class Syntax f where
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   expected :: String -> f a
   annotated :: (IsTerm a, IsStage s) => f (a s) -> f (Annotated s a)
-
-  -- here be hacks... FIXME
+  unannotated :: (IsTerm a, IsStage s) => f (Annotated s a) -> f (a s)
   internal :: f a -> f a -- for internal constructs, supports printing but not parsing
-  rightWithSep :: (IsTerm a, IsStage s) => f () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
-  leftWithSep :: (IsTerm a, IsStage s) => f () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
-  -- special sauce to make op applications right associative, but normal applications left associative e.g. &r ?v C t &r ?v t -> &r (?v ((((C t) &r) ?v) t))
-  foldType :: (IsStage s) => f (Type s) -> f (Type s)
 
 
 _Cons :: Prism [a] (a, [a])
@@ -66,7 +61,6 @@ _Cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})
 
 _Nil :: Prism [a] ()
 _Nil = Prism (const []) (\case { [] -> Just (); _ -> Nothing })
-
 
 definePrisms ''Maybe
 

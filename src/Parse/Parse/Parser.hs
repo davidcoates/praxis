@@ -39,7 +39,6 @@ instance Syntax Parser where
   annotated :: forall a s. (IsTerm a, IsStage s) => Parser (a s) -> Parser (Annotated s a)
   annotated (Parser p) = case stageT :: StageT s of
     InitialT -> Parser ((\(s :< x) -> s :< ((s, ()) :< x)) <$> p)
-  unannotated (Parser p) = Parser ((\(s :< (_ :< x)) -> (s :< x)) <$> p)
   internal = const (Parser empty)
 
 run :: Pretty a => Parser a -> [Sourced Token] -> Praxis a

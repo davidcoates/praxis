@@ -52,7 +52,6 @@ class Syntax f where
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   expected :: String -> f a
   annotated :: (IsTerm a, IsStage s) => f (a s) -> f (Annotated s a)
-  unannotated :: (IsTerm a, IsStage s) => f (Annotated s a) -> f (a s)
   internal :: f a -> f a -- for internal constructs, supports printing but not parsing
 
 

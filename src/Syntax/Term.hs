@@ -214,27 +214,57 @@ blank :: forall a s. StageT s -> TermT a -> Annotation s a
 blank stage _ = case stage of
   InitialT -> ()
 
-foldRight :: forall a s. (IsTerm a, IsStage s) => Prism (a s) (Annotated s a, Annotated s a) -> Prism (Annotated s a) [Annotated s a]
-foldRight _P = Prism fold (Just . unfold) where
+foldRight :: forall a s. (IsTerm a, IsStage s) => Prism (a s) (Annotated s a, Annotated s a) -> Prism (a s) [Annotated s a]
+foldRight _P = Prism (view value . fold) unfold where
   fold [x]    = x
   fold (x:xs) = let y = fold xs in (view source x <> view source y, blank (stageT :: StageT s) (termT :: TermT a)) :< construct _P (x, y)
-  unfold x = case destruct _P (view value x) of
-    Just (x, y) -> x : unfold y
+  unfold  x = case destruct _P x of
+    Just (x, y) -> Just (x : unfold' y)
+    Nothing     -> Nothing
+  unfold' x = case destruct _P (view value x) of
+    Just (x, y) -> x : unfold' y
     Nothing     -> [x]
 
-foldLeft :: forall a s. (IsTerm a, IsStage s) => Prism (a s) (Annotated s a, Annotated s a) -> Prism (Annotated s a) [Annotated s a]
-foldLeft _P = Prism fold (Just . unfold) where
+foldLeft :: forall a s. (IsTerm a, IsStage s) => Prism (a s) (Annotated s a, Annotated s a) -> Prism (a s) [Annotated s a]
+foldLeft _P = Prism (view value . fold) unfold where
   fold [x]      = x
   fold (x:y:ys) = fold ((view source x <> view source y, blank (stageT :: StageT s) (termT :: TermT a)) :< construct _P (x, y) : ys)
-  unfold x = case destruct _P (view value x) of
-    Just (x, y) -> unfold x ++ [y]
+  unfold x = case destruct _P x of
+    Just (x, y) -> Just (unfold' x ++ [y])
+    Nothing     -> Nothing
+  unfold' x = case destruct _P (view value x) of
+    Just (x, y) -> unfold' x ++ [y]
     Nothing     -> [x]
 
 rightWithSep :: (Syntax f, IsTerm a, IsStage s) => f () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
-rightWithSep s _P p = unannotated $ foldRight _P <$> (_Cons <$> annotated p <*> many (s *> annotated p))
+rightWithSep s _P p = foldRight _P <$> (_Cons <$> annotated p <*> many (s *> annotated p)) <|> internal p where
+  f x = case destruct _P x of
+    Just (_, _) -> Just (undefined :< x)
+    Nothing     -> Nothing
 
 leftWithSep :: (Syntax f, IsTerm a, IsStage s) => f () -> Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f (a s)
-leftWithSep s _P p = unannotated $ foldLeft _P <$> (_Cons <$> annotated p <*> many (s *> annotated p))
+leftWithSep s _P p = foldLeft _P <$> (_Cons <$> annotated p <*> many (s *> annotated p)) <|> internal p where
+  f x = case destruct _P x of
+    Just (_, _) -> Just (undefined :< x)
+    Nothing     -> Nothing
+
+-- special sauce to make op applications right associative, but normal applications left associative e.g. &r ?v C t &r ?v t -> &r (?v ((((C t) &r) ?v) t))
+foldType :: forall s. (IsStage s) => Prism (Type s) [Annotated s Type]
+foldType = Prism (view value . fold) unfold where
+  fold [x] = x
+  fold (x:xs)
+    | isTypeOp x = let y = fold xs in (view source x <> view source y, blank (stageT :: StageT s) TypeT) :< TypeApplyOp x y
+    | otherwise = foldLeft (x:xs)
+  foldLeft [x] = x
+  foldLeft (x:y:ys) = fold ((view source x <> view source y, blank (stageT :: StageT s) TypeT) :< TypeApply x y : ys)
+  unfold x = case x of
+    TypeApplyOp x y -> Just (x : unfold' y)
+    TypeApply x y   -> Just (unfold' x ++ [y])
+    _               -> Nothing
+  unfold' x = case view value x of
+    TypeApplyOp x y -> x : unfold' y
+    TypeApply x y   -> unfold' x ++ [y]
+    _               -> [x]
 
 integer :: Syntax f => f Integer
 integer = match f (Token.Lit . Integer) where
@@ -375,25 +405,8 @@ qTy = poly <|> mono <|> expected "quantified type" where
 ty :: (Syntax f, IsStage s) => f (Type s)
 ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> expected "type"
 
--- special sauce to make op applications right associative, but normal applications left associative e.g. &r ?v C t &r ?v t -> &r (?v ((((C t) &r) ?v) t))
-foldType :: forall s. (IsStage s) => Prism (Annotated s Type) [Annotated s Type]
-foldType = Prism fold (Just . unfold) where
-  fold [x] = x
-  fold (x:xs)
-    | isTypeOp x = let y = fold xs in (view source x <> view source y, blank (stageT :: StageT s) TypeT) :< TypeApplyOp x y
-    | otherwise = foldLeft (x:xs)
-  foldLeft [x] = x
-  foldLeft (x:y:ys) = fold ((view source x <> view source y, blank (stageT :: StageT s) TypeT) :< TypeApply x y : ys)
-  unfold x = case view value x of
-    TypeApplyOp x y -> x : unfold y
-    TypeApply _ _   -> unfoldLeft x
-    _               -> [x]
-  unfoldLeft x = case view value x of
-    TypeApply x y -> unfold x ++ [y]
-    _             -> [x]
-
 ty1 :: (Syntax f, IsStage s) => f (Type s)
-ty1 = unannotated (foldType <$> some (annotated ty0)) <|> expected "type(1)" where
+ty1 = (foldType <$> some (annotated ty0)) <|> internal ty0 <|> expected "type(1)" where
   ty0 =
     _TypeCon <$> conId <|>
     _TypeIdentityOp <$> reservedSym "@" <|>

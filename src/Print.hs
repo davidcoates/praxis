@@ -24,15 +24,13 @@ import           Term
 import           Token
 
 
+
 newtype Printer a = Printer { runPrinter :: a -> Maybe [Token] }
 
 force :: Printer a -> a -> [Token]
 force (Printer f) x = case f x of
   Nothing -> []
   Just xs -> xs
-
-noLabel :: Source
-noLabel = Source (Pos (-1) (-1)) (Pos (-1) (-1))
 
 instance Syntax Printer where
   f <$> g = Printer $ \x -> case destruct f x of
@@ -48,8 +46,7 @@ instance Syntax Printer where
   expected err = Printer (error err)
   annotated (Printer f) = Printer $ \x -> case f (view value x) of
     Nothing -> Nothing
-    Just xs -> if view source x == noLabel then Just xs else Just (Annotation (label x) : xs)
-  unannotated (Printer f) = Printer $ \x -> f ((noLabel, undefined) :< x) -- FIXME very hacky!
+    Just xs -> Just (Annotation (label x) : xs)
   internal = id
 
 indent :: Int -> String

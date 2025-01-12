@@ -1,6 +1,3 @@
-{-# LANGUAGE RankNTypes      #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module Praxis
   ( Praxis
   , liftIOUnsafe
@@ -8,6 +5,7 @@ module Praxis
   where
 
 import           Common
+
 
 data PraxisState
 

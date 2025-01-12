@@ -1,10 +1,6 @@
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE ImpredicativeTypes   #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TupleSections        #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 module Check.Type.Solve
   ( assumeFromQType

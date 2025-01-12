@@ -50,9 +50,9 @@ instance Alternative Parser where
 
 run :: Source -> Parser (Annotated Initial Exp) -> [Annotated Initial Tok] -> Praxis (Annotated Initial Exp)
 run src exp ts = case runParser (exp <* eof) ts of
-  []        -> throwAt Parse src "no mixfix parse"
+  []        -> throwAt Parse src ("no mixfix parse" :: String)
   [(a, [])] -> return a
-  (a:b:_)   -> throwAt Parse src "ambiguous mixfix parse" -- TODO provide more information here, say the first two parses?
+  (a:b:_)   -> throwAt Parse src ("ambiguous mixfix parse" :: String) -- TODO provide more information here, say the first two parses?
 
 -- The transitive closure of a precedence graph
 closure :: Graph -> Graph

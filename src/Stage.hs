@@ -9,6 +9,7 @@ module Stage
   , stageToEnum
   ) where
 
+
 data Stage
   = Initial
   | Parse

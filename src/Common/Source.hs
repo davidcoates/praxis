@@ -1,5 +1,3 @@
-{-# LANGUAGE NamedFieldPuns #-}
-
 module Common.Source
   ( Pos(..)
   , Source(..)
@@ -23,8 +21,7 @@ instance Show Pos where
 
 instance Show Source where
   show = \case
-    Phantom          -> "<?>"
-    Source { start } -> show start
+    Source { start = start } -> show start
 
 -- TODO this is partial
 instance Semigroup Source where

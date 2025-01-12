@@ -1,6 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Parse.Parser
   ( Parser
@@ -18,6 +16,7 @@ import           Control.Applicative (Alternative (..))
 import           Control.Arrow       (right)
 import           Control.Lens        (makeLenses)
 import           Data.Maybe          (fromMaybe)
+
 
 data Error = Expected String
            | Skip

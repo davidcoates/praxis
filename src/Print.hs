@@ -1,11 +1,5 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE InstanceSigs          #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Print
   (
@@ -22,7 +16,6 @@ import           Syntax.Syntax        (Syntax)
 import           Syntax.Term
 import           Term
 import           Token
-
 
 
 newtype Printer a = Printer { runPrinter :: a -> Maybe [Token] }

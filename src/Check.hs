@@ -12,5 +12,6 @@ import           Praxis
 import           Stage
 import           Term
 
+
 run :: IsTerm a => Annotated Parse a -> Praxis (Annotated TypeCheck a)
 run term = Kind.run term >>= Type.run

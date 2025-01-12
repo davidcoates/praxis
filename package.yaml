@@ -34,7 +34,11 @@ dependencies:
 
 library:
   source-dirs: src
-  default-extensions: LambdaCase
+  default-extensions:
+  - LambdaCase
+  - ScopedTypeVariables
+  - OverloadedStrings
+  - TypeOperators
   ghc-options:
   - -O2
 

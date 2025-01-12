@@ -1,7 +1,3 @@
-{-# LANGUAGE DeriveFunctor      #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE StandaloneDeriving #-}
-
 module Parse.Tokenize.Tokenizer
   ( Tokenizer
   , expected

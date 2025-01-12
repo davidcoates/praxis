@@ -1,16 +1,8 @@
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE DeriveFoldable       #-}
-{-# LANGUAGE DeriveTraversable    #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE GADTs                #-}
-{-# LANGUAGE ImpredicativeTypes   #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE Rank2Types           #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TupleSections        #-}
-{-# LANGUAGE TypeOperators        #-}
-{-# LANGUAGE UndecidableInstances #-}
-
+{-# LANGUAGE DeriveFoldable     #-}
+{-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE ImpredicativeTypes #-}
 
 module Check.Solve
   ( Resolver
@@ -128,7 +120,7 @@ solve state reduce term = do
               rewrite = normalize . sub resolve
 
               rewriteCrumbs :: Crumbs s -> Praxis (Crumbs s)
-              rewriteCrumbs = mapM (\(src, reason) -> (src,) <$> (recurseAnnotation (stageT :: StageT s) (termT :: TermT (Requirement c)) rewrite reason))
+              rewriteCrumbs = mapM (\(src, reason) -> (\a -> (src, a)) <$> (recurseAnnotation (stageT :: StageT s) (termT :: TermT (Requirement c)) rewrite reason))
 
             crumbs2 <- rewriteCrumbs crumbs2
 

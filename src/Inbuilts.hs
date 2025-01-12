@@ -1,9 +1,7 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE QuasiQuotes         #-}
-{-# LANGUAGE Rank2Types          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds   #-}
+{-# LANGUAGE GADTs       #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE Rank2Types  #-}
 
 module Inbuilts
   ( runWithPrelude

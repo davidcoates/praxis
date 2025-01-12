@@ -1,12 +1,6 @@
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE KindSignatures        #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeFamilies          #-}
-
+{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 -- | The grammar definition for Praxis terms.
 
@@ -28,6 +22,7 @@ import           Data.Maybe    (catMaybes)
 import qualified Data.Set      as Set (fromList, toList)
 import           Prelude       hiding (_Just, exp, pure, until, (*>), (<$>),
                                 (<*), (<*>))
+
 
 definePrisms ''Bool
 definePrisms ''Ordering

@@ -31,31 +31,32 @@ consume = match (const True)
 char :: Char -> Tokenizer Char
 char c = match (== c)
 
-isSymbol = (`elem` "!#$%&*+/<=>?@\\^|-~:[].")
+isSymbol = (`elem` ("!#$%&*+/<=>?@\\^|-~:[]." :: [Char]))
 isLower = (`elem` ['a'..'z'])
 isUpper = (`elem` ['A'..'Z'])
 isDigit = (`elem` ['0'..'9'])
-isSpace = (`elem` " \t")
+isSpace = (`elem` (" \t" :: [Char]))
 isAlphaNum c = isLower c || isUpper c || isDigit c
-isLetter c = c `elem` "_\'" || isAlphaNum c
+isLetter c = c `elem` ("_\'" :: [Char]) || isAlphaNum c
+isNewline = (`elem` ("\r\n\f" :: [Char]))
 
 token :: Tokenizer (Maybe Token)
 token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> conId <|> varId <|> varIdRef <|> varIdValue <|> varIdView <|> varSym)) <|> expected "token"
 
 whitespace :: Tokenizer ()
 whitespace = newline <|> space <|> comment where
-  newline = match (`elem` "\r\n\f") *> pure ()
+  newline = match isNewline *> pure ()
   space = match isSpace *> pure ()
-  comment = lookahead (char '-' *> char '-' *> match (not . isSymbol)) *> many (match (not . (`elem` "\r\n\f"))) *> pure ()
+  comment = lookahead (char '-' *> char '-' *> match (not . isSymbol)) *> many (match (not . isNewline)) *> pure ()
 
 special :: Tokenizer Token
-special = Special <$> match (`elem` "{}(),`_")
+special = Special <$> match (`elem` ("{}(),`_" :: [Char]))
 
 literal :: Tokenizer Token
 literal = intLiteral <|> charLiteral <|> stringLiteral
 
 intLiteral :: Tokenizer Token
-intLiteral = lookahead (match isDigit <|> match (`elem` "-+") *> match isDigit) *> (Lit . Integer <$> decimal) where
+intLiteral = lookahead (match isDigit <|> match (`elem` ("-+" :: [Char])) *> match isDigit) *> (Lit . Integer <$> decimal) where
   decimal :: Tokenizer Integer
   decimal = build <$> consume <*> many (match isDigit)
   build :: Char -> [Char] -> Integer

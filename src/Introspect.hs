@@ -1,15 +1,9 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE Rank2Types            #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StandaloneDeriving    #-}
-{-# LANGUAGE Strict                #-}
-{-# LANGUAGE StrictData            #-}
-{-# LANGUAGE TypeOperators         #-}
 
 
 module Introspect
@@ -75,7 +69,7 @@ data TermT a where
 
 deriving instance Show (TermT a)
 
-typeof :: forall a (s :: Stage). IsTerm a => (a s) -> TermT a
+typeof :: forall a s. IsTerm a => (a s) -> TermT a
 typeof _ = termT :: TermT a
 
 switch :: forall a b c. (IsTerm a, IsTerm b) => TermT a -> TermT b -> ((a ~ b) => c) -> c -> c

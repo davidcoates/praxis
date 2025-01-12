@@ -1,11 +1,5 @@
 {-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE NamedFieldPuns       #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE Strict               #-}
-{-# LANGUAGE StrictData           #-}
 {-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 
@@ -61,6 +55,7 @@ import           Common
 import           Stage
 
 import           Data.Set (Set)
+
 
 -- * OPERATORS *
 

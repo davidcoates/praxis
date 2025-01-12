@@ -15,7 +15,10 @@ import           Data.Foldable        (toList)
 import qualified Data.Monoid.Colorful as Colored
 import           Introspect
 import           Stage
-import           Syntax.Unparser
+import           Syntax.Prism
+import qualified Syntax.Syntax        as Syntax
+import           Syntax.Syntax        (Syntax)
+import           Syntax.Term
 import           Term
 import           Token
 
@@ -27,20 +30,23 @@ force (Printer f) x = case f x of
   Nothing -> []
   Just xs -> xs
 
-instance Unparser Printer where
-  f >$< g = Printer $ \x -> case f x of
+instance Syntax Printer where
+  f <$> g = Printer $ \x -> case destruct f x of
     Nothing -> Nothing
-    Just y  -> Just $ force g y
-  f >*< g = Printer $ \(a, b) -> Just $ force f a ++ force g b
+    Just y  -> Just (force g y)
+  f <*> g = Printer $ \(a, b) -> Just (force f a ++ force g b)
   empty = Printer $ const Nothing
   Printer f <|> Printer g = Printer $ \x -> case f x of
     Nothing -> g x
     Just xs -> Just xs
-  token = Printer $ \x -> Just [x]
-  expected s = Printer (error s)
+  pure = const Syntax.empty
+  match _ f = Printer $ \x -> Just [f x]
+  expected err = Printer (error err)
   annotated (Printer f) = Printer $ \x -> case f (view value x) of
     Nothing -> Nothing
-    Just xs -> Just $ Annotation (label x) : xs
+    Just xs -> Just (Annotation (label x) : xs)
+  internal = id
+
 
 indent :: Int -> String
 indent n = replicate (2*n) ' '
@@ -70,7 +76,7 @@ layout ts = layout' (-1) Colored.Nil ts where
 
 
 instance (IsTerm a, IsStage s, x ~ Annotation s a) => Pretty (Tag (Source, Maybe x) (a s)) where
-  pretty x = layout (force unparse x)
+  pretty x = layout (force (Syntax.annotated (syntax (termT :: TermT a))) x)
 
 -- Do not show the label for compositional structures where the label of the parent is obvious from the label of the children.
 -- I.e. ([a] a, ([b] b, [c] c)) instead of [(a, b, c)] ([a] a, [(b, c)] ([b] b, [c] c))

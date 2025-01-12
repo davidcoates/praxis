@@ -148,7 +148,7 @@ label ((s, a) :< x) = case a of
     _ -> Colored.Nil
   _ -> Colored.Nil
 
-instance IsStage s => Pretty (TypeReason s) where
+instance Pretty TypeReason where
   pretty = \case
     TypeReasonApply f x -> "application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
     TypeReasonBind p e -> "binding " <> pretty p <> pretty (Colored.Fg Red (" (<-) " :: Colored String)) <> pretty e
@@ -169,7 +169,7 @@ instance IsStage s => Pretty (TypeReason s) where
     TypeReasonMultiAlias n -> "variable " <> pretty n <> " is not a unique alias"
     TypeReasonMultiUse n -> "variable " <> pretty n <> " used more than once"
 
-instance IsStage s => Pretty (KindReason s) where
+instance Pretty KindReason where
   pretty = \case
     KindReasonTypeApply f x -> "type application " <> pretty f <> pretty (Colored.Fg Red (" ($) " :: Colored String)) <> pretty x
     KindReasonTypeApplyOp f x -> "type operator application " <> pretty f <> pretty (Colored.Fg Red (" (★) " :: Colored String)) <> pretty x

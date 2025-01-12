@@ -134,10 +134,10 @@ scope src block = save (checkState . typeState . varRename . renames) $ do
   series [ throwAt TypeCheck src ("variable " <> pretty name <> " is not used") | name <- unusedVars ]
   return x
 
-require :: Tag (Source, TypeReason TypeCheck) (TypeConstraint TypeCheck) -> Praxis ()
+require :: Tag (Source, TypeReason) (TypeConstraint TypeCheck) -> Praxis ()
 require ((src, reason) :< con) = checkState . typeState . typeSolve . requirements %= Set.insert ((src, Just reason) :< Requirement con)
 
-requires :: [Tag (Source, TypeReason TypeCheck) (TypeConstraint TypeCheck)] -> Praxis ()
+requires :: [Tag (Source, TypeReason) (TypeConstraint TypeCheck)] -> Praxis ()
 requires = mapM_ require
 
 getType :: (IsTerm a, Annotation TypeCheck a ~ Annotated TypeCheck Type) => Annotated TypeCheck a -> Annotated TypeCheck Type
@@ -430,9 +430,9 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, Just ty) :< exp) <$> ca
     return (getType exp :< Where exp decls)
 
 
-equals :: (IsTerm a, Annotation TypeCheck a ~ Annotated TypeCheck Type) => [Annotated TypeCheck a] -> TypeReason TypeCheck -> Praxis (Annotated TypeCheck Type)
+equals :: (IsTerm a, Annotation TypeCheck a ~ Annotated TypeCheck Type) => [Annotated TypeCheck a] -> TypeReason -> Praxis (Annotated TypeCheck Type)
 equals exps = equals' $ map (\((src, Just ty) :< _) -> (src, ty)) exps where
-  equals' :: [(Source, Annotated TypeCheck Type)] -> TypeReason TypeCheck -> Praxis (Annotated TypeCheck Type)
+  equals' :: [(Source, Annotated TypeCheck Type)] -> TypeReason -> Praxis (Annotated TypeCheck Type)
   equals' ((_, ty):tys) reason = requires [ (src, reason) :< (ty `TypeIsEq` ty') | (src, ty') <- tys ] >> return ty
 
 generateBind :: Annotated KindCheck Bind -> Praxis (Annotated TypeCheck Bind)

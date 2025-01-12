@@ -245,11 +245,11 @@ type family Annotation (s :: Stage) a where
   Annotation KindCheck Type = Annotated KindCheck Kind
   Annotation KindCheck TypePat = Annotated KindCheck Kind
   Annotation KindCheck DeclType = Annotated KindCheck Kind
-  Annotation KindCheck (Requirement KindConstraint) = KindReason KindCheck
+  Annotation KindCheck (Requirement KindConstraint) = KindReason
   Annotation TypeCheck DataCon = Annotated TypeCheck QType
   Annotation TypeCheck Exp = Annotated TypeCheck Type
   Annotation TypeCheck Pat = Annotated TypeCheck Type
-  Annotation TypeCheck (Requirement TypeConstraint) = TypeReason TypeCheck
+  Annotation TypeCheck (Requirement TypeConstraint) = TypeReason
   Annotation s a = Void
 
 
@@ -264,31 +264,31 @@ annotation = tag . second
 phantom :: (a s) -> Annotated s a
 phantom x = (Phantom, Nothing) :< x
 
-data TypeReason (s :: Stage)
-  = TypeReasonApply (Annotated s Exp) (Annotated s Exp)
-  | TypeReasonBind (Annotated s Pat) (Annotated s Exp)
+data TypeReason
+  = TypeReasonApply (Annotated TypeCheck Exp) (Annotated TypeCheck Exp)
+  | TypeReasonBind (Annotated TypeCheck Pat) (Annotated TypeCheck Exp)
   | TypeReasonCaptured Name
   | TypeReasonCaseCongruence
   | TypeReasonConstructor Name
-  | TypeReasonFunctionCongruence Name (Maybe (Annotated s QType))
+  | TypeReasonFunctionCongruence Name (Maybe (Annotated TypeCheck QType))
   | TypeReasonIfCondition
   | TypeReasonIfCongruence
   | TypeReasonIntegerLiteral Integer
   | TypeReasonMultiAlias Name
   | TypeReasonMultiUse Name
   | TypeReasonRead Name
-  | TypeReasonSignature (Annotated s Type)
+  | TypeReasonSignature (Annotated TypeCheck Type)
   | TypeReasonSpecialization Name
   | TypeReasonSwitchCondition
   | TypeReasonSwitchCongruence
   deriving (Eq, Ord)
 
-data KindReason (s :: Stage)
-  = KindReasonData Name [Annotated s TypePat]
-  | KindReasonDataCon (Annotated s DataCon)
-  | KindReasonQType (Annotated s QType)
-  | KindReasonTypeApply (Annotated s Type) (Annotated s Type)
-  | KindReasonTypeApplyOp (Annotated s Type) (Annotated s Type)
-  | KindReasonType (Annotated s Type)
-  | KindReasonTypePat (Annotated s TypePat)
+data KindReason
+  = KindReasonData Name [Annotated KindCheck TypePat]
+  | KindReasonDataCon (Annotated KindCheck DataCon)
+  | KindReasonQType (Annotated KindCheck QType)
+  | KindReasonTypeApply (Annotated KindCheck Type) (Annotated KindCheck Type)
+  | KindReasonTypeApplyOp (Annotated KindCheck Type) (Annotated KindCheck Type)
+  | KindReasonType (Annotated KindCheck Type)
+  | KindReasonTypePat (Annotated KindCheck TypePat)
   deriving (Eq, Ord)

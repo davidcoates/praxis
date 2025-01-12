@@ -96,7 +96,7 @@ checkDistinct src typePats = do
 scope :: Praxis a -> Praxis a
 scope block = save (checkState . kindState . typeVarRename . renames) $ block
 
-require :: Tag (Source, KindReason KindCheck) (KindConstraint KindCheck) -> Praxis ()
+require :: Tag (Source, KindReason) (KindConstraint KindCheck) -> Praxis ()
 require ((src, reason) :< con) = checkState . kindState . kindSolve . requirements %= Set.insert ((src, Just reason) :< Requirement con)
 
 getKind :: (IsTerm a, Annotation KindCheck a ~ Annotated KindCheck Kind) => Annotated KindCheck a -> Annotated KindCheck Kind

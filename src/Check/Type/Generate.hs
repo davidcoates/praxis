@@ -141,7 +141,7 @@ specializeTypePat (a :< TypePatVar f n) = (\ty -> (n, a :< view value ty)) <$> f
 specializeQType :: Source -> Name -> Annotated TypeCheck QType -> Praxis (Annotated TypeCheck Type, Maybe (Specialization TypeCheck))
 specializeQType src name (_ :< qTy) = case qTy of
   Forall vs cs ty -> do
-    vs' <- mapM specializeTypePat vs
+    vs' <- traverse specializeTypePat vs
     let
       typeRewrite :: IsTerm a => Annotated TypeCheck a -> Annotated TypeCheck a
       typeRewrite = sub (embedSub f)
@@ -195,7 +195,7 @@ generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
   DeclRec decls -> do
     let names = [ name | (_ :< DeclRecTerm (_ :< DeclTermVar name _ _)) <- decls ]
     unless (isDistinct names) $ throwAt TypeCheck src ("recursive declarations are not distinct" :: String)
-    actions <- mapM preDeclare decls
+    actions <- traverse preDeclare decls
     decls <- series actions
     return (DeclRec decls)
     where
@@ -244,7 +244,7 @@ generateDeclType (a@(src, kind) :< ty) = ((src, ()) :<) <$> case ty of
 
   DeclTypeEnum name alts -> do
     let qTy = phantom $ Mono (phantom (TypeCon name))
-    mapM_ (\alt -> introCon src alt qTy) alts
+    traverse (\alt -> introCon src alt qTy) alts
     return $ DeclTypeEnum name alts
 
 

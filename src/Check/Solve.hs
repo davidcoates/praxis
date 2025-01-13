@@ -120,7 +120,7 @@ solve state reduce term = do
               rewrite = normalize . sub resolve
 
               rewriteCrumbs :: Crumbs s -> Praxis (Crumbs s)
-              rewriteCrumbs = mapM (\(src, reason) -> (\a -> (src, a)) <$> (recurseAnnotation (stageT :: StageT s) (termT :: TermT (Requirement c)) rewrite reason))
+              rewriteCrumbs = traverse (\(src, reason) -> (\a -> (src, a)) <$> (recurseAnnotation (stageT :: StageT s) (termT :: TermT (Requirement c)) rewrite reason))
 
             crumbs2 <- rewriteCrumbs crumbs2
 

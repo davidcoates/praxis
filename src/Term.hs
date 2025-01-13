@@ -2,7 +2,6 @@
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-
 module Term
   -- | Operators
   ( Assoc(..)
@@ -241,7 +240,6 @@ type family Annotation (s :: Stage) a where
   Annotation TypeCheck Pat = Annotated TypeCheck Type
   Annotation TypeCheck (Requirement TypeConstraint) = TypeReason
   Annotation s a = ()
-
 
 type Annotated (s :: Stage) a = Tag (Source, Annotation s a) (a s)
 

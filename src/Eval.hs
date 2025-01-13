@@ -85,7 +85,7 @@ evalDecl (_ :< decl) = case decl of
       -- Evaluate each of the functions in turn, with all of the evaluations in the environment
       -- Note: The use of irrefMapM here is essential to avoid divergence of mfix.
       irrefMapM (\(name, value) -> (evalState . valueEnv) %= Map.insert name value) names values
-      mapM evalExp exps
+      traverse evalExp exps
     return ()
 
   DeclTerm decl -> evalDeclTerm decl
@@ -101,8 +101,8 @@ evalDeclTerm (_ :< decl) = case decl of
     (evalState . valueEnv) %= Map.insert name value
 
 
-getValue :: Source -> Name -> Praxis Value
-getValue src name = do
+lookupValue :: Source -> Name -> Praxis Value
+lookupValue src name = do
   entry <- (evalState . valueEnv) `uses` Map.lookup name
   case entry of
      Just val -> return val
@@ -120,7 +120,7 @@ evalExp ((src, t) :< exp) = case exp of
     let names = map fst captures
     display Evaluate "captures" (show (map fst captures)) `ifFlag` debug
     display Evaluate "exp" exp `ifFlag` debug
-    values <- mapM (getValue src) names
+    values <- traverse (lookupValue src) names
     Value.Fn fn <- evalExp exp
     return $ Value.Fn $ \val -> save (evalState . valueEnv) $ do
       evalState . valueEnv .= Map.fromList (zip names values)
@@ -179,7 +179,7 @@ evalExp ((src, t) :< exp) = case exp of
 
   Term.Unit -> return Value.Unit
 
-  Var var -> getValue src var
+  Var var -> lookupValue src var
 
   Where exp decls -> save (evalState . valueEnv) $ do
     traverse evalDeclTerm decls

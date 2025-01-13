@@ -3,8 +3,6 @@ module Syntax.Prism
   , lift
   ) where
 
-import           Data.Maybe (fromJust)
-import           Data.Tuple (swap)
 
 -- | Combination of a covariant and a contravariant function.
 -- Parsers use construct, Unparsers use destruct.

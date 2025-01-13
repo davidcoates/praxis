@@ -307,7 +307,7 @@ normalize (a :< x) = case typeof x of
               _  -> return (a :< TypeApplyOp op ty)
 
     TypeSetOp ops -> do
-      ops <- mapM normalize (Set.toList ops)
+      ops <- traverse normalize (Set.toList ops)
       return $ (contractTypeOps . Set.unions . map expandTypeOps) ops
 
     _ -> continue
@@ -395,8 +395,8 @@ tryDefault term@((src, _) :< _) = do
       warnAt TypeCheck src $ "underdetermined view " <> pretty name <> ", defaulting to " <> pretty (phantom TypeIdentityOp :: Annotated TypeCheck Type)
       return (name, TypeIdentityOp)
 
-  defaultViews <- mapM defaultView (Set.toList (deepTypeUnis (== View) term))
-  defaultRefs <- mapM defaultRef (Set.toList (deepTypeUnis (== Ref) term))
+  defaultViews <- traverse defaultView (Set.toList (deepTypeUnis (== View) term))
+  defaultRefs <- traverse defaultRef (Set.toList (deepTypeUnis (== Ref) term))
 
   let defaultTypeOps = defaultViews ++ defaultRefs
 
@@ -464,7 +464,7 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
         TypeVar _ n | n `elem` Set.fromList (map (\(_ :< TypePatVar _ n) -> n) boundVars)
           -> return ()
         _ | Just (n, tys@(_:_)) <- unapplyTypeCon (a :< ty)
-          -> mapM_ checkConstraintType tys
+          -> traverse checkConstraintType tys >> return ()
         _
           -> throwAt TypeCheck src $ "illegal constraint: " <> pretty constraint
         -- TODO RefVar and ViewVar ?

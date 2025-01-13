@@ -178,7 +178,7 @@ desugarOpRules op ((src, _) :< OpRules rules) = do
     when (length assocs > 1) $ throwAt Parse src $ "more than one associativity specified for op " <> pretty op
     when (length precs > 1) $ throwAt Parse src $ "more than one precedence block specified for op " <> pretty op
 
-    precs <- mapM desugarPrec (concat precs)
+    precs <- traverse desugarPrec (concat precs)
     return (listToMaybe assocs, precs)
 
 
@@ -239,7 +239,7 @@ desugarDeclTerm :: Bool -> Annotated Initial DeclTerm -> Praxis (Annotated Parse
 desugarDeclTerm recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   DeclTermDefSugar name args exp -> do
-    args <- mapM desugarPat args
+    args <- traverse desugarPat args
     let
       curry :: [Annotated Parse Pat] -> Annotated Parse Exp -> Annotated Parse Exp
       curry []     e = e

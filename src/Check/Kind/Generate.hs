@@ -128,14 +128,14 @@ generateType (a@(src, _) :< ty) = (\(kind :< ty) -> ((src, kind) :< ty)) <$> cas
     TypeIdentityOp -> return (phantom KindView :< TypeIdentityOp)
 
     TypeSetOp tys -> do
-      tys <- mapM generateType (Set.toList tys)
+      tys <- traverse generateType (Set.toList tys)
       let
         checkRefOrView :: Annotated KindCheck Type -> Praxis ()
         checkRefOrView ty = case view value (view annotation ty) of
           KindRef  -> return ()
           KindView -> return ()
           _        -> throwAt KindCheck src $ "type " <> pretty ty <> " is in a type operator set but is not a type operator"
-      mapM_ checkRefOrView tys
+      traverse checkRefOrView tys
       let
         isRef = all (\op -> case view value (view annotation op) of { KindRef -> True; KindView -> False }) tys
       return (phantom (if isRef then KindRef else KindView) :< TypeSetOp (Set.fromList tys))
@@ -195,7 +195,7 @@ generateDecl :: Annotated Parse Decl -> Praxis (Annotated KindCheck Decl)
 generateDecl (a :< decl) = (a :<) <$> case decl of
 
   DeclRec decls -> do
-    actions <- mapM preDeclare decls
+    actions <- traverse preDeclare decls
     decls <- series actions
     return (DeclRec decls)
      where

@@ -1,5 +1,6 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Print
   (
@@ -12,7 +13,7 @@ import           Introspect
 import           Stage
 import           Syntax.Prism
 import qualified Syntax.Syntax        as Syntax
-import           Syntax.Syntax        (Syntax)
+import           Syntax.Syntax        (Syntax, SyntaxT)
 import           Syntax.Term
 import           Term
 import           Token
@@ -37,10 +38,13 @@ instance Syntax Printer where
   pure = const Syntax.empty
   match _ f = Printer $ \x -> Just [f x]
   expected err = Printer (error err)
+  internal = id
+
+instance IsStage s => SyntaxT Printer s where
   annotated (Printer f) = Printer $ \x -> case f (view value x) of
     Nothing -> Nothing
     Just xs -> Just (Annotation (label x) : xs)
-  internal = id
+  blank _ _ = Syntax.empty
 
 indent :: Int -> String
 indent n = replicate (2*n) ' '

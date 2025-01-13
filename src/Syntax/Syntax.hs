@@ -1,8 +1,10 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies    #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Syntax.Syntax
   ( Syntax(..)
+  , SyntaxT(..)
   , _Cons
   , _Nil
   , _Just
@@ -49,8 +51,11 @@ class Syntax f where
   pure :: a -> f a
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   expected :: String -> f a
-  annotated :: (IsTerm a, IsStage s) => f (a s) -> f (Annotated s a)
   internal :: f a -> f a -- for internal constructs, supports printing but not parsing
+
+class (IsStage s, Syntax f) => SyntaxT f s where
+  annotated :: IsTerm a => f (a s) -> f (Annotated s a)
+  blank :: IsTerm a => StageT s -> TermT a -> f (Annotation s a)
 
 
 _Cons :: Prism [a] (a, [a])

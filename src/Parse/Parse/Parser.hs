@@ -1,7 +1,7 @@
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE InstanceSigs     #-}
-{-# LANGUAGE TypeFamilies     #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Parse.Parse.Parser
   ( Parser
@@ -15,7 +15,7 @@ import           Praxis
 import           Stage
 import           Syntax.Prism
 import qualified Syntax.Syntax       as Syntax
-import           Syntax.Syntax       (Syntax)
+import           Syntax.Syntax       (Syntax, SyntaxT)
 import           Syntax.Term
 import           Term
 import           Token
@@ -34,10 +34,11 @@ instance Syntax Parser where
   pure = Parser . pure . pure
   match f _ = Parser (over value (fromJust . f) <$> Parser.match (\(_ :< t) -> isJust (f t)))
   expected = Parser . Parser.expected
-  annotated :: forall a s. (IsTerm a, IsStage s) => Parser (a s) -> Parser (Annotated s a)
-  annotated (Parser p) = case stageT :: StageT s of
-    InitialT -> Parser ((\(s :< x) -> s :< ((s, ()) :< x)) <$> p)
   internal = const (Parser empty)
+
+instance SyntaxT Parser Initial where
+  annotated (Parser p) = Parser ((\(s :< x) -> s :< ((s, ()) :< x)) <$> p)
+  blank _ _ = Syntax.pure ()
 
 run :: Pretty a => Parser a -> [Sourced Token] -> Praxis a
 run (Parser p) ts = case Parser.run (view value <$> p) ts of

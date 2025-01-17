@@ -30,6 +30,7 @@ module Praxis
   , fresh
   , parseState
   , checkState
+  , monomorphizeState
   , evalState
 
   , freshKindUni
@@ -46,6 +47,7 @@ module Praxis
 import qualified Check.State                  as Check
 import           Common
 import qualified Eval.State                   as Eval
+import qualified Monomorphize.State           as Monomorphize
 import qualified Parse.State                  as Parse
 import           Print
 import           Stage
@@ -80,11 +82,12 @@ data Fresh = Fresh
   }
 
 data PraxisState = PraxisState
-  { _flags      :: Flags               -- ^ Flags
-  , _fresh      :: Fresh
-  , _parseState :: Parse.State
-  , _checkState :: Check.State
-  , _evalState  :: Eval.State
+  { _flags             :: Flags
+  , _fresh             :: Fresh
+  , _parseState        :: Parse.State
+  , _checkState        :: Check.State
+  , _monomorphizeState :: Monomorphize.State
+  , _evalState         :: Eval.State
   }
 
 type Praxis = ExceptT String (StateT PraxisState IO)
@@ -104,11 +107,12 @@ defaultFresh = Fresh
 
 emptyState :: PraxisState
 emptyState = PraxisState
-  { _flags      = defaultFlags
-  , _fresh      = defaultFresh
-  , _parseState = Parse.emptyState
-  , _checkState = Check.emptyState
-  , _evalState  = Eval.emptyState
+  { _flags             = defaultFlags
+  , _fresh             = defaultFresh
+  , _parseState        = Parse.emptyState
+  , _checkState        = Check.emptyState
+  , _monomorphizeState = Monomorphize.emptyState
+  , _evalState         = Eval.emptyState
   }
 
 makeLenses ''Flags

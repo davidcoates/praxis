@@ -28,7 +28,7 @@ import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
 
 
-type Annotated a = Term.Annotated TypeCheck a
+type Annotated a = Term.Annotated Monomorphize a
 
 type family Evaluation a where
   Evaluation Exp = Value
@@ -109,7 +109,7 @@ lookupValue src name = do
      Nothing  -> throwAt Evaluate src ("unknown variable " <> pretty name)
 
 evalExp :: Annotated Exp -> Praxis Value
-evalExp ((src, t) :< exp) = case exp of
+evalExp ((src, ty) :< exp) = case exp of
 
   Apply f x -> do
     Value.Fn f <- evalExp f
@@ -133,9 +133,9 @@ evalExp ((src, t) :< exp) = case exp of
   Cases alts -> return $ Value.Fn $ \val -> evalCase src val alts
 
   Con name -> do
-    case t of
+    case ty of
       (_ :< TypeFn _ _) -> return $ Value.Fn (\val -> return $ Value.Data name val)
-      _                -> return $ Value.Enum name
+      _                 -> return $ Value.Enum name
 
   Defer exp1 exp2 -> do
     val <- evalExp exp1
@@ -155,7 +155,7 @@ evalExp ((src, t) :< exp) = case exp of
   Lit lit -> pure $ case lit of
     Bool    val -> Value.Bool val
     Char    val -> Value.Char val
-    Integer val -> let (_ :< TypeCon n) = t in integerToValue n val
+    Integer val -> let (_ :< TypeCon n) = ty in integerToValue n val
     String  val -> Value.String val
 
   Read _ exp -> evalExp exp

@@ -35,7 +35,7 @@ data Value
   | I64 I64
   | ISize ISize
   | Pair Value Value
-  | Polymorphic (Specialization TypeCheck -> Value)
+  | Polymorphic (Specialization Monomorphize -> Value)
   | String String
   | U8 U8
   | U16 U16

@@ -15,6 +15,7 @@ import qualified Eval
 import           Eval.Value
 import           Inbuilts
 import           Introspect
+import qualified Monomorphize
 import qualified Parse
 import           Praxis
 import           Print
@@ -27,6 +28,12 @@ parse _ term = Parse.run term :: Praxis (Annotated Parse a)
 
 check :: forall a. IsTerm a => TermT a -> String -> Praxis (Annotated TypeCheck a)
 check ty term = parse ty term >>= Check.run
+
+{-
+-- FIXME
+monomorphize :: forall a. IsTerm a => TermT a -> String -> Praxis (Monomorphize.Monomorphization a)
+monomorphize ty term = check ty term >>= Monomorphize.run
+-}
 
 eval :: forall a. IsTerm a => TermT a -> String -> Praxis (Eval.Evaluation a)
 eval ty term = check ty term >>= Eval.run

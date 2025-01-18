@@ -427,9 +427,7 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
 
   assumeConstraint :: Annotated TypeCheck TypeConstraint -> Praxis ()
   assumeConstraint constraint = do
-    constraint <- normalize constraint
-    checkConstraint constraint
-    constraints <- expandConstraint constraint
+    constraints <- normalize constraint >>= expandConstraint
     checkState . typeState . typeSolve . assumptions %= Set.union (Set.fromList constraints)
 
   expandConstraint :: Annotated TypeCheck TypeConstraint -> Praxis [Annotated TypeCheck TypeConstraint]
@@ -451,20 +449,3 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
             (_, IsInstance)          -> throwAt TypeCheck src ("redundant constraint: " <> pretty constraint)
             (_, IsInstanceOnlyIf cs) -> concat <$> traverse expandConstraint cs
           _ -> return [] -- Note: The instance may be satisfied later (at the call site)
-
-  checkConstraint :: Annotated TypeCheck TypeConstraint -> Praxis ()
-  checkConstraint constraint = case view value constraint of
-    TypeIsInstance (_ :< TypeApply _ ty) -> checkConstraintType ty where
-      checkConstraintType :: Annotated TypeCheck Type -> Praxis ()
-      checkConstraintType (a@(src, _) :< ty) = case ty of
-        TypePair ty1 ty2
-          -> checkConstraintType ty1 >> checkConstraintType ty2
-        TypeFn ty1 ty2
-          -> checkConstraintType ty1 >> checkConstraintType ty2
-        TypeVar _ n | n `elem` Set.fromList (map (\(_ :< TypePatVar _ n) -> n) boundVars)
-          -> return ()
-        _ | Just (n, tys@(_:_)) <- unapplyTypeCon (a :< ty)
-          -> traverse checkConstraintType tys >> return ()
-        _
-          -> throwAt TypeCheck src $ "illegal constraint: " <> pretty constraint
-        -- TODO RefVar and ViewVar ?

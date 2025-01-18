@@ -32,21 +32,7 @@ f x = x
 |]
 
     it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error at 2:21: illegal constraint: Copy I32
-|]
-
-
-  describe "smuggled constraint" $ do
-
-    let program = [r|
-f : forall a. a -> (a, a)
-f x = g (x, ()) where
-  g : forall b | Copy a. (a, b) -> (a, a)
-  g (x, _) = (x, x)
-|]
-
-    it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error at 4:23: illegal constraint: Copy a_0
+type check error at 2:16: redundant constraint: Copy I32
 |]
 
 

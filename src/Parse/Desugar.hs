@@ -138,7 +138,7 @@ desugarExp (a@(src, _) :< exp) = case exp of
 
   Where exp decls -> do
     exp <- desugarExp exp
-    decls <- traverse (desugarDeclTerm False) decls >>= coalesceDeclTerms
+    decls <- traverse (desugarDeclTerm False False) decls >>= coalesceDeclTerms
     return (a :< Where exp decls)
 
   _           -> (a :<) <$> recurseTerm desugar exp
@@ -212,7 +212,7 @@ desugarDecl (a@(src, _) :< decl) = case decl of
     return Nothing
 
   DeclTerm decl -> do
-    decl <- desugarDeclTerm False decl
+    decl <- desugarDeclTerm True False decl
     return $ Just (a :< DeclTerm decl)
 
   DeclType decl -> do
@@ -223,7 +223,7 @@ desugarDecl (a@(src, _) :< decl) = case decl of
 desugarDeclRec :: Annotated Initial DeclRec -> Praxis (Annotated Parse DeclRec)
 desugarDeclRec (a@(src, _) :< decl) = (a :<) <$> case decl of
 
-  DeclRecTerm decl -> DeclRecTerm <$> desugarDeclTerm True decl
+  DeclRecTerm decl -> DeclRecTerm <$> desugarDeclTerm True True decl
 
   DeclRecType decl -> DeclRecType <$> desugarDeclType True decl
 
@@ -235,8 +235,8 @@ expIsFunction (_ :< exp) = case exp of
   _          -> False
 
 
-desugarDeclTerm :: Bool -> Annotated Initial DeclTerm -> Praxis (Annotated Parse DeclTerm)
-desugarDeclTerm recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
+desugarDeclTerm :: Bool -> Bool -> Annotated Initial DeclTerm -> Praxis (Annotated Parse DeclTerm)
+desugarDeclTerm top recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
 
   DeclTermDefSugar name args exp -> do
     args <- traverse desugarPat args
@@ -247,6 +247,8 @@ desugarDeclTerm recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
     exp <- curry args <$> desugarExp exp
     when (recursive && not (expIsFunction exp)) $ throwAt Parse src $ "non-function " <> pretty name <> " can not be recursive"
     return $ DeclTermVar name Nothing exp
+
+  DeclTermSigSugar name (_ :< Forall _ _ _) | not top -> throwAt Parse src $ "polymorphic function " <> pretty name <> " can only be at the top level"
 
   DeclTermSigSugar _ _ -> recurseTerm desugar decl -- handled by coalesce*
 

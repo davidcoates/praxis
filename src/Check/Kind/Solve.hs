@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 
 module Check.Kind.Solve

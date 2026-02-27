@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
-
 module Common.Pretty
   ( Pretty(..)
   , separate

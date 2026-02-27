@@ -1,6 +1,3 @@
-{-# LANGUAGE DataKinds    #-}
-{-# LANGUAGE TypeFamilies #-}
-
 module Check.Kind.Generate
   ( run
   ) where

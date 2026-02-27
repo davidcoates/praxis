@@ -1,7 +1,4 @@
-{-# LANGUAGE DataKinds   #-}
-{-# LANGUAGE GADTs       #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE Rank2Types  #-}
 
 module Inbuilts
   ( runWithPrelude

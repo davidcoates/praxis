@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-
 module Eval.Value
   ( Value(..)
   , integerToValue

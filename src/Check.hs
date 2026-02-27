@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-
 module Check
   ( run
   ) where

@@ -1,6 +1,3 @@
-{-# LANGUAGE DataKinds    #-}
-{-# LANGUAGE TypeFamilies #-}
-
 module Eval
   ( run
   , runMain

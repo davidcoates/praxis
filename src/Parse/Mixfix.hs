@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-
 module Parse.Mixfix
   ( parse
   ) where

@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-
 module Util
   ( parse
   , check

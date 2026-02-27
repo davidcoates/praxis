@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-
 module Check.Kind.Check
   ( run
   ) where

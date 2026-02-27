@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-
 module Parse.Parse
   ( run
   ) where

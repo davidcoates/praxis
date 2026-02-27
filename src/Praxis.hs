@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds       #-}
-{-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Praxis

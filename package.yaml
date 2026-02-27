@@ -34,11 +34,12 @@ dependencies:
 
 library:
   source-dirs: src
+  language: GHC2024
   default-extensions:
   - LambdaCase
-  - ScopedTypeVariables
+  - MonoLocalBinds
   - OverloadedStrings
-  - TypeOperators
+  - TypeFamilies
   ghc-options:
   - -O2
 
@@ -46,6 +47,7 @@ executables:
   praxis:
     main:                Main.hs
     source-dirs:         app
+    language:            GHC2024
     ghc-options:
     - -O2
     - -threaded
@@ -58,6 +60,7 @@ tests:
   praxis-test:
     main:                Spec.hs
     source-dirs:         test
+    language:            GHC2024
     ghc-options:
     - -O2
     - -threaded
@@ -71,6 +74,7 @@ benchmarks:
   criterion-benchmarks:
     main:                Main.hs
     source-dirs:         benchmark
+    language:            GHC2024
     ghc-options:
     - -O2
     - -threaded

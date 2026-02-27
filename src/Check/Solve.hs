@@ -1,7 +1,3 @@
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE GADTs              #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 
 module Check.Solve

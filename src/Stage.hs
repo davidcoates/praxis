@@ -1,7 +1,3 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE GADTs          #-}
-{-# LANGUAGE KindSignatures #-}
-
 module Stage
   ( Stage(..)
   , StageT(..)

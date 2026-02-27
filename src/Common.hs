@@ -1,5 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
-
 module Common
   ( module Common.Pretty
   , module Common.Source

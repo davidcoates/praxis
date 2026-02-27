@@ -1,6 +1,4 @@
-{-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE TypeFamilies       #-}
 
 module Check.Type.Solve
   ( assumeFromQType

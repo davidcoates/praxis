@@ -1,6 +1,4 @@
-{-# LANGUAGE DataKinds       #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies    #-}
 
 -- | The grammar definition for Praxis terms.
 

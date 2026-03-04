@@ -51,8 +51,38 @@ applySpec spec = sub (embedSub f)
     f (_ :< TypeVar _ n) = lookup n mapping
     f _                  = Nothing
 
+-- | Cross-stage traversal from TypeCheck to Monomorphize.
+-- Must enumerate each case so GHC can reduce the Annotation type family.
+castTerm :: forall a. IsTerm a => Annotated TypeCheck a -> Praxis (Annotated Monomorphize a)
+castTerm term = ($ term) $ case typeof (view value term) of
+  -- Exp: dispatches to monomorphizeExp for Specialize elimination
+  ExpT            -> monomorphizeExp
+  -- All remaining nodes: annotation is () or same type on both sides
+  BindT           -> auto
+  DataConT        -> auto
+  DeclT           -> auto
+  PatT            -> auto
+  DeclRecT        -> auto
+  DeclTermT       -> auto
+  DeclTypeT       -> auto
+  OpT             -> auto
+  OpRulesT        -> auto
+  PrecT           -> auto
+  ProgramT        -> auto
+  QTypeT          -> auto
+  StmtT           -> auto
+  TokT            -> auto
+  TypeConstraintT -> auto
+  TypePatT        -> auto
+  TypeT           -> auto
+  ty              -> error ("castTerm: unexpected term type " ++ show ty)
+  where
+    auto :: (IsTerm a, Annotation TypeCheck a ~ Annotation Monomorphize a)
+         => Annotated TypeCheck a -> Praxis (Annotated Monomorphize a)
+    auto = value (recurseTerm castTerm)
+
 monomorphizeExp :: Annotated TypeCheck Exp -> Praxis (Annotated Monomorphize Exp)
-monomorphizeExp _ = error "TODO: monomorphizeExp"
+monomorphizeExp ((src, ty) :< exp) = ((src, ty) :<) <$> recurseTerm castTerm exp
 
 monomorphizeProgram :: Annotated TypeCheck Program -> Praxis ()
 monomorphizeProgram _ = error "TODO: monomorphizeProgram"

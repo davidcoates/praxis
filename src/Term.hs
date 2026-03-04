@@ -237,7 +237,9 @@ type family Annotation (s :: Stage) a where
   Annotation TypeCheck Exp = Annotated TypeCheck Type
   Annotation TypeCheck Pat = Annotated TypeCheck Type
   Annotation TypeCheck (Requirement TypeConstraint) = TypeReason
-  Annotation Monomorphize Exp = Annotated TypeCheck Type -- TODO
+  Annotation Monomorphize DataCon = Annotated TypeCheck QType
+  Annotation Monomorphize Exp = Annotated TypeCheck Type
+  Annotation Monomorphize Pat = Annotated TypeCheck Type
   Annotation s a = ()
 
 type Annotated (s :: Stage) a = Tag (Source, Annotation s a) (a s)

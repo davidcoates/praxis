@@ -14,6 +14,9 @@ import           Praxis
 import           Stage
 import           Term
 
+import           Data.Map.Strict    (Map)
+import qualified Data.Map.Strict    as Map
+
 
 type family Monomorphization a where
   Monomorphization Program = Annotated Monomorphize Program
@@ -82,7 +85,53 @@ castTerm term = ($ term) $ case typeof (view value term) of
     auto = value (recurseTerm castTerm)
 
 monomorphizeExp :: Annotated TypeCheck Exp -> Praxis (Annotated Monomorphize Exp)
-monomorphizeExp ((src, ty) :< exp) = ((src, ty) :<) <$> recurseTerm castTerm exp
+monomorphizeExp ((src, ty) :< exp) = case exp of
+
+  Specialize inner spec -> case view value inner of
+    -- User-defined polymorphic function: generate/look up the monomorphic version
+    Var name -> do
+      srcDecl <- (monomorphizeState . sourceDecls) `uses` Map.lookup name
+      case srcDecl of
+        Just _  -> do
+          monoName <- specialize name spec
+          return ((src, ty) :< Var monoName)
+        -- Not in sourceDecls (inbuilt or constructor): keep Specialize as-is
+        Nothing -> passThrough
+    -- Constructor specialization: keep as-is for now (data type mono comes later)
+    _ -> passThrough
+    where
+      passThrough = do
+        inner' <- castTerm inner
+        spec'  <- traverse (\(p, t) -> (,) <$> castTerm p <*> castTerm t) spec
+        return ((src, ty) :< Specialize inner' spec')
+
+  _ -> ((src, ty) :<) <$> recurseTerm castTerm exp
+
+-- | Look up or create the monomorphic name for a specialization of a user-defined function.
+specialize :: Name -> Specialization TypeCheck -> Praxis Name
+specialize name spec = do
+  let types = map snd spec
+  existing <- (monomorphizeState . instances) `uses` Map.lookup (name, types)
+  case existing of
+    Just monoName -> return monoName
+    Nothing -> do
+      monoName <- freshVar name
+      -- Register before processing body to handle recursive self-calls
+      monomorphizeState . instances %= Map.insert (name, types) monoName
+      Just srcDecl <- (monomorphizeState . sourceDecls) `uses` Map.lookup name
+      monoDecl <- specializeDeclTerm monoName spec srcDecl
+      monomorphizeState . exportedDecls %= (++ [monoDecl])
+      return monoName
+
+-- | Produce a monomorphic DeclTermVar by substituting the specialization into a polymorphic definition.
+specializeDeclTerm :: Name -> Specialization TypeCheck -> Annotated TypeCheck DeclTerm -> Praxis (Annotated Monomorphize Decl)
+specializeDeclTerm monoName spec (_ :< DeclTermVar _ qTy bodyExp) = do
+  let monoTy = fmap (\qt -> case view value qt of
+        Forall _ _ ty -> phantom (Mono (applySpec spec ty))
+        Mono ty       -> phantom (Mono ty)) qTy
+  monoBody <- monomorphizeExp (applySpec spec bodyExp)
+  monoQTy  <- traverse castTerm monoTy
+  return (phantom (DeclTerm (phantom (DeclTermVar monoName monoQTy monoBody))))
 
 monomorphizeProgram :: Annotated TypeCheck Program -> Praxis ()
 monomorphizeProgram _ = error "TODO: monomorphizeProgram"

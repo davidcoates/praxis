@@ -29,14 +29,13 @@ parse _ term = Parse.run term :: Praxis (Annotated Parse a)
 check :: forall a. IsTerm a => TermT a -> String -> Praxis (Annotated TypeCheck a)
 check ty term = parse ty term >>= Check.run
 
-{-
--- FIXME
-monomorphize :: forall a. IsTerm a => TermT a -> String -> Praxis (Monomorphize.Monomorphization a)
-monomorphize ty term = check ty term >>= Monomorphize.run
--}
-
 eval :: forall a. IsTerm a => TermT a -> String -> Praxis (Eval.Evaluation a)
-eval ty term = check ty term >>= Eval.run
+eval ty term = do
+  checked <- check ty term
+  mono    <- Monomorphize.run checked
+  case (ty, mono) of
+    (ProgramT, prog)    -> Eval.run prog
+    (ExpT, (prog, exp)) -> Eval.run prog >> Eval.run exp
 
 -- Helpers for tests
 

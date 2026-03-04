@@ -1,10 +1,10 @@
-{-# LANGUAGE DataKinds       #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Monomorphize.State
   ( State(..)
-  , specializations
+  , instances
   , exportedDecls
+  , sourceDecls
   , emptyState
   ) where
 
@@ -15,19 +15,23 @@ import           Term
 import           Control.Lens    (makeLenses)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import           Data.Set        (Set)
-import qualified Data.Set        as Set
 
 
 data State = State
-  { _specializations :: Map Name (Map Name [Annotated Monomorphize Decl])
-  , _exportedDecls   :: [Annotated Monomorphize Decl]
+  { _instances     :: Map (Name, [Annotated TypeCheck Type]) Name
+  -- ^ Maps (original polymorphic name, concrete type args) to the generated monomorphic name.
+  -- Structured representation; name mangling is deferred to downstream stages.
+  , _exportedDecls :: [Annotated Monomorphize Decl]
+  -- ^ Accumulated output declarations (in emission order).
+  , _sourceDecls   :: Map Name (Annotated TypeCheck DeclTerm)
+  -- ^ Source definitions of polymorphic functions, for on-demand specialization.
   }
 
 makeLenses ''State
 
 emptyState :: State
 emptyState = State
-  { _specializations = Map.empty
+  { _instances     = Map.empty
   , _exportedDecls = []
+  , _sourceDecls   = Map.empty
   }

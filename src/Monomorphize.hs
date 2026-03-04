@@ -41,6 +41,16 @@ monomorphize term = case typeof (view value term) of
       monomorphizeState . exportedDecls .= []
       return (phantom (Program decls))
 
+-- | Apply a specialization as a type-variable substitution over any term.
+-- Replaces each TypeVar whose name appears in the specialization with the corresponding concrete type.
+applySpec :: IsTerm a => Specialization TypeCheck -> Annotated TypeCheck a -> Annotated TypeCheck a
+applySpec spec = sub (embedSub f)
+  where
+    mapping = [ (n, ty) | (_ :< TypePatVar _ n, ty) <- spec ]
+    f :: Annotated TypeCheck Type -> Maybe (Annotated TypeCheck Type)
+    f (_ :< TypeVar _ n) = lookup n mapping
+    f _                  = Nothing
+
 monomorphizeExp :: Annotated TypeCheck Exp -> Praxis (Annotated Monomorphize Exp)
 monomorphizeExp _ = error "TODO: monomorphizeExp"
 

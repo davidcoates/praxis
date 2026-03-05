@@ -31,11 +31,15 @@ monomorphize term = case typeof (view value term) of
   ExpT -> do
     exp <- monomorphizeExp term
     program <- getProgram
+    display Monomorphize "monomorphized program" program `ifFlag` debug
+    display Monomorphize "monomorphized exp" exp `ifFlag` debug
     return (program, exp)
 
   ProgramT -> do
     monomorphizeProgram term
-    getProgram
+    program <- getProgram
+    display Monomorphize "monomorphized program" program `ifFlag` debug
+    return program
 
   where
     getProgram :: Praxis (Annotated Monomorphize Program)

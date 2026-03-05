@@ -20,7 +20,7 @@ copy x = (x, x)
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-copy_0 : forall a_0 | Copy ( a_0 , a_0 ) . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
+copy : forall a | Copy ( a , a ) . a -> ( a , a ) = \ [a] x -> ( [a] x , [a] x )
 |]
 
 
@@ -46,7 +46,7 @@ f x = (x, x)
 |]
 
       it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-f_0 : forall &r_0 a_0 . &r_0 a_0 -> ( &r_0 a_0 , &r_0 a_0 ) = \ [&r_0 a_0] x_0 -> ( [&r_0 a_0] x_0 , [&r_0 a_0] x_0 )
+f : forall &r a . &r a -> ( &r a , &r a ) = \ [&r a] x -> ( [&r a] x , [&r a] x )
 |]
 
 
@@ -60,7 +60,7 @@ f x = (x, x)
 |]
 
       it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-f_0 : forall ?r_0 a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
+f : forall ?r a | Copy a . a -> ( a , a ) = \ [a] x -> ( [a] x , [a] x )
 |]
 
     describe "can not be copied if the underlying type can not be copied" $ do
@@ -71,10 +71,10 @@ f x = (x, x)
 |]
 
       it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error: unable to satisfy: Copy a_0
-  | derived from: Copy ( ?r_0 a_0 )
+type check error: unable to satisfy: Copy a
+  | derived from: Copy ( ?r a )
   | primary cause: variable x used more than once at 3:11
-  | secondary cause: function f with signature forall ?r_0 a_0 . ?r_0 a_0 -> ( ?r_0 a_0 , ?r_0 a_0 ) at 2:1
+  | secondary cause: function f with signature forall ?r a . ?r a -> ( ?r a , ?r a ) at 2:1
 |]
 
   describe "boxed type" $ do
@@ -91,9 +91,9 @@ copy x = (x, x)
 |]
 
         it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error: unable to satisfy: Copy ( Boxed a_1 )
+type check error: unable to satisfy: Copy ( Boxed a )
   | primary cause: variable x used more than once at 5:14
-  | secondary cause: function copy with signature forall a_1 . Boxed a_1 -> ( Boxed a_1 , Boxed a_1 ) at 4:1
+  | secondary cause: function copy with signature forall a . Boxed a -> ( Boxed a , Boxed a ) at 4:1
 |]
 
       describe "trivial copy constraint" $ do
@@ -122,9 +122,9 @@ copy x = (x, x)
 |]
 
         it "does not type check" $ runPretty (check ProgramT program)  `shouldReturn` trim [r|
-type check error: unable to satisfy: Copy ( Boxed a_1 )
+type check error: unable to satisfy: Copy ( Boxed a )
   | primary cause: variable x used more than once at 5:14
-  | secondary cause: function copy with signature forall a_1 | Copy a_1 . Boxed a_1 -> ( Boxed a_1 , Boxed a_1 ) at 4:1
+  | secondary cause: function copy with signature forall a | Copy a . Boxed a -> ( Boxed a , Boxed a ) at 4:1
 |]
 
   describe "unboxed type" $ do
@@ -141,10 +141,10 @@ copy x =  (x, x)
 |]
 
         it "does not type check" $ runPretty (check ProgramT program)  `shouldReturn` trim [r|
-type check error: unable to satisfy: Copy a_1
-  | derived from: Copy ( Unboxed a_1 b_1 )
+type check error: unable to satisfy: Copy a
+  | derived from: Copy ( Unboxed a b )
   | primary cause: variable x used more than once at 5:15
-  | secondary cause: function copy with signature forall a_1 b_1 . Unboxed a_1 b_1 -> ( Unboxed a_1 b_1 , Unboxed a_1 b_1 ) at 4:1
+  | secondary cause: function copy with signature forall a b . Unboxed a b -> ( Unboxed a b , Unboxed a b ) at 4:1
 |]
 
       describe "trivial copy constraint" $ do
@@ -159,9 +159,9 @@ foo = copy (Unboxed (1, 'c'))
 |]
 
         it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-datatype unboxed Unboxed a_0 b_0 = [forall a_0 b_0 . ( a_0 , b_0 ) -> Unboxed a_0 b_0] Unboxed ( a_0 , b_0 )
-copy_0 : forall a_1 b_1 | Copy ( Unboxed a_1 b_1 ) . Unboxed a_1 b_1 -> ( Unboxed a_1 b_1 , Unboxed a_1 b_1 ) = \ [Unboxed a_1 b_1] x_0 -> ( [Unboxed a_1 b_1] x_0 , [Unboxed a_1 b_1] x_0 )
-foo_0 = [Unboxed I32 Char -> ( Unboxed I32 Char , Unboxed I32 Char )] copy_0 ( [( I32 , Char ) -> Unboxed I32 Char] Unboxed ( [I32] 1 , [Char] 'c' ) )
+datatype unboxed Unboxed a b = [forall a b . ( a , b ) -> Unboxed a b] Unboxed ( a , b )
+copy : forall a b | Copy ( Unboxed a b ) . Unboxed a b -> ( Unboxed a b , Unboxed a b ) = \ [Unboxed a b] x -> ( [Unboxed a b] x , [Unboxed a b] x )
+foo = [Unboxed I32 Char -> ( Unboxed I32 Char , Unboxed I32 Char )] copy ( [( I32 , Char ) -> Unboxed I32 Char] Unboxed ( [I32] 1 , [Char] 'c' ) )
 |]
 
       describe "reduced copy constraint" $ do
@@ -176,7 +176,7 @@ foo = copy (Unboxed (1, 'c'))
 |]
 
         it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-datatype unboxed Unboxed a_0 b_0 = [forall a_0 b_0 . ( a_0 , b_0 ) -> Unboxed a_0 b_0] Unboxed ( a_0 , b_0 )
-copy_0 : forall a_1 b_1 | Copy a_1 , Copy b_1 . Unboxed a_1 b_1 -> ( Unboxed a_1 b_1 , Unboxed a_1 b_1 ) = \ [Unboxed a_1 b_1] x_0 -> ( [Unboxed a_1 b_1] x_0 , [Unboxed a_1 b_1] x_0 )
-foo_0 = [Unboxed I32 Char -> ( Unboxed I32 Char , Unboxed I32 Char )] copy_0 ( [( I32 , Char ) -> Unboxed I32 Char] Unboxed ( [I32] 1 , [Char] 'c' ) )
+datatype unboxed Unboxed a b = [forall a b . ( a , b ) -> Unboxed a b] Unboxed ( a , b )
+copy : forall a b | Copy a , Copy b . Unboxed a b -> ( Unboxed a b , Unboxed a b ) = \ [Unboxed a b] x -> ( [Unboxed a b] x , [Unboxed a b] x )
+foo = [Unboxed I32 Char -> ( Unboxed I32 Char , Unboxed I32 Char )] copy ( [( I32 , Char ) -> Unboxed I32 Char] Unboxed ( [I32] 1 , [Char] 'c' ) )
 |]

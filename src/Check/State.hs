@@ -7,7 +7,6 @@ module Check.State
   , assumptions
 
   , RenameState(..)
-  , counts
   , renames
 
   , TypeConEnv(..)
@@ -69,16 +68,14 @@ emptySolveState = SolveState
   }
 
 data RenameState = RenameState
-  { _counts  :: Map Name Int
-  , _renames :: Map Name Name
+  { _renames :: Map Name Name
   }
 
 makeLenses ''RenameState
 
 emptyRenameState :: RenameState
 emptyRenameState = RenameState
-  { _counts = Map.empty
-  , _renames = Map.empty
+  { _renames = Map.empty
   }
 
 type TypeConEnv = Map Name (Annotated KindCheck Kind) -- ^ Type constructor environment

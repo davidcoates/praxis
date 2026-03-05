@@ -43,7 +43,7 @@ data Value
   | Unit
 
 integerToValue :: Name -> Integer -> Value
-integerToValue n = case n of
+integerToValue n = case nameString n of
   "I8"    -> I8    . fromInteger
   "I16"   -> I16   . fromInteger
   "I32"   -> I32   . fromInteger
@@ -85,8 +85,8 @@ instance Show Value where
     Array a       -> let vs = unsafePerformIO (ArrayIO.getElems a) in "[" ++ intercalate ", " (map show vs) ++ "]" -- eek!
     Bool b        -> show b
     Char c        -> show c
-    Data n v      -> n ++ " " ++ show v
-    Enum n        -> n
+    Data n v      -> show n ++ " " ++ show v
+    Enum n        -> show n
     Fn f          -> "«function»"
     Pair a b      -> "(" ++ show a ++ ", " ++ show b ++ ")"
     Polymorphic _ -> "«polymorphic»"

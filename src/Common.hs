@@ -3,7 +3,10 @@ module Common
   , module Common.Source
   , module Common.Tag
 
-  , Name
+  , Unique(..)
+  , Name(..)
+  , mkName
+  , nameString
   , I8
   , I16
   , I32
@@ -60,6 +63,8 @@ import           Common.Pretty
 import           Common.Source
 import           Common.Tag
 
+import qualified Data.Monoid.Colorful       as Colored
+
 import           Control.Applicative        (Const (..), liftA2)
 import           Control.Lens               (Lens', _1, _2, both, makeLenses,
                                              over, set, use, uses, view, (%=),
@@ -76,7 +81,22 @@ import           Data.List                  (intercalate, intersperse, nub)
 import           Data.Traversable           (sequenceA)
 import           Data.Word
 
-type Name  = String
+newtype Unique = Unique Int deriving (Eq, Ord, Show)
+
+data Name = Name String Unique deriving (Eq, Ord)
+
+instance Show Name where
+  show (Name s _) = s
+
+instance Pretty Name where
+  pretty (Name s _) = Colored.Value s
+
+mkName :: String -> Name
+mkName s = Name s (Unique 0)
+
+nameString :: Name -> String
+nameString (Name s _) = s
+
 type I8    = Int8
 type I16   = Int16
 type I32   = Int32

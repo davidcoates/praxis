@@ -37,10 +37,10 @@ special c = token (Special c) <|> expected ("special '" ++ [c] ++ "'")
 layout :: Syntax f => Char -> f ()
 layout c = token (Layout c) <|> expected ("layout '" ++ [c] ++ "'")
 
-contextualOp :: Syntax f => Name -> f ()
+contextualOp :: Syntax f => String -> f ()
 contextualOp op = token (VarSym op) <|> internal (reservedSym op) <|> expected ("contextual keyword '" ++ op ++ "'")
 
-contextualId :: Syntax f => Name -> f ()
+contextualId :: Syntax f => String -> f ()
 contextualId id = token (VarId id) <|> internal (reservedId id) <|> expected ("contextual keyword '" ++ id ++ "'")
 
 block :: Syntax f => f a -> f [a]
@@ -57,53 +57,53 @@ blockLike f g =
   _Nil <$> pure ()
 
 conId :: Syntax f => f Name
-conId = match f ConId where
+conId = match f (ConId . nameString) where
   f = \case
-    ConId n -> Just n
+    ConId n -> Just (mkName n)
     _       -> Nothing
 
 varId :: Syntax f => f Name
-varId = match f VarId where
+varId = match f (VarId . nameString) where
   f = \case
-    VarId n -> Just n
+    VarId n -> Just (mkName n)
     _       -> Nothing
 
 flavoredVarId :: Syntax f => f (Flavor, Name)
 flavoredVarId = match parse print where
   parse = \case
-    VarId n      -> Just (Plain, n)
-    VarIdRef n   -> Just (Ref, n)
-    VarIdValue n -> Just (Value, n)
-    VarIdView n  -> Just (View, n)
+    VarId n      -> Just (Plain, mkName n)
+    VarIdRef n   -> Just (Ref,   mkName n)
+    VarIdValue n -> Just (Value, mkName n)
+    VarIdView n  -> Just (View,  mkName n)
     _            -> Nothing
   print (f, n) = case f of
-    Plain -> VarId n
-    Ref   -> VarIdRef n
-    Value -> VarIdValue n
-    View  -> VarIdView n
+    Plain -> VarId      (nameString n)
+    Ref   -> VarIdRef   (nameString n)
+    Value -> VarIdValue (nameString n)
+    View  -> VarIdView  (nameString n)
 
 varIdRef :: Syntax f => f Name
-varIdRef = match f VarIdRef where
+varIdRef = match f (VarIdRef . nameString) where
   f = \case
-    VarIdRef n -> Just n
+    VarIdRef n -> Just (mkName n)
     _          -> Nothing
 
 varSym :: Syntax f => f Name
-varSym = match f VarSym where
+varSym = match f (VarSym . nameString) where
   f = \case
-    VarSym n -> Just n
+    VarSym n -> Just (mkName n)
     _        -> Nothing
 
 uni :: Syntax f => f Name
-uni = match (const Nothing) (Uni . VarId)
+uni = match (const Nothing) (Uni . VarId . nameString)
 
 flavoredUni :: Syntax f => f (Flavor, Name)
 flavoredUni = match (const Nothing) print where
   print (f, n) = Uni $ case f of
-    Plain -> VarId n
-    Ref   -> VarIdRef n
-    Value -> VarIdValue n
-    View  -> VarIdView n
+    Plain -> VarId      (nameString n)
+    Ref   -> VarIdRef   (nameString n)
+    Value -> VarIdValue (nameString n)
+    View  -> VarIdView  (nameString n)
 
 lit :: Syntax f => f Lit
 lit = match f Token.Lit where

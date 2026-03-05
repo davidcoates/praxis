@@ -172,42 +172,42 @@ reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> ca
 
   TypeIsInstance (a0 :< inst) -> case inst of
 
-    TypeApply (_ :< TypeCon "Integral") ty | disambiguate
-      -> return $ subgoals [ Subgoal (a :< TypeIsEq ty (phantom (TypeCon "I32"))) ]
+    TypeApply (_ :< TypeCon n) ty | n == mkName "Integral", disambiguate
+      -> return $ subgoals [ Subgoal (a :< TypeIsEq ty (phantom (TypeCon (mkName "I32")))) ]
 
     TypeApply (a1 :< TypeCon cls) ty -> case view value ty of
       TypeApplyOp op ty -> do
         let
           instVal = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) ty))
-          instRef = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) (phantom (TypeApply (phantom (TypeCon "Ref")) ty))))
+          instRef = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) (phantom (TypeApply (phantom (TypeCon (mkName "Ref"))) ty))))
         affine <- isAffine ty
         case (isRef op, affine) of
           (No, _)         -> error "unnormalized"
           (_, No)         -> error "unnormalized"
           (_, Unknown)    -> return skip
           (Unknown, _)    -> return skip
-          (Yes, Yes)      -> reduceTypeConInstance cls "Ref" [ty]
+          (Yes, Yes)      -> reduceTypeConInstance cls (mkName "Ref") [ty]
           (Yes, Variable) -> return $ subgoals [ Subgoal instRef, copy ty `Implies` instVal ]
           (Variable, _)   -> return $ subgoals [ Subgoal instRef, Subgoal instVal ]
-      TypePair ty1 ty2 -> reduceTypeConInstance cls "Pair" [ty1, ty2]
-      TypeFn ty1 ty2 -> reduceTypeConInstance cls "Fn" [ty1, ty2]
-      TypeUnit -> reduceTypeConInstance cls "Unit" []
+      TypePair ty1 ty2 -> reduceTypeConInstance cls (mkName "Pair") [ty1, ty2]
+      TypeFn ty1 ty2 -> reduceTypeConInstance cls (mkName "Fn") [ty1, ty2]
+      TypeUnit -> reduceTypeConInstance cls (mkName "Unit") []
       TypeVar _ _ -> return contradiction
       _ | Just (n, tys) <- unapplyTypeCon ty -> reduceTypeConInstance cls n tys
       _ -> return skip
 
   TypeIsIntegralOver (_ :< ty) n -> case ty of
-    TypeCon "I8"    -> checkBounds n (undefined :: I8)
-    TypeCon "I16"   -> checkBounds n (undefined :: I16)
-    TypeCon "I32"   -> checkBounds n (undefined :: I32)
-    TypeCon "I64"   -> checkBounds n (undefined :: I64)
-    TypeCon "ISize" -> checkBounds n (undefined :: ISize)
-    TypeCon "U8"    -> checkBounds n (undefined :: U8)
-    TypeCon "U16"   -> checkBounds n (undefined :: U16)
-    TypeCon "U32"   -> checkBounds n (undefined :: U32)
-    TypeCon "U64"   -> checkBounds n (undefined :: U64)
-    TypeCon "USize" -> checkBounds n (undefined :: USize)
-    _               -> return skip
+    TypeCon c | c == mkName "I8"    -> checkBounds n (undefined :: I8)
+    TypeCon c | c == mkName "I16"   -> checkBounds n (undefined :: I16)
+    TypeCon c | c == mkName "I32"   -> checkBounds n (undefined :: I32)
+    TypeCon c | c == mkName "I64"   -> checkBounds n (undefined :: I64)
+    TypeCon c | c == mkName "ISize" -> checkBounds n (undefined :: ISize)
+    TypeCon c | c == mkName "U8"    -> checkBounds n (undefined :: U8)
+    TypeCon c | c == mkName "U16"   -> checkBounds n (undefined :: U16)
+    TypeCon c | c == mkName "U32"   -> checkBounds n (undefined :: U32)
+    TypeCon c | c == mkName "U64"   -> checkBounds n (undefined :: U64)
+    TypeCon c | c == mkName "USize" -> checkBounds n (undefined :: USize)
+    _                               -> return skip
     where
       checkBounds :: forall a. (Integral a, Bounded a) => Integer -> a -> Praxis (Reduction TypeCheck)
       checkBounds n _ = if toInteger (minBound :: a) <= n && n <= toInteger (maxBound :: a) then return tautology else return contradiction
@@ -356,9 +356,9 @@ isAffine ty = do
   where
     isAffine' :: Annotated TypeCheck Type -> Praxis Truth
     isAffine' (a :< ty) = case ty of
-      TypePair ty1 ty2 -> isTypeConAffine "Pair" [ty1, ty2]
-      TypeFn ty1 ty2 -> isTypeConAffine "Fn" [ty1, ty2]
-      TypeUnit -> isTypeConAffine "Unit" []
+      TypePair ty1 ty2 -> isTypeConAffine (mkName "Pair") [ty1, ty2]
+      TypeFn ty1 ty2 -> isTypeConAffine (mkName "Fn") [ty1, ty2]
+      TypeUnit -> isTypeConAffine (mkName "Unit") []
       TypeApplyOp op ty -> truthAnd (truthNot (isRef op)) <$> isAffine ty
       TypeUni _ _ -> return Unknown
       TypeVar _ _ -> return Variable
@@ -368,10 +368,10 @@ isTypeConAffine :: Name -> [Annotated TypeCheck Type] -> Praxis Truth
 isTypeConAffine name args = do
   l <- use (checkState . instanceEnv)
   let Just instances = Map.lookup name l
-  case Map.lookup "Copy" instances of
+  case Map.lookup (mkName "Copy") instances of
     Just resolver -> case resolver args of
       (_, IsInstance)                -> return No
-      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine ty | (_ :< TypeIsInstance (_ :< TypeApply (_ :< TypeCon "Copy") ty)) <- subgoals ]
+      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine ty | (_ :< TypeIsInstance (_ :< TypeApply (_ :< TypeCon c) ty)) <- subgoals, c == mkName "Copy" ]
     Nothing                          -> return Yes
 
 
@@ -432,9 +432,9 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
   expandConstraint constraint@((src, _) :< _) = ((constraint:) <$>) $ case view value constraint of
     TypeIsInstance (a0 :< inst) -> case inst of
       TypeApply (a1 :< TypeCon cls) ty -> case view value ty of
-        TypePair ty1 ty2 -> expandTypeConInstance cls "Pair" [ty1, ty2]
-        TypeFn ty1 ty2 -> expandTypeConInstance cls "Fn" [ty1, ty2]
-        TypeUnit -> expandTypeConInstance cls "Unit" []
+        TypePair ty1 ty2 -> expandTypeConInstance cls (mkName "Pair") [ty1, ty2]
+        TypeFn ty1 ty2 -> expandTypeConInstance cls (mkName "Fn") [ty1, ty2]
+        TypeUnit -> expandTypeConInstance cls (mkName "Unit") []
         TypeVar _ _ -> return []
         _ | Just (n, tys) <- unapplyTypeCon ty -> expandTypeConInstance cls n tys
     where

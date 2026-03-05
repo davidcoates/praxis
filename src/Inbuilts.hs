@@ -47,104 +47,104 @@ initialTypeConEnv :: TypeConEnv
 initialTypeConEnv = Map.fromList
   [
   -- Types
-    ("Array",    kind "Type -> Type")
-  , ("Bool",     kind "Type")
-  , ("Char",     kind "Type")
-  , ("Fn",       kind "Type -> Type -> Type")
-  , ("I8",       kind "Type")
-  , ("I16",      kind "Type")
-  , ("I32",      kind "Type")
-  , ("I64",      kind "Type")
-  , ("ISize",    kind "Type")
-  , ("Ref",      kind "Type -> Type")
-  , ("String",   kind "Type")
-  , ("U8",       kind "Type")
-  , ("U16",      kind "Type")
-  , ("U32",      kind "Type")
-  , ("U64",      kind "Type")
-  , ("USize",    kind "Type")
-  , ("Unit",     kind "Type")
-  , ("Pair",     kind "Type -> Type -> Type")
+    (mkName "Array",    kind "Type -> Type")
+  , (mkName "Bool",     kind "Type")
+  , (mkName "Char",     kind "Type")
+  , (mkName "Fn",       kind "Type -> Type -> Type")
+  , (mkName "I8",       kind "Type")
+  , (mkName "I16",      kind "Type")
+  , (mkName "I32",      kind "Type")
+  , (mkName "I64",      kind "Type")
+  , (mkName "ISize",    kind "Type")
+  , (mkName "Ref",      kind "Type -> Type")
+  , (mkName "String",   kind "Type")
+  , (mkName "U8",       kind "Type")
+  , (mkName "U16",      kind "Type")
+  , (mkName "U32",      kind "Type")
+  , (mkName "U64",      kind "Type")
+  , (mkName "USize",    kind "Type")
+  , (mkName "Unit",     kind "Type")
+  , (mkName "Pair",     kind "Type -> Type -> Type")
   -- Constraints
-  , ("Clone",    kind "Type -> Constraint")
-  , ("Dispose",  kind "Type -> Constraint")
-  , ("Copy",     kind "Type -> Constraint")
-  , ("Capture",  kind "Type -> Constraint")
-  , ("Integral", kind "Type -> Constraint")
+  , (mkName "Clone",    kind "Type -> Constraint")
+  , (mkName "Dispose",  kind "Type -> Constraint")
+  , (mkName "Copy",     kind "Type -> Constraint")
+  , (mkName "Capture",  kind "Type -> Constraint")
+  , (mkName "Integral", kind "Type -> Constraint")
   ]
 
 
 -- TODO should be replaced with instances in prelude
 
 integral :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-integral t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Integral")) t)))
+integral t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Integral"))) t)))
 
 clone :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-clone t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Clone")) t)))
+clone t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Clone"))) t)))
 
 dispose :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-dispose t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Dispose")) t)))
+dispose t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Dispose"))) t)))
 
 copy :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-copy t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Copy")) t)))
+copy t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Copy"))) t)))
 
 capture :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-capture t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon "Capture")) t)))
+capture t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Capture"))) t)))
 
 initialInstanceEnv :: InstanceEnv
 initialInstanceEnv = Map.fromList
-  [ ("Array", Map.fromList
-    [ ("Clone",   \[t] -> (Inbuilt, IsInstanceOnlyIf [clone t]))
-    , ("Dispose", \[t] -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
+  [ (mkName "Array", Map.fromList
+    [ (mkName "Clone",   \[t] -> (Inbuilt, IsInstanceOnlyIf [clone t]))
+    , (mkName "Dispose", \[t] -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
     ]
     )
-  , ("Bool", primitive)
-  , ("Char", primitive)
-  , ("Fn", Map.fromList
-    [ ("Clone",   \_ -> (Inbuilt, IsInstance))
-    , ("Dispose", \_ -> (Inbuilt, IsInstance))
-    , ("Copy",    \_ -> (Inbuilt, IsInstance))
-    , ("Capture", \_ -> (Inbuilt, IsInstance))
+  , (mkName "Bool", primitive)
+  , (mkName "Char", primitive)
+  , (mkName "Fn", Map.fromList
+    [ (mkName "Clone",   \_ -> (Inbuilt, IsInstance))
+    , (mkName "Dispose", \_ -> (Inbuilt, IsInstance))
+    , (mkName "Copy",    \_ -> (Inbuilt, IsInstance))
+    , (mkName "Capture", \_ -> (Inbuilt, IsInstance))
     ]
     )
-  , ("I8", integral)
-  , ("I16", integral)
-  , ("I32", integral)
-  , ("I64", integral)
-  , ("ISize", integral)
-  , ("Pair", Map.fromList
-    [ ("Clone",   \[a, b] -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
-    , ("Dispose", \[a, b] -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
-    , ("Copy",    \[a, b] -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
-    , ("Capture", \[a, b] -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
+  , (mkName "I8",    integralInst)
+  , (mkName "I16",   integralInst)
+  , (mkName "I32",   integralInst)
+  , (mkName "I64",   integralInst)
+  , (mkName "ISize", integralInst)
+  , (mkName "Pair", Map.fromList
+    [ (mkName "Clone",   \[a, b] -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
+    , (mkName "Dispose", \[a, b] -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
+    , (mkName "Copy",    \[a, b] -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
+    , (mkName "Capture", \[a, b] -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
     ]
     )
-  , ("Ref", Map.fromList
-    [ ("Clone",   \_ -> (Trivial, IsInstance))
-    , ("Dispose", \_ -> (Trivial, IsInstance))
-    , ("Copy",    \_ -> (Trivial, IsInstance))
+  , (mkName "Ref", Map.fromList
+    [ (mkName "Clone",   \_ -> (Trivial, IsInstance))
+    , (mkName "Dispose", \_ -> (Trivial, IsInstance))
+    , (mkName "Copy",    \_ -> (Trivial, IsInstance))
     ]
     )
-  , ("String", Map.fromList
-    [ ("Clone",   \_ -> (Inbuilt, IsInstance))
-    , ("Dispose", \_ -> (Inbuilt, IsInstance))
+  , (mkName "String", Map.fromList
+    [ (mkName "Clone",   \_ -> (Inbuilt, IsInstance))
+    , (mkName "Dispose", \_ -> (Inbuilt, IsInstance))
     ]
     )
-  , ("U8", integral)
-  , ("U16", integral)
-  , ("U32", integral)
-  , ("U64", integral)
-  , ("USize", integral)
-  , ("Unit", primitive)
+  , (mkName "U8",    integralInst)
+  , (mkName "U16",   integralInst)
+  , (mkName "U32",   integralInst)
+  , (mkName "U64",   integralInst)
+  , (mkName "USize", integralInst)
+  , (mkName "Unit", primitive)
   ] where
     primitive = Map.fromList
-      [ ("Clone",   \_ -> (Trivial, IsInstance))
-      , ("Dispose", \_ -> (Trivial, IsInstance))
-      , ("Copy",    \_ -> (Trivial, IsInstance))
-      , ("Capture", \_ -> (Trivial, IsInstance))
+      [ (mkName "Clone",   \_ -> (Trivial, IsInstance))
+      , (mkName "Dispose", \_ -> (Trivial, IsInstance))
+      , (mkName "Copy",    \_ -> (Trivial, IsInstance))
+      , (mkName "Capture", \_ -> (Trivial, IsInstance))
       ]
-    integral = primitive `Map.union` Map.fromList
-      [ ("Integral", \_ -> (Inbuilt, IsInstance))
+    integralInst = primitive `Map.union` Map.fromList
+      [ (mkName "Integral", \_ -> (Inbuilt, IsInstance))
       ]
 
 
@@ -152,99 +152,99 @@ initialInstanceEnv = Map.fromList
 
 inbuilts :: [(Name, Annotated TypeCheck QType, Value)]
 inbuilts =
-  [ ("add"
+  [ (mkName "add"
     , poly "forall a | Integral a. (a, a) -> a" -- TODO should be Num, not Integral
     , liftIII (+)
     )
-  , ("subtract"
+  , (mkName "subtract"
     , poly "forall a | Integral a. (a, a) -> a"
     , liftIII (-)
     )
-  , ("multiply"
+  , (mkName "multiply"
     , poly "forall a | Integral a. (a, a) -> a"
     , liftIII (*)
     )
-  , ("negate"
+  , (mkName "negate"
     , poly "forall a | Integral a. a -> a"
     , liftI $ \(con, decon) -> Fn (\x -> return (con (negate (decon x))))
     )
-  , ("get_int"
+  , (mkName "get_int"
     , poly "forall a | Integral a. () -> a"
     , liftI $ \(con, decon) -> Fn (\Unit -> liftIOUnsafe (con <$> readLn))
     )
-  , ("get_str"
+  , (mkName "get_str"
     , poly "() -> String"
     , Fn (\Unit -> Value.String <$> liftIOUnsafe getContents) -- TODO need to make many of these functions strict?
     )
-  , ("put_int"
+  , (mkName "put_int"
     , poly "forall a | Integral a. a -> ()"
     , liftI $ \(_, decon) -> Fn (\i -> liftIOUnsafe (print (decon i) >> pure Unit))
     )
-  , ("put_str"
+  , (mkName "put_str"
     , poly "forall &r. &r String -> ()"
     , Fn (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit)
     )
-  , ("put_str_ln"
+  , (mkName "put_str_ln"
     , poly "forall &r. &r String -> ()"
     , Fn (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit)
     )
-  , ("compose"
+  , (mkName "compose"
     , poly "forall a b c. (b -> c, a -> b) -> a -> c"
     , Fn (\(Pair (Fn f) (Fn g)) -> pure (Fn (\x -> g x >>= f)))
     )
-  , ("print"
+  , (mkName "print"
     , poly "forall &r a. &r a -> ()" -- TODO should have Show constraint
     , Fn (\x -> liftIOUnsafe (print x >> pure Unit))
     )
-  , ("new_array"
+  , (mkName "new_array"
     , poly "forall a. (USize, () -> a) -> Array a"
     , Fn (\(Pair (USize i) v) -> Value.newArray i v)
     )
-  , ("at_array"
+  , (mkName "at_array"
     , poly "forall &r a. (&r Array a, USize) -> &r a"
     , Fn (\(Pair (Array a) (USize i)) -> Value.readArray a i)
     )
-  , ("len_array"
+  , (mkName "len_array"
     , poly "forall &r a. &r Array a -> USize"
     , Fn (\(Array a) -> USize <$> Value.lenArray a)
     )
-  , ("set_array"
+  , (mkName "set_array"
     , poly "forall a. (Array a, USize, a) -> Array a"
     , Fn (\(Pair (Array a) (Pair (USize i) e)) -> Value.writeArray a i e >> pure (Array a))
     )
-  , ("not"
+  , (mkName "not"
     , poly "Bool -> Bool"
     , Fn (\(Bool a) -> pure (Bool (not a)))
     )
-  , ("or"
+  , (mkName "or"
     , poly "(Bool, Bool) -> Bool"
     , liftBBB (||)
     )
-  , ("and"
+  , (mkName "and"
     , poly "(Bool, Bool) -> Bool"
     , liftBBB (&&)
     )
-  , ("eq"
+  , (mkName "eq"
     , poly "forall a | Integral a. (a, a) -> Bool" -- TODO should be Eq, not Integral
     , liftIIB (==)
     )
-  , ("neq"
+  , (mkName "neq"
     , poly "forall a | Integral a. (a, a) -> Bool"
     , liftIIB (/=)
     )
-  , ("lt"
+  , (mkName "lt"
     , poly "forall a | Integral a. (a, a) -> Bool" -- TODO should be Ord, not Integral
     , liftIIB (<)
     )
-  , ("gt"
+  , (mkName "gt"
     , poly "forall a | Integral a. (a, a) -> Bool"
     , liftIIB (>)
     )
-  , ("lte"
+  , (mkName "lte"
     , poly "forall a | Integral a. (a, a) -> Bool"
     , liftIIB (<=)
     )
-  , ("gte"
+  , (mkName "gte"
     , poly "forall a | Integral a. (a, a) -> Bool"
     , liftIIB (>=)
     )

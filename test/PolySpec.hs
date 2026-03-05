@@ -24,7 +24,7 @@ swap : forall a b . ( a , b ) -> ( b , a ) = \ ( a , b ) -> ( b , a )
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-swap_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> ( b_0 , a_0 ) = \ ( [a_0] a_0 , [b_0] b_0 ) -> ( [b_0] b_0 , [a_0] a_0 )
+swap : forall a b . ( a , b ) -> ( b , a ) = \ ( [a] a , [b] b ) -> ( [b] b , [a] a )
 |]
 
     it "evals" $ do
@@ -47,7 +47,7 @@ copy : forall a | Copy a . a -> ( a , a ) = \ x -> ( x , x )
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-copy_0 : forall a_0 | Copy a_0 . a_0 -> ( a_0 , a_0 ) = \ [a_0] x_0 -> ( [a_0] x_0 , [a_0] x_0 )
+copy : forall a | Copy a . a -> ( a , a ) = \ [a] x -> ( [a] x , [a] x )
 |]
 
     it "evals" $ do

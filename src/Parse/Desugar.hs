@@ -129,9 +129,9 @@ desugarExp (a@(src, _) :< exp) = case exp of
 
   VarRefSugar var -> throwAt Parse src $ "observed variable " <> pretty var <> " is not in a valid read context"
 
-  Con "True" -> pure (a :< Lit (Bool True))
+  Con n | n == mkName "True"  -> pure (a :< Lit (Bool True))
 
-  Con "False" -> pure (a :< Lit (Bool False))
+  Con n | n == mkName "False" -> pure (a :< Lit (Bool False))
 
   Where exp decls -> do
     exp <- desugarExp exp
@@ -305,11 +305,11 @@ coalesceDecls (decl:decls) = (decl:) <$> coalesceDecls decls
 desugarPat :: Annotated Initial Pat -> Praxis (Annotated Parse Pat)
 desugarPat (a :< pat) = case pat of
 
-  PatEnum "True"  -> pure (a :< PatLit (Bool True))
+  PatEnum n | n == mkName "True"  -> pure (a :< PatLit (Bool True))
 
-  PatEnum "False" -> pure (a :< PatLit (Bool False))
+  PatEnum n | n == mkName "False" -> pure (a :< PatLit (Bool False))
 
-  _               -> (a :<) <$> recurseTerm desugar pat
+  _                               -> (a :<) <$> recurseTerm desugar pat
 
 
 desugarType :: Annotated Initial Type -> Praxis (Annotated Parse Type)

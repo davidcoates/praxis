@@ -9,19 +9,19 @@ import           Term                 (Lit (..))
 
 data Token
   = Annotation (Colored String)
-  | ConId Name
+  | ConId String
   | Layout Char
   | Lit Lit
-  | ReservedCon Name
-  | ReservedSym Name
-  | ReservedId Name
+  | ReservedCon String
+  | ReservedSym String
+  | ReservedId String
   | Special Char
   | Uni Token
-  | VarId Name
-  | VarIdRef Name
-  | VarIdValue Name
-  | VarIdView Name
-  | VarSym Name
+  | VarId String
+  | VarIdRef String
+  | VarIdValue String
+  | VarIdView String
+  | VarSym String
   deriving Eq
 
 unstyle :: Colored a -> Colored a

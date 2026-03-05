@@ -76,7 +76,7 @@ data Fresh = Fresh
   , _freshTypeUniRefs   :: [String]
   , _freshTypeUniValues :: [String]
   , _freshTypeUniViews  :: [String]
-  , _freshVars          :: Map Name Int
+  , _freshVars          :: Map String Int
   }
 
 data PraxisState = PraxisState
@@ -210,13 +210,13 @@ freshKindUni :: Praxis (Annotated KindCheck Kind)
 freshKindUni = do
   (k:ks) <- use (fresh . freshKindUnis)
   fresh . freshKindUnis .= ks
-  return (phantom (KindUni k))
+  return (phantom (KindUni (mkName k)))
 
 freshRef :: Praxis (Annotated TypeCheck Type)
 freshRef = do
   (l:ls) <- use (fresh . freshRefs)
   fresh . freshRefs .= ls
-  return $ phantom (TypeRef l)
+  return $ phantom (TypeRef (mkName l))
 
 freshTypeUni :: Flavor -> Praxis (Annotated TypeCheck Type)
 freshTypeUni f = case f of
@@ -229,11 +229,11 @@ freshTypeUni f = case f of
     freshTypeUni' freshTypeUnis kind = do
       (x:xs) <- use (fresh . freshTypeUnis)
       fresh . freshTypeUnis .= xs
-      return (phantom (TypeUni f x))
+      return (phantom (TypeUni f (mkName x)))
 
 freshVar :: Name -> Praxis Name
-freshVar var = do
+freshVar (Name s _) = do
   m <- use (fresh . freshVars)
-  let i = Map.findWithDefault 0 var m
-  fresh . freshVars .= (Map.insert var (i+1) m)
-  return ("_" ++ var ++ "_" ++ show i)
+  let i = Map.findWithDefault 1 s m
+  fresh . freshVars .= Map.insert s (i+1) m
+  return (Name s (Unique i))

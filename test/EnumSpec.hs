@@ -31,7 +31,7 @@ color_to_char = \ color -> case color of
 
   it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 enum Color = Red | Green | Blue
-color_to_char_0 = \ [Color] color_0 -> [Char] case [Color] color_0 of
+color_to_char = \ [Color] color -> [Char] case [Color] color of
   [Color] Red -> [Char] 'R'
   [Color] Green -> [Char] 'G'
   [Color] Blue -> [Char] 'B'

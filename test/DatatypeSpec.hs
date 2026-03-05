@@ -23,7 +23,7 @@ datatype unboxed Either a b = Left a | Right b
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-datatype unboxed Either a_0 b_0 = [forall a_0 b_0 . a_0 -> Either a_0 b_0] Left a_0 | [forall a_0 b_0 . b_0 -> Either a_0 b_0] Right b_0
+datatype unboxed Either a b = [forall a b . a -> Either a b] Left a | [forall a b . b -> Either a b] Right b
 |]
 
     it "evals" $ do
@@ -51,9 +51,9 @@ id_fun : forall a . ( ) -> Fun a a = \ ( ) -> Fun ( \ x -> x )
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-datatype unboxed Fun a_0 b_0 = [forall a_0 b_0 . ( a_0 -> b_0 ) -> Fun a_0 b_0] Fun ( a_0 -> b_0 )
-unbox_fun_0 : forall a_1 b_1 . Fun a_1 b_1 -> a_1 -> b_1 = \ [Fun a_1 b_1] Fun [a_1 -> b_1] f_0 -> \ [a_1] x_0 -> [a_1 -> b_1] f_0 [a_1] x_0
-id_fun_0 : forall a_2 . ( ) -> Fun a_2 a_2 = \ [( )] ( ) -> [( a_2 -> a_2 ) -> Fun a_2 a_2] Fun ( \ [a_2] x_1 -> [a_2] x_1 )
+datatype unboxed Fun a b = [forall a b . ( a -> b ) -> Fun a b] Fun ( a -> b )
+unbox_fun : forall a b . Fun a b -> a -> b = \ [Fun a b] Fun [a -> b] f -> \ [a] x -> [a -> b] f [a] x
+id_fun : forall a . ( ) -> Fun a a = \ [( )] ( ) -> [( a -> a ) -> Fun a a] Fun ( \ [a] x -> [a] x )
 |]
 
     it "evals" $ runEvaluate program "unbox_fun (id_fun ()) 4"  `shouldReturn` "4"
@@ -66,7 +66,7 @@ datatype unboxed Unboxed a = Unboxed a
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-datatype unboxed Unboxed a_0 = [forall a_0 . a_0 -> Unboxed a_0] Unboxed a_0
+datatype unboxed Unboxed a = [forall a . a -> Unboxed a] Unboxed a
 |]
 
 
@@ -77,7 +77,7 @@ datatype boxed Boxed a = Boxed a
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-datatype boxed Boxed a_0 = [forall a_0 . a_0 -> Boxed a_0] Boxed a_0
+datatype boxed Boxed a = [forall a . a -> Boxed a] Boxed a
 |]
 
 
@@ -125,15 +125,15 @@ rec
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 rec
-  datatype boxed List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
+  datatype boxed List a = [forall a . ( ) -> List a] Nil ( ) | [forall a . ( a , List a ) -> List a] Cons ( a , List a )
 rec
-  map_0 : forall ?v_0 a_1 b_0 . ( ?v_0 a_1 -> b_0 ) -> ?v_0 List a_1 -> List b_0 = \ [?v_0 a_1 -> b_0] f_0 -> [?v_0 List a_1 -> List b_0] cases
-    [?v_0 List a_1] Nil [( )] ( ) -> [( ) -> List b_0] Nil [( )] ( )
-    [?v_0 List a_1] Cons ( [?v_0 a_1] x_0 , [?v_0 List a_1] xs_0 ) -> [( b_0 , List b_0 ) -> List b_0] Cons ( [?v_0 a_1 -> b_0] f_0 [?v_0 a_1] x_0 , [( ?v_0 a_1 -> b_0 ) -> ?v_0 List a_1 -> List b_0] map_0 [?v_0 a_1 -> b_0] f_0 [?v_0 List a_1] xs_0 )
+  map : forall ?v a b . ( ?v a -> b ) -> ?v List a -> List b = \ [?v a -> b] f -> [?v List a -> List b] cases
+    [?v List a] Nil [( )] ( ) -> [( ) -> List b] Nil [( )] ( )
+    [?v List a] Cons ( [?v a] x , [?v List a] xs ) -> [( b , List b ) -> List b] Cons ( [?v a -> b] f [?v a] x , [( ?v a -> b ) -> ?v List a -> List b] map [?v a -> b] f [?v List a] xs )
 rec
-  sum_0 : forall &r_0 . &r_0 List I32 -> I32 = [&r_0 List I32 -> I32] cases
-    [&r_0 List I32] Nil [( )] ( ) -> [I32] 0
-    [&r_0 List I32] Cons ( [I32] x_1 , [&r_0 List I32] xs_1 ) -> [( I32 , I32 ) -> I32] add ( [I32] x_1 , [&r_0 List I32 -> I32] sum_0 [&r_0 List I32] xs_1 )
+  sum : forall &r . &r List I32 -> I32 = [&r List I32 -> I32] cases
+    [&r List I32] Nil [( )] ( ) -> [I32] 0
+    [&r List I32] Cons ( [I32] x , [&r List I32] xs ) -> [( I32 , I32 ) -> I32] add ( [I32] x , [&r List I32 -> I32] sum [&r List I32] xs )
 |]
 
     it "evals" $ do

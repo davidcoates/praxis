@@ -38,7 +38,7 @@ fst : forall a b . ( a , b ) -> a = \ ( x , _ ) -> x
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] _hole_0 ) -> [a_0] x_0
+fst : forall a b . ( a , b ) -> a = \ ( [a] x , [b] hole ) -> [a] x
 |]
 
 
@@ -68,7 +68,7 @@ fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> read y in x defer y
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-fst_0 : forall a_0 b_0 . ( a_0 , b_0 ) -> a_0 = \ ( [a_0] x_0 , [b_0] y_0 ) -> read y_0 in [a_0] [a_0] x_0 defer [&'l0 b_0] y_0
+fst : forall a b . ( a , b ) -> a = \ ( [a] x , [b] y ) -> read y in [a] [a] x defer [&'l0 b] y
 |]
 
 

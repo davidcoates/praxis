@@ -52,10 +52,7 @@ introCon src name kind = do
 
 introVar :: Source -> Flavor -> Name -> Annotated KindCheck Kind -> Praxis Name
 introVar src flavor name kind = do
-  entry <- (checkState . kindState . typeVarRename . counts) `uses` Map.lookup name
-  let count = case entry of { Just count -> count; Nothing -> 0 }
-  let rename = name ++ "_" ++ show count
-  checkState . kindState . typeVarRename . counts %= Map.insert name (count + 1)
+  rename <- freshVar name
   checkState . kindState . typeVarRename . renames %= Map.insert name rename
   Nothing <- (checkState . kindState . typeVarEnv) `uses` Map.lookup rename -- sanity check
   checkState . kindState . typeVarEnv %= Map.insert rename (flavor, kind)
@@ -244,14 +241,14 @@ generateDeclType' forwardKind ((src, _) :< ty) = case ty of
 
       instances = case mode of
         DataUnboxed -> Map.fromList
-          [ ("Clone",          deduce clone)
-          , ("Dispose",        deduce dispose)
-          , ("Copy",           deduce copy)
-          , ("Capture",        deduce capture)
+          [ (mkName "Clone",   deduce clone)
+          , (mkName "Dispose", deduce dispose)
+          , (mkName "Copy",    deduce copy)
+          , (mkName "Capture", deduce capture)
           ]
         DataBoxed -> Map.fromList
-          [ ("Clone",          deduce clone)
-          , ("Dispose",        deduce dispose)
+          [ (mkName "Clone",   deduce clone)
+          , (mkName "Dispose", deduce dispose)
           ]
 
     checkState . instanceEnv %= Map.insert name instances
@@ -262,10 +259,10 @@ generateDeclType' forwardKind ((src, _) :< ty) = case ty of
     introCon src name kind
     let
       instances = Map.fromList
-        [ ("Clone",   \_ -> (Trivial, IsInstance))
-        , ("Dispose", \_ -> (Trivial, IsInstance))
-        , ("Copy",    \_ -> (Trivial, IsInstance))
-        , ("Capture", \_ -> (Trivial, IsInstance))
+        [ (mkName "Clone",   \_ -> (Trivial, IsInstance))
+        , (mkName "Dispose", \_ -> (Trivial, IsInstance))
+        , (mkName "Copy",    \_ -> (Trivial, IsInstance))
+        , (mkName "Capture", \_ -> (Trivial, IsInstance))
         ]
     checkState . instanceEnv %= Map.insert name instances
     return $ (src, kind) :< DeclTypeEnum name alts

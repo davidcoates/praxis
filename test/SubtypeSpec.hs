@@ -51,16 +51,16 @@ rec
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 rec
-  datatype boxed List a_0 = [forall a_0 . ( ) -> List a_0] Nil ( ) | [forall a_0 . ( a_0 , List a_0 ) -> List a_0] Cons ( a_0 , List a_0 )
+  datatype boxed List a = [forall a . ( ) -> List a] Nil ( ) | [forall a . ( a , List a ) -> List a] Cons ( a , List a )
 rec
-  copy_0 : forall ?v_0 a_1 . ?v_0 List a_1 -> List ( ?v_0 a_1 ) = [?v_0 List a_1 -> List ( ?v_0 a_1 )] cases
-    [?v_0 List a_1] Nil [( )] ( ) -> [( ) -> List ( ?v_0 a_1 )] Nil [( )] ( )
-    [?v_0 List a_1] Cons ( [?v_0 a_1] x_0 , [?v_0 List a_1] xs_0 ) -> [( ?v_0 a_1 , List ( ?v_0 a_1 ) ) -> List ( ?v_0 a_1 )] Cons ( [?v_0 a_1] x_0 , [?v_0 List a_1 -> List ( ?v_0 a_1 )] copy_0 [?v_0 List a_1] xs_0 )
+  copy : forall ?v a . ?v List a -> List ( ?v a ) = [?v List a -> List ( ?v a )] cases
+    [?v List a] Nil [( )] ( ) -> [( ) -> List ( ?v a )] Nil [( )] ( )
+    [?v List a] Cons ( [?v a] x , [?v List a] xs ) -> [( ?v a , List ( ?v a ) ) -> List ( ?v a )] Cons ( [?v a] x , [?v List a -> List ( ?v a )] copy [?v List a] xs )
 rec
-  concat_0 : forall ?v_1 ?w_0 a_2 . ( ?v_1 List a_2 , ?w_0 List a_2 ) -> List ( { ?v_1 , ?w_0 } a_2 ) = [( ?v_1 List a_2 , ?w_0 List a_2 ) -> List ( { ?v_1 , ?w_0 } a_2 )] cases
-    ( [?v_1 List a_2] Nil [( )] ( ) , [?w_0 List a_2] Nil [( )] ( ) ) -> [( ) -> List ( { ?v_1 , ?w_0 } a_2 )] Nil [( )] ( )
-    ( [?v_1 List a_2] Cons ( [?v_1 a_2] x_1 , [?v_1 List a_2] xs_1 ) , [?w_0 List a_2] ys_0 ) -> [( { ?v_1 , ?w_0 } a_2 , List ( { ?v_1 , ?w_0 } a_2 ) ) -> List ( { ?v_1 , ?w_0 } a_2 )] Cons ( [?v_1 a_2] x_1 : { ?v_1 , ?w_0 } a_2 , [( ?v_1 List a_2 , ?w_0 List a_2 ) -> List ( { ?v_1 , ?w_0 } a_2 )] concat_0 ( [?v_1 List a_2] xs_1 , [?w_0 List a_2] ys_0 ) )
-    ( [?v_1 List a_2] Nil [( )] ( ) , [?w_0 List a_2] ys_1 ) -> [{ ?v_1 , ?w_0 } List a_2 -> List ( { ?v_1 , ?w_0 } a_2 )] copy_0 ( [?w_0 List a_2] ys_1 : { ?v_1 , ?w_0 } List a_2 )
+  concat : forall ?v ?w a . ( ?v List a , ?w List a ) -> List ( { ?v , ?w } a ) = [( ?v List a , ?w List a ) -> List ( { ?v , ?w } a )] cases
+    ( [?v List a] Nil [( )] ( ) , [?w List a] Nil [( )] ( ) ) -> [( ) -> List ( { ?v , ?w } a )] Nil [( )] ( )
+    ( [?v List a] Cons ( [?v a] x , [?v List a] xs ) , [?w List a] ys ) -> [( { ?v , ?w } a , List ( { ?v , ?w } a ) ) -> List ( { ?v , ?w } a )] Cons ( [?v a] x : { ?v , ?w } a , [( ?v List a , ?w List a ) -> List ( { ?v , ?w } a )] concat ( [?v List a] xs , [?w List a] ys ) )
+    ( [?v List a] Nil [( )] ( ) , [?w List a] ys ) -> [{ ?v , ?w } List a -> List ( { ?v , ?w } a )] copy ( [?w List a] ys : { ?v , ?w } List a )
 |]
 
     it "evals" $ do

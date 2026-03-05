@@ -56,10 +56,7 @@ introCon src name qTy = do
 
 introVar :: Source -> Name -> Annotated TypeCheck QType -> Praxis Name
 introVar src name qTy = do
-  entry <- (checkState . typeState . varRename . counts) `uses` Map.lookup name
-  let count = case entry of { Just count -> count; Nothing -> 0 }
-  let rename = name ++ "_" ++ show count
-  checkState . typeState . varRename . counts %= Map.insert name (count + 1)
+  rename <- freshVar name
   checkState . typeState . varRename . renames %= Map.insert name rename
   Nothing <- (checkState . typeState . varEnv) `uses` Map.lookup rename -- sanity check
   checkState . typeState . varEnv %= Map.insert rename (mempty, qTy)
@@ -67,7 +64,7 @@ introVar src name qTy = do
 
 introHole :: Annotated TypeCheck QType -> Praxis Name
 introHole qTy = do
-  name <- freshVar "hole"
+  name <- freshVar (mkName "hole")
   Nothing <- (checkState . typeState . varEnv) `uses` Map.lookup name -- sanity check
   checkState . typeState . varEnv %= Map.insert name (mempty, qTy)
   return name
@@ -336,7 +333,7 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
   If condExp thenExp elseExp -> do
     condExp <- generateExp condExp
     (thenExp, elseExp) <- join src (generateExp thenExp) (generateExp elseExp)
-    require $ (src, TypeReasonIfCondition) :< Requirement (phantom (TypeIsEq (view annotation condExp) (phantom (TypeCon "Bool"))))
+    require $ (src, TypeReasonIfCondition) :< Requirement (phantom (TypeIsEq (view annotation condExp) (phantom (TypeCon (mkName "Bool")))))
     require $ (src, TypeReasonIfCongruence) :< Requirement (phantom (TypeIsEq (view annotation thenExp) (view annotation elseExp)))
     return (view annotation thenExp :< If condExp thenExp elseExp)
 
@@ -356,12 +353,12 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
     Integer n
       -> generateInteger src n
     Bool _
-      -> return (phantom (TypeCon "Bool"))
+      -> return (phantom (TypeCon (mkName "Bool")))
     Char _
-      -> return (phantom (TypeCon "Char"))
+      -> return (phantom (TypeCon (mkName "Char")))
     String _ -> do
       op <- freshTypeUni View
-      return (phantom (TypeApplyOp op (phantom (TypeCon "String"))))
+      return (phantom (TypeApplyOp op (phantom (TypeCon (mkName "String")))))
 
   Read name exp -> do
     (rename, refName, refType) <- readVar src name
@@ -394,7 +391,7 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
 
   Switch alts -> do
     conditions <- sequence (map (generateExp . fst) alts)
-    requires [ (src, TypeReasonSwitchCondition) :< Requirement (phantom (TypeIsEq ty (phantom (TypeCon "Bool")))) | ((src, ty) :< _) <- conditions ]
+    requires [ (src, TypeReasonSwitchCondition) :< Requirement (phantom (TypeIsEq ty (phantom (TypeCon (mkName "Bool"))))) | ((src, ty) :< _) <- conditions ]
     exps <- parallel src (map (generateExp . snd) alts)
     ty <- equals exps TypeReasonSwitchCongruence
     return (ty :< Switch (zip conditions exps))
@@ -480,10 +477,10 @@ generatePat' wrap ((src, _) :< pat) = (\(ty, pat, aliased) -> (ty, (src, wrap ty
 
   -- TODO think about how view literals would work, e.g. x@"abc"
   PatLit lit -> (\ty -> (ty, PatLit lit, False)) <$> case lit of
-    Bool _    -> return (phantom (TypeCon "Bool"))
-    Char _    -> return (phantom (TypeCon "Char"))
+    Bool _    -> return (phantom (TypeCon (mkName "Bool")))
+    Char _    -> return (phantom (TypeCon (mkName "Char")))
     Integer n -> generateInteger src n
-    String _  -> return (phantom (TypeCon "String"))
+    String _  -> return (phantom (TypeCon (mkName "String")))
 
   PatPair pat1 pat2 -> do
     layer <- freshLayer

@@ -83,8 +83,8 @@ x = 2
 |]
 
     it "checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-x_0 = [I32] 1
-x_1 = [I32] 2
+x = [I32] 1
+x = [I32] 2
 |]
 
 
@@ -121,12 +121,12 @@ g x = f x where
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-f_1 = \ [I32] x_0 -> [I32] [I32 -> I32] f_0 [I32] x_0 where
-  f_0 : I32 -> I32 = \ [I32] x_1 -> [I32] x_1
-g_0 = \ [I32] x_2 -> [I32] [I32 -> I32] f_2 [I32] x_2 where
-  f_2 = [I32 -> I32] cases
+f = \ [I32] x -> [I32] [I32 -> I32] f [I32] x where
+  f : I32 -> I32 = \ [I32] x -> [I32] x
+g = \ [I32] x -> [I32] [I32 -> I32] f [I32] x where
+  f = [I32 -> I32] cases
     [I32] 0 -> [I32] 1
-    [I32] n_0 -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f_1 ( [( I32 , I32 ) -> I32] subtract ( [I32] n_0 , [I32] 1 ) ) , [I32] n_0 )
+    [I32] n -> [( I32 , I32 ) -> I32] multiply ( [I32 -> I32] f ( [( I32 , I32 ) -> I32] subtract ( [I32] n , [I32] 1 ) ) , [I32] n )
 |]
 
     it "evals" $ do

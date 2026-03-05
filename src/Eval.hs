@@ -36,7 +36,7 @@ run term = eval term
 
 runMain :: Praxis ()
 runMain = do
-  entry <- (checkState . Check.typeState . Check.varRename . Check.renames) `uses` Map.Strict.lookup "main"
+  entry <- (checkState . Check.typeState . Check.varRename . Check.renames) `uses` Map.Strict.lookup (mkName "main")
   case entry of
     Nothing -> throw Evaluate ("missing main function" :: String)
     Just rename -> do

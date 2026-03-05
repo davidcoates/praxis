@@ -120,7 +120,7 @@ evalExp ((src, ty) :< exp) = case exp of
     values <- traverse (lookupValue src) names
     Value.Fn fn <- evalExp exp
     return $ Value.Fn $ \val -> save (evalState . valueEnv) $ do
-      evalState . valueEnv .= Map.fromList (zip names values)
+      mapM_ (\(n, v) -> (evalState . valueEnv) %= Map.insert n v) (zip names values)
       fn val
 
   Case exp alts -> do

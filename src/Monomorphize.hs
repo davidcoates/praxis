@@ -87,6 +87,13 @@ castTerm term = ($ term) $ case typeof (view value term) of
 monomorphizeExp :: Annotated TypeCheck Exp -> Praxis (Annotated Monomorphize Exp)
 monomorphizeExp ((src, ty) :< exp) = case exp of
 
+  Capture captures inner -> do
+    sourceDecls' <- use (monomorphizeState . sourceDecls)
+    let monoCaptures = filter (\(name, _) -> not (Map.member name sourceDecls')) captures
+    inner' <- castTerm inner
+    monoCaptures' <- traverse (\(n, qt) -> (n,) <$> castTerm qt) monoCaptures
+    return ((src, ty) :< Capture monoCaptures' inner')
+
   Specialize inner spec -> case view value inner of
     -- User-defined polymorphic function: generate/look up the monomorphic version
     Var name -> do
@@ -134,4 +141,40 @@ specializeDeclTerm monoName spec (_ :< DeclTermVar _ qTy bodyExp) = do
   return (phantom (DeclTerm (phantom (DeclTermVar monoName monoQTy monoBody))))
 
 monomorphizeProgram :: Annotated TypeCheck Program -> Praxis ()
-monomorphizeProgram _ = error "TODO: monomorphizeProgram"
+monomorphizeProgram (_ :< Program decls) = do
+  mapM_ collect decls
+  mapM_ emit decls
+  where
+    -- First pass: populate sourceDecls with polymorphic definitions
+    collect :: Annotated TypeCheck Decl -> Praxis ()
+    collect (_ :< decl) = case decl of
+      DeclTerm dt -> collectDeclTerm dt
+      DeclRec ds  -> mapM_ collectDeclRec ds
+      _           -> return ()
+
+    collectDeclRec :: Annotated TypeCheck DeclRec -> Praxis ()
+    collectDeclRec (_ :< DeclRecTerm dt) = collectDeclTerm dt
+    collectDeclRec _                     = return ()
+
+    collectDeclTerm :: Annotated TypeCheck DeclTerm -> Praxis ()
+    collectDeclTerm dt = case view value dt of
+      DeclTermVar name (Just qt) _
+        | (_ :< Forall _ _ _) <- qt -> monomorphizeState . sourceDecls %= Map.insert name dt
+      _ -> return ()
+
+    -- Second pass: emit non-polymorphic declarations
+    emit :: Annotated TypeCheck Decl -> Praxis ()
+    emit ann = case view value ann of
+      DeclTerm dt | isPolymorphic dt -> return ()
+      DeclRec ds  | any (isPolyRec . view value) ds -> return ()
+      _ -> do
+        monoDecl <- castTerm ann
+        monomorphizeState . exportedDecls %= (++ [monoDecl])
+
+    isPolymorphic :: Annotated TypeCheck DeclTerm -> Bool
+    isPolymorphic (_ :< DeclTermVar _ (Just (_ :< Forall _ _ _)) _) = True
+    isPolymorphic _                                                 = False
+
+    isPolyRec :: DeclRec TypeCheck -> Bool
+    isPolyRec (DeclRecTerm dt) = isPolymorphic dt
+    isPolyRec _                = False

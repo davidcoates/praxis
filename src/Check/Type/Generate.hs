@@ -164,11 +164,8 @@ closure src exp = do
   env1 <- use (checkState . typeState . varEnv)
   (ty :< x) <- scope src exp
   env2 <- use (checkState . typeState . varEnv)
---  display "exp" (phantom x) `ifFlag` debug
---  display "env1" (show (map (\(n, (u, _)) -> (n, view usedCount u, view readCount u)) (Map.toList env1))) `ifFlag` debug
---  display "env2" (show (map (\(n, (u, _)) -> (n, view usedCount u, view readCount u)) (Map.toList env2))) `ifFlag` debug
-  let captures = Map.toList $ Map.map (\((_, qTy), _) -> qTy) $ Map.filter (\((u1, _), (u2, _)) -> view usedCount u2 > view usedCount u1 || view readCount u2 > view readCount u1) $ Map.intersectionWith (,) env1 env2
---  display "captures" (show (map fst captures)) `ifFlag` debug
+  globals <- use (checkState . typeState . globalVars)
+  let captures = Map.toList $ Map.map (\((_, qTy), _) -> qTy) $ Map.filter (\((u1, _), (u2, _)) -> view usedCount u2 > view usedCount u1 || view readCount u2 > view readCount u1) $ Map.filterWithKey (\name _ -> not (Set.member name globals)) $ Map.intersectionWith (,) env1 env2
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, TypeReasonCaptured name) :< Requirement (capture ty) | (name, (_ :< Mono t)) <- captures ]
   return $ ty :< Capture captures ((src, ty) :< x)
@@ -202,10 +199,17 @@ generateDecl (a@(src, _) :< decl) = (a :<) <$> case decl of
         DeclRecTerm declTerm@(a :< DeclTermVar name sig exp) -> do
           ty <- getTypeFromSig sig
           rename <- introVar src name ty
+          checkState . typeState . globalVars %= Set.insert rename
           return (DeclRecTerm <$> generateDeclTerm' (Just ty) (a :< DeclTermVar rename sig exp))
         DeclRecType declType -> do
            -- FIXME: should pre-declare the constructors ?
           return (DeclRecType <$> generateDeclType declType)
+
+  DeclTerm declTerm -> do
+    declTerm' <- generateDeclTerm declTerm
+    let (_ :< DeclTermVar rename _ _) = declTerm'
+    checkState . typeState . globalVars %= Set.insert rename
+    return (DeclTerm declTerm')
 
   _ -> recurseTerm generate decl
 

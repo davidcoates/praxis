@@ -92,11 +92,9 @@ monomorphizeExp :: Annotated TypeCheck Exp -> Praxis (Annotated Monomorphize Exp
 monomorphizeExp ((src, ty) :< exp) = case exp of
 
   Capture captures inner -> do
-    sourceDecls' <- use (monomorphizeState . sourceDecls)
-    let monoCaptures = filter (\(name, _) -> not (Map.member name sourceDecls')) captures
     inner' <- castTerm inner
-    monoCaptures' <- traverse (\(n, qt) -> (n,) <$> castTerm qt) monoCaptures
-    return ((src, ty) :< Capture monoCaptures' inner')
+    captures' <- traverse (\(n, qt) -> (n,) <$> castTerm qt) captures
+    return ((src, ty) :< Capture captures' inner')
 
   Specialize inner spec -> case view value inner of
     -- User-defined polymorphic function: generate/look up the monomorphic version

@@ -27,6 +27,7 @@ module Check.State
   , conEnv
   , varEnv
   , varRename
+  , globalVars
 
   , InstanceOrigin(..)
   , Instance(..)
@@ -114,20 +115,22 @@ instance Monoid Usage where
 type VarEnv = Map Name (Usage, Annotated TypeCheck QType) -- ^ Variable environment
 
 data TypeState = TypeState
-  { _typeSolve :: SolveState TypeCheck
-  , _conEnv    :: ConEnv
-  , _varEnv    :: VarEnv
-  , _varRename :: RenameState
+  { _typeSolve  :: SolveState TypeCheck
+  , _conEnv     :: ConEnv
+  , _varEnv     :: VarEnv
+  , _varRename  :: RenameState
+  , _globalVars :: Set Name
   }
 
 makeLenses ''TypeState
 
 emptyTypeState :: TypeState
 emptyTypeState = TypeState
-  { _typeSolve = emptySolveState
-  , _conEnv = Map.empty
-  , _varEnv = Map.empty
-  , _varRename = emptyRenameState
+  { _typeSolve  = emptySolveState
+  , _conEnv     = Map.empty
+  , _varEnv     = Map.empty
+  , _varRename  = emptyRenameState
+  , _globalVars = Set.empty
   }
 
 data InstanceOrigin = Inbuilt | Trivial | User

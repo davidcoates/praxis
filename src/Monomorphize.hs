@@ -116,10 +116,27 @@ monomorphizeExp ((src, ty) :< exp) = case exp of
 
   _ -> ((src, ty) :<) <$> recurseTerm castTerm exp
 
+-- | Normalize a specialization for use as a deduplication key.
+-- Reference labels and view labels only matter to the type checker (lifetime analysis);
+-- for code generation all refs are equivalent (non-null pointer), and views are either
+-- ref or value. So collapse all TypeRef labels to a canonical one, and treat all
+-- concrete ref-flavored views identically.
+normalizeSpec :: Specialization TypeCheck -> Specialization TypeCheck
+normalizeSpec = map normPair
+  where
+    canonicalRef = phantom (TypeRef (mkName "r"))
+    normPair (pat, ty) = case view value pat of
+      TypePatVar Ref _  -> (pat, canonicalRef)
+      TypePatVar View _ -> case view value ty of
+        TypeRef _ -> (pat, canonicalRef)
+        _         -> (pat, ty)
+      _                 -> (pat, ty)
+
 -- | Look up or create the monomorphic name for a specialization of a user-defined function.
 specialize :: Name -> Specialization TypeCheck -> Praxis Name
 specialize name spec = do
-  let types = map snd spec
+  let spec'  = normalizeSpec spec
+      types  = map snd spec'
   existing <- (monomorphizeState . instances) `uses` Map.lookup (name, types)
   case existing of
     Just monoName -> return monoName
@@ -128,7 +145,7 @@ specialize name spec = do
       -- Register before processing body to handle recursive self-calls
       monomorphizeState . instances %= Map.insert (name, types) monoName
       Just srcDecl <- (monomorphizeState . sourceDecls) `uses` Map.lookup name
-      monoDecl <- specializeDeclTerm monoName spec srcDecl
+      monoDecl <- specializeDeclTerm monoName spec' srcDecl
       monomorphizeState . exportedDecls %= (++ [monoDecl])
       return monoName
 

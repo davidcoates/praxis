@@ -284,6 +284,7 @@ runWithPrelude c = runPraxis (importPrelude >> c) where
     checkState . kindState . typeConEnv .= initialTypeConEnv
     let initialVarEnv = Map.fromList $ map (\(n, qTy, _) -> (n, (mempty :: Usage, qTy))) inbuilts
     checkState . typeState . varEnv .= initialVarEnv
+    checkState . typeState . globalVars .= Map.keysSet initialVarEnv
     let initialValueEnv = Map.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
     evalState . valueEnv .= initialValueEnv
     flags . silent .= True

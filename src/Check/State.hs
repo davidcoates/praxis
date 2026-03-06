@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell  #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Check.State
   ( Constraint(..)

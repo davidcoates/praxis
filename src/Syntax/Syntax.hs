@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Syntax.Syntax
   ( Syntax(..)

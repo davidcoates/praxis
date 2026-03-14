@@ -166,11 +166,6 @@ evalExp ((src, ty) :< exp) = case exp of
 
   Sig exp _ -> evalExp exp
 
-  Specialize exp specialization -> do
-    exp <- evalExp exp
-    case exp of
-      Value.Polymorphic polyFun -> return (polyFun specialization)
-      _                         -> return exp
 
   Switch alts -> evalSwitch src alts
 

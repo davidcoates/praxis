@@ -7,10 +7,12 @@ module Monomorphize.State
   , sourceDecls
   , sourceDataDecls
   , conToDataType
+  , polyEnv
   , emptyState
   ) where
 
 import           Common
+import           Eval.Value      (Value)
 import           Stage
 import           Term
 
@@ -31,6 +33,8 @@ data State = State
   -- ^ Polymorphic DeclTypeData declarations keyed by data type name.
   , _conToDataType   :: Map Name Name
   -- ^ Maps each constructor name to its owning data type name.
+  , _polyEnv         :: Map Name (Specialization Monomorphize -> Value)
+  -- ^ Polymorphic inbuilt functions, keyed by name, for on-demand specialization.
   }
 
 makeLenses ''State
@@ -42,4 +46,5 @@ emptyState = State
   , _sourceDecls     = Map.empty
   , _sourceDataDecls = Map.empty
   , _conToDataType   = Map.empty
+  , _polyEnv         = Map.empty
   }

@@ -16,6 +16,7 @@ import           Eval.Value                (Value (..), integerToValue,
                                             valueToInteger)
 import qualified Eval.Value                as Value
 import           Introspect
+import           Monomorphize.State        (polyEnv)
 import qualified Parse                     (run)
 -- import qualified Check.Kind.Check          as Check.Kind (run)
 -- import qualified Check                     as Check (run)
@@ -150,113 +151,115 @@ initialInstanceEnv = Map.fromList
 
 -- FIXME: Intiailize "scopes"
 
-inbuilts :: [(Name, Annotated TypeCheck QType, Value)]
+type PolyFun = Specialization Monomorphize -> Value
+
+inbuilts :: [(Name, Annotated TypeCheck QType, Either Value PolyFun)]
 inbuilts =
   [ (mkName "add"
     , poly "forall a | Integral a. (a, a) -> a" -- TODO should be Num, not Integral
-    , liftIII (+)
+    , Right (liftIII (+))
     )
   , (mkName "subtract"
     , poly "forall a | Integral a. (a, a) -> a"
-    , liftIII (-)
+    , Right (liftIII (-))
     )
   , (mkName "multiply"
     , poly "forall a | Integral a. (a, a) -> a"
-    , liftIII (*)
+    , Right (liftIII (*))
     )
   , (mkName "negate"
     , poly "forall a | Integral a. a -> a"
-    , liftI $ \(con, decon) -> Fn (\x -> return (con (negate (decon x))))
+    , Right $ liftI $ \(con, decon) -> Fn (\x -> return (con (negate (decon x))))
     )
   , (mkName "get_int"
     , poly "forall a | Integral a. () -> a"
-    , liftI $ \(con, decon) -> Fn (\Unit -> liftIOUnsafe (con <$> readLn))
+    , Right $ liftI $ \(con, decon) -> Fn (\Unit -> liftIOUnsafe (con <$> readLn))
     )
   , (mkName "get_str"
     , poly "() -> String"
-    , Fn (\Unit -> Value.String <$> liftIOUnsafe getContents) -- TODO need to make many of these functions strict?
+    , Left $ Fn (\Unit -> Value.String <$> liftIOUnsafe getContents) -- TODO need to make many of these functions strict?
     )
   , (mkName "put_int"
     , poly "forall a | Integral a. a -> ()"
-    , liftI $ \(_, decon) -> Fn (\i -> liftIOUnsafe (print (decon i) >> pure Unit))
+    , Right $ liftI $ \(_, decon) -> Fn (\i -> liftIOUnsafe (print (decon i) >> pure Unit))
     )
   , (mkName "put_str"
     , poly "forall &r. &r String -> ()"
-    , Fn (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit)
+    , Left $ Fn (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit)
     )
   , (mkName "put_str_ln"
     , poly "forall &r. &r String -> ()"
-    , Fn (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit)
+    , Left $ Fn (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit)
     )
   , (mkName "compose"
     , poly "forall a b c. (b -> c, a -> b) -> a -> c"
-    , Fn (\(Pair (Fn f) (Fn g)) -> pure (Fn (\x -> g x >>= f)))
+    , Left $ Fn (\(Pair (Fn f) (Fn g)) -> pure (Fn (\x -> g x >>= f)))
     )
   , (mkName "print"
     , poly "forall &r a. &r a -> ()" -- TODO should have Show constraint
-    , Fn (\x -> liftIOUnsafe (print x >> pure Unit))
+    , Left $ Fn (\x -> liftIOUnsafe (print x >> pure Unit))
     )
   , (mkName "new_array"
     , poly "forall a. (USize, () -> a) -> Array a"
-    , Fn (\(Pair (USize i) v) -> Value.newArray i v)
+    , Left $ Fn (\(Pair (USize i) v) -> Value.newArray i v)
     )
   , (mkName "at_array"
     , poly "forall &r a. (&r Array a, USize) -> &r a"
-    , Fn (\(Pair (Array a) (USize i)) -> Value.readArray a i)
+    , Left $ Fn (\(Pair (Array a) (USize i)) -> Value.readArray a i)
     )
   , (mkName "len_array"
     , poly "forall &r a. &r Array a -> USize"
-    , Fn (\(Array a) -> USize <$> Value.lenArray a)
+    , Left $ Fn (\(Array a) -> USize <$> Value.lenArray a)
     )
   , (mkName "set_array"
     , poly "forall a. (Array a, USize, a) -> Array a"
-    , Fn (\(Pair (Array a) (Pair (USize i) e)) -> Value.writeArray a i e >> pure (Array a))
+    , Left $ Fn (\(Pair (Array a) (Pair (USize i) e)) -> Value.writeArray a i e >> pure (Array a))
     )
   , (mkName "not"
     , poly "Bool -> Bool"
-    , Fn (\(Bool a) -> pure (Bool (not a)))
+    , Left $ Fn (\(Bool a) -> pure (Bool (not a)))
     )
   , (mkName "or"
     , poly "(Bool, Bool) -> Bool"
-    , liftBBB (||)
+    , Left $ liftBBB (||)
     )
   , (mkName "and"
     , poly "(Bool, Bool) -> Bool"
-    , liftBBB (&&)
+    , Left $ liftBBB (&&)
     )
   , (mkName "eq"
     , poly "forall a | Integral a. (a, a) -> Bool" -- TODO should be Eq, not Integral
-    , liftIIB (==)
+    , Right (liftIIB (==))
     )
   , (mkName "neq"
     , poly "forall a | Integral a. (a, a) -> Bool"
-    , liftIIB (/=)
+    , Right (liftIIB (/=))
     )
   , (mkName "lt"
     , poly "forall a | Integral a. (a, a) -> Bool" -- TODO should be Ord, not Integral
-    , liftIIB (<)
+    , Right (liftIIB (<))
     )
   , (mkName "gt"
     , poly "forall a | Integral a. (a, a) -> Bool"
-    , liftIIB (>)
+    , Right (liftIIB (>))
     )
   , (mkName "lte"
     , poly "forall a | Integral a. (a, a) -> Bool"
-    , liftIIB (<=)
+    , Right (liftIIB (<=))
     )
   , (mkName "gte"
     , poly "forall a | Integral a. (a, a) -> Bool"
-    , liftIIB (>=)
+    , Right (liftIIB (>=))
     )
   ]
   where
-    liftI :: ((Integer -> Value, Value -> Integer) -> Value) -> Value
-    liftI f = Polymorphic $ \[(_, _ :< TypeCon ty)] -> f (integerToValue ty, valueToInteger)
-    liftII :: (forall a. Integral a => (a -> a)) -> Value
+    liftI :: ((Integer -> Value, Value -> Integer) -> Value) -> PolyFun
+    liftI f [(_, _ :< TypeCon ty)] = f (integerToValue ty, valueToInteger)
+    liftII :: (forall a. Integral a => (a -> a)) -> PolyFun
     liftII f = liftI $ \(con, decon) -> Fn (\x -> return (con (f (decon x))))
-    liftIII :: (forall a. Integral a => (a -> a -> a)) -> Value
+    liftIII :: (forall a. Integral a => (a -> a -> a)) -> PolyFun
     liftIII f = liftI $ \(con, decon) -> Fn (\(Pair x y) -> return (con (f (decon x) (decon y))))
-    liftIIB :: (forall a. Integral a => (a -> a -> Bool)) -> Value
+    liftIIB :: (forall a. Integral a => (a -> a -> Bool)) -> PolyFun
     liftIIB f = liftI $ \(con, decon) -> Fn (\(Pair x y) -> return (Bool (f (decon x) (decon y))))
     liftBBB :: (Bool -> Bool -> Bool) -> Value
     liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
@@ -282,11 +285,13 @@ runWithPrelude c = runPraxis (importPrelude >> c) where
   importPrelude = do
     checkState . instanceEnv .= initialInstanceEnv
     checkState . kindState . typeConEnv .= initialTypeConEnv
-    let initialVarEnv = Map.fromList $ map (\(n, qTy, _) -> (n, (mempty :: Usage, qTy))) inbuilts
-    checkState . typeState . varEnv .= initialVarEnv
+    let initialVarEnv   = Map.fromList [(n, (mempty :: Usage, qt)) | (n, qt, _) <- inbuilts]
+        initialValueEnv = Map.Lazy.fromList [(n, v) | (n, _, Left v)  <- inbuilts]
+        initialPolyEnv  = Map.fromList      [(n, f) | (n, _, Right f) <- inbuilts]
+    checkState . typeState . varEnv    .= initialVarEnv
     checkState . typeState . globalVars .= Map.keysSet initialVarEnv
-    let initialValueEnv = Map.Lazy.fromList $ map (\(n, _, v) -> (n, v)) inbuilts
-    evalState . valueEnv .= initialValueEnv
+    evalState . valueEnv        .= initialValueEnv
+    monomorphizeState . polyEnv .= initialPolyEnv
     flags . silent .= True
     Parse.run prelude :: Praxis (Annotated Parse Program)
     flags . silent .= False

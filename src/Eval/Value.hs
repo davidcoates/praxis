@@ -9,8 +9,6 @@ module Eval.Value
   ) where
 
 import {-# SOURCE #-}           Praxis           (Praxis, liftIOUnsafe)
-import                          Stage
-import                          Term             (Specialization)
 
 import                          Common
 import                          Data.Array.IO    (IOArray)
@@ -33,7 +31,6 @@ data Value
   | I64 I64
   | ISize ISize
   | Pair Value Value
-  | Polymorphic (Specialization Monomorphize -> Value)
   | String String
   | U8 U8
   | U16 U16
@@ -89,7 +86,6 @@ instance Show Value where
     Enum n        -> show n
     Fn f          -> "«function»"
     Pair a b      -> "(" ++ show a ++ ", " ++ show b ++ ")"
-    Polymorphic _ -> "«polymorphic»"
     String s      -> show s
     I8 i          -> show i
     I16 i         -> show i

@@ -96,11 +96,6 @@ castTerm term = ($ term) $ case typeof (view value term) of
 monomorphizeExp :: Annotated TypeCheck Exp -> Praxis (Annotated Monomorphize Exp)
 monomorphizeExp ((src, ty) :< exp) = case exp of
 
-  Capture captures inner -> do
-    inner' <- castTerm inner
-    captures' <- traverse (\(n, qt) -> (n,) <$> castTerm qt) captures
-    return ((src, ty) :< Capture captures' inner')
-
   Specialize inner spec -> case view value inner of
     -- User-defined polymorphic function: generate/look up the monomorphic version
     Var name -> do
@@ -118,13 +113,13 @@ monomorphizeExp ((src, ty) :< exp) = case exp of
                   types = map snd spec'
               existing <- (monomorphizeState . instances) `uses` Map.lookup (name, types)
               monoName <- case existing of
-                Just mn -> return mn
+                Just monoName -> return monoName
                 Nothing -> do
-                  mn <- freshVar name
-                  monomorphizeState . instances %= Map.insert (name, types) mn
+                  monoName <- freshVar name
+                  monomorphizeState . instances %= Map.insert (name, types) monoName
                   spec'' <- traverse (\(p, t) -> (,) <$> castTerm p <*> castTerm t) spec'
-                  (evalState . valueEnv) %= Map.insert mn (f spec'')
-                  return mn
+                  (evalState . valueEnv) %= Map.insert monoName (f spec'')
+                  return monoName
               return ((src, ty) :< Var monoName)
             -- Parametric inbuilt (Fn): value is type-generic, reference it directly
             Nothing -> return ((src, ty) :< Var name)
@@ -225,8 +220,8 @@ specializeDataType dataName spec = do
           rewriteTy ty = case unapplyTypeCon ty of
             Just (n, args) ->
               let normalizedArgs = map snd (normalizeSpec (zip typePats args))
-              in  Map.lookup (n, normalizedArgs) instanceMap <&> \mn ->
-                    phantom (TypeCon mn)
+              in  Map.lookup (n, normalizedArgs) instanceMap <&> \monoName ->
+                    phantom (TypeCon monoName)
             Nothing -> Nothing
           applyRewrites :: IsTerm a => Annotated TypeCheck a -> Annotated TypeCheck a
           applyRewrites = sub (embedSub rewriteTy)
@@ -267,8 +262,8 @@ monomorphizePat ((src, ty) :< pat) = case pat of
               let spec = zip typePats concreteArgs
               _  <- specializeDataType dn spec
               let monoTypes = map snd (normalizeSpec spec)
-              mn <- (monomorphizeState . instances) `uses` Map.lookup (conName, monoTypes)
-              return (fromJust mn)
+              monoName <- (monomorphizeState . instances) `uses` Map.lookup (conName, monoTypes)
+              return (fromJust monoName)
             Nothing -> return conName
 
 monomorphizeProgram :: Annotated TypeCheck Program -> Praxis ()

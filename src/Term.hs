@@ -29,6 +29,7 @@ module Term
   , QType(..)
   , TypeConstraint(..)
   , Type(..)
+  , TypeInstance(..)
   , TypePat(..)
 
   -- | T2
@@ -148,7 +149,7 @@ data Exp (s :: Stage)
   = Apply (Annotated s Exp) (Annotated s Exp)
   | Case (Annotated s Exp) [(Annotated s Pat, Annotated s Exp)]
   | Cases [(Annotated s Pat, Annotated s Exp)]
-  | Capture [(Name, Annotated s QType)] (Annotated s Exp)
+  | Closure [(Name, Annotated s QType)] (Annotated s Exp)
   | Con Name
   | Defer (Annotated s Exp) (Annotated s Exp)
   | DoSugar [Annotated s Stmt]
@@ -216,12 +217,16 @@ data Flavor = Plain | Ref | Value | View
 data TypePat (s :: Stage) = TypePatVar Flavor Name
   deriving (Eq, Ord)
 
+data TypeInstance = Clone | Dispose | Copy | Capture | Integral
+  deriving (Eq, Ord)
+
 data Type (s :: Stage)
   = TypeApply (Annotated s Type) (Annotated s Type)
   | TypeApplyOp (Annotated s Type) (Annotated s Type)
   | TypeCon Name
   | TypeFn (Annotated s Type) (Annotated s Type)
   | TypeIdentityOp
+  | TypeInstance TypeInstance
   | TypePair (Annotated s Type) (Annotated s Type)
   | TypeRef Name
   | TypeSetOp (Set (Annotated s Type))

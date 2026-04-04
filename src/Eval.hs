@@ -112,7 +112,7 @@ evalExp ((src, ty) :< exp) = case exp of
     x <- evalExp x
     f x
 
-  Capture captures exp -> do
+  Closure captures exp -> do
     let names = map fst captures
     display Evaluate "captures" (show (map fst captures)) `ifFlag` debug
     display Evaluate "exp" exp `ifFlag` debug

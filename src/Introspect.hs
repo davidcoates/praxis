@@ -219,7 +219,7 @@ instance IsTerm Exp where
     Apply a b       -> Apply <$> f a <*> f b
     Case a as       -> Case <$> f a <*> pairs f as
     Cases as        -> Cases <$> pairs f as
-    Capture cs e    -> Capture <$> traverse (second f) cs <*> f e
+    Closure cs e    -> Closure <$> traverse (second f) cs <*> f e
     Con n           -> pure (Con n)
     Defer a b       -> Defer <$> f a <*> f b
     DoSugar ss      -> DoSugar <$> traverse f ss
@@ -313,6 +313,7 @@ instance IsTerm Type where
     TypeCon n       -> pure (TypeCon n)
     TypeFn a b      -> TypeFn <$> f a <*> f b
     TypeIdentityOp  -> pure TypeIdentityOp
+    TypeInstance i  -> pure (TypeInstance i)
     TypePair a b    -> TypePair <$> f a <*> f b
     TypeRef n       -> pure (TypeRef n)
     TypeSetOp os    -> TypeSetOp . Set.fromList <$> traverse f (Set.toList os)

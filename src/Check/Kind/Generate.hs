@@ -109,6 +109,8 @@ generateType (a@(src, _) :< ty) = (\(kind :< ty) -> ((src, kind) :< ty)) <$> cas
       kind <- lookupCon src con
       return (kind :< TypeCon con)
 
+    TypeInstance i -> return (phantom (KindFn (phantom KindType) (phantom KindConstraint)) :< TypeInstance i)
+
     TypeFn ty1 ty2 -> do
       ty1 <- generateType ty1
       ty2 <- generateType ty2
@@ -241,14 +243,14 @@ generateDeclType' forwardKind ((src, _) :< ty) = case ty of
 
       instances = case mode of
         DataUnboxed -> Map.fromList
-          [ (mkName "Clone",   deduce clone)
-          , (mkName "Dispose", deduce dispose)
-          , (mkName "Copy",    deduce copy)
-          , (mkName "Capture", deduce capture)
+          [ (Clone,   deduce clone)
+          , (Dispose, deduce dispose)
+          , (Copy,    deduce copy)
+          , (Capture, deduce capture)
           ]
         DataBoxed -> Map.fromList
-          [ (mkName "Clone",   deduce clone)
-          , (mkName "Dispose", deduce dispose)
+          [ (Clone,   deduce clone)
+          , (Dispose, deduce dispose)
           ]
 
     checkState . instanceEnv %= Map.insert name instances
@@ -259,10 +261,10 @@ generateDeclType' forwardKind ((src, _) :< ty) = case ty of
     introCon src name kind
     let
       instances = Map.fromList
-        [ (mkName "Clone",   \_ -> (Trivial, IsInstance))
-        , (mkName "Dispose", \_ -> (Trivial, IsInstance))
-        , (mkName "Copy",    \_ -> (Trivial, IsInstance))
-        , (mkName "Capture", \_ -> (Trivial, IsInstance))
+        [ (Clone,   \_ -> (Trivial, IsInstance))
+        , (Dispose, \_ -> (Trivial, IsInstance))
+        , (Copy,    \_ -> (Trivial, IsInstance))
+        , (Capture, \_ -> (Trivial, IsInstance))
         ]
     checkState . instanceEnv %= Map.insert name instances
     return $ (src, kind) :< DeclTypeEnum name alts

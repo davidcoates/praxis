@@ -24,6 +24,7 @@ import           Prelude       hiding (_Just, exp, pure, until, (*>), (<$>),
 
 definePrisms ''Bool
 definePrisms ''Ordering
+definePrisms ''TypeInstance
 
 until :: Syntax f => f a -> f () -> f [a]
 until p q = _Nil <$> q <|> _Cons <$> p <*> until p q
@@ -395,6 +396,7 @@ ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> expected "type"
 ty1 :: (SyntaxT f s) => f (Type s)
 ty1 = foldType ty0 <|> expected "type(1)" where
   ty0 =
+    _TypeInstance <$> (_Clone <$> reservedCon "Clone" <|> _Dispose <$> reservedCon "Dispose" <|> _Copy <$> reservedCon "Copy" <|> _Capture <$> reservedCon "Capture" <|> _Integral <$> reservedCon "Integral") <|>
     _TypeCon <$> conId <|>
     _TypeIdentityOp <$> reservedSym "@" <|>
     internal (_TypeRef <$> varIdRef) <|>
@@ -420,7 +422,7 @@ exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expressi
     _Cases <$> reservedId "cases" *> block alt <|>
     _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
     _Lambda <$> reservedSym "\\" *> alt <|>
-    internal (_Capture <$> empty <*> annotated exp3) <|>
+    internal (_Closure <$> empty <*> annotated exp3) <|>
     _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
     _Switch <$> reservedId "switch" *> block switch <|>
     exp2 <|> expected "expression(3)"

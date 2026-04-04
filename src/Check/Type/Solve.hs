@@ -172,14 +172,14 @@ reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> ca
 
   TypeIsInstance (a0 :< inst) -> case inst of
 
-    TypeApply (_ :< TypeCon n) ty | n == mkName "Integral", disambiguate
+    TypeApply (_ :< TypeInstance Integral) ty | disambiguate
       -> return $ subgoals [ Subgoal (a :< TypeIsEq ty (phantom (TypeCon (mkName "I32")))) ]
 
-    TypeApply (a1 :< TypeCon cls) ty -> case view value ty of
+    TypeApply (a1 :< TypeInstance cls) ty -> case view value ty of
       TypeApplyOp op ty -> do
         let
-          instVal = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) ty))
-          instRef = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeCon cls) (phantom (TypeApply (phantom (TypeCon (mkName "Ref"))) ty))))
+          instVal = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeInstance cls) ty))
+          instRef = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeInstance cls) (phantom (TypeApply (phantom (TypeCon (mkName "Ref"))) ty))))
         affine <- isAffine ty
         case (isRef op, affine) of
           (No, _)         -> error "unnormalized"
@@ -216,7 +216,7 @@ reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> ca
 
 
   where
-    reduceTypeConInstance :: Name -> Name -> [Annotated TypeCheck Type] -> Praxis (Reduction TypeCheck)
+    reduceTypeConInstance :: TypeInstance -> Name -> [Annotated TypeCheck Type] -> Praxis (Reduction TypeCheck)
     reduceTypeConInstance cls name args = do
       l <- use (checkState . instanceEnv)
       let Just instances = Map.lookup name l
@@ -368,10 +368,10 @@ isTypeConAffine :: Name -> [Annotated TypeCheck Type] -> Praxis Truth
 isTypeConAffine name args = do
   l <- use (checkState . instanceEnv)
   let Just instances = Map.lookup name l
-  case Map.lookup (mkName "Copy") instances of
+  case Map.lookup Copy instances of
     Just resolver -> case resolver args of
       (_, IsInstance)                -> return No
-      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine ty | (_ :< TypeIsInstance (_ :< TypeApply (_ :< TypeCon c) ty)) <- subgoals, c == mkName "Copy" ]
+      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine ty | (_ :< TypeIsInstance (_ :< TypeApply (_ :< TypeInstance Copy) ty)) <- subgoals ]
     Nothing                          -> return Yes
 
 
@@ -431,14 +431,14 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
   expandConstraint :: Annotated TypeCheck TypeConstraint -> Praxis [Annotated TypeCheck TypeConstraint]
   expandConstraint constraint@((src, _) :< _) = ((constraint:) <$>) $ case view value constraint of
     TypeIsInstance (a0 :< inst) -> case inst of
-      TypeApply (a1 :< TypeCon cls) ty -> case view value ty of
+      TypeApply (a1 :< TypeInstance cls) ty -> case view value ty of
         TypePair ty1 ty2 -> expandTypeConInstance cls (mkName "Pair") [ty1, ty2]
         TypeFn ty1 ty2 -> expandTypeConInstance cls (mkName "Fn") [ty1, ty2]
         TypeUnit -> expandTypeConInstance cls (mkName "Unit") []
         TypeVar _ _ -> return []
         _ | Just (n, tys) <- unapplyTypeCon ty -> expandTypeConInstance cls n tys
     where
-      expandTypeConInstance :: Name -> Name -> [Annotated TypeCheck Type] -> Praxis [Annotated TypeCheck TypeConstraint]
+      expandTypeConInstance :: TypeInstance -> Name -> [Annotated TypeCheck Type] -> Praxis [Annotated TypeCheck TypeConstraint]
       expandTypeConInstance cls name args = do
         l <- use (checkState . instanceEnv)
         let Just instances = Map.lookup name l

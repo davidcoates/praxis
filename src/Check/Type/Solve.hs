@@ -170,31 +170,29 @@ reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> ca
     | otherwise
       -> return skip
 
-  TypeIsInstance (a0 :< inst) -> case inst of
+  TypeIsInstance Integral ty | disambiguate
+    -> return $ subgoals [ Subgoal (a :< TypeIsEq ty (phantom (TypeCon (mkName "I32")))) ]
 
-    TypeApply (_ :< TypeInstance Integral) ty | disambiguate
-      -> return $ subgoals [ Subgoal (a :< TypeIsEq ty (phantom (TypeCon (mkName "I32")))) ]
-
-    TypeApply (a1 :< TypeInstance cls) ty -> case view value ty of
-      TypeApplyOp op ty -> do
-        let
-          instVal = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeInstance cls) ty))
-          instRef = phantom (TypeIsInstance (a0 :< TypeApply (a1 :< TypeInstance cls) (phantom (TypeApply (phantom (TypeCon (mkName "Ref"))) ty))))
-        affine <- isAffine ty
-        case (isRef op, affine) of
-          (No, _)         -> error "unnormalized"
-          (_, No)         -> error "unnormalized"
-          (_, Unknown)    -> return skip
-          (Unknown, _)    -> return skip
-          (Yes, Yes)      -> reduceTypeConInstance cls (mkName "Ref") [ty]
-          (Yes, Variable) -> return $ subgoals [ Subgoal instRef, copy ty `Implies` instVal ]
-          (Variable, _)   -> return $ subgoals [ Subgoal instRef, Subgoal instVal ]
-      TypePair ty1 ty2 -> reduceTypeConInstance cls (mkName "Pair") [ty1, ty2]
-      TypeFn ty1 ty2 -> reduceTypeConInstance cls (mkName "Fn") [ty1, ty2]
-      TypeUnit -> reduceTypeConInstance cls (mkName "Unit") []
-      TypeVar _ _ -> return contradiction
-      _ | Just (n, tys) <- unapplyTypeCon ty -> reduceTypeConInstance cls n tys
-      _ -> return skip
+  TypeIsInstance cls ty -> case view value ty of
+    TypeApplyOp op ty -> do
+      let
+        instVal = phantom (TypeIsInstance cls ty)
+        instRef = phantom (TypeIsInstance cls (phantom (TypeApply (phantom (TypeCon (mkName "Ref"))) ty)))
+      affine <- isAffine ty
+      case (isRef op, affine) of
+        (No, _)         -> error "unnormalized"
+        (_, No)         -> error "unnormalized"
+        (_, Unknown)    -> return skip
+        (Unknown, _)    -> return skip
+        (Yes, Yes)      -> reduceTypeConInstance cls (mkName "Ref") [ty]
+        (Yes, Variable) -> return $ subgoals [ Subgoal instRef, copy ty `Implies` instVal ]
+        (Variable, _)   -> return $ subgoals [ Subgoal instRef, Subgoal instVal ]
+    TypePair ty1 ty2 -> reduceTypeConInstance cls (mkName "Pair") [ty1, ty2]
+    TypeFn ty1 ty2 -> reduceTypeConInstance cls (mkName "Fn") [ty1, ty2]
+    TypeUnit -> reduceTypeConInstance cls (mkName "Unit") []
+    TypeVar _ _ -> return contradiction
+    _ | Just (n, tys) <- unapplyTypeCon ty -> reduceTypeConInstance cls n tys
+    _ -> return skip
 
   TypeIsIntegralOver (_ :< ty) n -> case ty of
     TypeCon c | c == mkName "I8"    -> checkBounds n (undefined :: I8)
@@ -371,7 +369,7 @@ isTypeConAffine name args = do
   case Map.lookup Copy instances of
     Just resolver -> case resolver args of
       (_, IsInstance)                -> return No
-      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine ty | (_ :< TypeIsInstance (_ :< TypeApply (_ :< TypeInstance Copy) ty)) <- subgoals ]
+      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine ty | (_ :< TypeIsInstance Copy ty) <- subgoals ]
     Nothing                          -> return Yes
 
 
@@ -430,13 +428,12 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
 
   expandConstraint :: Annotated TypeCheck TypeConstraint -> Praxis [Annotated TypeCheck TypeConstraint]
   expandConstraint constraint@((src, _) :< _) = ((constraint:) <$>) $ case view value constraint of
-    TypeIsInstance (a0 :< inst) -> case inst of
-      TypeApply (a1 :< TypeInstance cls) ty -> case view value ty of
-        TypePair ty1 ty2 -> expandTypeConInstance cls (mkName "Pair") [ty1, ty2]
-        TypeFn ty1 ty2 -> expandTypeConInstance cls (mkName "Fn") [ty1, ty2]
-        TypeUnit -> expandTypeConInstance cls (mkName "Unit") []
-        TypeVar _ _ -> return []
-        _ | Just (n, tys) <- unapplyTypeCon ty -> expandTypeConInstance cls n tys
+    TypeIsInstance cls ty -> case view value ty of
+      TypePair ty1 ty2 -> expandTypeConInstance cls (mkName "Pair") [ty1, ty2]
+      TypeFn ty1 ty2 -> expandTypeConInstance cls (mkName "Fn") [ty1, ty2]
+      TypeUnit -> expandTypeConInstance cls (mkName "Unit") []
+      TypeVar _ _ -> return []
+      _ | Just (n, tys) <- unapplyTypeCon ty -> expandTypeConInstance cls n tys
     where
       expandTypeConInstance :: TypeInstance -> Name -> [Annotated TypeCheck Type] -> Praxis [Annotated TypeCheck TypeConstraint]
       expandTypeConInstance cls name args = do

@@ -109,8 +109,6 @@ generateType (a@(src, _) :< ty) = (\(kind :< ty) -> ((src, kind) :< ty)) <$> cas
       kind <- lookupCon src con
       return (kind :< TypeCon con)
 
-    TypeInstance i -> return (phantom (KindFn (phantom KindType) (phantom KindConstraint)) :< TypeInstance i)
-
     TypeFn ty1 ty2 -> do
       ty1 <- generateType ty1
       ty2 <- generateType ty2

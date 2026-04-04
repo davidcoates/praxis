@@ -224,6 +224,7 @@ instance IsTerm Exp where
     Defer a b       -> Defer <$> f a <*> f b
     DoSugar ss      -> DoSugar <$> traverse f ss
     If a b c        -> If <$> f a <*> f b <*> f c
+    Inbuilt i       -> pure (Inbuilt i)
     Lambda a b      -> Lambda <$> f a <*> f b
     Let a b         -> Let <$> f a <*> f b
     Lit l           -> pure (Lit l)

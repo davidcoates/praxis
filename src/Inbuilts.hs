@@ -11,25 +11,14 @@ module Inbuilts
 
 import           Check.State
 import           Common
-import           Eval.State
-import           Eval.Value                (Value (..), integerToValue,
-                                            valueToInteger)
-import qualified Eval.Value                as Value
 import           Introspect
-import           Monomorphize.State        (polyEnv)
-import qualified Parse                     (run)
--- import qualified Check.Kind.Check          as Check.Kind (run)
--- import qualified Check                     as Check (run)
+import qualified Parse             (run)
 import           Praxis
 import           Stage
-import           Term                      hiding (Lit (..), Pair, Unit)
+import           Term              hiding (Lit (..), Pair, Unit)
 
-import           Control.Monad.Trans.Class (MonadTrans (..))
-import qualified Control.Monad.Trans.State as State (get)
-import qualified Data.Map                  as Map
-import qualified Data.Map.Lazy             as Map.Lazy
-import qualified Data.Set                  as Set
-import           System.IO.Unsafe          (unsafePerformIO)
+import qualified Data.Map.Strict   as Map
+import           System.IO.Unsafe  (unsafePerformIO)
 import           Text.RawString.QQ
 
 
@@ -95,17 +84,17 @@ capture t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkNam
 initialInstanceEnv :: InstanceEnv
 initialInstanceEnv = Map.fromList
   [ (mkName "Array", Map.fromList
-    [ (mkName "Clone",   \[t] -> (Inbuilt, IsInstanceOnlyIf [clone t]))
-    , (mkName "Dispose", \[t] -> (Inbuilt, IsInstanceOnlyIf [dispose t]))
+    [ (mkName "Clone",   \[t] -> (Native, IsInstanceOnlyIf [clone t]))
+    , (mkName "Dispose", \[t] -> (Native, IsInstanceOnlyIf [dispose t]))
     ]
     )
   , (mkName "Bool", primitive)
   , (mkName "Char", primitive)
   , (mkName "Fn", Map.fromList
-    [ (mkName "Clone",   \_ -> (Inbuilt, IsInstance))
-    , (mkName "Dispose", \_ -> (Inbuilt, IsInstance))
-    , (mkName "Copy",    \_ -> (Inbuilt, IsInstance))
-    , (mkName "Capture", \_ -> (Inbuilt, IsInstance))
+    [ (mkName "Clone",   \_ -> (Native, IsInstance))
+    , (mkName "Dispose", \_ -> (Native, IsInstance))
+    , (mkName "Copy",    \_ -> (Native, IsInstance))
+    , (mkName "Capture", \_ -> (Native, IsInstance))
     ]
     )
   , (mkName "I8",    integralInst)
@@ -127,8 +116,8 @@ initialInstanceEnv = Map.fromList
     ]
     )
   , (mkName "String", Map.fromList
-    [ (mkName "Clone",   \_ -> (Inbuilt, IsInstance))
-    , (mkName "Dispose", \_ -> (Inbuilt, IsInstance))
+    [ (mkName "Clone",   \_ -> (Native, IsInstance))
+    , (mkName "Dispose", \_ -> (Native, IsInstance))
     ]
     )
   , (mkName "U8",    integralInst)
@@ -145,124 +134,41 @@ initialInstanceEnv = Map.fromList
       , (mkName "Capture", \_ -> (Trivial, IsInstance))
       ]
     integralInst = primitive `Map.union` Map.fromList
-      [ (mkName "Integral", \_ -> (Inbuilt, IsInstance))
+      [ (mkName "Integral", \_ -> (Native, IsInstance))
       ]
 
 
--- FIXME: Intiailize "scopes"
-
-type PolyFun = Specialization Monomorphize -> Value
-
-inbuilts :: [(Name, Annotated TypeCheck QType, Either Value PolyFun)]
+inbuilts :: [(Inbuilt, Annotated TypeCheck QType)]
 inbuilts =
-  [ (mkName "add"
-    , poly "forall a | Integral a. (a, a) -> a" -- TODO should be Num, not Integral
-    , Right (liftIII (+))
-    )
-  , (mkName "subtract"
-    , poly "forall a | Integral a. (a, a) -> a"
-    , Right (liftIII (-))
-    )
-  , (mkName "multiply"
-    , poly "forall a | Integral a. (a, a) -> a"
-    , Right (liftIII (*))
-    )
-  , (mkName "negate"
-    , poly "forall a | Integral a. a -> a"
-    , Right $ liftI $ \(con, decon) -> Fn (\x -> return (con (negate (decon x))))
-    )
-  , (mkName "get_int"
-    , poly "forall a | Integral a. () -> a"
-    , Right $ liftI $ \(con, decon) -> Fn (\Unit -> liftIOUnsafe (con <$> readLn))
-    )
-  , (mkName "get_str"
-    , poly "() -> String"
-    , Left $ Fn (\Unit -> Value.String <$> liftIOUnsafe getContents) -- TODO need to make many of these functions strict?
-    )
-  , (mkName "put_int"
-    , poly "forall a | Integral a. a -> ()"
-    , Right $ liftI $ \(_, decon) -> Fn (\i -> liftIOUnsafe (print (decon i) >> pure Unit))
-    )
-  , (mkName "put_str"
-    , poly "forall &r. &r String -> ()"
-    , Left $ Fn (\(String s) -> liftIOUnsafe (putStr s) >> pure Unit)
-    )
-  , (mkName "put_str_ln"
-    , poly "forall &r. &r String -> ()"
-    , Left $ Fn (\(String s) -> liftIOUnsafe (putStrLn s) >> pure Unit)
-    )
-  , (mkName "compose"
-    , poly "forall a b c. (b -> c, a -> b) -> a -> c"
-    , Left $ Fn (\(Pair (Fn f) (Fn g)) -> pure (Fn (\x -> g x >>= f)))
-    )
-  , (mkName "print"
-    , poly "forall &r a. &r a -> ()" -- TODO should have Show constraint
-    , Left $ Fn (\x -> liftIOUnsafe (print x >> pure Unit))
-    )
-  , (mkName "new_array"
-    , poly "forall a. (USize, () -> a) -> Array a"
-    , Left $ Fn (\(Pair (USize i) v) -> Value.newArray i v)
-    )
-  , (mkName "at_array"
-    , poly "forall &r a. (&r Array a, USize) -> &r a"
-    , Left $ Fn (\(Pair (Array a) (USize i)) -> Value.readArray a i)
-    )
-  , (mkName "len_array"
-    , poly "forall &r a. &r Array a -> USize"
-    , Left $ Fn (\(Array a) -> USize <$> Value.lenArray a)
-    )
-  , (mkName "set_array"
-    , poly "forall a. (Array a, USize, a) -> Array a"
-    , Left $ Fn (\(Pair (Array a) (Pair (USize i) e)) -> Value.writeArray a i e >> pure (Array a))
-    )
-  , (mkName "not"
-    , poly "Bool -> Bool"
-    , Left $ Fn (\(Bool a) -> pure (Bool (not a)))
-    )
-  , (mkName "or"
-    , poly "(Bool, Bool) -> Bool"
-    , Left $ liftBBB (||)
-    )
-  , (mkName "and"
-    , poly "(Bool, Bool) -> Bool"
-    , Left $ liftBBB (&&)
-    )
-  , (mkName "eq"
-    , poly "forall a | Integral a. (a, a) -> Bool" -- TODO should be Eq, not Integral
-    , Right (liftIIB (==))
-    )
-  , (mkName "neq"
-    , poly "forall a | Integral a. (a, a) -> Bool"
-    , Right (liftIIB (/=))
-    )
-  , (mkName "lt"
-    , poly "forall a | Integral a. (a, a) -> Bool" -- TODO should be Ord, not Integral
-    , Right (liftIIB (<))
-    )
-  , (mkName "gt"
-    , poly "forall a | Integral a. (a, a) -> Bool"
-    , Right (liftIIB (>))
-    )
-  , (mkName "lte"
-    , poly "forall a | Integral a. (a, a) -> Bool"
-    , Right (liftIIB (<=))
-    )
-  , (mkName "gte"
-    , poly "forall a | Integral a. (a, a) -> Bool"
-    , Right (liftIIB (>=))
-    )
+  [ (Add,      poly "forall a | Integral a. (a, a) -> a") -- TODO should be Num, not Integral
+  , (Subtract, poly "forall a | Integral a. (a, a) -> a")
+  , (Multiply, poly "forall a | Integral a. (a, a) -> a")
+  , (Negate,   poly "forall a | Integral a. a -> a")
+  , (GetInt,   poly "forall a | Integral a. () -> a")
+  , (GetStr,   poly "() -> String")
+  , (PutInt,   poly "forall a | Integral a. a -> ()")
+  , (PutStr,   poly "forall &r. &r String -> ()")
+  , (PutStrLn, poly "forall &r. &r String -> ()")
+  , (Compose,  poly "forall a b c. (b -> c, a -> b) -> a -> c")
+  , (Print,    poly "forall &r a. &r a -> ()") -- TODO should have Show constraint
+  , (NewArray, poly "forall a. (USize, () -> a) -> Array a")
+  , (AtArray,  poly "forall &r a. (&r Array a, USize) -> &r a")
+  , (LenArray, poly "forall &r a. &r Array a -> USize")
+  , (SetArray, poly "forall a. (Array a, USize, a) -> Array a")
+  , (Not,      poly "Bool -> Bool")
+  , (Or,       poly "(Bool, Bool) -> Bool")
+  , (And,      poly "(Bool, Bool) -> Bool")
+  , (Eq,       poly "forall a | Integral a. (a, a) -> Bool") -- TODO should be Eq, not Integral
+  , (Neq,      poly "forall a | Integral a. (a, a) -> Bool")
+  , (Lt,       poly "forall a | Integral a. (a, a) -> Bool") -- TODO should be Ord, not Integral
+  , (Gt,       poly "forall a | Integral a. (a, a) -> Bool")
+  , (Lte,      poly "forall a | Integral a. (a, a) -> Bool")
+  , (Gte,      poly "forall a | Integral a. (a, a) -> Bool")
   ]
-  where
-    liftI :: ((Integer -> Value, Value -> Integer) -> Value) -> PolyFun
-    liftI f [(_, _ :< TypeCon ty)] = f (integerToValue ty, valueToInteger)
-    liftII :: (forall a. Integral a => (a -> a)) -> PolyFun
-    liftII f = liftI $ \(con, decon) -> Fn (\x -> return (con (f (decon x))))
-    liftIII :: (forall a. Integral a => (a -> a -> a)) -> PolyFun
-    liftIII f = liftI $ \(con, decon) -> Fn (\(Pair x y) -> return (con (f (decon x) (decon y))))
-    liftIIB :: (forall a. Integral a => (a -> a -> Bool)) -> PolyFun
-    liftIIB f = liftI $ \(con, decon) -> Fn (\(Pair x y) -> return (Bool (f (decon x) (decon y))))
-    liftBBB :: (Bool -> Bool -> Bool) -> Value
-    liftBBB f = Fn (\(Pair (Bool a) (Bool b)) -> pure (Bool (f a b)))
+
+
+initialInbuiltEnv :: InbuiltEnv
+initialInbuiltEnv = Map.fromList [ (mkName (show inbuilt), (inbuilt, qTy)) | (inbuilt, qTy) <- inbuilts ]
 
 mono :: String -> Annotated TypeCheck Type
 mono s = cast $ runInternal (checkState . kindState . typeConEnv .= initialTypeConEnv >> Parse.run s) where
@@ -285,13 +191,7 @@ runWithPrelude c = runPraxis (importPrelude >> c) where
   importPrelude = do
     checkState . instanceEnv .= initialInstanceEnv
     checkState . kindState . typeConEnv .= initialTypeConEnv
-    let initialVarEnv   = Map.fromList [(n, (mempty :: Usage, qt)) | (n, qt, _) <- inbuilts]
-        initialValueEnv = Map.Lazy.fromList [(n, v) | (n, _, Left v)  <- inbuilts]
-        initialPolyEnv  = Map.fromList      [(n, f) | (n, _, Right f) <- inbuilts]
-    checkState . typeState . varEnv    .= initialVarEnv
-    checkState . typeState . globalVars .= Map.keysSet initialVarEnv
-    evalState . valueEnv        .= initialValueEnv
-    monomorphizeState . polyEnv .= initialPolyEnv
+    checkState . typeState . inbuiltEnv .= initialInbuiltEnv
     flags . silent .= True
     Parse.run prelude :: Praxis (Annotated Parse Program)
     flags . silent .= False

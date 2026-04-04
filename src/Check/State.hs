@@ -19,6 +19,7 @@ module Check.State
 
   , ConEnv(..)
   , VarEnv(..)
+  , InbuiltEnv(..)
   , Usage(..)
   , usedCount
   , readCount
@@ -26,6 +27,7 @@ module Check.State
   , typeSolve
   , conEnv
   , varEnv
+  , inbuiltEnv
   , varRename
   , globalVars
 
@@ -114,10 +116,13 @@ instance Monoid Usage where
 
 type VarEnv = Map Name (Usage, Annotated TypeCheck QType) -- ^ Variable environment
 
+type InbuiltEnv = Map Name (Inbuilt, Annotated TypeCheck QType) -- ^ Inbuilt environment
+
 data TypeState = TypeState
   { _typeSolve  :: SolveState TypeCheck
   , _conEnv     :: ConEnv
   , _varEnv     :: VarEnv
+  , _inbuiltEnv :: InbuiltEnv
   , _varRename  :: RenameState
   , _globalVars :: Set Name
   }
@@ -129,11 +134,12 @@ emptyTypeState = TypeState
   { _typeSolve  = emptySolveState
   , _conEnv     = Map.empty
   , _varEnv     = Map.empty
+  , _inbuiltEnv = Map.empty
   , _varRename  = emptyRenameState
   , _globalVars = Set.empty
   }
 
-data InstanceOrigin = Inbuilt | Trivial | User
+data InstanceOrigin = Native | Trivial | User
   deriving Eq
 
 data Instance = IsInstance | IsInstanceOnlyIf [Annotated TypeCheck TypeConstraint]

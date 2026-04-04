@@ -8,8 +8,6 @@ module Monomorphize
   ) where
 
 import           Common
-import           Eval.State         (valueEnv)
-import           Eval.Value         (Value)
 import           Introspect
 import           Monomorphize.State
 import           Praxis
@@ -97,38 +95,19 @@ monomorphizeExp :: Annotated TypeCheck Exp -> Praxis (Annotated Monomorphize Exp
 monomorphizeExp ((src, ty) :< exp) = case exp of
 
   Specialize inner spec -> case view value inner of
-    -- User-defined polymorphic function: generate/look up the monomorphic version
+
     Var name -> do
-      srcDecl <- (monomorphizeState . sourceDecls) `uses` Map.lookup name
-      case srcDecl of
-        Just _  -> do
-          monoName <- specialize name spec
-          return ((src, ty) :< Var monoName)
-        Nothing -> do
-          -- Check if it's a polymorphic inbuilt (value depends on type args)
-          polyFun <- (monomorphizeState . polyEnv) `uses` Map.lookup name
-          case polyFun of
-            Just f -> do
-              let spec' = normalizeSpec spec
-                  types = map snd spec'
-              existing <- (monomorphizeState . instances) `uses` Map.lookup (name, types)
-              monoName <- case existing of
-                Just monoName -> return monoName
-                Nothing -> do
-                  monoName <- freshVar name
-                  monomorphizeState . instances %= Map.insert (name, types) monoName
-                  spec'' <- traverse (\(p, t) -> (,) <$> castTerm p <*> castTerm t) spec'
-                  (evalState . valueEnv) %= Map.insert monoName (f spec'')
-                  return monoName
-              return ((src, ty) :< Var monoName)
-            -- Parametric inbuilt (Fn): value is type-generic, reference it directly
-            Nothing -> return ((src, ty) :< Var name)
+      monoName <- specialize name spec
+      return ((src, ty) :< Var monoName)
+
     Con name -> do
       Just dataName <- (monomorphizeState . conToDataType) `uses` Map.lookup name
       _ <- specializeDataType dataName spec
       let monoTypes = map snd (normalizeSpec spec)
       Just monoConName <- (monomorphizeState . instances) `uses` Map.lookup (name, monoTypes)
       return ((src, ty) :< Con monoConName)
+
+    Inbuilt _ -> ((src, ty) :<) <$> recurseTerm castTerm exp
 
   _ -> ((src, ty) :<) <$> recurseTerm castTerm exp
 

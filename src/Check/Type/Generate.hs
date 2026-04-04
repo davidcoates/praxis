@@ -76,20 +76,21 @@ lookupCon src name = do
     Just qTy -> return qTy
     Nothing  -> throwAt TypeCheck src $ "constructor " <> pretty name <> " is not in scope"
 
-lookupVar :: Source -> Name -> Praxis (Name, Usage, Annotated TypeCheck QType)
-lookupVar src name =do
+lookupVar :: Name -> Praxis (Maybe (Name, Usage, Annotated TypeCheck QType))
+lookupVar name = do
   entry <- (checkState . typeState . varRename . renames) `uses` Map.lookup name
   let rename = case entry of { Just rename -> rename; Nothing -> name }
   entry <- (checkState . typeState . varEnv) `uses` Map.lookup rename
-  case entry of
-    Just (usage, qTy) -> return (rename, usage, qTy)
-    Nothing           -> throwAt TypeCheck src $ "variable " <> pretty name <> " is not in scope"
+  return $ fmap (\(usage, qTy) -> (rename, usage, qTy)) entry
 
 --- | Marks a variable as used, returning the type of the variable.
 --- A copy constraint will be generated if the variable has already been used or has been captured.
 useVar :: Source -> Name -> Praxis (Name, Annotated TypeCheck Type, Maybe (Specialization TypeCheck))
 useVar src name = do
-  (rename, usage, qTy) <- lookupVar src name
+  result <- lookupVar name
+  (rename, usage, qTy) <- case result of
+    Just x  -> return x
+    Nothing -> throwAt TypeCheck src $ "variable " <> pretty name <> " is not in scope"
   (ty, specialization) <- specializeQType src name qTy
   unless (isJust specialization) $ do
     requires [ (src, TypeReasonMultiUse name) :< Requirement (copy ty) | view usedCount usage > 0 ]
@@ -100,7 +101,10 @@ useVar src name = do
 -- A copy constraint will be generated if the variable has already been used or has been captured.
 readVar :: Source -> Name -> Praxis (Name, Name, Annotated TypeCheck Type)
 readVar src name = do
-  (rename, usage, qTy) <- lookupVar src name
+  result <- lookupVar name
+  (rename, usage, qTy) <- case result of
+    Just x  -> return x
+    Nothing -> throwAt TypeCheck src $ "variable " <> pretty name <> " is not in scope"
   (ty, specialization) <- specializeQType src name qTy
   -- reading a polymorphic term is illformed (and unnecessary since every specialization is copyable anyway)
   when (isJust specialization) $ throwAt TypeCheck src $ "illegal read of polymorphic variable " <> pretty name
@@ -405,10 +409,22 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
     return (ty :< Unit)
 
   Var name -> do
-    (rename, ty, specialization) <- useVar src name
-    case specialization of
-      Just specialization -> return (ty :< Specialize ((src, ty) :< Var rename) specialization)
-      Nothing             -> return (ty :< Var rename)
+    result <- lookupVar name
+    case result of
+      Just _ -> do
+        (rename, ty, specialization) <- useVar src name
+        case specialization of
+          Just specialization -> return (ty :< Specialize ((src, ty) :< Var rename) specialization)
+          Nothing             -> return (ty :< Var rename)
+      Nothing -> do
+        entry <- (checkState . typeState . inbuiltEnv) `uses` Map.lookup name
+        case entry of
+          Just (inbuilt, qTy) -> do
+            (ty, specialization) <- specializeQType src name qTy
+            case specialization of
+              Just spec -> return (ty :< Specialize ((src, ty) :< Inbuilt inbuilt) spec)
+              Nothing   -> return (ty :< Inbuilt inbuilt)
+          Nothing -> throwAt TypeCheck src $ "variable " <> pretty name <> " is not in scope"
 
   Where exp decls -> scope src $ do
     decls <- traverse generateDeclTerm decls

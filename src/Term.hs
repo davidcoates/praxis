@@ -16,6 +16,7 @@ module Term
   , DeclTerm(..)
   , DeclType(..)
   , Exp(..)
+  , Inbuilt(..)
   , Lit(..)
   , Pat(..)
   , Program(..)
@@ -108,6 +109,41 @@ data DeclTerm (s :: Stage)
 -- TODO constraints
 type Specialization (s :: Stage) = [(Annotated s TypePat, Annotated s Type)]
 
+data Inbuilt
+  = Add | Subtract | Multiply | Negate
+  | GetInt | PutInt | GetStr | PutStr | PutStrLn
+  | Compose | Print | NewArray | AtArray | LenArray | SetArray
+  | Not | Or | And
+  | Eq | Neq | Lt | Gt | Lte | Gte
+  deriving (Eq, Ord)
+
+instance Show Inbuilt where
+  show = \case
+    Add      -> "add"
+    Subtract -> "subtract"
+    Multiply -> "multiply"
+    Negate   -> "negate"
+    GetInt   -> "get_int"
+    PutInt   -> "put_int"
+    GetStr   -> "get_str"
+    PutStr   -> "put_str"
+    PutStrLn -> "put_str_ln"
+    Compose  -> "compose"
+    Print    -> "print"
+    NewArray -> "new_array"
+    AtArray  -> "at_array"
+    LenArray -> "len_array"
+    SetArray -> "set_array"
+    Not      -> "not"
+    Or       -> "or"
+    And      -> "and"
+    Eq       -> "eq"
+    Neq      -> "neq"
+    Lt       -> "lt"
+    Gt       -> "gt"
+    Lte      -> "lte"
+    Gte      -> "gte"
+
 data Exp (s :: Stage)
   = Apply (Annotated s Exp) (Annotated s Exp)
   | Case (Annotated s Exp) [(Annotated s Pat, Annotated s Exp)]
@@ -117,6 +153,7 @@ data Exp (s :: Stage)
   | Defer (Annotated s Exp) (Annotated s Exp)
   | DoSugar [Annotated s Stmt]
   | If (Annotated s Exp) (Annotated s Exp) (Annotated s Exp)
+  | Inbuilt Inbuilt
   | Lambda (Annotated s Pat) (Annotated s Exp)
   | Let (Annotated s Bind) (Annotated s Exp)
   | Lit Lit

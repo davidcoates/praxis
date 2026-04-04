@@ -7,8 +7,7 @@ module Eval
 
 import qualified Check.State       as Check
 import           Common
-import qualified Data.Map.Lazy     as Map
-import qualified Data.Map.Strict   as Map.Strict
+import qualified Data.Map.Strict   as Map
 import           Eval.State
 import           Eval.Value        (Value, integerToValue, valueToInteger)
 import qualified Eval.Value        as Value
@@ -36,11 +35,11 @@ run term = eval term
 
 runMain :: Praxis ()
 runMain = do
-  entry <- (checkState . Check.typeState . Check.varRename . Check.renames) `uses` Map.Strict.lookup (mkName "main")
+  entry <- (checkState . Check.typeState . Check.varRename . Check.renames) `uses` Map.lookup (mkName "main")
   case entry of
     Nothing -> throw Evaluate ("missing main function" :: String)
     Just rename -> do
-      entry <- (checkState . Check.typeState . Check.varEnv) `uses` Map.Strict.lookup rename
+      entry <- (checkState . Check.typeState . Check.varEnv) `uses` Map.lookup rename
       case entry of
         Just (_, qTy)
           | (_ :< Mono (_ :< TypeFn (_ :< TypeUnit) (_ :< TypeUnit))) <- qTy
@@ -143,6 +142,10 @@ evalExp ((src, ty) :< exp) = case exp of
     Value.Bool cond <- evalExp condExp
     if cond then evalExp thenExp else evalExp elseExp
 
+  Inbuilt inbuilt -> evalInbuilt inbuilt []
+
+  Specialize (_ :< Inbuilt inbuilt) specialization -> evalInbuilt inbuilt specialization
+
   Lambda pat exp -> return $ Value.Fn $ \val -> forceMatch src val pat >> evalExp exp
 
   Let bind exp -> save (evalState . valueEnv) $ do
@@ -177,6 +180,40 @@ evalExp ((src, ty) :< exp) = case exp of
     traverse evalDeclTerm decls
     evalExp exp
 
+
+evalInbuilt :: Inbuilt -> Specialization Monomorphize -> Praxis Value
+evalInbuilt inbuilt specialization = return $ case inbuilt of
+  Add      -> liftIII (+)
+  Subtract -> liftIII (-)
+  Multiply -> liftIII (*)
+  Negate   -> liftI $ \(con, decon) -> Value.Fn (\x -> return (con (negate (decon x))))
+  GetInt   -> liftI $ \(con, _)     -> Value.Fn (\Value.Unit -> liftIOUnsafe (con <$> readLn))
+  PutInt   -> liftI $ \(_, decon)   -> Value.Fn (\i -> liftIOUnsafe (print (decon i) >> pure Value.Unit))
+  Eq       -> liftIIB (==)
+  Neq      -> liftIIB (/=)
+  Lt       -> liftIIB (<)
+  Gt       -> liftIIB (>)
+  Lte      -> liftIIB (<=)
+  Gte      -> liftIIB (>=)
+  GetStr   -> Value.Fn (\Value.Unit -> Value.String <$> liftIOUnsafe getContents)
+  PutStr   -> Value.Fn (\(Value.String s) -> liftIOUnsafe (putStr s) >> pure Value.Unit)
+  PutStrLn -> Value.Fn (\(Value.String s) -> liftIOUnsafe (putStrLn s) >> pure Value.Unit)
+  Compose  -> Value.Fn (\(Value.Pair (Value.Fn f) (Value.Fn g)) -> pure (Value.Fn (\x -> g x >>= f)))
+  Print    -> Value.Fn (\x -> liftIOUnsafe (print x) >> pure Value.Unit)
+  NewArray -> Value.Fn (\(Value.Pair (Value.USize n) v) -> Value.newArray n v)
+  AtArray  -> Value.Fn (\(Value.Pair (Value.Array a) (Value.USize i)) -> Value.readArray a i)
+  LenArray -> Value.Fn (\(Value.Array a) -> Value.USize <$> Value.lenArray a)
+  SetArray -> Value.Fn (\(Value.Pair (Value.Array a) (Value.Pair (Value.USize i) e)) -> Value.writeArray a i e >> pure (Value.Array a))
+  Not      -> Value.Fn (\(Value.Bool a) -> pure (Value.Bool (not a)))
+  Or       -> Value.Fn (\(Value.Pair (Value.Bool a) (Value.Bool b)) -> pure (Value.Bool (a || b)))
+  And      -> Value.Fn (\(Value.Pair (Value.Bool a) (Value.Bool b)) -> pure (Value.Bool (a && b)))
+  where
+    (con, decon) = case specialization of
+      [(_, _ :< TypeCon ty)] -> (integerToValue ty, valueToInteger)
+      _                      -> (error "evalInbuilt: missing spec", error "evalInbuilt: missing spec")
+    liftI f = f (con, decon)
+    liftIII f = Value.Fn (\(Value.Pair x y) -> return (con (f (decon x) (decon y))))
+    liftIIB f = Value.Fn (\(Value.Pair x y) -> return (Value.Bool (f (decon x) (decon y))))
 
 evalSwitch :: Source -> [(Annotated Exp, Annotated Exp)] -> Praxis Value
 evalSwitch src [] = throwAt Evaluate src ("inexhaustive switch" :: String)

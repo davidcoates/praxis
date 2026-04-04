@@ -139,12 +139,12 @@ emptyTypeState = TypeState
   , _globalVars = Set.empty
   }
 
-data InstanceOrigin = Native | Trivial | User
+data InstanceOrigin = Native | Trivial
   deriving Eq
 
 data Instance = IsInstance | IsInstanceOnlyIf [Annotated TypeCheck TypeConstraint]
 
-type InstanceEnv = Map Name (Map Name ([Annotated TypeCheck Type] -> (InstanceOrigin, Instance))) -- ^ Instance environment
+type InstanceEnv = Map Name (Map TypeInstance ([Annotated TypeCheck Type] -> (InstanceOrigin, Instance))) -- ^ Instance environment
 
 data State = State
   { _kindState   :: KindState

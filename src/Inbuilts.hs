@@ -55,46 +55,40 @@ initialTypeConEnv = Map.fromList
   , (mkName "USize",    kind "Type")
   , (mkName "Unit",     kind "Type")
   , (mkName "Pair",     kind "Type -> Type -> Type")
-  -- Constraints
-  , (mkName "Clone",    kind "Type -> Constraint")
-  , (mkName "Dispose",  kind "Type -> Constraint")
-  , (mkName "Copy",     kind "Type -> Constraint")
-  , (mkName "Capture",  kind "Type -> Constraint")
-  , (mkName "Integral", kind "Type -> Constraint")
   ]
 
 
 -- TODO should be replaced with instances in prelude
 
 integral :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-integral t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Integral"))) t)))
+integral t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Integral)) t)))
 
 clone :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-clone t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Clone"))) t)))
+clone t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Clone)) t)))
 
 dispose :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-dispose t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Dispose"))) t)))
+dispose t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Dispose)) t)))
 
 copy :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-copy t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Copy"))) t)))
+copy t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Copy)) t)))
 
 capture :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-capture t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeCon (mkName "Capture"))) t)))
+capture t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Capture)) t)))
 
 initialInstanceEnv :: InstanceEnv
 initialInstanceEnv = Map.fromList
   [ (mkName "Array", Map.fromList
-    [ (mkName "Clone",   \[t] -> (Native, IsInstanceOnlyIf [clone t]))
-    , (mkName "Dispose", \[t] -> (Native, IsInstanceOnlyIf [dispose t]))
+    [ (Clone,   \[t] -> (Native, IsInstanceOnlyIf [clone t]))
+    , (Dispose, \[t] -> (Native, IsInstanceOnlyIf [dispose t]))
     ]
     )
   , (mkName "Bool", primitive)
   , (mkName "Char", primitive)
   , (mkName "Fn", Map.fromList
-    [ (mkName "Clone",   \_ -> (Native, IsInstance))
-    , (mkName "Dispose", \_ -> (Native, IsInstance))
-    , (mkName "Copy",    \_ -> (Native, IsInstance))
-    , (mkName "Capture", \_ -> (Native, IsInstance))
+    [ (Clone,   \_ -> (Native, IsInstance))
+    , (Dispose, \_ -> (Native, IsInstance))
+    , (Copy,    \_ -> (Native, IsInstance))
+    , (Capture, \_ -> (Native, IsInstance))
     ]
     )
   , (mkName "I8",    integralInst)
@@ -103,21 +97,21 @@ initialInstanceEnv = Map.fromList
   , (mkName "I64",   integralInst)
   , (mkName "ISize", integralInst)
   , (mkName "Pair", Map.fromList
-    [ (mkName "Clone",   \[a, b] -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
-    , (mkName "Dispose", \[a, b] -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
-    , (mkName "Copy",    \[a, b] -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
-    , (mkName "Capture", \[a, b] -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
+    [ (Clone,   \[a, b] -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
+    , (Dispose, \[a, b] -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
+    , (Copy,    \[a, b] -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
+    , (Capture, \[a, b] -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
     ]
     )
   , (mkName "Ref", Map.fromList
-    [ (mkName "Clone",   \_ -> (Trivial, IsInstance))
-    , (mkName "Dispose", \_ -> (Trivial, IsInstance))
-    , (mkName "Copy",    \_ -> (Trivial, IsInstance))
+    [ (Clone,   \_ -> (Trivial, IsInstance))
+    , (Dispose, \_ -> (Trivial, IsInstance))
+    , (Copy,    \_ -> (Trivial, IsInstance))
     ]
     )
   , (mkName "String", Map.fromList
-    [ (mkName "Clone",   \_ -> (Native, IsInstance))
-    , (mkName "Dispose", \_ -> (Native, IsInstance))
+    [ (Clone,   \_ -> (Native, IsInstance))
+    , (Dispose, \_ -> (Native, IsInstance))
     ]
     )
   , (mkName "U8",    integralInst)
@@ -128,13 +122,13 @@ initialInstanceEnv = Map.fromList
   , (mkName "Unit", primitive)
   ] where
     primitive = Map.fromList
-      [ (mkName "Clone",   \_ -> (Trivial, IsInstance))
-      , (mkName "Dispose", \_ -> (Trivial, IsInstance))
-      , (mkName "Copy",    \_ -> (Trivial, IsInstance))
-      , (mkName "Capture", \_ -> (Trivial, IsInstance))
+      [ (Clone,   \_ -> (Trivial, IsInstance))
+      , (Dispose, \_ -> (Trivial, IsInstance))
+      , (Copy,    \_ -> (Trivial, IsInstance))
+      , (Capture, \_ -> (Trivial, IsInstance))
       ]
     integralInst = primitive `Map.union` Map.fromList
-      [ (mkName "Integral", \_ -> (Native, IsInstance))
+      [ (Integral, \_ -> (Native, IsInstance))
       ]
 
 

@@ -79,7 +79,7 @@ hideLabel x = case typeof x of
   ExpT -> case x of
     Pair _ _       -> True
     Apply _ _      -> True
-    Capture _ _    -> True
+    Closure _ _    -> True
     Lambda _ _     -> True
     Read _ _       -> True
     Specialize _ _ -> True

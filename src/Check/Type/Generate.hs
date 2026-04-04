@@ -172,7 +172,7 @@ closure src exp = do
   let captures = Map.toList $ Map.map (\((_, qTy), _) -> qTy) $ Map.filter (\((u1, _), (u2, _)) -> view usedCount u2 > view usedCount u1 || view readCount u2 > view readCount u1) $ Map.filterWithKey (\name _ -> not (Set.member name globals)) $ Map.intersectionWith (,) env1 env2
   -- Note: copy restrictions do not apply to polymorphic terms
   requires [ (src, TypeReasonCaptured name) :< Requirement (capture ty) | (name, (_ :< Mono t)) <- captures ]
-  return $ ty :< Capture captures ((src, ty) :< x)
+  return $ ty :< Closure captures ((src, ty) :< x)
 
 -- Computes in 'parallel' (c.f. `sequence` which computes in series)
 -- For our purposes we require each 'branch' to start with the same type environment TODO kEnv etc

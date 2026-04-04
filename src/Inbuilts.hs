@@ -61,19 +61,19 @@ initialTypeConEnv = Map.fromList
 -- TODO should be replaced with instances in prelude
 
 integral :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-integral t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Integral)) t)))
+integral t = phantom (TypeIsInstance Integral t)
 
 clone :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-clone t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Clone)) t)))
+clone t = phantom (TypeIsInstance Clone t)
 
 dispose :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-dispose t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Dispose)) t)))
+dispose t = phantom (TypeIsInstance Dispose t)
 
 copy :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-copy t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Copy)) t)))
+copy t = phantom (TypeIsInstance Copy t)
 
 capture :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-capture t = phantom (TypeIsInstance (phantom (TypeApply (phantom (TypeInstance Capture)) t)))
+capture t = phantom (TypeIsInstance Capture t)
 
 initialInstanceEnv :: InstanceEnv
 initialInstanceEnv = Map.fromList

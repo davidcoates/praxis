@@ -292,7 +292,7 @@ instance IsTerm TypeConstraint where
   recurseTerm f = \case
     TypeIsEq a b            -> TypeIsEq <$> f a <*> f b
     TypeIsEqIfAffine a b t  -> TypeIsEqIfAffine <$> f a <*> f b <*> f t
-    TypeIsInstance t        -> TypeIsInstance <$> f t
+    TypeIsInstance cls t    -> TypeIsInstance cls <$> f t
     TypeIsIntegralOver t n  -> TypeIsIntegralOver <$> f t <*> pure n
     TypeIsRef t             -> TypeIsRef <$> f t
     TypeIsRefFree t n       -> TypeIsRefFree <$> f t <*> pure n
@@ -313,7 +313,6 @@ instance IsTerm Type where
     TypeCon n       -> pure (TypeCon n)
     TypeFn a b      -> TypeFn <$> f a <*> f b
     TypeIdentityOp  -> pure TypeIdentityOp
-    TypeInstance i  -> pure (TypeInstance i)
     TypePair a b    -> TypePair <$> f a <*> f b
     TypeRef n       -> pure (TypeRef n)
     TypeSetOp os    -> TypeSetOp . Set.fromList <$> traverse f (Set.toList os)

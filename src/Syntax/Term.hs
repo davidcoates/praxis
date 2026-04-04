@@ -262,7 +262,7 @@ integer = match f (Token.Lit . Integer) where
 
 typeConstraint :: (SyntaxT f s) => f (TypeConstraint s)
 typeConstraint =
-  _TypeIsInstance <$> annotated ty <|>
+  _TypeIsInstance <$> typeInstance <*> annotated ty0 <|>
   internal (_TypeIsEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
   internal (_TypeIsEqIfAffine <$> annotated ty <*> reservedSym "=" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
   internal (_TypeIsIntegralOver <$> swap <$> integer <*> reservedSym "∈" *> annotated ty) <|>
@@ -393,18 +393,22 @@ qTy = poly <|> mono <|> expected "quantified type" where
 ty :: (SyntaxT f s) => f (Type s)
 ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> expected "type"
 
+typeInstance :: Syntax f => f TypeInstance
+typeInstance = _Clone <$> reservedCon "Clone" <|> _Dispose <$> reservedCon "Dispose" <|> _Copy <$> reservedCon "Copy" <|> _Capture <$> reservedCon "Capture" <|> _Integral <$> reservedCon "Integral"
+
+ty0 :: (SyntaxT f s) => f (Type s)
+ty0 =
+  _TypeCon <$> conId <|>
+  _TypeIdentityOp <$> reservedSym "@" <|>
+  internal (_TypeRef <$> varIdRef) <|>
+  _TypeSetOp <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
+  internal (_TypeUni <$> flavoredUni) <|>
+  _TypeVar <$> flavoredVarId <|>
+  tuple _TypeUnit _TypePair ty <|>
+  expected "type(0)"
+
 ty1 :: (SyntaxT f s) => f (Type s)
-ty1 = foldType ty0 <|> expected "type(1)" where
-  ty0 =
-    _TypeInstance <$> (_Clone <$> reservedCon "Clone" <|> _Dispose <$> reservedCon "Dispose" <|> _Copy <$> reservedCon "Copy" <|> _Capture <$> reservedCon "Capture" <|> _Integral <$> reservedCon "Integral") <|>
-    _TypeCon <$> conId <|>
-    _TypeIdentityOp <$> reservedSym "@" <|>
-    internal (_TypeRef <$> varIdRef) <|>
-    _TypeSetOp <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
-    internal (_TypeUni <$> flavoredUni) <|>
-    _TypeVar <$> flavoredVarId <|>
-    tuple _TypeUnit _TypePair ty <|>
-    expected "type(0)"
+ty1 = foldType ty0 <|> expected "type(1)"
 
 tok :: (SyntaxT f s) => f (Tok s)
 tok = internal (_TokOp <$> varSym <|> _TokExp <$> annotated exp) <|> expected "token"

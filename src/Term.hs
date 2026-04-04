@@ -226,7 +226,6 @@ data Type (s :: Stage)
   | TypeCon Name
   | TypeFn (Annotated s Type) (Annotated s Type)
   | TypeIdentityOp
-  | TypeInstance TypeInstance
   | TypePair (Annotated s Type) (Annotated s Type)
   | TypeRef Name
   | TypeSetOp (Set (Annotated s Type))
@@ -252,7 +251,7 @@ data Kind (s :: Stage)
 data TypeConstraint (s :: Stage)
   = TypeIsEq (Annotated s Type) (Annotated s Type)
   | TypeIsEqIfAffine (Annotated s Type) (Annotated s Type) (Annotated s Type)
-  | TypeIsInstance (Annotated s Type)
+  | TypeIsInstance TypeInstance (Annotated s Type)
   | TypeIsIntegralOver (Annotated s Type) Integer
   | TypeIsRef (Annotated s Type)
   | TypeIsRefFree (Annotated s Type) Name

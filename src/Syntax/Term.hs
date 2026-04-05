@@ -47,48 +47,41 @@ blockLike f g =
   f *> blockOrLine g <|>
   _Nil <$> pure ()
 
-formOf :: String -> Form
-formOf (c:_)
-  | isLower  c = Lower
-  | isSymbol c = Symbol
-  | isUpper  c = Upper
-  | otherwise  = Symbol -- FIXME: this is ∈ and ∉
-
 keyword :: Syntax f => Keyword -> f ()
 keyword kw = token (Keyword kw) <|> expected ("keyword '" ++ keywordString kw ++ "'")
 
 contextual :: Syntax f => String -> f ()
-contextual str = token (Ident Plain (formOf str) str) <|> expected ("contextual keyword '" ++ str ++ "'")
+contextual str = token (Ident Plain str) <|> expected ("contextual keyword '" ++ str ++ "'")
 
 conId :: Syntax f => f Name
-conId = match f (Ident Plain Upper . nameString) where
+conId = match f (Ident Plain . nameString) where
   f = \case
-    Ident Plain Upper str -> Just (mkName str)
-    _                     -> Nothing
+    Ident Plain str | isUpper (head str) -> Just (mkName str)
+    _                                    -> Nothing
 
 varId :: Syntax f => f Name
-varId = match f (Ident Plain Lower . nameString) where
+varId = match f (Ident Plain . nameString) where
   f = \case
-    Ident Plain Lower str -> Just (mkName str)
-    _                     -> Nothing
+    Ident Plain str | isLower (head str) -> Just (mkName str)
+    _                                    -> Nothing
 
 tyVarId :: Syntax f => f (Flavor, Name)
-tyVarId = match f (\(flavor, name) -> Ident flavor Lower (nameString name)) where
+tyVarId = match f (\(flavor, name) -> Ident flavor (nameString name)) where
   f = \case
-    Ident flavor Lower str -> Just (flavor, mkName str)
-    _                      -> Nothing
+    Ident flavor str | isLower (head str) -> Just (flavor, mkName str)
+    _                                     -> Nothing
 
 varIdRef :: Syntax f => f Name
-varIdRef = match f (Ident Ref Lower . nameString) where
+varIdRef = match f (Ident Ref . nameString) where
   f = \case
-    Ident Ref Lower str -> Just (mkName str)
-    _                   -> Nothing
+    Ident Ref str -> Just (mkName str)
+    _             -> Nothing
 
 symbol :: Syntax f => f Name
-symbol = match f (Ident Plain Symbol . nameString) where
+symbol = match f (Ident Plain . nameString) where
   f = \case
-    Ident Plain Symbol str -> Just (mkName str)
-    _                      -> Nothing
+    Ident Plain str | isSymbol (head str) -> Just (mkName str)
+    _                                     -> Nothing
 
 internal :: Syntax f => String -> f ()
 internal str = match (const Nothing) (const (Internal (pretty str)))
@@ -97,10 +90,10 @@ kindUni :: Syntax f => f Name
 kindUni = match (const Nothing) (Internal . pretty . nameString)
 
 tyUni :: Syntax f => f (Flavor, Name)
-tyUni = match (const Nothing) (\(flavor, name) -> Internal (pretty (Ident flavor Lower (nameString name))))
+tyUni = match (const Nothing) (\(flavor, name) -> Internal (pretty (Ident flavor (nameString name))))
 
 inbuilt :: Syntax f => f Inbuilt
-inbuilt = match (const Nothing) (Ident Plain Lower . show)
+inbuilt = match (const Nothing) (Ident Plain . show)
 
 integer :: Syntax f => f Integer
 integer = match f (Token.Lit . Integer) where

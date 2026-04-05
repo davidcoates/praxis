@@ -94,16 +94,16 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> expected "
 keywordMap :: Map.Map String Keyword
 keywordMap = Map.fromList [ (keywordString kw, kw) | kw <- [minBound..maxBound] ]
 
-toToken :: Form -> String -> Token
-toToken form str = maybe (Ident Plain form str) Keyword (Map.lookup str keywordMap)
+toToken :: String -> Token
+toToken str = maybe (Ident Plain str) Keyword (Map.lookup str keywordMap)
 
 upper :: Tokenizer Token
-upper = toToken Upper <$> ((:) <$> match isUpper <*> many (match isLetter))
+upper = toToken <$> ((:) <$> match isUpper <*> many (match isLetter))
 
 lower :: Tokenizer Token
 lower =
-  toToken Lower <$> lower' <|>
-  lookahead (flavor *> match isLower) *> (Ident <$> flavor <*> pure Lower <*> lower') where
+  toToken <$> lower' <|>
+  lookahead (flavor *> match isLower) *> (Ident <$> flavor <*> lower') where
     lower' :: Tokenizer String
     lower' = (:) <$> match isLower <*> many (match isLetter)
     flavor :: Tokenizer Flavor
@@ -113,4 +113,4 @@ lower =
       char '?' *> pure View
 
 symbol :: Tokenizer Token
-symbol = toToken Symbol <$> some (match isSymbol)
+symbol = toToken <$> some (match isSymbol)

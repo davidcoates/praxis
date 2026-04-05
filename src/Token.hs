@@ -1,7 +1,5 @@
 module Token
-  ( Form(..)
-  , Keyword(..)
-  , keywordForm
+  ( Keyword(..)
   , keywordString
   , isLower
   , isSymbol
@@ -14,8 +12,6 @@ import qualified Data.Monoid.Colorful as Colored
 import           Term                 (Flavor (..), Lit (..))
 
 
-data Form = Lower | Symbol | Upper
-  deriving Eq
 
 data Keyword
   -- Lower
@@ -67,11 +63,6 @@ keywordString = \case
   KeywordArrow    -> "->"
   KeywordAt       -> "@"
 
-keywordForm :: Keyword -> Form
-keywordForm kw = case keywordString kw of
-  (c:_) | isLower c -> Lower
-        | isUpper c -> Upper
-        | otherwise -> Symbol
 
 isLower :: Char -> Bool
 isLower  = (`elem` ['a'..'z'])
@@ -84,7 +75,7 @@ isUpper  = (`elem` ['A'..'Z'])
 
 data Token
   = Annotation (Colored String)
-  | Ident Flavor Form String
+  | Ident Flavor String
   | Internal (Colored String)
   | Keyword Keyword
   | Layout Char
@@ -106,20 +97,19 @@ highlight = RGB 216 213 199
 instance Pretty Token where
   pretty token = pretty $ case token of
     Annotation str
-      | null str          -> Colored.Nil
-      | otherwise         -> Colored.Fg Black (Colored.Bg highlight ("[" <> unstyle str <> "]"))
-    Ident Plain _     str -> Colored.Value str
-    Ident Ref   Lower str -> Colored.Fg Yellow  $ Colored.Value ('&':str)
-    Ident Value Lower str -> Colored.Fg Cyan    $ Colored.Value ('!':str)
-    Ident View  Lower str -> Colored.Fg Magenta $ Colored.Value ('?':str)
-    Internal str          -> Colored.Style Underline $ unstyle str
-    Keyword kw -> case keywordForm kw of
-      Lower  -> Colored.Style Bold $ Colored.Value (keywordString kw)
-      Symbol -> Colored.Fg Green   $ Colored.Value (keywordString kw)
-      Upper  -> Colored.Style Bold $ Colored.Value (keywordString kw)
-    Layout char           -> Colored.Fg Red $ Colored.Value [char]
-    Lit lit               -> Colored.Fg Blue $ Colored.Value $ show lit
-    Special char          -> Colored.Fg Black $ Colored.Value [char]
+      | null str  -> Colored.Nil
+      | otherwise -> Colored.Fg Black (Colored.Bg highlight ("[" <> unstyle str <> "]"))
+    Ident Plain str -> Colored.Value str
+    Ident Ref   str -> Colored.Fg Yellow  $ Colored.Value ('&':str)
+    Ident Value str -> Colored.Fg Cyan $ Colored.Value ('!':str)
+    Ident View  str -> Colored.Fg Magenta $ Colored.Value ('?':str)
+    Internal str    -> Colored.Style Underline $ unstyle str
+    Keyword kw
+      | isSymbol (head (keywordString kw)) -> Colored.Fg Green $ Colored.Value (keywordString kw)
+      | otherwise                          -> Colored.Style Bold $ Colored.Value (keywordString kw)
+    Layout char     -> Colored.Fg Red $ Colored.Value [char]
+    Lit lit         -> Colored.Fg Blue $ Colored.Value $ show lit
+    Special char    -> Colored.Fg Black $ Colored.Value [char]
 
 instance Pretty (Sourced Token) where
   pretty (_ :< x) = pretty x

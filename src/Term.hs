@@ -111,39 +111,39 @@ data DeclTerm (s :: Stage)
 type Specialization (s :: Stage) = [(Annotated s TypePat, Annotated s Type)]
 
 data Inbuilt
-  = Add | Subtract | Multiply | Negate
-  | GetInt | PutInt | GetStr | PutStr | PutStrLn
-  | Compose | Print | NewArray | AtArray | LenArray | SetArray
-  | Not | Or | And
-  | Eq | Neq | Lt | Gt | Lte | Gte
+  = InbuiltAdd | InbuiltSubtract | InbuiltMultiply | InbuiltNegate
+  | InbuiltGetInt | InbuiltPutInt | InbuiltGetStr | InbuiltPutStr | InbuiltPutStrLn
+  | InbuiltCompose | InbuiltPrint | InbuiltNewArray | InbuiltAtArray | InbuiltLenArray | InbuiltSetArray
+  | InbuiltNot | InbuiltOr | InbuiltAnd
+  | InbuiltEq | InbuiltNeq | InbuiltLt | InbuiltGt | InbuiltLte | InbuiltGte
   deriving (Eq, Ord)
 
 instance Show Inbuilt where
   show = \case
-    Add      -> "add"
-    Subtract -> "subtract"
-    Multiply -> "multiply"
-    Negate   -> "negate"
-    GetInt   -> "get_int"
-    PutInt   -> "put_int"
-    GetStr   -> "get_str"
-    PutStr   -> "put_str"
-    PutStrLn -> "put_str_ln"
-    Compose  -> "compose"
-    Print    -> "print"
-    NewArray -> "new_array"
-    AtArray  -> "at_array"
-    LenArray -> "len_array"
-    SetArray -> "set_array"
-    Not      -> "not"
-    Or       -> "or"
-    And      -> "and"
-    Eq       -> "eq"
-    Neq      -> "neq"
-    Lt       -> "lt"
-    Gt       -> "gt"
-    Lte      -> "lte"
-    Gte      -> "gte"
+    InbuiltAdd      -> "add"
+    InbuiltSubtract -> "subtract"
+    InbuiltMultiply -> "multiply"
+    InbuiltNegate   -> "negate"
+    InbuiltGetInt   -> "get_int"
+    InbuiltPutInt   -> "put_int"
+    InbuiltGetStr   -> "get_str"
+    InbuiltPutStr   -> "put_str"
+    InbuiltPutStrLn -> "put_str_ln"
+    InbuiltCompose  -> "compose"
+    InbuiltPrint    -> "print"
+    InbuiltNewArray -> "new_array"
+    InbuiltAtArray  -> "at_array"
+    InbuiltLenArray -> "len_array"
+    InbuiltSetArray -> "set_array"
+    InbuiltNot      -> "not"
+    InbuiltOr       -> "or"
+    InbuiltAnd      -> "and"
+    InbuiltEq       -> "eq"
+    InbuiltNeq      -> "neq"
+    InbuiltLt       -> "lt"
+    InbuiltGt       -> "gt"
+    InbuiltLte      -> "lte"
+    InbuiltGte      -> "gte"
 
 data Exp (s :: Stage)
   = Apply (Annotated s Exp) (Annotated s Exp)

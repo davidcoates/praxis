@@ -134,30 +134,30 @@ initialInstanceEnv = Map.fromList
 
 inbuilts :: [(Inbuilt, Annotated TypeCheck QType)]
 inbuilts =
-  [ (Add,      poly "forall a | a : Integral. (a, a) -> a") -- TODO should be Num, not Integral
-  , (Subtract, poly "forall a | a : Integral. (a, a) -> a")
-  , (Multiply, poly "forall a | a : Integral. (a, a) -> a")
-  , (Negate,   poly "forall a | a : Integral. a -> a")
-  , (GetInt,   poly "forall a | a : Integral. () -> a")
-  , (GetStr,   poly "() -> String")
-  , (PutInt,   poly "forall a | a : Integral. a -> ()")
-  , (PutStr,   poly "forall &r. &r String -> ()")
-  , (PutStrLn, poly "forall &r. &r String -> ()")
-  , (Compose,  poly "forall a b c. (b -> c, a -> b) -> a -> c")
-  , (Print,    poly "forall &r a. &r a -> ()") -- TODO should have Show constraint
-  , (NewArray, poly "forall a. (USize, () -> a) -> Array a")
-  , (AtArray,  poly "forall &r a. (&r Array a, USize) -> &r a")
-  , (LenArray, poly "forall &r a. &r Array a -> USize")
-  , (SetArray, poly "forall a. (Array a, USize, a) -> Array a")
-  , (Not,      poly "Bool -> Bool")
-  , (Or,       poly "(Bool, Bool) -> Bool")
-  , (And,      poly "(Bool, Bool) -> Bool")
-  , (Eq,       poly "forall a | a : Integral. (a, a) -> Bool") -- TODO should be Eq, not Integral
-  , (Neq,      poly "forall a | a : Integral. (a, a) -> Bool")
-  , (Lt,       poly "forall a | a : Integral. (a, a) -> Bool") -- TODO should be Ord, not Integral
-  , (Gt,       poly "forall a | a : Integral. (a, a) -> Bool")
-  , (Lte,      poly "forall a | a : Integral. (a, a) -> Bool")
-  , (Gte,      poly "forall a | a : Integral. (a, a) -> Bool")
+  [ (InbuiltAdd,      poly "forall a | a : Integral. (a, a) -> a") -- TODO should be Num, not Integral
+  , (InbuiltSubtract, poly "forall a | a : Integral. (a, a) -> a")
+  , (InbuiltMultiply, poly "forall a | a : Integral. (a, a) -> a")
+  , (InbuiltNegate,   poly "forall a | a : Integral. a -> a")
+  , (InbuiltGetInt,   poly "forall a | a : Integral. () -> a")
+  , (InbuiltGetStr,   poly "() -> String")
+  , (InbuiltPutInt,   poly "forall a | a : Integral. a -> ()")
+  , (InbuiltPutStr,   poly "forall &r. &r String -> ()")
+  , (InbuiltPutStrLn, poly "forall &r. &r String -> ()")
+  , (InbuiltCompose,  poly "forall a b c. (b -> c, a -> b) -> a -> c")
+  , (InbuiltPrint,    poly "forall &r a. &r a -> ()") -- TODO should have Show constraint
+  , (InbuiltNewArray, poly "forall a. (USize, () -> a) -> Array a")
+  , (InbuiltAtArray,  poly "forall &r a. (&r Array a, USize) -> &r a")
+  , (InbuiltLenArray, poly "forall &r a. &r Array a -> USize")
+  , (InbuiltSetArray, poly "forall a. (Array a, USize, a) -> Array a")
+  , (InbuiltNot,      poly "Bool -> Bool")
+  , (InbuiltOr,       poly "(Bool, Bool) -> Bool")
+  , (InbuiltAnd,      poly "(Bool, Bool) -> Bool")
+  , (InbuiltEq,       poly "forall a | a : Integral. (a, a) -> Bool") -- TODO should be Eq, not Integral
+  , (InbuiltNeq,      poly "forall a | a : Integral. (a, a) -> Bool")
+  , (InbuiltLt,       poly "forall a | a : Integral. (a, a) -> Bool") -- TODO should be Ord, not Integral
+  , (InbuiltGt,       poly "forall a | a : Integral. (a, a) -> Bool")
+  , (InbuiltLte,      poly "forall a | a : Integral. (a, a) -> Bool")
+  , (InbuiltGte,      poly "forall a | a : Integral. (a, a) -> Bool")
   ]
 
 

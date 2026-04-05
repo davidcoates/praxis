@@ -29,7 +29,7 @@ instance Syntax Parser where
   pure = Parser . pure . pure
   match f _ = Parser (over value (fromJust . f) <$> Parser.match (\(_ :< t) -> isJust (f t)))
   expected = Parser . Parser.expected
-  internal = const (Parser empty)
+  direction _ = Syntax.DirectionParse
 
 instance SyntaxT Parser Initial where
   annotated (Parser p) = Parser ((\(s :< x) -> s :< ((s, ()) :< x)) <$> p)

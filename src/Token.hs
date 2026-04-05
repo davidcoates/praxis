@@ -1,5 +1,8 @@
 module Token
   ( Form(..)
+  , Keyword(..)
+  , keywordForm
+  , keywordString
   , isLower
   , isSymbol
   , isUpper
@@ -14,6 +17,62 @@ import           Term                 (Flavor (..), Lit (..))
 data Form = Lower | Symbol | Upper
   deriving Eq
 
+data Keyword
+  -- Lower
+  = KeywordRead | KeywordIn | KeywordIf | KeywordThen | KeywordElse
+  | KeywordUsing | KeywordDatatype | KeywordEnum | KeywordCases | KeywordCase | KeywordOf
+  | KeywordWhere | KeywordDo | KeywordForall | KeywordLet | KeywordOperator
+  | KeywordSwitch | KeywordRec | KeywordDefer | KeywordSeq
+  -- Upper (kinds)
+  | KeywordType | KeywordRef | KeywordView
+  -- Upper (instances)
+  | KeywordClone | KeywordDispose | KeywordCopy | KeywordCapture | KeywordIntegral
+  -- Symbol
+  | KeywordColon | KeywordEquals | KeywordLambda | KeywordArrow | KeywordAt
+  deriving (Eq, Ord, Enum, Bounded)
+
+keywordString :: Keyword -> String
+keywordString = \case
+  KeywordRead     -> "read"
+  KeywordIn       -> "in"
+  KeywordIf       -> "if"
+  KeywordThen     -> "then"
+  KeywordElse     -> "else"
+  KeywordUsing    -> "using"
+  KeywordDatatype -> "datatype"
+  KeywordEnum     -> "enum"
+  KeywordCases    -> "cases"
+  KeywordCase     -> "case"
+  KeywordOf       -> "of"
+  KeywordWhere    -> "where"
+  KeywordDo       -> "do"
+  KeywordForall   -> "forall"
+  KeywordLet      -> "let"
+  KeywordOperator -> "operator"
+  KeywordSwitch   -> "switch"
+  KeywordRec      -> "rec"
+  KeywordDefer    -> "defer"
+  KeywordSeq      -> "seq"
+  KeywordType     -> "Type"
+  KeywordRef      -> "Ref"
+  KeywordView     -> "View"
+  KeywordClone    -> "Clone"
+  KeywordDispose  -> "Dispose"
+  KeywordCopy     -> "Copy"
+  KeywordCapture  -> "Capture"
+  KeywordIntegral -> "Integral"
+  KeywordColon    -> ":"
+  KeywordEquals   -> "="
+  KeywordLambda   -> "\\"
+  KeywordArrow    -> "->"
+  KeywordAt       -> "@"
+
+keywordForm :: Keyword -> Form
+keywordForm kw = case keywordString kw of
+  (c:_) | isLower c -> Lower
+        | isUpper c -> Upper
+        | otherwise -> Symbol
+
 isLower :: Char -> Bool
 isLower  = (`elem` ['a'..'z'])
 
@@ -27,7 +86,7 @@ data Token
   = Annotation (Colored String)
   | Ident Flavor Form String
   | Internal (Colored String)
-  | Keyword Form String
+  | Keyword Keyword
   | Layout Char
   | Lit Lit
   | Special Char
@@ -50,13 +109,14 @@ instance Pretty Token where
       | null str          -> Colored.Nil
       | otherwise         -> Colored.Fg Black (Colored.Bg highlight ("[" <> unstyle str <> "]"))
     Ident Plain _     str -> Colored.Value str
-    Ident Ref   Lower str -> Colored.Fg Yellow $ Colored.Value ('&':str)
-    Ident Value Lower str -> Colored.Fg Cyan $ Colored.Value  ('!':str)
+    Ident Ref   Lower str -> Colored.Fg Yellow  $ Colored.Value ('&':str)
+    Ident Value Lower str -> Colored.Fg Cyan    $ Colored.Value ('!':str)
     Ident View  Lower str -> Colored.Fg Magenta $ Colored.Value ('?':str)
     Internal str          -> Colored.Style Underline $ unstyle str
-    Keyword Lower  str    -> Colored.Style Bold $ Colored.Value str
-    Keyword Symbol str    -> Colored.Fg Green $ Colored.Value str
-    Keyword Upper  str    -> Colored.Style Bold $ Colored.Value str
+    Keyword kw -> case keywordForm kw of
+      Lower  -> Colored.Style Bold $ Colored.Value (keywordString kw)
+      Symbol -> Colored.Fg Green   $ Colored.Value (keywordString kw)
+      Upper  -> Colored.Style Bold $ Colored.Value (keywordString kw)
     Layout char           -> Colored.Fg Red $ Colored.Value [char]
     Lit lit               -> Colored.Fg Blue $ Colored.Value $ show lit
     Special char          -> Colored.Fg Black $ Colored.Value [char]

@@ -54,11 +54,11 @@ formOf (c:_)
   | isUpper  c = Upper
   | otherwise  = Symbol -- FIXME: this is ∈ and ∉
 
-keyword :: Syntax f => String -> f ()
-keyword str = token (Keyword (formOf str) str) <|> expected ("keyword '" ++ str ++ "'")
+keyword :: Syntax f => Keyword -> f ()
+keyword kw = token (Keyword kw) <|> expected ("keyword '" ++ keywordString kw ++ "'")
 
 contextual :: Syntax f => String -> f ()
-contextual str = token (Ident Plain (formOf str) str) <|> printOnly (keyword str) <|> expected ("contextual keyword '" ++ str ++ "'")
+contextual str = token (Ident Plain (formOf str) str) <|> expected ("contextual keyword '" ++ str ++ "'")
 
 conId :: Syntax f => f Name
 conId = match f (Ident Plain Upper . nameString) where
@@ -255,7 +255,7 @@ foldType ty = foldWithSep fold unfold ty (pure ()) where
 
 typeConstraint :: (SyntaxT f s) => f (TypeConstraint s)
 typeConstraint =
-  _TypeIsInstance <$> swap <$> annotated ty <*> keyword ":" *> typeInstance <|>
+  _TypeIsInstance <$> swap <$> annotated ty <*> keyword KeywordColon *> typeInstance <|>
   printOnly (_TypeIsEq <$> annotated ty <*> internal "~" *> annotated ty) <|>
   printOnly (_TypeIsEqIfAffine <$> annotated ty <*> internal "~" *> annotated ty <*> internal "|" *> internal "affine" *> annotated ty) <|>
   printOnly (_TypeIsIntegralOver <$> internal "integral" *> annotated ty <*> internal "over" *> integer) <|>
@@ -278,7 +278,7 @@ program = _Program <$> block (annotated decl) <|> expected "program"
 
 decl :: (SyntaxT f s) => f (Decl s)
 decl =
-  _DeclRec <$> keyword "rec" *> blockOrLine (annotated declRec) <|>
+  _DeclRec <$> keyword KeywordRec *> blockOrLine (annotated declRec) <|>
   declSyn <|>
   declOp <|>
   _DeclTerm <$> annotated declTerm <|>
@@ -292,14 +292,14 @@ declRec =
   expected "recursive declaration"
 
 declOp :: (SyntaxT f s) => f (Decl s)
-declOp = _DeclOpSugar <$> keyword "operator" *> annotated op <*> keyword "=" *> varId <*> annotated opRules
+declOp = _DeclOpSugar <$> keyword KeywordOperator *> annotated op <*> keyword KeywordEquals *> varId <*> annotated opRules
 
 op :: (SyntaxT f s) => f (Op s)
 op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator section"  where
   atom = _Nothing <$> special '_' <|> _Just <$> symbol <|> expected "operator or hole"
 
 opRules :: (SyntaxT f s) => f (OpRules s)
-opRules = _OpRules <$> blockLike (keyword "where") (_Left <$> assoc <|> _Right <$> precs) <|> expected "operator rules"
+opRules = _OpRules <$> blockLike (keyword KeywordWhere) (_Left <$> assoc <|> _Right <$> precs) <|> expected "operator rules"
 
 assoc :: Syntax f => f Assoc
 assoc = assoc' <* contextual "associative" where
@@ -318,16 +318,16 @@ prec = _Prec <$> ordering <*> annotated op where
     _EQ <$> contextual "equal"
 
 declSyn :: (SyntaxT f s) => f (Decl s)
-declSyn = _DeclSynSugar <$> keyword "using" *> conId <*> keyword "=" *> annotated ty
+declSyn = _DeclSynSugar <$> keyword KeywordUsing *> conId <*> keyword KeywordEquals *> annotated ty
 
 declType :: (SyntaxT f s) => f (DeclType s)
 declType = declTypeDataSugar <|> printOnly declTypeData <|> declTypeEnum where
 
   declTypeData :: (SyntaxT f s) => f (DeclType s)
-  declTypeData = _DeclTypeData <$> keyword "datatype" *> dataMode <*> conId <*> many (annotated typePat) <*> keyword "=" *> dataCons
+  declTypeData = _DeclTypeData <$> keyword KeywordDatatype *> dataMode <*> conId <*> many (annotated typePat) <*> keyword KeywordEquals *> dataCons
 
   declTypeDataSugar :: (SyntaxT f s) => f (DeclType s)
-  declTypeDataSugar = _DeclTypeDataSugar <$> keyword "datatype" *> optional dataMode <*> conId <*> many (annotated typePat) <*> keyword "=" *> dataCons
+  declTypeDataSugar = _DeclTypeDataSugar <$> keyword KeywordDatatype *> optional dataMode <*> conId <*> many (annotated typePat) <*> keyword KeywordEquals *> dataCons
 
   dataCons :: (SyntaxT f s) => f [Annotated s DataCon]
   dataCons = _Cons <$> annotated dataCon <*> many (contextual "|" *> annotated dataCon)
@@ -336,7 +336,7 @@ declType = declTypeDataSugar <|> printOnly declTypeData <|> declTypeEnum where
   dataMode = (_DataBoxed <$> contextual "boxed") <|> (_DataUnboxed <$> contextual "unboxed")
 
   declTypeEnum :: (SyntaxT f s) => f (DeclType s)
-  declTypeEnum = _DeclTypeEnum <$> keyword "enum" *> conId <*> keyword "=" *> alts where
+  declTypeEnum = _DeclTypeEnum <$> keyword KeywordEnum *> conId <*> keyword KeywordEquals *> alts where
     alts = _Cons <$> conId <*> many (contextual "|" *> conId)
 
 
@@ -350,48 +350,48 @@ typePat =
 
 declTerm :: (SyntaxT f s) => f (DeclTerm s)
 declTerm = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> printOnly declTermVar <|> expected "term declaration" where
-  declTermSig = keyword ":" *> annotated qTy
-  declTermDef = annotated pat `until` keyword "=" <*> annotated exp
-  declTermVar = _DeclTermVar <$> varId <*> (_Just <$> keyword ":" *> annotated qTy) <*> keyword "=" *> annotated exp
+  declTermSig = keyword KeywordColon *> annotated qTy
+  declTermDef = annotated pat `until` keyword KeywordEquals <*> annotated exp
+  declTermVar = _DeclTermVar <$> varId <*> (_Just <$> keyword KeywordColon *> annotated qTy) <*> keyword KeywordEquals *> annotated exp
 
 bind :: (SyntaxT f s) => f (Bind s)
-bind = _Bind <$> annotated pat <*> keyword "=" *> annotated exp <|> expected "binding"
+bind = _Bind <$> annotated pat <*> keyword KeywordEquals *> annotated exp <|> expected "binding"
 
 pat :: (SyntaxT f s) => f (Pat s)
 pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> expected "pattern" where
   pat0 =
     _PatHole <$> special '_' <|>
     _PatLit <$> litNoString <|> -- TODO allow string literals
-    prefix' varId (_PatAt, keyword "@" *> annotated pat) _PatVar <|>
+    prefix' varId (_PatAt, keyword KeywordAt *> annotated pat) _PatVar <|>
     tuple _PatUnit _PatPair pat <|>
     expected "pattern(0)"
 
 kind :: (SyntaxT f s) => f (Kind s)
-kind = kind0 `join` (_KindFn, keyword "->" *> annotated kind) <|> expected "kind" where
+kind = kind0 `join` (_KindFn, keyword KeywordArrow *> annotated kind) <|> expected "kind" where
   kind0 =
-    _KindRef <$> keyword "Ref" <|>
-    _KindType <$> keyword "Type" <|>
-    _KindView <$> keyword "View" <|>
+    _KindRef <$> keyword KeywordRef <|>
+    _KindType <$> keyword KeywordType <|>
+    _KindView <$> keyword KeywordView <|>
     printOnly (_KindUni <$> kindUni) <|>
     expected "kind(0)"
 
 qTy :: (SyntaxT f s) => f (QType s)
 qTy = poly <|> mono <|> expected "quantified type" where
-  poly = _Forall <$> keyword "forall" *> some (annotated typePat) <*> typeConstraints <*> (contextual "." *> annotated ty)
+  poly = _Forall <$> keyword KeywordForall *> some (annotated typePat) <*> typeConstraints <*> (contextual "." *> annotated ty)
   mono = _Mono <$> annotated ty
   typeConstraints :: (SyntaxT f s) => f [Annotated s TypeConstraint]
   typeConstraints = _Cons <$> (contextual "|" *> annotated typeConstraint) <*> many (special ',' *> annotated typeConstraint) <|> _Nil <$> pure ()
 
 ty :: (SyntaxT f s) => f (Type s)
-ty = ty1 `join` (_TypeFn, keyword "->" *> annotated ty) <|> expected "type"
+ty = ty1 `join` (_TypeFn, keyword KeywordArrow *> annotated ty) <|> expected "type"
 
 typeInstance :: Syntax f => f TypeInstance
-typeInstance = _Clone <$> keyword "Clone" <|> _Dispose <$> keyword "Dispose" <|> _Copy <$> keyword "Copy" <|> _Capture <$> keyword "Capture" <|> _Integral <$> keyword "Integral"
+typeInstance = _Clone <$> keyword KeywordClone <|> _Dispose <$> keyword KeywordDispose <|> _Copy <$> keyword KeywordCopy <|> _Capture <$> keyword KeywordCapture <|> _Integral <$> keyword KeywordIntegral
 
 ty0 :: (SyntaxT f s) => f (Type s)
 ty0 =
   _TypeCon <$> conId <|>
-  _TypeIdentityOp <$> keyword "@" <|>
+  _TypeIdentityOp <$> keyword KeywordAt <|>
   printOnly (_TypeRef <$> varIdRef) <|>
   _TypeSetOp <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
   printOnly (_TypeUni <$> tyUni) <|>
@@ -406,21 +406,21 @@ tok :: (SyntaxT f s) => f (Tok s)
 tok = printOnly (_TokOp <$> symbol <|> _TokExp <$> annotated exp) <|> expected "token"
 
 exp :: (SyntaxT f s) => f (Exp s)
-exp = exp6 `join` (_Sig, keyword ":" *> annotated ty) <|> expected "expression" where
-  exp6 = optWhere <$> annotated exp5 <*> blockLike (keyword "where") (annotated declTerm) <|> printOnly exp5 <|> expected "expression(6)"
+exp = exp6 `join` (_Sig, keyword KeywordColon *> annotated ty) <|> expected "expression" where
+  exp6 = optWhere <$> annotated exp5 <*> blockLike (keyword KeywordWhere) (annotated declTerm) <|> printOnly exp5 <|> expected "expression(6)"
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
-  exp5 = rightWithSep _Defer exp4 (keyword "defer") <|> expected "expression(5)"
-  exp4 = rightWithSep _Seq exp3 (keyword "seq") <|> expected "expression(4)"
+  exp5 = rightWithSep _Defer exp4 (keyword KeywordDefer) <|> expected "expression(5)"
+  exp4 = rightWithSep _Seq exp3 (keyword KeywordSeq) <|> expected "expression(4)"
   exp3 =
-    _Read <$> keyword "read" *> varId <*> keyword "in" *> annotated exp <|>
-    _DoSugar <$> keyword "do" *> block (annotated stmt) <|>
-    _Case <$> keyword "case" *> annotated exp <*> keyword "of" *> block alt <|>
-    _Cases <$> keyword "cases" *> block alt <|>
-    _If <$> keyword "if" *> annotated exp <*> keyword "then" *> annotated exp <*> keyword "else" *> annotated exp <|>
-    _Lambda <$> keyword "\\" *> alt <|>
+    _Read <$> keyword KeywordRead *> varId <*> keyword KeywordIn *> annotated exp <|>
+    _DoSugar <$> keyword KeywordDo *> block (annotated stmt) <|>
+    _Case <$> keyword KeywordCase *> annotated exp <*> keyword KeywordOf *> block alt <|>
+    _Cases <$> keyword KeywordCases *> block alt <|>
+    _If <$> keyword KeywordIf *> annotated exp <*> keyword KeywordThen *> annotated exp <*> keyword KeywordElse *> annotated exp <|>
+    _Lambda <$> keyword KeywordLambda *> alt <|>
     printOnly (_Closure <$> empty <*> annotated exp3) <|>
-    _Let <$> keyword "let" *> annotated bind <*> keyword "in" *> annotated exp <|>
-    _Switch <$> keyword "switch" *> block switch <|>
+    _Let <$> keyword KeywordLet *> annotated bind <*> keyword KeywordIn *> annotated exp <|>
+    _Switch <$> keyword KeywordSwitch *> block switch <|>
     exp2 <|> expected "expression(3)"
   exp2 = mixfix <$> some (annotated (_TokOp <$> symbol <|> _TokExp <$> annotated exp1)) <|> printOnly exp1 <|> expected "expression(2)"
   mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> MixfixSugar ts }) (\case { MixfixSugar ts -> Just ts; _ -> Nothing })
@@ -436,14 +436,14 @@ exp = exp6 `join` (_Sig, keyword ":" *> annotated ty) <|> expected "expression" 
     expected "expression(0)"
 
 switch :: (SyntaxT f s) => f (Annotated s Exp, Annotated s Exp)
-switch = annotated exp <*> keyword "->" *> annotated exp <|> expected "switch alternative"
+switch = annotated exp <*> keyword KeywordArrow *> annotated exp <|> expected "switch alternative"
 
 -- TODO allow "let ... in" in expression?
 stmt :: (SyntaxT f s) => f (Stmt s)
-stmt = _StmtBind <$> keyword "let" *> annotated bind <|> _StmtExp <$> annotated exp <|> expected "statement"
+stmt = _StmtBind <$> keyword KeywordLet *> annotated bind <|> _StmtExp <$> annotated exp <|> expected "statement"
 
 alt :: (SyntaxT f s) => f (Annotated s Pat, Annotated s Exp)
-alt = annotated pat <*> keyword "->" *> annotated exp <|> expected "case alternative"
+alt = annotated pat <*> keyword KeywordArrow *> annotated exp <|> expected "case alternative"
 
 typeRequirement :: (SyntaxT f s) => f (Requirement TypeConstraint s)
 typeRequirement = _Requirement <$> annotated typeConstraint

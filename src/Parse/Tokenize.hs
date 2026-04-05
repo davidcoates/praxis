@@ -12,8 +12,6 @@ import           Term                     (Flavor (..), Lit (..))
 import           Token
 
 import           Control.Applicative      (Alternative (..), Applicative (..))
-import           Data.Foldable            (asum)
-import           Data.List                (intercalate)
 import qualified Data.Map.Strict          as Map
 import           Data.Maybe               (fromJust)
 

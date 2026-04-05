@@ -37,7 +37,7 @@ datatype Bar ?v a = Bar (Foo ?v a)
   |]
 
       it "does not kind check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-kind check error: unable to satisfy: View ≤ Ref
+kind check error: unable to satisfy: View <: Ref
   | primary cause: type application [Ref -> Type -> Type] Foo ($) [View] ?v at 3:26
   | secondary causes:
   | - data type Foo with argument(s) [Ref] &v, [Type] a at 1:1

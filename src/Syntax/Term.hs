@@ -255,22 +255,22 @@ foldType ty = foldWithSep fold unfold ty (pure ()) where
 
 typeConstraint :: (SyntaxT f s) => f (TypeConstraint s)
 typeConstraint =
-  _TypeIsInstance <$> typeInstance <*> annotated ty0 <|>
-  printOnly (_TypeIsEq <$> annotated ty <*> keyword "=" *> annotated ty) <|>
-  printOnly (_TypeIsEqIfAffine <$> annotated ty <*> keyword "=" *> annotated ty <*> keyword "|" *> annotated ty) <|>
-  printOnly (_TypeIsIntegralOver <$> swap <$> integer <*> keyword "∈" *> annotated ty) <|>
-  printOnly (_TypeIsRef <$> keyword "Ref" *> annotated ty) <|>
-  printOnly (_TypeIsRefFree <$> swap <$> varId <*> keyword "∉" *> annotated ty) <|>
-  printOnly (_TypeIsSub <$> annotated ty <*> keyword "≤" *> annotated ty) <|>
-  printOnly (_TypeIsSubIfAffine <$> annotated ty <*> keyword "≤" *> annotated ty <*> keyword "|" *> annotated ty) <|>
-  printOnly (_TypeIsValue <$> keyword "Value" *> annotated ty) <|>
+  _TypeIsInstance <$> swap <$> annotated ty <*> keyword ":" *> typeInstance <|>
+  printOnly (_TypeIsEq <$> annotated ty <*> internal "~" *> annotated ty) <|>
+  printOnly (_TypeIsEqIfAffine <$> annotated ty <*> internal "~" *> annotated ty <*> internal "|" *> internal "affine" *> annotated ty) <|>
+  printOnly (_TypeIsIntegralOver <$> internal "integral" *> annotated ty <*> internal "over" *> integer) <|>
+  printOnly (_TypeIsRef <$> internal "ref" *> annotated ty) <|>
+  printOnly (_TypeIsRefFree <$> swap <$> varId <*> internal "∉" *> internal "lifetimes" *> annotated ty) <|>
+  printOnly (_TypeIsSub <$> annotated ty <*> internal "<:" *> annotated ty) <|>
+  printOnly (_TypeIsSubIfAffine <$> annotated ty <*> internal "<:" *> annotated ty <*> internal "|" *> annotated ty) <|>
+  printOnly (_TypeIsValue <$> internal "value" *> annotated ty) <|>
   expected "type constraint"
 
 kindConstraint :: (SyntaxT f s) => f (KindConstraint s)
 kindConstraint =
-  printOnly (_KindIsEq <$> annotated kind <*> keyword "=" *> annotated kind) <|>
-  printOnly (_KindIsPlain <$> keyword "Plain" *> annotated kind) <|>
-  printOnly (_KindIsSub <$> annotated kind <*> keyword "≤" *> annotated kind) <|>
+  printOnly (_KindIsEq <$> annotated kind <*> internal "~" *> annotated kind) <|>
+  printOnly (_KindIsPlain <$> internal "plain" *> annotated kind) <|>
+  printOnly (_KindIsSub <$> annotated kind <*> internal "<:" *> annotated kind) <|>
   expected "kind constraint"
 
 program :: (SyntaxT f s) => f (Program s)
@@ -373,7 +373,6 @@ kind = kind0 `join` (_KindFn, keyword "->" *> annotated kind) <|> expected "kind
     _KindType <$> keyword "Type" <|>
     _KindView <$> keyword "View" <|>
     printOnly (_KindUni <$> kindUni) <|>
-    _KindConstraint <$> keyword "Constraint" <|>
     expected "kind(0)"
 
 qTy :: (SyntaxT f s) => f (QType s)

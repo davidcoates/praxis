@@ -162,8 +162,8 @@ specialize name spec = do
 specializeDeclTerm :: Name -> Specialization TypeCheck -> Annotated TypeCheck DeclTerm -> Praxis (Annotated Monomorphize Decl)
 specializeDeclTerm monoName spec (_ :< DeclTermVar _ qTy bodyExp) = do
   let monoTy = fmap (\qt -> case view value qt of
-        Forall _ _ ty -> phantom (Mono (applySpec spec ty))
-        Mono ty       -> phantom (Mono ty)) qTy
+        Poly _ _ ty -> phantom (Mono (applySpec spec ty))
+        Mono ty     -> phantom (Mono ty)) qTy
   monoBody <- monomorphizeExp (applySpec spec bodyExp)
   monoQTy  <- traverse castTerm monoTy
   return (phantom (DeclTerm (phantom (DeclTermVar monoName monoQTy monoBody))))
@@ -273,7 +273,7 @@ monomorphizeProgram (_ :< Program decls) = do
     collectDeclTerm :: Annotated TypeCheck DeclTerm -> Praxis ()
     collectDeclTerm dt = case view value dt of
       DeclTermVar name (Just qt) _
-        | (_ :< Forall _ _ _) <- qt -> monomorphizeState . sourceDecls %= Map.insert name dt
+        | (_ :< Poly _ _ _) <- qt -> monomorphizeState . sourceDecls %= Map.insert name dt
       _ -> return ()
 
     -- Second pass: emit non-polymorphic declarations
@@ -287,8 +287,8 @@ monomorphizeProgram (_ :< Program decls) = do
         monomorphizeState . exportedDecls %= (++ [monoDecl])
 
     isPolymorphic :: Annotated TypeCheck DeclTerm -> Bool
-    isPolymorphic (_ :< DeclTermVar _ (Just (_ :< Forall _ _ _)) _) = True
-    isPolymorphic _                                                 = False
+    isPolymorphic (_ :< DeclTermVar _ (Just (_ :< Poly _ _ _)) _) = True
+    isPolymorphic _                                               = False
 
     isPolymorphicDT :: Annotated TypeCheck DeclType -> Bool
     isPolymorphicDT (_ :< DeclTypeData _ _ typePats _) = not (null typePats)

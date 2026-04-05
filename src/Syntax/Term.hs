@@ -370,7 +370,7 @@ kind = kind0 `join` (_KindFn, keyword KeywordArrow *> annotated kind) <|> expect
 
 qTy :: (SyntaxT f s) => f (QType s)
 qTy = poly <|> mono <|> expected "quantified type" where
-  poly = _Forall <$> keyword KeywordForall *> some (annotated typePat) <*> typeConstraints <*> (contextual "." *> annotated ty)
+  poly = _Poly <$> keyword KeywordForall *> some (annotated typePat) <*> typeConstraints <*> (contextual "." *> annotated ty)
   mono = _Mono <$> annotated ty
   typeConstraints :: (SyntaxT f s) => f [Annotated s TypeConstraint]
   typeConstraints = _Cons <$> (contextual "|" *> annotated typeConstraint) <*> many (special ',' *> annotated typeConstraint) <|> _Nil <$> pure ()

@@ -138,7 +138,7 @@ specializeTypePat (a :< TypePatVar f n) = (\ty -> (n, a :< view value ty)) <$> f
 
 specializeQType :: Source -> Name -> Annotated TypeCheck QType -> Praxis (Annotated TypeCheck Type, Maybe (Specialization TypeCheck))
 specializeQType src name (_ :< qTy) = case qTy of
-  Forall vs cs ty -> do
+  Poly vs cs ty -> do
     vs' <- traverse specializeTypePat vs
     let
       typeRewrite :: IsTerm a => Annotated TypeCheck a -> Annotated TypeCheck a
@@ -232,7 +232,7 @@ generateDeclType (a@(src, kind) :< ty) = ((src, ()) :<) <$> case ty of
       buildConType :: Annotated TypeCheck Type -> Annotated TypeCheck QType
       buildConType argTy = case typePats of
         [] -> phantom (Mono (phantom (TypeFn argTy retTy)))
-        _  -> phantom (Forall typePats [] (phantom (TypeFn argTy retTy)))
+        _  -> phantom (Poly typePats [] (phantom (TypeFn argTy retTy)))
 
       generateDataCon :: Annotated KindCheck DataCon -> Praxis (Annotated TypeCheck DataCon)
       generateDataCon ((src, ()) :< DataCon name argTy) = do
@@ -281,7 +281,7 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = ((src, ()) :<) <$> case decl 
               rename <- introVar src name sig'
               return $ DeclTermVar rename sig exp
 
-        Just sig'@(_ :< Forall vs cs ty) -> do
+        Just sig'@(_ :< Poly vs cs ty) -> do
           assumeFromQType vs cs -- constraints in the signature are added as assumptions
           exp <- generateExp exp
           require $ (src, TypeReasonFunctionCongruence name sig) :< Requirement (phantom (TypeIsEq ty (view annotation exp)))

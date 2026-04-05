@@ -235,7 +235,7 @@ data Type (s :: Stage)
   deriving (Eq, Ord)
 
 data QType (s :: Stage)
-  = Forall [Annotated s TypePat] [Annotated s TypeConstraint] (Annotated s Type)
+  = Poly [Annotated s TypePat] [Annotated s TypeConstraint] (Annotated s Type)
   | Mono (Annotated s Type)
   deriving (Eq, Ord)
 

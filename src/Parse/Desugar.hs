@@ -245,7 +245,7 @@ desugarDeclTerm top recursive (a@(src, _) :< decl) = (a :<) <$> case decl of
     when (recursive && not (expIsFunction exp)) $ throwAt Parse src $ "non-function " <> pretty name <> " can not be recursive"
     return $ DeclTermVar name Nothing exp
 
-  DeclTermSigSugar name (_ :< Forall _ _ _) | not top -> throwAt Parse src $ "polymorphic function " <> pretty name <> " can only be at the top level"
+  DeclTermSigSugar name (_ :< Poly _ _ _) | not top -> throwAt Parse src $ "polymorphic function " <> pretty name <> " can only be at the top level"
 
   DeclTermSigSugar _ _ -> recurseTerm desugar decl -- handled by coalesce*
 

@@ -35,9 +35,7 @@ kind s = cast $ runInternal (Parse.run s) where
 
 initialTypeConEnv :: TypeConEnv
 initialTypeConEnv = Map.fromList
-  [
-  -- Types
-    (mkName "Array",    kind "Type -> Type")
+  [ (mkName "Array",    kind "Type -> Type")
   , (mkName "Bool",     kind "Type")
   , (mkName "Char",     kind "Type")
   , (mkName "Fn",       kind "Type -> Type -> Type")
@@ -57,8 +55,6 @@ initialTypeConEnv = Map.fromList
   , (mkName "Pair",     kind "Type -> Type -> Type")
   ]
 
-
--- TODO should be replaced with instances in prelude
 
 integral :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
 integral t = phantom (TypeIsInstance Integral t)

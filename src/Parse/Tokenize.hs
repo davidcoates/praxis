@@ -14,6 +14,7 @@ import           Token
 import           Control.Applicative      (Alternative (..), Applicative (..))
 import           Data.Foldable            (asum)
 import           Data.List                (intercalate)
+import qualified Data.Map.Strict          as Map
 import           Data.Maybe               (fromJust)
 
 run :: Bool -> String -> Praxis [Sourced Token]
@@ -90,19 +91,18 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> expected "
   inner :: Tokenizer String
   inner = concat <$> many (escape stringEscapeSeqs <|> ((:[]) <$> match (/= '"')))
 
--- TODO should more of these be contextual ?
-keywords = [
-  "read", "in", "if", "then", "else", "using", "datatype", "enum", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec", "defer", "seq",
-  "Type", "Ref", "View", -- Kinds
-  "Clone", "Dispose", "Copy", "Capture", "Integral", -- Instances
-  ":", "=", "\\", "->", "@"] -- Symbols
+keywordMap :: Map.Map String Keyword
+keywordMap = Map.fromList [ (keywordString kw, kw) | kw <- [minBound..maxBound] ]
+
+toToken :: Form -> String -> Token
+toToken form str = maybe (Ident Plain form str) Keyword (Map.lookup str keywordMap)
 
 upper :: Tokenizer Token
-upper = (\str -> if str `elem` keywords then Keyword Upper str else Ident Plain Upper str) <$> ((:) <$> match isUpper <*> many (match isLetter))
+upper = toToken Upper <$> ((:) <$> match isUpper <*> many (match isLetter))
 
 lower :: Tokenizer Token
 lower =
-  (\str -> if str `elem` keywords then Keyword Lower str else Ident Plain Lower str) <$> lower' <|>
+  toToken Lower <$> lower' <|>
   lookahead (flavor *> match isLower) *> (Ident <$> flavor <*> pure Lower <*> lower') where
     lower' :: Tokenizer String
     lower' = (:) <$> match isLower <*> many (match isLetter)
@@ -113,4 +113,4 @@ lower =
       char '?' *> pure View
 
 symbol :: Tokenizer Token
-symbol = (\str -> if str `elem` keywords then Keyword Symbol str else Ident Plain Symbol str) <$> some (match isSymbol)
+symbol = toToken Symbol <$> some (match isSymbol)

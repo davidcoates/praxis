@@ -241,7 +241,6 @@ data QType (s :: Stage)
 
 data Kind (s :: Stage)
   = KindUni Name
-  | KindConstraint
   | KindFn (Annotated s Kind) (Annotated s Kind)
   | KindRef
   | KindType

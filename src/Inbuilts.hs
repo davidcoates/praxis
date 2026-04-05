@@ -134,13 +134,13 @@ initialInstanceEnv = Map.fromList
 
 inbuilts :: [(Inbuilt, Annotated TypeCheck QType)]
 inbuilts =
-  [ (Add,      poly "forall a | Integral a. (a, a) -> a") -- TODO should be Num, not Integral
-  , (Subtract, poly "forall a | Integral a. (a, a) -> a")
-  , (Multiply, poly "forall a | Integral a. (a, a) -> a")
-  , (Negate,   poly "forall a | Integral a. a -> a")
-  , (GetInt,   poly "forall a | Integral a. () -> a")
+  [ (Add,      poly "forall a | a : Integral. (a, a) -> a") -- TODO should be Num, not Integral
+  , (Subtract, poly "forall a | a : Integral. (a, a) -> a")
+  , (Multiply, poly "forall a | a : Integral. (a, a) -> a")
+  , (Negate,   poly "forall a | a : Integral. a -> a")
+  , (GetInt,   poly "forall a | a : Integral. () -> a")
   , (GetStr,   poly "() -> String")
-  , (PutInt,   poly "forall a | Integral a. a -> ()")
+  , (PutInt,   poly "forall a | a : Integral. a -> ()")
   , (PutStr,   poly "forall &r. &r String -> ()")
   , (PutStrLn, poly "forall &r. &r String -> ()")
   , (Compose,  poly "forall a b c. (b -> c, a -> b) -> a -> c")
@@ -152,12 +152,12 @@ inbuilts =
   , (Not,      poly "Bool -> Bool")
   , (Or,       poly "(Bool, Bool) -> Bool")
   , (And,      poly "(Bool, Bool) -> Bool")
-  , (Eq,       poly "forall a | Integral a. (a, a) -> Bool") -- TODO should be Eq, not Integral
-  , (Neq,      poly "forall a | Integral a. (a, a) -> Bool")
-  , (Lt,       poly "forall a | Integral a. (a, a) -> Bool") -- TODO should be Ord, not Integral
-  , (Gt,       poly "forall a | Integral a. (a, a) -> Bool")
-  , (Lte,      poly "forall a | Integral a. (a, a) -> Bool")
-  , (Gte,      poly "forall a | Integral a. (a, a) -> Bool")
+  , (Eq,       poly "forall a | a : Integral. (a, a) -> Bool") -- TODO should be Eq, not Integral
+  , (Neq,      poly "forall a | a : Integral. (a, a) -> Bool")
+  , (Lt,       poly "forall a | a : Integral. (a, a) -> Bool") -- TODO should be Ord, not Integral
+  , (Gt,       poly "forall a | a : Integral. (a, a) -> Bool")
+  , (Lte,      poly "forall a | a : Integral. (a, a) -> Bool")
+  , (Gte,      poly "forall a | a : Integral. (a, a) -> Bool")
   ]
 
 

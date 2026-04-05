@@ -93,8 +93,9 @@ stringLiteral = char '"' *> ((Lit . String <$> inner) <* char '"' <|> expected "
 -- TODO should more of these be contextual ?
 keywords = [
   "read", "in", "if", "then", "else", "using", "datatype", "enum", "cases", "case", "of", "where", "do", "forall", "let", "operator", "switch", "rec", "defer", "seq",
-  "Type", "Constraint", "Clone", "Dispose", "Copy", "Capture", "Integral",
-  ":", "=", "\\", "->", "@"]
+  "Type", "Ref", "View", -- Kinds
+  "Clone", "Dispose", "Copy", "Capture", "Integral", -- Instances
+  ":", "=", "\\", "->", "@"] -- Symbols
 
 upper :: Tokenizer Token
 upper = (\str -> if str `elem` keywords then Keyword Upper str else Ident Plain Upper str) <$> ((:) <$> match isUpper <*> many (match isLetter))

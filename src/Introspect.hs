@@ -336,7 +336,6 @@ instance IsTerm Kind where
   termT = KindT
   recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
-    KindConstraint -> pure KindConstraint
     KindFn a b     -> KindFn <$> f a <*> f b
     KindRef        -> pure KindRef
     KindType       -> pure KindType

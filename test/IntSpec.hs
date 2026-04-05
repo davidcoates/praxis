@@ -29,7 +29,7 @@ spec = do
 
     forM_ overflows $ \(number, ty) -> do
       it (number ++ " overflows " ++ ty) $ runPretty (check ProgramT ("x = " ++ number ++ " : " ++ ty)) `shouldReturn` trim [r|
-type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
+type check error: unable to satisfy: integral |] <> ty <> " over " <> number <> [r|
   | primary cause: integer literal |] <> number <> [r| at 1:5
   | secondary cause: signature |] ++ ty ++ " at 1:5"
 
@@ -47,6 +47,6 @@ type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
 
     forM_ underflows $ \(number, ty) -> do
       it (number ++ " underflows " ++ ty) $ runPretty (check ProgramT ("x = " ++ number ++ " : " ++ ty)) `shouldReturn` trim [r|
-type check error: unable to satisfy: |] <> number <> " ∈ " <> ty <> [r|
+type check error: unable to satisfy: integral |] <> ty <> " over " <> number <> [r|
   | primary cause: integer literal |] <> number <> [r| at 1:5
   | secondary cause: signature |] ++ ty ++ " at 1:5"

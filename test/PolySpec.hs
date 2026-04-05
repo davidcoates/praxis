@@ -38,16 +38,16 @@ swap : forall a b . ( a , b ) -> ( b , a ) = \ ( [a] a , [b] b ) -> ( [b] b , [a
   describe "polymorphic function with constraint (copy)" $ do
 
     let program = [r|
-copy : forall a | Copy a. a -> (a, a)
+copy : forall a | a : Copy. a -> (a, a)
 copy x = (x, x)
 |]
 
     it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
-copy : forall a | Copy a . a -> ( a , a ) = \ x -> ( x , x )
+copy : forall a | a : Copy . a -> ( a , a ) = \ x -> ( x , x )
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-copy : forall a | Copy a . a -> ( a , a ) = \ [a] x -> ( [a] x , [a] x )
+copy : forall a | a : Copy . a -> ( a , a ) = \ [a] x -> ( [a] x , [a] x )
 |]
 
     it "evals" $ do

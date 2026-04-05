@@ -38,7 +38,7 @@ reduce disambiguate (a :< constraint) = case constraint of
     KindUni _ -> return skip
     KindRef   -> return contradiction
     KindView  -> return contradiction
-    _         -> return tautology -- What about Constraint?
+    _         -> return tautology
 
   KindIsSub kind1 kind2 | kind1 == kind2 -> return tautology
 

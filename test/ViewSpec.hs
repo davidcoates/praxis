@@ -57,8 +57,8 @@ box = [&'l0 String -> Box &'l0 String] Box [&'l0 String] "x"
 
       it "does not type check" $ do
         runPretty (check ProgramT program >> check ExpT "let xs = Cons (1, Cons (2, Cons (3, Nil ()))) in Box xs") `shouldReturn` trim [r|
-type check error: unable to satisfy: Ref @
-  | derived from: List ^t2 = List ^t2
+type check error: unable to satisfy: ref @
+  | derived from: List ^t2 ~ List ^t2
   | primary cause: binding [List ^t2] xs (<-) [( ^t2 , List ^t2 ) -> List ^t2] Cons ( [^t2] 1 , [( ^t2 , List ^t2 ) -> List ^t2] Cons ( [^t2] 2 , [( ^t2 , List ^t2 ) -> List ^t2] Cons ( [^t2] 3 , [( ) -> List ^t2] Nil [( )] ( ) ) ) ) at 1:5
   | secondary causes:
   | - application [List ^t2 -> Box @ ( List ^t2 )] Box ($) [List ^t2] xs at 1:50
@@ -96,7 +96,7 @@ y = read x in ( 1 , x )
 |]
 
     it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error: unable to satisfy: 'l0 ∉ ( I32 , &'l0 List I32 )
+type check error: unable to satisfy: 'l0 ∉ lifetimes ( I32 , &'l0 List I32 )
   | primary cause: read of x at 5:5
   | secondary causes:
   | - application [( I32 , List I32 ) -> List I32] Cons ($) ( [I32] 1 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 2 , [( I32 , List I32 ) -> List I32] Cons ( [I32] 3 , [( ) -> List I32] Nil [( )] ( ) ) ) ) at 3:5

@@ -22,10 +22,6 @@ import           Prelude       hiding (_Just, exp, pure, until, (*>), (<$>),
                                 (<*), (<*>))
 
 
-definePrisms ''Bool
-definePrisms ''Ordering
-definePrisms ''TypeInstance
-
 until :: Syntax f => f a -> f () -> f [a]
 until p q = _Nil <$> q <|> _Cons <$> p <*> until p q
 
@@ -37,12 +33,6 @@ special c = token (Special c) <|> expected ("special '" ++ [c] ++ "'")
 
 layout :: Syntax f => Char -> f ()
 layout c = token (Layout c) <|> expected ("layout '" ++ [c] ++ "'")
-
-contextualOp :: Syntax f => String -> f ()
-contextualOp op = token (VarSym op) <|> internal (reservedSym op) <|> expected ("contextual keyword '" ++ op ++ "'")
-
-contextualId :: Syntax f => String -> f ()
-contextualId id = token (VarId id) <|> internal (reservedId id) <|> expected ("contextual keyword '" ++ id ++ "'")
 
 block :: Syntax f => f a -> f [a]
 block p = layout '{' *> _Cons <$> p <*> (layout ';' *> p) `until` layout '}'
@@ -57,81 +47,89 @@ blockLike f g =
   f *> blockOrLine g <|>
   _Nil <$> pure ()
 
+formOf :: String -> Form
+formOf (c:_)
+  | isLower  c = Lower
+  | isSymbol c = Symbol
+  | isUpper  c = Upper
+  | otherwise  = Symbol -- FIXME: this is ∈ and ∉
+
+keyword :: Syntax f => String -> f ()
+keyword str = token (Keyword (formOf str) str) <|> expected ("keyword '" ++ str ++ "'")
+
+contextual :: Syntax f => String -> f ()
+contextual str = token (Ident Plain (formOf str) str) <|> printOnly (keyword str) <|> expected ("contextual keyword '" ++ str ++ "'")
+
 conId :: Syntax f => f Name
-conId = match f (ConId . nameString) where
+conId = match f (Ident Plain Upper . nameString) where
   f = \case
-    ConId n -> Just (mkName n)
-    _       -> Nothing
+    Ident Plain Upper str -> Just (mkName str)
+    _                     -> Nothing
 
 varId :: Syntax f => f Name
-varId = match f (VarId . nameString) where
+varId = match f (Ident Plain Lower . nameString) where
   f = \case
-    VarId n -> Just (mkName n)
-    _       -> Nothing
+    Ident Plain Lower str -> Just (mkName str)
+    _                     -> Nothing
 
-flavoredVarId :: Syntax f => f (Flavor, Name)
-flavoredVarId = match parse print where
-  parse = \case
-    VarId n      -> Just (Plain, mkName n)
-    VarIdRef n   -> Just (Ref,   mkName n)
-    VarIdValue n -> Just (Value, mkName n)
-    VarIdView n  -> Just (View,  mkName n)
-    _            -> Nothing
-  print (f, n) = case f of
-    Plain -> VarId      (nameString n)
-    Ref   -> VarIdRef   (nameString n)
-    Value -> VarIdValue (nameString n)
-    View  -> VarIdView  (nameString n)
+tyVarId :: Syntax f => f (Flavor, Name)
+tyVarId = match f (\(flavor, name) -> Ident flavor Lower (nameString name)) where
+  f = \case
+    Ident flavor Lower str -> Just (flavor, mkName str)
+    _                      -> Nothing
 
 varIdRef :: Syntax f => f Name
-varIdRef = match f (VarIdRef . nameString) where
+varIdRef = match f (Ident Ref Lower . nameString) where
   f = \case
-    VarIdRef n -> Just (mkName n)
-    _          -> Nothing
+    Ident Ref Lower str -> Just (mkName str)
+    _                   -> Nothing
 
-varSym :: Syntax f => f Name
-varSym = match f (VarSym . nameString) where
+symbol :: Syntax f => f Name
+symbol = match f (Ident Plain Symbol . nameString) where
   f = \case
-    VarSym n -> Just (mkName n)
-    _        -> Nothing
+    Ident Plain Symbol str -> Just (mkName str)
+    _                      -> Nothing
 
-uni :: Syntax f => f Name
-uni = match (const Nothing) (Uni . VarId . nameString)
+internal :: Syntax f => String -> f ()
+internal str = match (const Nothing) (const (Internal (pretty str)))
 
-flavoredUni :: Syntax f => f (Flavor, Name)
-flavoredUni = match (const Nothing) print where
-  print (f, n) = Uni $ case f of
-    Plain -> VarId      (nameString n)
-    Ref   -> VarIdRef   (nameString n)
-    Value -> VarIdValue (nameString n)
-    View  -> VarIdView  (nameString n)
+kindUni :: Syntax f => f Name
+kindUni = match (const Nothing) (Internal . pretty . nameString)
+
+tyUni :: Syntax f => f (Flavor, Name)
+tyUni = match (const Nothing) (\(flavor, name) -> Internal (pretty (Ident flavor Lower (nameString name))))
+
+inbuilt :: Syntax f => f Inbuilt
+inbuilt = match (const Nothing) (Ident Plain Lower . show)
+
+integer :: Syntax f => f Integer
+integer = match f (Token.Lit . Integer) where
+  f = \case
+    Token.Lit (Integer n) -> Just n
+    _                     -> Nothing
 
 lit :: Syntax f => f Lit
 lit = match f Token.Lit where
   f = \case
-    Token.Lit l -> Just l
-    _           -> Nothing
+    Token.Lit lit -> Just lit
+    _             -> Nothing
 
 litNoString :: Syntax f => f Lit
-litNoString = match f (\l -> Token.Lit l) where
+litNoString = match f Token.Lit where
   f = \case
     Token.Lit (String _) -> Nothing
-    Token.Lit l          -> Just l
+    Token.Lit lit        -> Just lit
     _                    -> Nothing
 
-reservedSym :: Syntax f => String -> f ()
-reservedSym s = token (ReservedSym s) <|> expected ("reserved symbol '" ++ s ++ "'")
-
-reservedCon :: Syntax f => String -> f ()
-reservedCon s = token (ReservedCon s) <|> expected ("reserved name '" ++ s ++ "'")
-
-reservedId :: Syntax f => String -> f ()
-reservedId s = token (ReservedId s) <|> expected ("reserved name '" ++ s ++ "'")
 
 definePrisms ''Assoc
 definePrisms ''Op
 definePrisms ''OpRules
 definePrisms ''Prec
+
+definePrisms ''Bool
+definePrisms ''Ordering
+definePrisms ''TypeInstance
 
 definePrisms ''Bind
 definePrisms ''DataCon
@@ -191,7 +189,7 @@ tuple unit pair p = special '(' *> tuple' where
   tuple' = unit <$> special ')' *> pure () <|> rightWithSep pair p (special ',') <* special ')'
 
 join :: (SyntaxT f s, IsTerm a) => f (a s) -> (Prism (a s) (Annotated s a, b), f b) -> f (a s)
-join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> internal p where
+join p (_P, q) = Prism f g <$> annotated p <*> optional q <|> printOnly p where
   f (_ :< p, Nothing) = p
   f (p, Just q)       = construct _P (p, q)
   g x = case destruct _P x of
@@ -205,7 +203,7 @@ left :: (SyntaxT f s, IsTerm a) => Prism (a s) (Annotated s a, Annotated s a) ->
 left _P p = leftWithSep _P p (pure ())
 
 foldWithSep :: forall f a s. (SyntaxT f s, IsTerm a) => (Annotation s a -> [Annotated s a] -> Annotated s a) -> ((a s) -> Maybe [Annotated s a]) -> f (a s) -> f () -> f (a s)
-foldWithSep fold unfold p s = Prism f g <$> blank (stageT :: StageT s) (termT :: TermT a) <*> (_Cons <$> annotated p <*> many (s *> annotated p)) <|> internal p where
+foldWithSep fold unfold p s = Prism f g <$> blank (stageT :: StageT s) (termT :: TermT a) <*> (_Cons <$> annotated p <*> many (s *> annotated p)) <|> printOnly p where
   f :: (Annotation s a, [Annotated s a]) -> (a s)
   f (a, ps) = view value (fold a ps)
   g :: (a s) -> Maybe (Annotation s a, [Annotated s a])
@@ -254,30 +252,25 @@ foldType ty = foldWithSep fold unfold ty (pure ()) where
     TypeApply x y   -> unfold' x ++ [y]
     _               -> [x]
 
-integer :: Syntax f => f Integer
-integer = match f (Token.Lit . Integer) where
-  f = \case
-    Token.Lit (Integer n) -> Just n
-    _                     -> Nothing
 
 typeConstraint :: (SyntaxT f s) => f (TypeConstraint s)
 typeConstraint =
   _TypeIsInstance <$> typeInstance <*> annotated ty0 <|>
-  internal (_TypeIsEq <$> annotated ty <*> reservedSym "=" *> annotated ty) <|>
-  internal (_TypeIsEqIfAffine <$> annotated ty <*> reservedSym "=" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
-  internal (_TypeIsIntegralOver <$> swap <$> integer <*> reservedSym "∈" *> annotated ty) <|>
-  internal (_TypeIsRef <$> reservedCon "Ref" *> annotated ty) <|>
-  internal (_TypeIsRefFree <$> swap <$> varId <*> reservedSym "∉" *> annotated ty) <|>
-  internal (_TypeIsSub <$> annotated ty <*> reservedSym "≤" *> annotated ty) <|>
-  internal (_TypeIsSubIfAffine <$> annotated ty <*> reservedSym "≤" *> annotated ty <*> reservedSym "|" *> annotated ty) <|>
-  internal (_TypeIsValue <$> reservedCon "Value" *> annotated ty) <|>
+  printOnly (_TypeIsEq <$> annotated ty <*> keyword "=" *> annotated ty) <|>
+  printOnly (_TypeIsEqIfAffine <$> annotated ty <*> keyword "=" *> annotated ty <*> keyword "|" *> annotated ty) <|>
+  printOnly (_TypeIsIntegralOver <$> swap <$> integer <*> keyword "∈" *> annotated ty) <|>
+  printOnly (_TypeIsRef <$> keyword "Ref" *> annotated ty) <|>
+  printOnly (_TypeIsRefFree <$> swap <$> varId <*> keyword "∉" *> annotated ty) <|>
+  printOnly (_TypeIsSub <$> annotated ty <*> keyword "≤" *> annotated ty) <|>
+  printOnly (_TypeIsSubIfAffine <$> annotated ty <*> keyword "≤" *> annotated ty <*> keyword "|" *> annotated ty) <|>
+  printOnly (_TypeIsValue <$> keyword "Value" *> annotated ty) <|>
   expected "type constraint"
 
 kindConstraint :: (SyntaxT f s) => f (KindConstraint s)
 kindConstraint =
-  internal (_KindIsEq <$> annotated kind <*> reservedSym "=" *> annotated kind) <|>
-  internal (_KindIsPlain <$> reservedCon "Plain" *> annotated kind) <|>
-  internal (_KindIsSub <$> annotated kind <*> reservedSym "≤" *> annotated kind) <|>
+  printOnly (_KindIsEq <$> annotated kind <*> keyword "=" *> annotated kind) <|>
+  printOnly (_KindIsPlain <$> keyword "Plain" *> annotated kind) <|>
+  printOnly (_KindIsSub <$> annotated kind <*> keyword "≤" *> annotated kind) <|>
   expected "kind constraint"
 
 program :: (SyntaxT f s) => f (Program s)
@@ -285,7 +278,7 @@ program = _Program <$> block (annotated decl) <|> expected "program"
 
 decl :: (SyntaxT f s) => f (Decl s)
 decl =
-  _DeclRec <$> reservedId "rec" *> blockOrLine (annotated declRec) <|>
+  _DeclRec <$> keyword "rec" *> blockOrLine (annotated declRec) <|>
   declSyn <|>
   declOp <|>
   _DeclTerm <$> annotated declTerm <|>
@@ -299,52 +292,52 @@ declRec =
   expected "recursive declaration"
 
 declOp :: (SyntaxT f s) => f (Decl s)
-declOp = _DeclOpSugar <$> reservedId "operator" *> annotated op <*> reservedSym "=" *> varId <*> annotated opRules
+declOp = _DeclOpSugar <$> keyword "operator" *> annotated op <*> keyword "=" *> varId <*> annotated opRules
 
 op :: (SyntaxT f s) => f (Op s)
 op = _Op <$> special '(' *> atLeast 2 atom <* special ')' <|> expected "operator section"  where
-  atom = _Nothing <$> special '_' <|> _Just <$> varSym <|> expected "operator or hole"
+  atom = _Nothing <$> special '_' <|> _Just <$> symbol <|> expected "operator or hole"
 
 opRules :: (SyntaxT f s) => f (OpRules s)
-opRules = _OpRules <$> blockLike (reservedId "where") (_Left <$> assoc <|> _Right <$> precs) <|> expected "operator rules"
+opRules = _OpRules <$> blockLike (keyword "where") (_Left <$> assoc <|> _Right <$> precs) <|> expected "operator rules"
 
 assoc :: Syntax f => f Assoc
-assoc = assoc' <* contextualId "associative" where
+assoc = assoc' <* contextual "associative" where
   assoc' =
-    _AssocLeft <$> contextualId "left" <|>
-    _AssocRight <$> contextualId "right"
+    _AssocLeft <$> contextual "left" <|>
+    _AssocRight <$> contextual "right"
 
 precs :: (SyntaxT f s) => f [Annotated s Prec]
-precs = blockLike (contextualId "precedence") (annotated prec)
+precs = blockLike (contextual "precedence") (annotated prec)
 
 prec :: (SyntaxT f s) => f (Prec s)
 prec = _Prec <$> ordering <*> annotated op where
   ordering =
-    _GT <$> contextualId "above" <|>
-    _LT <$> contextualId "below" <|>
-    _EQ <$> contextualId "equal"
+    _GT <$> contextual "above" <|>
+    _LT <$> contextual "below" <|>
+    _EQ <$> contextual "equal"
 
 declSyn :: (SyntaxT f s) => f (Decl s)
-declSyn = _DeclSynSugar <$> reservedId "using" *> conId <*> reservedSym "=" *> annotated ty
+declSyn = _DeclSynSugar <$> keyword "using" *> conId <*> keyword "=" *> annotated ty
 
 declType :: (SyntaxT f s) => f (DeclType s)
-declType = declTypeDataSugar <|> internal declTypeData <|> declTypeEnum where
+declType = declTypeDataSugar <|> printOnly declTypeData <|> declTypeEnum where
 
   declTypeData :: (SyntaxT f s) => f (DeclType s)
-  declTypeData = _DeclTypeData <$> reservedId "datatype" *> dataMode <*> conId <*> many (annotated typePat) <*> reservedSym "=" *> dataCons
+  declTypeData = _DeclTypeData <$> keyword "datatype" *> dataMode <*> conId <*> many (annotated typePat) <*> keyword "=" *> dataCons
 
   declTypeDataSugar :: (SyntaxT f s) => f (DeclType s)
-  declTypeDataSugar = _DeclTypeDataSugar <$> reservedId "datatype" *> optional dataMode <*> conId <*> many (annotated typePat) <*> reservedSym "=" *> dataCons
+  declTypeDataSugar = _DeclTypeDataSugar <$> keyword "datatype" *> optional dataMode <*> conId <*> many (annotated typePat) <*> keyword "=" *> dataCons
 
   dataCons :: (SyntaxT f s) => f [Annotated s DataCon]
-  dataCons = _Cons <$> annotated dataCon <*> many (contextualOp "|" *> annotated dataCon)
+  dataCons = _Cons <$> annotated dataCon <*> many (contextual "|" *> annotated dataCon)
 
   dataMode :: Syntax f => f DataMode
-  dataMode = (_DataBoxed <$> reservedId "boxed") <|> (_DataUnboxed <$> reservedId "unboxed")
+  dataMode = (_DataBoxed <$> contextual "boxed") <|> (_DataUnboxed <$> contextual "unboxed")
 
   declTypeEnum :: (SyntaxT f s) => f (DeclType s)
-  declTypeEnum = _DeclTypeEnum <$> reservedId "enum" *> conId <*> reservedSym "=" *> alts where
-    alts = _Cons <$> conId <*> many (contextualOp "|" *> conId)
+  declTypeEnum = _DeclTypeEnum <$> keyword "enum" *> conId <*> keyword "=" *> alts where
+    alts = _Cons <$> conId <*> many (contextual "|" *> conId)
 
 
 dataCon :: (SyntaxT f s) => f (DataCon s)
@@ -352,58 +345,58 @@ dataCon = _DataCon <$> conId <*> annotated ty1
 
 typePat :: (SyntaxT f s) => f (TypePat s)
 typePat =
-  _TypePatVar <$> flavoredVarId <|>
+  _TypePatVar <$> tyVarId <|>
   expected "type variable"
 
 declTerm :: (SyntaxT f s) => f (DeclTerm s)
-declTerm = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> internal declTermVar <|> expected "term declaration" where
-  declTermSig = reservedSym ":" *> annotated qTy
-  declTermDef = annotated pat `until` reservedSym "=" <*> annotated exp
-  declTermVar = _DeclTermVar <$> varId <*> (_Just <$> reservedSym ":" *> annotated qTy) <*> reservedSym "=" *> annotated exp
+declTerm = prefix varId (_DeclTermSigSugar, declTermSig) (_DeclTermDefSugar, declTermDef) <|> printOnly declTermVar <|> expected "term declaration" where
+  declTermSig = keyword ":" *> annotated qTy
+  declTermDef = annotated pat `until` keyword "=" <*> annotated exp
+  declTermVar = _DeclTermVar <$> varId <*> (_Just <$> keyword ":" *> annotated qTy) <*> keyword "=" *> annotated exp
 
 bind :: (SyntaxT f s) => f (Bind s)
-bind = _Bind <$> annotated pat <*> reservedSym "=" *> annotated exp <|> expected "binding"
+bind = _Bind <$> annotated pat <*> keyword "=" *> annotated exp <|> expected "binding"
 
 pat :: (SyntaxT f s) => f (Pat s)
 pat = prefix' conId (_PatData, annotated pat0) _PatEnum <|> pat0 <|> expected "pattern" where
   pat0 =
     _PatHole <$> special '_' <|>
     _PatLit <$> litNoString <|> -- TODO allow string literals
-    prefix' varId (_PatAt, reservedSym "@" *> annotated pat) _PatVar <|>
+    prefix' varId (_PatAt, keyword "@" *> annotated pat) _PatVar <|>
     tuple _PatUnit _PatPair pat <|>
     expected "pattern(0)"
 
 kind :: (SyntaxT f s) => f (Kind s)
-kind = kind0 `join` (_KindFn, reservedSym "->" *> annotated kind) <|> expected "kind" where
+kind = kind0 `join` (_KindFn, keyword "->" *> annotated kind) <|> expected "kind" where
   kind0 =
-    _KindRef <$> reservedCon "Ref" <|>
-    _KindType <$> reservedCon "Type" <|>
-    _KindView <$> reservedCon "View" <|>
-    internal (_KindUni <$> uni) <|>
-    _KindConstraint <$> reservedCon "Constraint" <|>
+    _KindRef <$> keyword "Ref" <|>
+    _KindType <$> keyword "Type" <|>
+    _KindView <$> keyword "View" <|>
+    printOnly (_KindUni <$> kindUni) <|>
+    _KindConstraint <$> keyword "Constraint" <|>
     expected "kind(0)"
 
 qTy :: (SyntaxT f s) => f (QType s)
 qTy = poly <|> mono <|> expected "quantified type" where
-  poly = _Forall <$> reservedId "forall" *> some (annotated typePat) <*> typeConstraints <*> (contextualOp "." *> annotated ty)
+  poly = _Forall <$> keyword "forall" *> some (annotated typePat) <*> typeConstraints <*> (contextual "." *> annotated ty)
   mono = _Mono <$> annotated ty
   typeConstraints :: (SyntaxT f s) => f [Annotated s TypeConstraint]
-  typeConstraints = _Cons <$> (contextualOp "|" *> annotated typeConstraint) <*> many (special ',' *> annotated typeConstraint) <|> _Nil <$> pure ()
+  typeConstraints = _Cons <$> (contextual "|" *> annotated typeConstraint) <*> many (special ',' *> annotated typeConstraint) <|> _Nil <$> pure ()
 
 ty :: (SyntaxT f s) => f (Type s)
-ty = ty1 `join` (_TypeFn, reservedSym "->" *> annotated ty) <|> expected "type"
+ty = ty1 `join` (_TypeFn, keyword "->" *> annotated ty) <|> expected "type"
 
 typeInstance :: Syntax f => f TypeInstance
-typeInstance = _Clone <$> reservedCon "Clone" <|> _Dispose <$> reservedCon "Dispose" <|> _Copy <$> reservedCon "Copy" <|> _Capture <$> reservedCon "Capture" <|> _Integral <$> reservedCon "Integral"
+typeInstance = _Clone <$> keyword "Clone" <|> _Dispose <$> keyword "Dispose" <|> _Copy <$> keyword "Copy" <|> _Capture <$> keyword "Capture" <|> _Integral <$> keyword "Integral"
 
 ty0 :: (SyntaxT f s) => f (Type s)
 ty0 =
   _TypeCon <$> conId <|>
-  _TypeIdentityOp <$> reservedSym "@" <|>
-  internal (_TypeRef <$> varIdRef) <|>
+  _TypeIdentityOp <$> keyword "@" <|>
+  printOnly (_TypeRef <$> varIdRef) <|>
   _TypeSetOp <$> (Prism Set.fromList (Just . Set.toList) <$> (special '{' *> (_Cons <$> annotated ty <*> some (special ',' *> annotated ty)) <* special '}')) <|>
-  internal (_TypeUni <$> flavoredUni) <|>
-  _TypeVar <$> flavoredVarId <|>
+  printOnly (_TypeUni <$> tyUni) <|>
+  _TypeVar <$> tyVarId <|>
   tuple _TypeUnit _TypePair ty <|>
   expected "type(0)"
 
@@ -411,47 +404,47 @@ ty1 :: (SyntaxT f s) => f (Type s)
 ty1 = foldType ty0 <|> expected "type(1)"
 
 tok :: (SyntaxT f s) => f (Tok s)
-tok = internal (_TokOp <$> varSym <|> _TokExp <$> annotated exp) <|> expected "token"
+tok = printOnly (_TokOp <$> symbol <|> _TokExp <$> annotated exp) <|> expected "token"
 
 exp :: (SyntaxT f s) => f (Exp s)
-exp = exp6 `join` (_Sig, reservedSym ":" *> annotated ty) <|> expected "expression" where
-  exp6 = optWhere <$> annotated exp5 <*> blockLike (reservedId "where") (annotated declTerm) <|> internal exp5 <|> expected "expression(6)"
+exp = exp6 `join` (_Sig, keyword ":" *> annotated ty) <|> expected "expression" where
+  exp6 = optWhere <$> annotated exp5 <*> blockLike (keyword "where") (annotated declTerm) <|> printOnly exp5 <|> expected "expression(6)"
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
-  exp5 = rightWithSep _Defer exp4 (reservedId "defer") <|> expected "expression(5)"
-  exp4 = rightWithSep _Seq exp3 (reservedId "seq") <|> expected "expression(4)"
+  exp5 = rightWithSep _Defer exp4 (keyword "defer") <|> expected "expression(5)"
+  exp4 = rightWithSep _Seq exp3 (keyword "seq") <|> expected "expression(4)"
   exp3 =
-    _Read <$> reservedId "read" *> varId <*> reservedId "in" *> annotated exp <|>
-    _DoSugar <$> reservedId "do" *> block (annotated stmt) <|>
-    _Case <$> reservedId "case" *> annotated exp <*> reservedId "of" *> block alt <|>
-    _Cases <$> reservedId "cases" *> block alt <|>
-    _If <$> reservedId "if" *> annotated exp <*> reservedId "then" *> annotated exp <*> reservedId "else" *> annotated exp <|>
-    _Lambda <$> reservedSym "\\" *> alt <|>
-    internal (_Closure <$> empty <*> annotated exp3) <|>
-    _Let <$> reservedId "let" *> annotated bind <*> reservedId "in" *> annotated exp <|>
-    _Switch <$> reservedId "switch" *> block switch <|>
+    _Read <$> keyword "read" *> varId <*> keyword "in" *> annotated exp <|>
+    _DoSugar <$> keyword "do" *> block (annotated stmt) <|>
+    _Case <$> keyword "case" *> annotated exp <*> keyword "of" *> block alt <|>
+    _Cases <$> keyword "cases" *> block alt <|>
+    _If <$> keyword "if" *> annotated exp <*> keyword "then" *> annotated exp <*> keyword "else" *> annotated exp <|>
+    _Lambda <$> keyword "\\" *> alt <|>
+    printOnly (_Closure <$> empty <*> annotated exp3) <|>
+    _Let <$> keyword "let" *> annotated bind <*> keyword "in" *> annotated exp <|>
+    _Switch <$> keyword "switch" *> block switch <|>
     exp2 <|> expected "expression(3)"
-  exp2 = mixfix <$> some (annotated (_TokOp <$> varSym <|> _TokExp <$> annotated exp1)) <|> internal exp1 <|> expected "expression(2)"
+  exp2 = mixfix <$> some (annotated (_TokOp <$> symbol <|> _TokExp <$> annotated exp1)) <|> printOnly exp1 <|> expected "expression(2)"
   mixfix = Prism (\ts -> case ts of { [_ :< TokExp e] -> view value e; _ -> MixfixSugar ts }) (\case { MixfixSugar ts -> Just ts; _ -> Nothing })
   exp1 = left _Apply exp0 <|> expected "expression(1)"
   exp0 =
     _VarRefSugar <$> varIdRef <|>
     _Var <$> varId <|>
     _Con <$> conId <|>
-    _Inbuilt <$> match (const Nothing) (VarId . show) <|>
+    _Inbuilt <$> inbuilt <|>
     _Lit <$> lit <|>
-    internal (_Specialize <$> annotated exp0 <*> empty) <|>
+    printOnly (_Specialize <$> annotated exp0 <*> empty) <|>
     tuple _Unit _Pair exp <|> -- Note: Grouping parentheses are handled here
     expected "expression(0)"
 
 switch :: (SyntaxT f s) => f (Annotated s Exp, Annotated s Exp)
-switch = annotated exp <*> reservedSym "->" *> annotated exp <|> expected "switch alternative"
+switch = annotated exp <*> keyword "->" *> annotated exp <|> expected "switch alternative"
 
 -- TODO allow "let ... in" in expression?
 stmt :: (SyntaxT f s) => f (Stmt s)
-stmt = _StmtBind <$> reservedId "let" *> annotated bind <|> _StmtExp <$> annotated exp <|> expected "statement"
+stmt = _StmtBind <$> keyword "let" *> annotated bind <|> _StmtExp <$> annotated exp <|> expected "statement"
 
 alt :: (SyntaxT f s) => f (Annotated s Pat, Annotated s Exp)
-alt = annotated pat <*> reservedSym "->" *> annotated exp <|> expected "case alternative"
+alt = annotated pat <*> keyword "->" *> annotated exp <|> expected "case alternative"
 
 typeRequirement :: (SyntaxT f s) => f (Requirement TypeConstraint s)
 typeRequirement = _Requirement <$> annotated typeConstraint

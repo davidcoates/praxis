@@ -1,8 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Syntax.Syntax
-  ( Syntax(..)
+  ( Direction(..)
+  , Syntax(..)
   , SyntaxT(..)
+  , printOnly
   , _Cons
   , _Nil
   , _Just
@@ -35,6 +37,8 @@ infixr 4 *>
 infixr 4 <*
 infixl 3 <|>
 
+data Direction = DirectionPrint | DirectionParse
+
 -- | Syntax abstracts over Parsers and Unparsers (pretty printers).
 -- It uses "Prisms" to extend parser combinators (applicative, alternative) to be contravariant as well as covariant.
 class Syntax f where
@@ -49,12 +53,16 @@ class Syntax f where
   pure :: a -> f a
   match :: (Token -> Maybe a) -> (a -> Token) -> f a
   expected :: String -> f a
-  internal :: f a -> f a -- for internal constructs, supports printing but not parsing
+  direction :: f a -> Direction
 
 class (IsStage s, Syntax f) => SyntaxT f s where
   annotated :: IsTerm a => f (a s) -> f (Annotated s a)
   blank :: IsTerm a => StageT s -> TermT a -> f (Annotation s a)
 
+printOnly :: Syntax f => f a -> f a
+printOnly p = case direction p of
+  DirectionPrint -> p
+  DirectionParse -> empty
 
 _Cons :: Prism [a] (a, [a])
 _Cons = Prism (\(x, xs) -> x:xs) (\case { [] -> Nothing; x:xs -> Just (x, xs)})

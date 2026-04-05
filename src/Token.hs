@@ -1,27 +1,36 @@
 module Token
-  ( Token(..)
+  ( Form(..)
+  , isLower
+  , isSymbol
+  , isUpper
+  , Token(..)
   ) where
 
 import           Common
 import qualified Data.Monoid.Colorful as Colored
-import           Term                 (Lit (..))
+import           Term                 (Flavor (..), Lit (..))
 
+
+data Form = Lower | Symbol | Upper
+  deriving Eq
+
+isLower :: Char -> Bool
+isLower  = (`elem` ['a'..'z'])
+
+isSymbol :: Char -> Bool
+isSymbol = (`elem` ("!#$%&*+/<=>?@\\^|-~:[]." :: [Char]))
+
+isUpper :: Char -> Bool
+isUpper  = (`elem` ['A'..'Z'])
 
 data Token
   = Annotation (Colored String)
-  | ConId String
+  | Ident Flavor Form String
+  | Internal (Colored String)
+  | Keyword Form String
   | Layout Char
   | Lit Lit
-  | ReservedCon String
-  | ReservedSym String
-  | ReservedId String
   | Special Char
-  | Uni Token
-  | VarId String
-  | VarIdRef String
-  | VarIdValue String
-  | VarIdView String
-  | VarSym String
   deriving Eq
 
 unstyle :: Colored a -> Colored a
@@ -36,28 +45,21 @@ unstyle x = case x of
 highlight = RGB 216 213 199
 
 instance Pretty Token where
-  pretty (Annotation str) =
-    if null str
-      then Colored.Nil
-      else Colored.Fg Black (Colored.Bg highlight ("[" <> unstyle str <> "]"))
-  pretty (Uni t) =
-    let str = pretty t in
-      if null str
-        then Colored.Nil
-        else Colored.Style Underline (unstyle str)
-  pretty x = pretty $ case x of
-    ConId s       -> Colored.Value $ s
-    Layout c      -> Colored.Fg Red $ Colored.Value [c]
-    Lit l         -> Colored.Fg Blue $ Colored.Value $ show l
-    ReservedCon s -> Colored.Value s
-    ReservedSym s -> Colored.Fg Green $ Colored.Value s
-    ReservedId s  -> Colored.Style Bold $ Colored.Value s
-    Special c     -> Colored.Fg Black $ Colored.Value [c]
-    VarId s       -> Colored.Value $ s
-    VarIdRef s    -> Colored.Fg Yellow $ Colored.Value ('&':s)
-    VarIdValue s  -> Colored.Fg Cyan $ Colored.Value  ('!':s)
-    VarIdView s   -> Colored.Fg Magenta $ Colored.Value ('?':s)
-    VarSym s      -> Colored.Value $ s
+  pretty token = pretty $ case token of
+    Annotation str
+      | null str          -> Colored.Nil
+      | otherwise         -> Colored.Fg Black (Colored.Bg highlight ("[" <> unstyle str <> "]"))
+    Ident Plain _     str -> Colored.Value str
+    Ident Ref   Lower str -> Colored.Fg Yellow $ Colored.Value ('&':str)
+    Ident Value Lower str -> Colored.Fg Cyan $ Colored.Value  ('!':str)
+    Ident View  Lower str -> Colored.Fg Magenta $ Colored.Value ('?':str)
+    Internal str          -> Colored.Style Underline $ unstyle str
+    Keyword Lower  str    -> Colored.Style Bold $ Colored.Value str
+    Keyword Symbol str    -> Colored.Fg Green $ Colored.Value str
+    Keyword Upper  str    -> Colored.Style Bold $ Colored.Value str
+    Layout char           -> Colored.Fg Red $ Colored.Value [char]
+    Lit lit               -> Colored.Fg Blue $ Colored.Value $ show lit
+    Special char          -> Colored.Fg Black $ Colored.Value [char]
 
 instance Pretty (Sourced Token) where
   pretty (_ :< x) = pretty x

@@ -34,7 +34,7 @@ instance Syntax Printer where
   pure = const Syntax.empty
   match _ f = Printer $ \x -> Just [f x]
   expected err = Printer (error err)
-  internal = id
+  direction _ = Syntax.DirectionPrint
 
 instance IsStage s => SyntaxT Printer s where
   annotated (Printer f) = Printer $ \x -> case f (view value x) of

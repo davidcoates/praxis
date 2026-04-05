@@ -283,7 +283,7 @@ instance IsTerm QType where
   termT = QTypeT
   recurseAnnotation _ _ _ = trivial
   recurseTerm f = \case
-    Forall vs cs t -> Forall <$> traverse f vs <*> traverse f cs <*> f t
+    Poly vs cs t -> Poly <$> traverse f vs <*> traverse f cs <*> f t
     Mono t         -> Mono <$> f t
 
 instance IsTerm TypeConstraint where

@@ -271,7 +271,7 @@ generateDeclType' forwardKind ((src, _) :< ty) = case ty of
 generateDeclTerm :: Annotated Parse DeclTerm -> Praxis (Annotated KindCheck DeclTerm)
 generateDeclTerm (a@(src, _) :< decl) = ((src, ()) :<) <$> case decl of
 
-  DeclTermVar name (Just sig@((src, _) :< qTy@(Forall vs _ _))) exp -> scope $ do
+  DeclTermVar name (Just sig@((src, _) :< qTy@(Poly vs _ _))) exp -> scope $ do
     checkDistinct src vs
     sig <- ((src, ()) :<) <$> recurseTerm generate qTy
     exp <- generate exp
@@ -283,6 +283,6 @@ generateDeclTerm (a@(src, _) :< decl) = ((src, ()) :<) <$> case decl of
 generateQType :: Annotated Parse QType -> Praxis (Annotated KindCheck  QType)
 generateQType (a@(src, _) :< qTy) = ((src, ()) :<) <$> case qTy of
 
-  Forall vs _ _ -> checkDistinct src vs >> (scope $ recurseTerm generate qTy)
+  Poly vs _ _ -> checkDistinct src vs >> (scope $ recurseTerm generate qTy)
 
-  _             -> recurseTerm generate qTy
+  _           -> recurseTerm generate qTy

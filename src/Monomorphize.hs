@@ -19,6 +19,7 @@ import qualified Data.Map.Strict    as Map
 import           Data.Maybe         (fromJust)
 
 import           Control.Monad      (forM, forM_)
+import           Data.List          (partition)
 
 
 type family Monomorphization a where
@@ -109,7 +110,26 @@ monomorphizeExp ((src, ty) :< exp) = case exp of
 
     Inbuilt _ -> ((src, ty) :<) <$> recurseTerm castTerm exp
 
+  Where body decls -> do
+    let (polyDecls, monoDecls) = partition isPolymorphic decls
+    savedLocal   <- use (monomorphizeState . localSourceDecls)
+    savedPending <- use (monomorphizeState . localPendingDecls)
+    forM_ polyDecls $ \dt -> case view value dt of
+      DeclTermVar name _ _ -> monomorphizeState . localSourceDecls %= Map.insert name dt
+      _                    -> return ()
+    monomorphizeState . localPendingDecls .= []
+    monoDecls' <- traverse castTerm monoDecls
+    monoBody   <- monomorphizeExp body
+    pending    <- use (monomorphizeState . localPendingDecls)
+    monomorphizeState . localSourceDecls  .= savedLocal
+    monomorphizeState . localPendingDecls .= savedPending
+    return ((src, ty) :< Where monoBody (pending ++ monoDecls'))
+
   _ -> ((src, ty) :<) <$> recurseTerm castTerm exp
+
+isPolymorphic :: Annotated TypeCheck DeclTerm -> Bool
+isPolymorphic (_ :< DeclTermVar _ (Just (_ :< Poly _ _ _)) _) = True
+isPolymorphic _                                               = False
 
 -- | Normalize a specialization for use as a deduplication key.
 -- Reference labels and view labels only matter to the type checker (lifetime analysis);
@@ -153,9 +173,16 @@ specialize name spec = do
       monoName <- freshVar name
       -- Register before processing body to handle recursive self-calls
       monomorphizeState . instances %= Map.insert (name, types) monoName
-      Just srcDecl <- (monomorphizeState . sourceDecls) `uses` Map.lookup name
-      monoDecl <- specializeDeclTerm monoName spec' srcDecl
-      monomorphizeState . exportedDecls %= (++ [monoDecl])
+      mTop <- (monomorphizeState . sourceDecls) `uses` Map.lookup name
+      case mTop of
+        Just srcDecl -> do
+          monoDecl <- specializeDeclTerm monoName spec' srcDecl
+          monomorphizeState . exportedDecls %= (++ [monoDecl])
+        Nothing -> do
+          Just srcDecl <- (monomorphizeState . localSourceDecls) `uses` Map.lookup name
+          monoDecl <- specializeDeclTerm monoName spec' srcDecl
+          let (_ :< DeclTerm dt) = monoDecl
+          monomorphizeState . localPendingDecls %= (++ [dt])
       return monoName
 
 -- | Produce a monomorphic DeclTermVar by substituting the specialization into a polymorphic definition.
@@ -286,9 +313,6 @@ monomorphizeProgram (_ :< Program decls) = do
         monoDecl <- castTerm ann
         monomorphizeState . exportedDecls %= (++ [monoDecl])
 
-    isPolymorphic :: Annotated TypeCheck DeclTerm -> Bool
-    isPolymorphic (_ :< DeclTermVar _ (Just (_ :< Poly _ _ _)) _) = True
-    isPolymorphic _                                               = False
 
     isPolymorphicDT :: Annotated TypeCheck DeclType -> Bool
     isPolymorphicDT (_ :< DeclTypeData _ _ typePats _) = not (null typePats)

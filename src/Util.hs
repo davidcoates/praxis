@@ -15,6 +15,7 @@ import qualified Eval
 import           Eval.Value
 import           Inbuilts
 import           Introspect
+import qualified LambdaLift
 import qualified Monomorphize
 import qualified Parse
 import           Praxis
@@ -34,8 +35,13 @@ eval ty term = do
   checked <- check ty term
   mono    <- Monomorphize.run checked
   case (ty, mono) of
-    (ProgramT, prog)    -> Eval.run prog
-    (ExpT, (prog, exp)) -> Eval.run prog >> Eval.run exp
+    (ProgramT, prog)    -> do
+      lifted <- LambdaLift.run prog
+      Eval.run lifted
+    (ExpT, (prog, exp)) -> do
+      prog'          <- LambdaLift.run prog
+      (prog'', exp') <- LambdaLift.runExp prog' exp
+      Eval.run prog'' >> Eval.run exp'
 
 -- Helpers for tests
 

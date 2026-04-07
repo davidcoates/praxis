@@ -12,6 +12,7 @@ data Stage
   | KindCheck
   | TypeCheck
   | Monomorphize
+  | LambdaLift
   | Evaluate
   deriving Eq
 
@@ -22,6 +23,7 @@ instance Show Stage where
     KindCheck    -> "kind check"
     TypeCheck    -> "type check"
     Monomorphize -> "monomorphize"
+    LambdaLift   -> "lambda lift"
     Evaluate     -> "evaluate"
 
 data StageT (s :: Stage) where

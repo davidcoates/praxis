@@ -20,7 +20,7 @@ module Term
   , Lit(..)
   , Pat(..)
   , Program(..)
-  , Specialization
+  , Substitution
   , Stmt(..)
   , Tok(..)
 
@@ -108,7 +108,7 @@ data DeclTerm (s :: Stage)
   deriving (Eq, Ord)
 
 -- TODO constraints
-type Specialization (s :: Stage) = [(Annotated s TypePat, Annotated s Type)]
+type Substitution (s :: Stage) = [(Annotated s TypePat, Annotated s Type)]
 
 data Inbuilt
   = InbuiltAdd | InbuiltSubtract | InbuiltMultiply | InbuiltNegate
@@ -163,7 +163,7 @@ data Exp (s :: Stage)
   | Pair (Annotated s Exp) (Annotated s Exp)
   | Seq (Annotated s Exp) (Annotated s Exp)
   | Sig (Annotated s Exp) (Annotated s Type)
-  | Specialize (Annotated s Exp) (Specialization s)
+  | Specialize (Annotated s Exp) (Substitution s)
   | Switch [(Annotated s Exp, Annotated s Exp)]
   | Unit
   | Var Name

@@ -181,7 +181,7 @@ evalExp ((src, ty) :< exp) = case exp of
     evalExp exp
 
 
-evalInbuilt :: Inbuilt -> Specialization Monomorphize -> Praxis Value
+evalInbuilt :: Inbuilt -> Substitution Monomorphize -> Praxis Value
 evalInbuilt inbuilt specialization = return $ case inbuilt of
   InbuiltAdd      -> liftIII (+)
   InbuiltSubtract -> liftIII (-)

@@ -85,17 +85,17 @@ lookupVar name = do
 
 --- | Marks a variable as used, returning the type of the variable.
 --- A copy constraint will be generated if the variable has already been used or has been captured.
-useVar :: Source -> Name -> Praxis (Name, Annotated TypeCheck Type, Maybe (Specialization TypeCheck))
+useVar :: Source -> Name -> Praxis (Name, Annotated TypeCheck Type, Maybe (Substitution TypeCheck))
 useVar src name = do
   result <- lookupVar name
   (rename, usage, qTy) <- case result of
     Just x  -> return x
     Nothing -> throwAt TypeCheck src $ "variable " <> pretty name <> " is not in scope"
-  (ty, specialization) <- specializeQType src name qTy
-  unless (isJust specialization) $ do
+  (ty, subst) <- specializeQType src name qTy
+  unless (isJust subst) $ do
     requires [ (src, TypeReasonMultiUse name) :< Requirement (copy ty) | view usedCount usage > 0 ]
   checkState . typeState . varEnv %= Map.adjust (\(usage, qTy) -> (over usedCount (+ 1) usage, qTy)) rename
-  return (rename, ty, specialization)
+  return (rename, ty, subst)
 
 -- | Marks a variable as read, returning the view-type of the variable and the view ref-name.
 -- A copy constraint will be generated if the variable has already been used or has been captured.
@@ -105,9 +105,9 @@ readVar src name = do
   (rename, usage, qTy) <- case result of
     Just x  -> return x
     Nothing -> throwAt TypeCheck src $ "variable " <> pretty name <> " is not in scope"
-  (ty, specialization) <- specializeQType src name qTy
-  -- reading a polymorphic term is illformed (and unnecessary since every specialization is copyable anyway)
-  when (isJust specialization) $ throwAt TypeCheck src $ "illegal read of polymorphic variable " <> pretty name
+  (ty, subst) <- specializeQType src name qTy
+  -- reading a polymorphic term is illformed (and unnecessary since every subst is copyable anyway)
+  when (isJust subst) $ throwAt TypeCheck src $ "illegal read of polymorphic variable " <> pretty name
   when (view usedCount usage > 0) $ throwAt TypeCheck src $ "variable " <> pretty name <> " read after use"
   checkState . typeState . varEnv %= Map.adjust (\(usage, qTy) -> (over readCount (+ 1) usage, qTy)) rename
   ref@(_ :< TypeRef refName) <- freshRef
@@ -136,7 +136,7 @@ mono ty = (view source ty, ()) :< Mono ty
 specializeTypePat :: Annotated TypeCheck TypePat -> Praxis (Name, Annotated TypeCheck Type)
 specializeTypePat (a :< TypePatVar f n) = (\ty -> (n, a :< view value ty)) <$> freshTypeUni f
 
-specializeQType :: Source -> Name -> Annotated TypeCheck QType -> Praxis (Annotated TypeCheck Type, Maybe (Specialization TypeCheck))
+specializeQType :: Source -> Name -> Annotated TypeCheck QType -> Praxis (Annotated TypeCheck Type, Maybe (Substitution TypeCheck))
 specializeQType src name (_ :< qTy) = case qTy of
   Poly vs cs ty -> do
     vs' <- traverse specializeTypePat vs
@@ -147,9 +147,9 @@ specializeQType src name (_ :< qTy) = case qTy of
       f (_ :< ty) = case ty of
         TypeVar _  n -> n `lookup` vs'
         _            -> Nothing
-    let specialization = zip vs (map snd vs')
+    let subst = zip vs (map snd vs')
     requires [ (src, TypeReasonSpecialization name) :< Requirement (typeRewrite c) | c <- cs ]
-    return (typeRewrite ty, Just specialization)
+    return (typeRewrite ty, Just subst)
   Mono ty -> return (ty, Nothing)
 
 join :: Source -> Praxis a -> Praxis b -> Praxis (a, b)
@@ -328,10 +328,10 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
 
   Con name -> do
     qTy <- lookupCon src name
-    (ty, specialization) <- specializeQType src name qTy
-    case specialization of
-      Just specialization -> return (ty :< Specialize ((src, ty) :< Con name) specialization)
-      Nothing             -> return (ty :< Con name)
+    (ty, subst) <- specializeQType src name qTy
+    case subst of
+      Just subst -> return (ty :< Specialize ((src, ty) :< Con name) subst)
+      Nothing    -> return (ty :< Con name)
 
   Defer exp1 exp2 -> do
     exp1 <- generateExp exp1
@@ -412,16 +412,16 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
     result <- lookupVar name
     case result of
       Just _ -> do
-        (rename, ty, specialization) <- useVar src name
-        case specialization of
-          Just specialization -> return (ty :< Specialize ((src, ty) :< Var rename) specialization)
+        (rename, ty, subst) <- useVar src name
+        case subst of
+          Just subst -> return (ty :< Specialize ((src, ty) :< Var rename) subst)
           Nothing             -> return (ty :< Var rename)
       Nothing -> do
         entry <- (checkState . typeState . inbuiltEnv) `uses` Map.lookup name
         case entry of
           Just (inbuilt, qTy) -> do
-            (ty, specialization) <- specializeQType src name qTy
-            case specialization of
+            (ty, subst) <- specializeQType src name qTy
+            case subst of
               Just spec -> return (ty :< Specialize ((src, ty) :< Inbuilt inbuilt) spec)
               Nothing   -> return (ty :< Inbuilt inbuilt)
           Nothing -> throwAt TypeCheck src $ "variable " <> pretty name <> " is not in scope"

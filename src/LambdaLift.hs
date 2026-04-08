@@ -134,14 +134,11 @@ liftExp globals ((src, ty) :< exp) = case exp of
 -- Returns the rewritten body and remaining non-lifted decls.
 liftWhere :: Set Name -> Annotated Monomorphize Exp -> [Annotated Monomorphize DeclTerm] -> LiftM (Annotated Monomorphize Exp, [Annotated Monomorphize DeclTerm])
 liftWhere globals body decls = do
-  -- Collect all names defined in this where block
-  let whereNames = Set.fromList [ name | (_ :< DeclTermVar name _ _) <- decls ]
   -- Process decls left-to-right, accumulating rewrites and lifted globals
-  (rewrites, revLetBindings, extraGlobals) <-
-    foldM (processDeclTerm globals whereNames) (Map.empty, [], Set.empty) decls
+  (rewrites, extraGlobals) <- foldM (processDeclTerm globals) (Map.empty, Set.empty) decls
   let allGlobals = globals <> extraGlobals
-  -- Apply rewrites throughout and lift remaining sub-expressions
-  let letDecls = reverse revLetBindings
+      liftedNames = Map.keysSet rewrites
+      letDecls = [ dt | dt@(_ :< DeclTermVar name _ _) <- decls, name `Set.notMember` liftedNames ]
   body'     <- liftExp allGlobals (applyRewrites rewrites body)
   letDecls' <- mapM (\dt -> liftDeclTermBody allGlobals (applyRewritesInDeclTerm rewrites dt)) letDecls
   return (body', letDecls')
@@ -153,14 +150,13 @@ liftDeclTermBody globals (_ :< DeclTermVar name qTy body) = do
 liftDeclTermBody _ dt = return dt
 
 -- | Process one DeclTerm from a Where clause.
--- Accumulator: (rewrites, revLetBindings, extraGlobals)
+-- Accumulator: (rewrites, extraGlobals)
 processDeclTerm
   :: Set Name    -- outer globals
-  -> Set Name    -- all names bound in this where block
-  -> (Map Name (Annotated Monomorphize Exp), [Annotated Monomorphize DeclTerm], Set Name)
+  -> (Map Name (Annotated Monomorphize Exp), Set Name)
   -> Annotated Monomorphize DeclTerm
-  -> LiftM (Map Name (Annotated Monomorphize Exp), [Annotated Monomorphize DeclTerm], Set Name)
-processDeclTerm globals whereNames (rewrites, revLet, extraGlobals) dt =
+  -> LiftM (Map Name (Annotated Monomorphize Exp), Set Name)
+processDeclTerm globals (rewrites, extraGlobals) dt =
   case view value dt of
     DeclTermVar name qTy body -> do
       let body' = applyRewrites rewrites body
@@ -179,9 +175,7 @@ processDeclTerm globals whereNames (rewrites, revLet, extraGlobals) dt =
                   liftedDecl = phantom (DeclTerm (phantom (DeclTermVar liftedName qTy liftedBody)))
                   callSite   = (Phantom, origType) :< Var liftedName
               modify (++ [liftedDecl])
-              let rewrites'     = Map.insert name callSite rewrites
-                  extraGlobals' = Set.insert liftedName extraGlobals
-              return (rewrites', revLet, extraGlobals')
+              return (Map.insert name callSite rewrites, Set.insert liftedName extraGlobals)
             _ -> do
               -- Has captures: lift with capture tuple as extra parameter.
               -- Compute the new type: capsType -> origType.
@@ -194,13 +188,10 @@ processDeclTerm globals whereNames (rewrites, revLet, extraGlobals) dt =
                   capsArg    = buildCapsTuple caps
                   callSite   = (Phantom, origType) :< Apply ((Phantom, newType) :< Var liftedName) capsArg
               modify (++ [liftedDecl])
-              let rewrites'     = Map.insert name callSite rewrites
-                  extraGlobals' = Set.insert liftedName extraGlobals
-              return (rewrites', revLet, extraGlobals')
-        -- Value binding: keep as Where decl
-        _ ->
-          return (rewrites, revLet ++ [dt], extraGlobals)
-    _ -> return (rewrites, revLet ++ [dt], extraGlobals)
+              return (Map.insert name callSite rewrites, Set.insert liftedName extraGlobals)
+        -- Value binding: not lifted, excluded from rewrites
+        _ -> return (rewrites, extraGlobals)
+    _ -> return (rewrites, extraGlobals)
 
 
 -- * Type casting

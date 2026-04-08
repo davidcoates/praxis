@@ -7,7 +7,7 @@ module Monomorphize.State
   , sourceDecls
   , sourceDataDecls
   , conToDataType
-  , localSourceDecls
+  , localNames
   , localPendingDecls
   , emptyState
   ) where
@@ -19,6 +19,8 @@ import           Term
 import           Control.Lens    (makeLenses)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import           Data.Set        (Set)
+import qualified Data.Set        as Set
 
 
 data State = State
@@ -33,8 +35,8 @@ data State = State
   -- ^ Polymorphic DeclTypeData declarations keyed by data type name.
   , _conToDataType     :: Map Name Name
   -- ^ Maps each constructor name to its owning data type name.
-  , _localSourceDecls  :: Map Name (Annotated TypeCheck DeclTerm)
-  -- ^ Source definitions of Where-bound polymorphic functions, scoped per Where expression.
+  , _localNames        :: Set Name
+  -- ^ Names of Where-bound polymorphic functions currently in scope, for routing specializations.
   , _localPendingDecls :: [Annotated Monomorphize DeclTerm]
   -- ^ Specialized mono instances of local poly decls, awaiting insertion into enclosing Where.
   }
@@ -48,6 +50,6 @@ emptyState = State
   , _sourceDecls       = Map.empty
   , _sourceDataDecls   = Map.empty
   , _conToDataType     = Map.empty
-  , _localSourceDecls  = Map.empty
+  , _localNames        = Set.empty
   , _localPendingDecls = []
   }

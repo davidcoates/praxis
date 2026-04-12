@@ -33,6 +33,7 @@ module Common
   , (%=)
   , modifyM
   , save
+  , saveLift
   , MonadState
   , use
   , uses
@@ -144,6 +145,13 @@ save l c = do
   x <- use l
   r <- c
   l .= x
+  return r
+
+saveLift :: (MonadTrans t, MonadState s m, Monad (t m)) => Lens' s a -> t m b -> t m b
+saveLift l c = do
+  x <- lift $ use l
+  r <- c
+  lift $ l .= x
   return r
 
 modifyM :: MonadState s m => Lens' s a -> (a -> m a) -> m ()

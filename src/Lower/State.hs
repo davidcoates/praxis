@@ -21,7 +21,6 @@ import qualified Data.Map.Strict as Map
 data State = State
   { _specializations :: Map (Name, [Annotated TypeCheck Type]) Name
   -- ^ Maps (original polymorphic name, concrete type args) to the generated monomorphic name.
-  -- Structured representation; name mangling is deferred to downstream stages.
   , _polyDecls       :: Map Name (Annotated TypeCheck DeclTerm)
   -- ^ Source definitions of top-level polymorphic functions, for on-demand specialization.
   , _polyDataDecls   :: Map Name (Annotated TypeCheck DeclType)

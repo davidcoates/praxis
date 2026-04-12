@@ -106,13 +106,13 @@ defaultFresh = Fresh
 
 emptyState :: PraxisState
 emptyState = PraxisState
-  { _flags             = defaultFlags
-  , _fresh             = defaultFresh
-  , _parseState        = Parse.emptyState
-  , _checkState        = Check.emptyState
-  , _lowerState        = Lower.emptyState
-  , _evalState         = Eval.emptyState
-  , _mainName          = Nothing
+  { _flags      = defaultFlags
+  , _fresh      = defaultFresh
+  , _parseState = Parse.emptyState
+  , _checkState = Check.emptyState
+  , _lowerState = Lower.emptyState
+  , _evalState  = Eval.emptyState
+  , _mainName   = Nothing
   }
 
 makeLenses ''Flags
@@ -216,9 +216,9 @@ freshRef = do
 freshTypeUni :: Flavor -> Praxis (Annotated TypeCheck Type)
 freshTypeUni f = case f of
   Plain -> freshTypeUni' freshTypeUniPlains KindType
-  Ref   -> freshTypeUni' freshTypeUniRefs KindRef
+  Ref   -> freshTypeUni' freshTypeUniRefs   KindRef
   Value -> freshTypeUni' freshTypeUniValues KindType
-  View  -> freshTypeUni' freshTypeUniViews KindView
+  View  -> freshTypeUni' freshTypeUniViews  KindView
   where
     freshTypeUni' :: Lens' Fresh [String] -> (Kind TypeCheck) -> Praxis (Annotated TypeCheck Type)
     freshTypeUni' freshTypeUnis kind = do

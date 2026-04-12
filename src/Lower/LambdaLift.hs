@@ -26,26 +26,28 @@ type LiftM = StateT [Annotated Lower Decl] Praxis
 
 -- * Entry points
 
+-- | Extract the bound names from a list of top-level declarations.
+topLevelNames :: [Annotated Lower Decl] -> Set Name
+topLevelNames decls = Set.fromList
+  [ name
+  | (_ :< decl) <- decls
+  , name <- case decl of
+      DeclTerm (_ :< DeclTermVar name _ _) -> [name]
+      DeclRec ds -> [ n | (_ :< DeclRecTerm (_ :< DeclTermVar n _ _)) <- ds ]
+      _ -> []
+  ]
+
 run :: Annotated Lower Program -> Praxis (Annotated Lower Program)
 run prog = do
-  (prog', lifted) <- runStateT (liftProgram prog) []
-  let (_ :< Program decls) = prog'
-      result = phantom (Program (lifted ++ decls))
+  ((_ :< Program decls), lifted) <- runStateT (liftProgram prog) []
+  let result = phantom (Program (lifted ++ decls))
   display Lower "lambda lifted program" result `ifFlag` debug
   return result
 
 runExp :: Annotated Lower Program -> Annotated Lower Exp -> Praxis (Annotated Lower Program, Annotated Lower Exp)
 runExp prog exp = do
-  (prog', liftedProg) <- runStateT (liftProgram prog) []
-  let (_ :< Program decls) = prog'
-      globals = Set.fromList
-        [ name
-        | (_ :< decl) <- decls
-        , name <- case decl of
-            DeclTerm (_ :< DeclTermVar name _ _) -> [name]
-            DeclRec ds -> [ n | (_ :< DeclRecTerm (_ :< DeclTermVar n _ _)) <- ds ]
-            _ -> []
-        ]
+  ((_ :< Program decls), liftedProg) <- runStateT (liftProgram prog) []
+  let globals = topLevelNames decls
   (exp', liftedExp) <- runStateT (liftExp globals exp) []
   let result = phantom (Program (liftedProg ++ liftedExp ++ decls))
   display Lower "lambda lifted program" result `ifFlag` debug
@@ -58,14 +60,7 @@ runExp prog exp = do
 liftProgram :: Annotated Lower Program -> LiftM (Annotated Lower Program)
 liftProgram (_ :< Program decls) = do
   -- Collect all top-level names as globals so they're never treated as captures
-  let globals = Set.fromList
-        [ name
-        | (_ :< decl) <- decls
-        , name <- case decl of
-            DeclTerm (_ :< DeclTermVar name _ _) -> [name]
-            DeclRec ds -> [ n | (_ :< DeclRecTerm (_ :< DeclTermVar n _ _)) <- ds ]
-            _ -> []
-        ]
+  let globals = topLevelNames decls
   decls' <- mapM (liftTopDecl globals) decls
   return (phantom (Program decls'))
 
@@ -197,20 +192,12 @@ processDeclTerm globals (rewrites, extraGlobals) dt =
 -- * Type casting
 
 -- | Strip the TypeCheck annotation from a type, producing a Lower-stage type.
--- Safe because Annotation Lower Type = () = Annotation TypeCheck Type.
+
 castType :: Annotated TypeCheck Type -> Annotated Lower Type
-castType (_ :< ty) = phantom $ case ty of
-  TypeApply f x   -> TypeApply (castType f) (castType x)
-  TypeApplyOp f x -> TypeApplyOp (castType f) (castType x)
-  TypeCon n       -> TypeCon n
-  TypeFn a b      -> TypeFn (castType a) (castType b)
-  TypeIdentityOp  -> TypeIdentityOp
-  TypePair a b    -> TypePair (castType a) (castType b)
-  TypeRef n       -> TypeRef n
-  TypeSetOp ts    -> TypeSetOp (Set.map castType ts)
-  TypeUni f n     -> TypeUni f n
-  TypeUnit        -> TypeUnit
-  TypeVar f n     -> TypeVar f n
+castType = cast where
+  cast :: forall a. IsTerm a => Annotated TypeCheck a -> Annotated Lower a
+  cast ((src, _) :< term) = case termT :: TermT a of
+    TypeT -> (src, ()) :< runIdentity (recurseTerm (Identity . cast) term)
 
 
 -- * Free variable analysis

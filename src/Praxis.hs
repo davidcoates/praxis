@@ -10,7 +10,6 @@ module Praxis
   , throw
   , throwAt
 
-  , save
   , try
 
   , runPraxis
@@ -171,13 +170,6 @@ clearTerm = unlessSilent $ liftIO $ do
   Terminal.size >>= \case
     Just (Terminal.Window _ w) -> putStrLn $ replicate w '='
     Nothing                    -> pure ()
-
-save :: Lens' PraxisState a -> Praxis b -> Praxis b
-save l c = do
-  x <- use l
-  r <- c
-  l .= x
-  return r
 
 try :: Praxis a -> Praxis (Maybe a)
 try p = do

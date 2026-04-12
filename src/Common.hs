@@ -32,6 +32,8 @@ module Common
   , (.=)
   , (%=)
   , modifyM
+  , save
+  , MonadState
   , use
   , uses
   , first
@@ -136,6 +138,13 @@ foldMapA f = foldr (liftA2 mappend . f) (pure mempty)
 
 just :: Functor f => (a -> f b) -> Maybe a -> f (Maybe b)
 just f (Just x) = Just <$> f x
+
+save :: MonadState s m => Lens' s a -> m b -> m b
+save l c = do
+  x <- use l
+  r <- c
+  l .= x
+  return r
 
 modifyM :: MonadState s m => Lens' s a -> (a -> m a) -> m ()
 modifyM l f = use l >>= f >>= (l .=)

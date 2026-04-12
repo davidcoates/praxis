@@ -225,12 +225,10 @@ reduceTree :: forall s c m st.
 -- This means the assumption state needs to be reverted before exiting, to avoid the local assumption *or any consequents* from escaping the local context.
 reduceTree state reduce tree = case tree of
 
-  Assume constraint tree -> do
-    savedAssumptions <- use (state . assumptions)
-    state . assumptions %= Set.insert constraint
-    result <- reduceTree state reduce tree
-    state . assumptions .= savedAssumptions
-    return result
+  Assume constraint tree ->
+    save (state . assumptions) $ do
+      state . assumptions %= Set.insert constraint
+      reduceTree state reduce tree
 
   Branch constraint subtrees -> do
     assumptions' <- use (state . assumptions)

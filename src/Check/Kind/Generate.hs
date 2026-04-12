@@ -84,11 +84,7 @@ checkDistinct src typePats = do
   unless (isDistinct names) $ lift $ throwAt KindCheck src ("type variables are not distinct" :: String)
 
 scope :: KindM a -> KindM a
-scope block = do
-  saved <- use (typeVarRenameLocal)
-  result <- block
-  typeVarRenameLocal .= saved
-  return result
+scope = save typeVarRenameLocal
 
 require :: Annotated KindCheck (Requirement KindConstraint) -> KindM ()
 require requirement = kindSolveLocal . requirements %= Set.insert requirement

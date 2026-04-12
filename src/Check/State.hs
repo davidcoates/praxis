@@ -2,20 +2,15 @@
 
 module Check.State
   ( Constraint(..)
-  , SolveState(..)
+  , Constraints(..)
   , requirements
   , assumptions
-
-  , RenameState(..)
-  , renames
+  , emptyConstraints
 
   , TypeConEnv(..)
   , TypeVarEnv(..)
   , KindState(..)
-  , kindSolve
   , typeConEnv
-  , typeVarEnv
-  , typeVarRename
 
   , ConEnv(..)
   , VarEnv(..)
@@ -24,7 +19,6 @@ module Check.State
   , usedCount
   , readCount
   , TypeState(..)
-  , typeSolve
   , conEnv
   , varEnv
   , inbuiltEnv
@@ -57,28 +51,17 @@ type family Constraint (s :: Stage) where
   Constraint TypeCheck = TypeConstraint
   Constraint KindCheck = KindConstraint
 
-data SolveState (s :: Stage) = SolveState
+data Constraints (s :: Stage) = Constraints
   { _requirements :: Set (Annotated s (Requirement (Constraint s)))
   , _assumptions  :: Set (Annotated s (Constraint s))
   }
 
-makeLenses ''SolveState
+makeLenses ''Constraints
 
-emptySolveState :: Ord (Annotated s (Constraint s)) => SolveState s
-emptySolveState = SolveState
+emptyConstraints :: Ord (Annotated s (Constraint s)) => Constraints s
+emptyConstraints = Constraints
   { _requirements = Set.empty
   , _assumptions  = Set.empty
-  }
-
-data RenameState = RenameState
-  { _renames :: Map Name Name
-  }
-
-makeLenses ''RenameState
-
-emptyRenameState :: RenameState
-emptyRenameState = RenameState
-  { _renames = Map.empty
   }
 
 type TypeConEnv = Map Name (Annotated KindCheck Kind) -- ^ Type constructor environment
@@ -86,20 +69,14 @@ type TypeConEnv = Map Name (Annotated KindCheck Kind) -- ^ Type constructor envi
 type TypeVarEnv = Map Name (Flavor, Annotated KindCheck Kind) -- ^ Type variable environment
 
 data KindState = KindState
-  { _kindSolve     :: SolveState KindCheck
-  , _typeConEnv    :: TypeConEnv
-  , _typeVarEnv    :: TypeVarEnv
-  , _typeVarRename :: RenameState
+  { _typeConEnv :: TypeConEnv
   }
 
 makeLenses ''KindState
 
 emptyKindState :: KindState
 emptyKindState = KindState
-  { _kindSolve = emptySolveState
-  , _typeConEnv = Map.empty
-  , _typeVarEnv = Map.empty
-  , _typeVarRename = emptyRenameState
+  { _typeConEnv = Map.empty
   }
 
 type ConEnv = Map Name (Annotated TypeCheck QType) -- ^ Constructor environment
@@ -119,11 +96,10 @@ type VarEnv = Map Name (Usage, Annotated TypeCheck QType) -- ^ Variable environm
 type InbuiltEnv = Map Name (Inbuilt, Annotated TypeCheck QType) -- ^ Inbuilt environment
 
 data TypeState = TypeState
-  { _typeSolve  :: SolveState TypeCheck
-  , _conEnv     :: ConEnv
+  { _conEnv     :: ConEnv
   , _varEnv     :: VarEnv
   , _inbuiltEnv :: InbuiltEnv
-  , _varRename  :: RenameState
+  , _varRename  :: Map Name Name
   , _globalVars :: Set Name
   }
 
@@ -131,11 +107,10 @@ makeLenses ''TypeState
 
 emptyTypeState :: TypeState
 emptyTypeState = TypeState
-  { _typeSolve  = emptySolveState
-  , _conEnv     = Map.empty
+  { _conEnv     = Map.empty
   , _varEnv     = Map.empty
   , _inbuiltEnv = Map.empty
-  , _varRename  = emptyRenameState
+  , _varRename  = Map.empty
   , _globalVars = Set.empty
   }
 

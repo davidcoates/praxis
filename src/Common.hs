@@ -31,7 +31,7 @@ module Common
   , over
   , (.=)
   , (%=)
-  , (%%=)
+  , modifyM
   , use
   , uses
   , first
@@ -137,13 +137,8 @@ foldMapA f = foldr (liftA2 mappend . f) (pure mempty)
 just :: Functor f => (a -> f b) -> Maybe a -> f (Maybe b)
 just f (Just x) = Just <$> f x
 
-(%%=) :: MonadState s m => Lens' s a -> (a -> m a) -> m ()
-(%%=) l f = do
-  x <- use l
-  x' <- f x
-  l .= x'
-
-infix 4 %%=
+modifyM :: MonadState s m => Lens' s a -> (a -> m a) -> m ()
+modifyM l f = use l >>= f >>= (l .=)
 
 isDistinct :: Eq a => [a] -> Bool
 isDistinct xs = length (nub xs) == length xs

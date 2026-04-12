@@ -15,8 +15,7 @@ import qualified Eval
 import           Eval.Value
 import           Inbuilts
 import           Introspect
-import qualified LambdaLift
-import qualified Monomorphize
+import qualified Lower
 import qualified Parse
 import           Praxis
 import           Print
@@ -33,15 +32,10 @@ check ty term = parse ty term >>= Check.run
 eval :: forall a. IsTerm a => TermT a -> String -> Praxis (Eval.Evaluation a)
 eval ty term = do
   checked <- check ty term
-  mono    <- Monomorphize.run checked
-  case (ty, mono) of
-    (ProgramT, prog)    -> do
-      lifted <- LambdaLift.run prog
-      Eval.run lifted
-    (ExpT, (prog, exp)) -> do
-      prog'          <- LambdaLift.run prog
-      (prog'', exp') <- LambdaLift.runExp prog' exp
-      Eval.run prog'' >> Eval.run exp'
+  lower   <- Lower.run checked
+  case (ty, lower) of
+    (ProgramT, prog)    -> Eval.run prog
+    (ExpT, (prog, exp)) -> Eval.run prog >> Eval.run exp
 
 -- Helpers for tests
 

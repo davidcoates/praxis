@@ -5,7 +5,6 @@ module Eval
   , Evaluation(..)
   ) where
 
-import qualified Check.State       as Check
 import           Common
 import qualified Data.Map.Strict   as Map
 import           Eval.State
@@ -24,7 +23,7 @@ import           Data.List         (partition)
 import           Data.Maybe        (mapMaybe)
 
 
-type Annotated a = Term.Annotated Monomorphize a
+type Annotated a = Term.Annotated Lower a
 
 type family Evaluation a where
   Evaluation Exp = Value
@@ -35,20 +34,13 @@ run term = eval term
 
 runMain :: Praxis ()
 runMain = do
-  entry <- (checkState . Check.typeState . Check.varRename . Check.renames) `uses` Map.lookup (mkName "main")
+  entry <- use mainName
   case entry of
-    Nothing -> throw Evaluate ("missing main function" :: String)
+    Nothing     -> throw Evaluate ("missing main function" :: String)
     Just rename -> do
-      entry <- (checkState . Check.typeState . Check.varEnv) `uses` Map.lookup rename
-      case entry of
-        Just (_, qTy)
-          | (_ :< Mono (_ :< TypeFn (_ :< TypeUnit) (_ :< TypeUnit))) <- qTy
-            -> do
-              Just (Value.Fn f) <- (evalState . valueEnv) `uses` Map.lookup rename
-              f Value.Unit
-              return ()
-          | otherwise
-            -> throwAt Evaluate (view source qTy) $ "main function has bad type " <> pretty qTy <> ", expected () -> ()"
+      Just (Value.Fn f) <- (evalState . valueEnv) `uses` Map.lookup rename
+      f Value.Unit
+      return ()
 
 eval :: IsTerm a => Annotated a -> Praxis (Evaluation a)
 eval term = ($ term) $ case typeof (view value term) of
@@ -181,7 +173,7 @@ evalExp ((src, ty) :< exp) = case exp of
     evalExp exp
 
 
-evalInbuilt :: Inbuilt -> Substitution Monomorphize -> Praxis Value
+evalInbuilt :: Inbuilt -> Substitution Lower -> Praxis Value
 evalInbuilt inbuilt specialization = return $ case inbuilt of
   InbuiltAdd      -> liftIII (+)
   InbuiltSubtract -> liftIII (-)

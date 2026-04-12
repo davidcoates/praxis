@@ -1,58 +1,74 @@
 {-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE TemplateHaskell      #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Monomorphize
+module Lower.Monomorphize
   ( run
   , Monomorphization(..)
   ) where
 
 import           Common
 import           Introspect
-import           Monomorphize.State
+import           Lower.State
 import           Praxis
 import           Stage
 import           Term
 
-import           Data.Map.Strict    (Map)
-import qualified Data.Map.Strict    as Map
-import           Data.Maybe         (fromJust)
-import           Data.Set           (Set)
-import qualified Data.Set           as Set
+import           Data.Map.Strict     (Map)
+import qualified Data.Map.Strict     as Map
+import           Data.Maybe          (fromJust)
+import           Data.Set            (Set)
+import qualified Data.Set            as Set
 
-import           Control.Monad      (forM, forM_)
-import           Data.List          (partition)
+import           Control.Lens        (makeLenses)
+import           Control.Monad       (forM, forM_)
+import           Control.Monad.State (StateT, runStateT)
+import           Control.Monad.Trans (lift)
+import           Data.List           (partition)
 
+
+data MonoLocal = MonoLocal
+  { _topLevelDecls  :: [Annotated Lower Decl]
+  -- ^ Monomorphic declarations emitted at the top level.
+  , _localPolyNames :: Set Name
+  -- ^ Names of polymorphic functions declared in the current Where scope.
+  , _pendingDecls   :: [Annotated Lower DeclTerm]
+  -- ^ Monomorphic declarations pending injection into the current Where body.
+  }
+
+makeLenses ''MonoLocal
+
+emptyMonoLocal :: MonoLocal
+emptyMonoLocal = MonoLocal
+  { _topLevelDecls  = []
+  , _localPolyNames = Set.empty
+  , _pendingDecls   = []
+  }
+
+type MonoM = StateT MonoLocal Praxis
 
 type family Monomorphization a where
-  Monomorphization Program = Annotated Monomorphize Program
-  Monomorphization Exp = (Annotated Monomorphize Program, Annotated Monomorphize Exp)
+  Monomorphization Program = Annotated Lower Program
+  Monomorphization Exp = (Annotated Lower Program, Annotated Lower Exp)
 
 run :: IsTerm a => Annotated TypeCheck a -> Praxis (Monomorphization a)
-run term = monomorphize term
-
-monomorphize :: IsTerm a => Annotated TypeCheck a -> Praxis (Monomorphization a)
-monomorphize term = case typeof (view value term) of
-
-  ExpT -> do
-    exp <- monomorphizeExp term
-    program <- getProgram
-    display Monomorphize "monomorphized program" program `ifFlag` debug
-    display Monomorphize "monomorphized exp" exp `ifFlag` debug
-    return (program, exp)
+run term = case typeof (view value term) of
 
   ProgramT -> do
-    monomorphizeProgram term
-    program <- getProgram
-    display Monomorphize "monomorphized program" program `ifFlag` debug
+    ((), local) <- runStateT (monomorphizeProgram term) emptyMonoLocal
+    let program = phantom (Program (view topLevelDecls local))
+    display Lower "monomorphized program" program `ifFlag` debug
     return program
 
-  where
-    getProgram :: Praxis (Annotated Monomorphize Program)
-    getProgram = do
-      decls <- use (monomorphizeState . outputDecls)
-      monomorphizeState . outputDecls .= []
-      return (phantom (Program decls))
+  ExpT -> do
+    (exp, local) <- runStateT (monomorphizeExp term) emptyMonoLocal
+    let program = phantom (Program (view topLevelDecls local))
+    display Lower "monomorphized program" program `ifFlag` debug
+    display Lower "monomorphized exp" exp `ifFlag` debug
+    return (program, exp)
+
+  _ -> error "Lower.Monomorphize.run: unexpected term type"
 
 -- | Apply a substitution over any term.
 -- Replaces each TypeVar whose name appears in the substitution with the corresponding concrete type.
@@ -64,9 +80,9 @@ applySubst subst = sub (embedSub f)
     f (_ :< TypeVar _ n) = lookup n mapping
     f _                  = Nothing
 
--- | Cross-stage traversal from TypeCheck to Monomorphize.
+-- | Cross-stage traversal from TypeCheck to Lower.
 -- Must enumerate each case so GHC can reduce the Annotation type family.
-castTerm :: forall a. IsTerm a => Annotated TypeCheck a -> Praxis (Annotated Monomorphize a)
+castTerm :: forall a. IsTerm a => Annotated TypeCheck a -> MonoM (Annotated Lower a)
 castTerm term = ($ term) $ case typeof (view value term) of
   -- Exp: dispatches to monomorphizeExp for Specialize elimination
   ExpT            -> monomorphizeExp
@@ -90,11 +106,11 @@ castTerm term = ($ term) $ case typeof (view value term) of
   TypeT           -> auto
   ty              -> error (show ty)
   where
-    auto :: (IsTerm a, Annotation TypeCheck a ~ Annotation Monomorphize a)
-         => Annotated TypeCheck a -> Praxis (Annotated Monomorphize a)
+    auto :: (IsTerm a, Annotation TypeCheck a ~ Annotation Lower a)
+         => Annotated TypeCheck a -> MonoM (Annotated Lower a)
     auto = value (recurseTerm castTerm)
 
-monomorphizeExp :: Annotated TypeCheck Exp -> Praxis (Annotated Monomorphize Exp)
+monomorphizeExp :: Annotated TypeCheck Exp -> MonoM (Annotated Lower Exp)
 monomorphizeExp ((src, ty) :< exp) = case exp of
 
   Specialize inner subst -> case view value inner of
@@ -104,10 +120,10 @@ monomorphizeExp ((src, ty) :< exp) = case exp of
       return ((src, ty) :< Var monoName)
 
     Con name -> do
-      Just dataName <- (monomorphizeState . conToDataType) `uses` Map.lookup name
+      Just dataName <- lift $ (lowerState . conToDataType) `uses` Map.lookup name
       _ <- specializeDataType dataName subst
       let monoTypes = map snd (normalizeSubst subst)
-      Just monoConName <- (monomorphizeState . specializations) `uses` Map.lookup (name, monoTypes)
+      Just monoConName <- lift $ (lowerState . specializations) `uses` Map.lookup (name, monoTypes)
       return ((src, ty) :< Con monoConName)
 
     Inbuilt _ -> ((src, ty) :<) <$> recurseTerm castTerm exp
@@ -115,21 +131,23 @@ monomorphizeExp ((src, ty) :< exp) = case exp of
   Where body decls -> do
     let (wherePolyDecls, whereMonoDecls) = partition isPolymorphic decls
         newLocalPolyNames = Set.fromList [ name | (_ :< DeclTermVar name _ _) <- wherePolyDecls ]
-    savedPolyDecls  <- use (monomorphizeState . polyDecls)
-    savedPolyNames  <- use (monomorphizeState . localPolyNames)
-    savedPending    <- use (monomorphizeState . localPendingDecls)
+    savedPolyDecls <- lift $ use (lowerState . polyDecls)
     forM_ wherePolyDecls $ \dt -> case view value dt of
-      DeclTermVar name _ _ -> monomorphizeState . polyDecls %= Map.insert name dt
+      DeclTermVar name _ _ -> lift $ lowerState . polyDecls %= Map.insert name dt
       _                    -> return ()
-    monomorphizeState . localPolyNames    %= Set.union newLocalPolyNames
-    monomorphizeState . localPendingDecls .= []
+    -- Extend localPolyNames and reset pendingDecls for this Where scope
+    savedPolyNames <- use localPolyNames
+    savedPending   <- use pendingDecls
+    localPolyNames %= Set.union newLocalPolyNames
+    pendingDecls   .= []
     whereMonoDecls' <- traverse castTerm whereMonoDecls
     monoBody        <- monomorphizeExp body
-    pending         <- use (monomorphizeState . localPendingDecls)
-    monomorphizeState . polyDecls         .= savedPolyDecls
-    monomorphizeState . localPolyNames    .= savedPolyNames
-    monomorphizeState . localPendingDecls .= savedPending
-    return ((src, ty) :< Where monoBody (pending ++ whereMonoDecls'))
+    innerPending <- use pendingDecls
+    -- Restore outer scope state
+    localPolyNames .= savedPolyNames
+    pendingDecls   .= savedPending
+    lift $ lowerState . polyDecls .= savedPolyDecls
+    return ((src, ty) :< Where monoBody (innerPending ++ whereMonoDecls'))
 
   _ -> ((src, ty) :<) <$> recurseTerm castTerm exp
 
@@ -168,30 +186,31 @@ unapplyTypeCon = go []
     go _    _                    = Nothing
 
 -- | Look up or create the monomorphic name for a specialization of a user-defined function.
-specialize :: Name -> Substitution TypeCheck -> Praxis Name
+specialize :: Name -> Substitution TypeCheck -> MonoM Name
 specialize name subst = do
   let subst' = normalizeSubst subst
       types  = map snd subst'
-  existing <- (monomorphizeState . specializations) `uses` Map.lookup (name, types)
+  existing <- lift $ (lowerState . specializations) `uses` Map.lookup (name, types)
   case existing of
     Just monoName -> return monoName
     Nothing -> do
-      monoName <- freshVar name
+      monoName <- lift $ freshVar name
       -- Register before processing body to handle recursive self-calls
-      monomorphizeState . specializations %= Map.insert (name, types) monoName
-      Just polyDecl <- (monomorphizeState . polyDecls) `uses` Map.lookup name
-      isLocal <- (monomorphizeState . localPolyNames) `uses` Set.member name
+      lift $ lowerState . specializations %= Map.insert (name, types) monoName
+      Just polyDecl <- lift $ (lowerState . polyDecls) `uses` Map.lookup name
+      localNames <- use localPolyNames
+      let isLocal = Set.member name localNames
       monoDecl <- specializeDeclTerm monoName subst' polyDecl
       if isLocal
         then do
           let (_ :< DeclTerm dt) = monoDecl
-          monomorphizeState . localPendingDecls %= (++ [dt])
+          pendingDecls %= (++ [dt])
         else
-          monomorphizeState . outputDecls %= (++ [monoDecl])
+          topLevelDecls %= (++ [monoDecl])
       return monoName
 
 -- | Produce a monomorphic DeclTermVar by substituting the specialization into a polymorphic definition.
-specializeDeclTerm :: Name -> Substitution TypeCheck -> Annotated TypeCheck DeclTerm -> Praxis (Annotated Monomorphize Decl)
+specializeDeclTerm :: Name -> Substitution TypeCheck -> Annotated TypeCheck DeclTerm -> MonoM (Annotated Lower Decl)
 specializeDeclTerm monoName subst (_ :< DeclTermVar _ qTy bodyExp) = do
   let monoTy = fmap (\qt -> case view value qt of
         Poly _ _ ty -> phantom (Mono (applySubst subst ty))
@@ -201,32 +220,32 @@ specializeDeclTerm monoName subst (_ :< DeclTermVar _ qTy bodyExp) = do
   return (phantom (DeclTerm (phantom (DeclTermVar monoName monoQTy monoBody))))
 
 -- | Look up or create the monomorphic name for a specialization of a polymorphic data type.
-specializeDataType :: Name -> Substitution TypeCheck -> Praxis Name
+specializeDataType :: Name -> Substitution TypeCheck -> MonoM Name
 specializeDataType dataName subst = do
   let subst' = normalizeSubst subst
       types  = map snd subst'
-  existing <- (monomorphizeState . specializations) `uses` Map.lookup (dataName, types)
+  existing <- lift $ (lowerState . specializations) `uses` Map.lookup (dataName, types)
   case existing of
     Just monoDataName -> return monoDataName
     Nothing -> do
-      Just polyDecl <- (monomorphizeState . polyDataDecls) `uses` Map.lookup dataName
+      Just polyDecl <- lift $ (lowerState . polyDataDecls) `uses` Map.lookup dataName
       let (_ :< DeclTypeData mode _ typePats cons) = polyDecl
 
       -- Register mono data type name FIRST (before processing body, handles recursion)
-      monoDataName <- freshVar dataName
-      monomorphizeState . specializations %= Map.insert (dataName, types) monoDataName
+      monoDataName <- lift $ freshVar dataName
+      lift $ lowerState . specializations %= Map.insert (dataName, types) monoDataName
 
       -- Register a mono name for each constructor
       monoConNames <- forM cons $ \(_ :< DataCon conName _) -> do
-        monoConName <- freshVar conName
-        monomorphizeState . specializations %= Map.insert (conName, types) monoConName
+        monoConName <- lift $ freshVar conName
+        lift $ lowerState . specializations %= Map.insert (conName, types) monoConName
         return monoConName
 
       -- Apply type-variable substitution to the whole DeclTypeData body
       let specData = applySubst subst' polyDecl
 
       -- Build a type-rewriting function: TypeApply (TypeCon n) args -> TypeCon monoN
-      specializationMap <- use (monomorphizeState . specializations)
+      specializationMap <- lift $ use (lowerState . specializations)
       let rewriteTy :: Annotated TypeCheck Type -> Maybe (Annotated TypeCheck Type)
           rewriteTy ty = case unapplyTypeCon ty of
             Just (n, args) ->
@@ -247,13 +266,13 @@ specializeDataType dataName subst = do
           monoDecl :: Annotated TypeCheck DeclType
           monoDecl = phantom (DeclTypeData mode monoDataName [] monoCons)
 
-      -- Cast to Monomorphize stage and emit
+      -- Cast to Lower stage and emit
       monoDecl' <- castTerm monoDecl
-      monomorphizeState . outputDecls %= (++ [phantom (DeclType monoDecl')])
+      topLevelDecls %= (++ [phantom (DeclType monoDecl')])
 
       return monoDataName
 
-monomorphizePat :: Annotated TypeCheck Pat -> Praxis (Annotated Monomorphize Pat)
+monomorphizePat :: Annotated TypeCheck Pat -> MonoM (Annotated Lower Pat)
 monomorphizePat ((src, ty) :< pat) = case pat of
   PatData conName innerPat -> do
     monoConName <- monoConNameFor conName ty
@@ -262,27 +281,27 @@ monomorphizePat ((src, ty) :< pat) = case pat of
   _ -> ((src, ty) :<) <$> recurseTerm castTerm pat
   where
     monoConNameFor conName ty = do
-      dataName <- (monomorphizeState . conToDataType) `uses` Map.lookup conName
+      dataName <- lift $ (lowerState . conToDataType) `uses` Map.lookup conName
       case dataName of
         Nothing -> return conName  -- non-polymorphic, keep as-is
         Just dn -> do
           Just (_ :< DeclTypeData _ _ typePats _) <-
-            (monomorphizeState . polyDataDecls) `uses` Map.lookup dn
+            lift $ (lowerState . polyDataDecls) `uses` Map.lookup dn
           case unapplyTypeCon (stripViews ty) of
             Just (_, concreteArgs) -> do
               let subst = zip typePats concreteArgs
               _  <- specializeDataType dn subst
               let monoTypes = map snd (normalizeSubst subst)
-              monoName <- (monomorphizeState . specializations) `uses` Map.lookup (conName, monoTypes)
+              monoName <- lift $ (lowerState . specializations) `uses` Map.lookup (conName, monoTypes)
               return (fromJust monoName)
             Nothing -> return conName
 
-monomorphizeProgram :: Annotated TypeCheck Program -> Praxis ()
+monomorphizeProgram :: Annotated TypeCheck Program -> MonoM ()
 monomorphizeProgram (_ :< Program decls) = do
-  mapM_ collect decls
-  mapM_ emit decls
+  lift $ mapM_ collect decls
+  mapM_ emitDecl decls
   where
-    -- First pass: populate polyDecls with polymorphic definitions
+    -- First pass: populate polyDecls/polyDataDecls (pure Praxis state, no output)
     collect :: Annotated TypeCheck Decl -> Praxis ()
     collect (_ :< decl) = case decl of
       DeclTerm dt -> collectDeclTerm dt
@@ -297,27 +316,26 @@ monomorphizeProgram (_ :< Program decls) = do
     collectDeclType :: Annotated TypeCheck DeclType -> Praxis ()
     collectDeclType dt = case view value dt of
       DeclTypeData _ name typePats cons | not (null typePats) -> do
-        monomorphizeState . polyDataDecls %= Map.insert name dt
+        lowerState . polyDataDecls %= Map.insert name dt
         forM_ cons $ \(_ :< DataCon conName _) ->
-          monomorphizeState . conToDataType %= Map.insert conName name
+          lowerState . conToDataType %= Map.insert conName name
       _ -> return ()
 
     collectDeclTerm :: Annotated TypeCheck DeclTerm -> Praxis ()
     collectDeclTerm dt = case view value dt of
       DeclTermVar name (Just qt) _
-        | (_ :< Poly _ _ _) <- qt -> monomorphizeState . polyDecls %= Map.insert name dt
+        | (_ :< Poly _ _ _) <- qt -> lowerState . polyDecls %= Map.insert name dt
       _ -> return ()
 
     -- Second pass: emit non-polymorphic declarations
-    emit :: Annotated TypeCheck Decl -> Praxis ()
-    emit ann = case view value ann of
+    emitDecl :: Annotated TypeCheck Decl -> MonoM ()
+    emitDecl ann = case view value ann of
       DeclTerm dt | isPolymorphic dt -> return ()
       DeclRec ds  | any (isPolyRec . view value) ds -> return ()
       DeclType dt | isPolymorphicDT dt -> return ()
       _ -> do
         monoDecl <- castTerm ann
-        monomorphizeState . outputDecls %= (++ [monoDecl])
-
+        topLevelDecls %= (++ [monoDecl])
 
     isPolymorphicDT :: Annotated TypeCheck DeclType -> Bool
     isPolymorphicDT (_ :< DeclTypeData _ _ typePats _) = not (null typePats)

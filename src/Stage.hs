@@ -11,28 +11,26 @@ data Stage
   | Parse
   | KindCheck
   | TypeCheck
-  | Monomorphize
-  | LambdaLift
+  | Lower
   | Evaluate
   deriving Eq
 
 instance Show Stage where
   show = \case
-    Initial      -> "initial"
-    Parse        -> "parse"
-    KindCheck    -> "kind check"
-    TypeCheck    -> "type check"
-    Monomorphize -> "monomorphize"
-    LambdaLift   -> "lambda lift"
-    Evaluate     -> "evaluate"
+    Initial   -> "initial"
+    Parse     -> "parse"
+    KindCheck -> "kind check"
+    TypeCheck -> "type check"
+    Lower     -> "lower"
+    Evaluate  -> "evaluate"
 
 data StageT (s :: Stage) where
-  InitialT      :: StageT Initial
-  ParseT        :: StageT Parse
-  KindCheckT    :: StageT KindCheck
-  TypeCheckT    :: StageT TypeCheck
-  MonomorphizeT :: StageT Monomorphize
-  EvaluateT     :: StageT Evaluate
+  InitialT   :: StageT Initial
+  ParseT     :: StageT Parse
+  KindCheckT :: StageT KindCheck
+  TypeCheckT :: StageT TypeCheck
+  LowerT     :: StageT Lower
+  EvaluateT  :: StageT Evaluate
 
 class IsStage (s :: Stage) where
   stageT :: StageT s
@@ -49,17 +47,17 @@ instance IsStage KindCheck where
 instance IsStage TypeCheck where
   stageT = TypeCheckT
 
-instance IsStage Monomorphize where
-  stageT = MonomorphizeT
+instance IsStage Lower where
+  stageT = LowerT
 
 instance IsStage Evaluate where
   stageT = EvaluateT
 
 stageToEnum :: StageT s -> Stage
 stageToEnum = \case
-  InitialT      -> Initial
-  ParseT        -> Parse
-  KindCheckT    -> KindCheck
-  TypeCheckT    -> TypeCheck
-  MonomorphizeT -> Monomorphize
-  EvaluateT     -> Evaluate
+  InitialT   -> Initial
+  ParseT     -> Parse
+  KindCheckT -> KindCheck
+  TypeCheckT -> TypeCheck
+  LowerT     -> Lower
+  EvaluateT  -> Evaluate

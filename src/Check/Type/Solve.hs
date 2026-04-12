@@ -8,6 +8,7 @@ module Check.Type.Solve
 
 import           Check.Solve
 import           Check.State
+import           Check.Type.State
 import           Common
 import           Inbuilts            (copy)
 import           Introspect
@@ -16,6 +17,7 @@ import           Stage
 import           Term
 
 import           Control.Applicative (liftA2)
+import           Control.Monad.Trans (lift)
 import           Data.List           (foldl', nub, partition, sort)
 import qualified Data.Map.Strict     as Map
 import           Data.Maybe          (fromMaybe)
@@ -23,15 +25,19 @@ import           Data.Set            (Set)
 import qualified Data.Set            as Set
 
 
-run :: IsTerm a => Annotated TypeCheck a -> Praxis (Annotated TypeCheck a)
+-- | Apply a TypeM transformation to a field in PraxisState.
+liftUpdate :: Lens' PraxisState a -> (a -> TypeM a) -> TypeM ()
+liftUpdate l f = lift (use l) >>= f >>= lift . (l .=)
+
+run :: IsTerm a => Annotated TypeCheck a -> TypeM (Annotated TypeCheck a)
 run term = do
   -- TODO pretty ugly to do this here
-  checkState . typeState . varEnv %%= traverse (second normalize)
-  checkState . typeState . conEnv %%= traverse normalize
-  checkState . typeState . typeSolve . requirements %%= (\set -> Set.fromList <$> traverse normalize (Set.toList set))
-  checkState . typeState . typeSolve . assumptions %%= (\set -> Set.fromList <$> traverse normalize (Set.toList set))
+  liftUpdate (checkState . typeState . varEnv) (traverse (second normalize))
+  liftUpdate (checkState . typeState . conEnv) (traverse normalize)
+  modifyM (typeSolveLocal . requirements) normalizeSet
+  modifyM (typeSolveLocal . assumptions)  normalizeSet
   term <- normalize term
-  term <- solve (checkState . typeState . typeSolve) reduce term
+  term <- solve typeSolveLocal reduce term
   term <- tryDefault term
   return term
 
@@ -43,15 +49,13 @@ unapplyTypeCon (_ :< ty) = case ty of
     Nothing       -> Nothing
   _ -> Nothing
 
-assertNormalized :: (IsTerm a, Eq (a TypeCheck))  => Annotated TypeCheck a -> Praxis ()
+assertNormalized :: (IsTerm a, Eq (a TypeCheck))  => Annotated TypeCheck a -> TypeM ()
 assertNormalized term = do
   term' <- normalize term
-  let str1 = fold (pretty term)
-  let str2 = fold (pretty term')
-  when (term /= term') $ throw TypeCheck ("unnormalized: " <> pretty term <> " vs " <> pretty term')
+  when (term /= term') $ lift $ throw TypeCheck ("unnormalized: " <> pretty term <> " vs " <> pretty term')
   return ()
 
-reduce :: Disambiguating (Reducer TypeCheck)
+reduce :: Disambiguating (Reducer TypeM TypeCheck)
 reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> case constraint of
 
   TypeIsEq ty1 ty2 | ty1 == ty2 -> return tautology
@@ -207,16 +211,16 @@ reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> ca
     TypeCon c | c == mkName "USize" -> checkBounds n (undefined :: USize)
     _                               -> return skip
     where
-      checkBounds :: forall a. (Integral a, Bounded a) => Integer -> a -> Praxis (Reduction TypeCheck)
+      checkBounds :: forall a. (Integral a, Bounded a) => Integer -> a -> TypeM (Reduction TypeM TypeCheck)
       checkBounds n _ = if toInteger (minBound :: a) <= n && n <= toInteger (maxBound :: a) then return tautology else return contradiction
 
   _ -> return contradiction
 
 
   where
-    reduceTypeConInstance :: TypeInstance -> Name -> [Annotated TypeCheck Type] -> Praxis (Reduction TypeCheck)
+    reduceTypeConInstance :: TypeInstance -> Name -> [Annotated TypeCheck Type] -> TypeM (Reduction TypeM TypeCheck)
     reduceTypeConInstance cls name args = do
-      l <- use (checkState . instanceEnv)
+      l <- lift $ use (checkState . instanceEnv)
       let Just instances = Map.lookup name l
       case Map.lookup cls instances of
         Just resolver -> case resolver args of
@@ -240,14 +244,14 @@ reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> ca
 
 
 -- Rewrite helpers
-solved :: Resolver TypeCheck -> Praxis (Reduction TypeCheck)
+solved :: Resolver TypeCheck -> TypeM (Reduction TypeM TypeCheck)
 solved resolve = solvedWithSubgoals resolve []
 
 -- note: assumption is the subgoals are not affected by the solution
-solvedWithSubgoals :: Resolver TypeCheck -> [Subgoal TypeCheck] -> Praxis (Reduction TypeCheck)
+solvedWithSubgoals :: Resolver TypeCheck -> [Subgoal TypeCheck] -> TypeM (Reduction TypeM TypeCheck)
 solvedWithSubgoals resolve subgoals = do
-  checkState . typeState . varEnv %%= traverse (second (normalize . sub resolve))
-  checkState . typeState . conEnv %%= traverse (normalize . sub resolve)
+  liftUpdate (checkState . typeState . varEnv) (traverse (second (normalize . sub resolve)))
+  liftUpdate (checkState . typeState . conEnv) (traverse (normalize . sub resolve))
   return (Progress (Just (resolve, normalize)) subgoals)
 
 are :: [(Name, Type TypeCheck)] -> Resolver TypeCheck
@@ -284,7 +288,10 @@ removeTypeOp :: Annotated TypeCheck Type -> Annotated TypeCheck Type -> Annotate
 removeTypeOp op1 op2  = contractTypeOps (expandTypeOps op1 `Set.difference` expandTypeOps op2)
 
 -- Term normalizer (after a substitution is applied)
-normalize :: Normalizer TypeCheck
+normalizeSet :: (Ord (Annotated TypeCheck a), IsTerm a) => Set (Annotated TypeCheck a) -> TypeM (Set (Annotated TypeCheck a))
+normalizeSet set = Set.fromList <$> traverse normalize (Set.toList set)
+
+normalize :: Normalizer TypeM TypeCheck
 normalize (a :< x) = case typeof x of
 
   TypeT -> case x of
@@ -345,14 +352,14 @@ truthNot Variable = Variable
 truthAnd :: Truth -> Truth -> Truth
 truthAnd a b = truthNot (truthOr (truthNot a) (truthNot b))
 
-isAffine :: Annotated TypeCheck Type -> Praxis Truth
+isAffine :: Annotated TypeCheck Type -> TypeM Truth
 isAffine ty = do
-  assumptions' <- use (checkState . typeState . typeSolve . assumptions)
+  assumptions' <- use (typeSolveLocal . assumptions)
   if copy ty `Set.member` assumptions'
     then return No
     else isAffine' ty
   where
-    isAffine' :: Annotated TypeCheck Type -> Praxis Truth
+    isAffine' :: Annotated TypeCheck Type -> TypeM Truth
     isAffine' (a :< ty) = case ty of
       TypePair ty1 ty2 -> isTypeConAffine (mkName "Pair") [ty1, ty2]
       TypeFn ty1 ty2 -> isTypeConAffine (mkName "Fn") [ty1, ty2]
@@ -362,9 +369,9 @@ isAffine ty = do
       TypeVar _ _ -> return Variable
       _ | Just (n, tys) <- unapplyTypeCon (a :< ty) -> isTypeConAffine n tys
 
-isTypeConAffine :: Name -> [Annotated TypeCheck Type] -> Praxis Truth
+isTypeConAffine :: Name -> [Annotated TypeCheck Type] -> TypeM Truth
 isTypeConAffine name args = do
-  l <- use (checkState . instanceEnv)
+  l <- lift $ use (checkState . instanceEnv)
   let Just instances = Map.lookup name l
   case Map.lookup Copy instances of
     Just resolver -> case resolver args of
@@ -374,21 +381,21 @@ isTypeConAffine name args = do
 
 
 -- Check for undetermined unification variables, default them where possible
-tryDefault :: IsTerm a => Annotated TypeCheck a -> Praxis (Annotated TypeCheck a)
+tryDefault :: IsTerm a => Annotated TypeCheck a -> TypeM (Annotated TypeCheck a)
 tryDefault term@((src, _) :< _) = do
 
   -- TODO could just be a warning, and default to ()?
   let freeTys = deepTypeUnis (\f -> f == Plain || f == Value) term
-  when (not (null freeTys)) $ throwAt TypeCheck src $ "underdetermined type " <> pretty (Set.elemAt 0 freeTys)
+  when (not (null freeTys)) $ lift $ throwAt TypeCheck src $ "underdetermined type " <> pretty (Set.elemAt 0 freeTys)
 
   let
     defaultRef name = do
-      ref <- freshRef
-      warnAt TypeCheck src $ "underdetermined reference " <> pretty name <> ", defaulting to " <> pretty ref
+      ref <- lift freshRef
+      lift $ warnAt TypeCheck src $ "underdetermined reference " <> pretty name <> ", defaulting to " <> pretty ref
       return (name, view value ref)
 
     defaultView name = do
-      warnAt TypeCheck src $ "underdetermined view " <> pretty name <> ", defaulting to " <> pretty (phantom TypeIdentityOp :: Annotated TypeCheck Type)
+      lift $ warnAt TypeCheck src $ "underdetermined view " <> pretty name <> ", defaulting to " <> pretty (phantom TypeIdentityOp :: Annotated TypeCheck Type)
       return (name, TypeIdentityOp)
 
   defaultViews <- traverse defaultView (Set.toList (deepTypeUnis (== View) term))
@@ -418,15 +425,15 @@ tryDefault term@((src, _) :< _) = do
 -- We also "expand" the assumptions, e.g. if there is an instance C t => D t, the the assumption D t should also include C t.
 
 -- TODO handle references/views!
-assumeFromQType :: [Annotated TypeCheck TypePat] -> [Annotated TypeCheck TypeConstraint] -> Praxis ()
+assumeFromQType :: [Annotated TypeCheck TypePat] -> [Annotated TypeCheck TypeConstraint] -> TypeM ()
 assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
 
-  assumeConstraint :: Annotated TypeCheck TypeConstraint -> Praxis ()
+  assumeConstraint :: Annotated TypeCheck TypeConstraint -> TypeM ()
   assumeConstraint constraint = do
     constraints <- normalize constraint >>= expandConstraint
-    checkState . typeState . typeSolve . assumptions %= Set.union (Set.fromList constraints)
+    typeSolveLocal . assumptions %= Set.union (Set.fromList constraints)
 
-  expandConstraint :: Annotated TypeCheck TypeConstraint -> Praxis [Annotated TypeCheck TypeConstraint]
+  expandConstraint :: Annotated TypeCheck TypeConstraint -> TypeM [Annotated TypeCheck TypeConstraint]
   expandConstraint constraint@((src, _) :< _) = ((constraint:) <$>) $ case view value constraint of
     TypeIsInstance cls ty -> case view value ty of
       TypePair ty1 ty2 -> expandTypeConInstance cls (mkName "Pair") [ty1, ty2]
@@ -435,12 +442,12 @@ assumeFromQType boundVars constraints = mapM_ assumeConstraint constraints where
       TypeVar _ _ -> return []
       _ | Just (n, tys) <- unapplyTypeCon ty -> expandTypeConInstance cls n tys
     where
-      expandTypeConInstance :: TypeInstance -> Name -> [Annotated TypeCheck Type] -> Praxis [Annotated TypeCheck TypeConstraint]
+      expandTypeConInstance :: TypeInstance -> Name -> [Annotated TypeCheck Type] -> TypeM [Annotated TypeCheck TypeConstraint]
       expandTypeConInstance cls name args = do
-        l <- use (checkState . instanceEnv)
+        l <- lift $ use (checkState . instanceEnv)
         let Just instances = Map.lookup name l
         case Map.lookup cls instances of
           Just resolver -> case resolver args of
-            (_, IsInstance)          -> throwAt TypeCheck src ("redundant constraint: " <> pretty constraint)
+            (_, IsInstance)          -> lift $ throwAt TypeCheck src ("redundant constraint: " <> pretty constraint)
             (_, IsInstanceOnlyIf cs) -> concat <$> traverse expandConstraint cs
           _ -> return [] -- Note: The instance may be satisfied later (at the call site)

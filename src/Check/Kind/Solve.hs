@@ -4,26 +4,28 @@ module Check.Kind.Solve
   ( run
   ) where
 
+import           Check.Kind.State
 import           Check.Solve
 import           Check.State
 import           Common
+import           Control.Monad.Trans (lift)
 import           Introspect
 import           Praxis
 import           Stage
 import           Term
 
-import           Data.List   (nub, sort)
-import           Data.Maybe  (fromMaybe)
-import           Data.Set    (Set, union)
-import qualified Data.Set    as Set
+import           Data.List           (nub, sort)
+import           Data.Maybe          (fromMaybe)
+import           Data.Set            (Set, union)
+import qualified Data.Set            as Set
 
 
-run :: IsTerm a => Annotated KindCheck a -> Praxis (Annotated KindCheck a)
+run :: IsTerm a => Annotated KindCheck a -> KindM (Annotated KindCheck a)
 run term = do
-  term <- solve (checkState . kindState . kindSolve) reduce term
+  term <- solve kindSolveLocal reduce term
   tryDefault term
 
-reduce :: Disambiguating (Reducer KindCheck)
+reduce :: Disambiguating (Reducer KindM KindCheck)
 reduce disambiguate (a :< constraint) = case constraint of
 
   KindIsEq kind1 kind2 | kind1 == kind2 -> return tautology
@@ -71,10 +73,10 @@ reduce disambiguate (a :< constraint) = case constraint of
 
 
 -- Rewrite helpers
-solved :: Resolver KindCheck -> Praxis (Reduction KindCheck)
+solved :: Resolver KindCheck -> KindM (Reduction KindM KindCheck)
 solved resolve = do
-  checkState . kindState . typeConEnv %%= traverse (pure . sub resolve)
-  checkState . kindState . typeVarEnv %%= traverse (second (pure . sub resolve))
+  lift $ checkState . kindState . typeConEnv %= fmap (sub resolve)
+  typeVarEnvLocal %= fmap (over second (sub resolve))
   return (solution (resolve, pure))
 
 is :: Name -> Kind KindCheck -> Resolver KindCheck
@@ -84,12 +86,12 @@ is n kind = embedSub f where
     _          -> Nothing
 
 -- Check for undetermined unification variables, default them where possible
-tryDefault :: IsTerm a => Annotated KindCheck a -> Praxis (Annotated KindCheck a)
+tryDefault :: IsTerm a => Annotated KindCheck a -> KindM (Annotated KindCheck a)
 tryDefault term@((src, _) :< _) = do
 
   -- TODO could just be a warning, and default to Type?
   let freeKinds = deepKindUnis term
-  when (not (null freeKinds)) $ throwAt KindCheck src $ "underdetermined kind: " <> pretty (Set.elemAt 0 freeKinds)
+  when (not (null freeKinds)) $ lift $ throwAt KindCheck src $ "underdetermined kind: " <> pretty (Set.elemAt 0 freeKinds)
   return term
 
   where
@@ -98,4 +100,3 @@ tryDefault term@((src, _) :< _) = do
       f (_ :< kind) = case kind of
         KindUni n -> Set.singleton n
         _         -> Set.empty
-

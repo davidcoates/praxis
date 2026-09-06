@@ -12,13 +12,17 @@ import           Util               (eval)
 import           Control.Monad      (void, when)
 import           Data.List          (delete)
 import           System.Environment
+import           System.Exit        (exitFailure)
 import           System.IO
 
 
 main :: IO ()
 main = hSetBuffering stdin LineBuffering >> do
   args <- getArgs
-  void $ runWithPrelude (parse args)
+  result <- runWithPrelude (parse args)
+  case result of
+    Left err -> hPutStrLn stderr err >> exitFailure
+    Right () -> return ()
 
 data Mode = Interactive (Maybe FilePath)
           | Interpret FilePath
@@ -84,7 +88,12 @@ help = Praxis.abort (pretty helpStr) where
     ]
 
 forever :: Praxis a -> Praxis a
-forever p = try p >> forever p
+forever p = do
+  result <- try p
+  case result of
+    Left err -> liftIO (hPutStrLn stderr err)
+    Right _  -> return ()
+  forever p
 
 repl :: Praxis ()
 repl = forever $ do

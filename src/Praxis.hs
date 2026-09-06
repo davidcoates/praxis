@@ -119,10 +119,9 @@ makeLenses ''Flags
 makeLenses ''Fresh
 makeLenses ''PraxisState
 
+-- | Fail with an error message.
 abort :: Colored String -> Praxis b
-abort err = do
-  displayLn err
-  ExceptT (return (Left (fold err)))
+abort err = ExceptT (return (Left (fold err)))
 
 -- <stage> <message> at <src>
 format :: Stage -> Maybe Source -> Colored String -> Colored String
@@ -171,13 +170,14 @@ clearTerm = unlessSilent $ liftIO $ do
     Just (Terminal.Window _ w) -> putStrLn $ replicate w '='
     Nothing                    -> pure ()
 
-try :: Praxis a -> Praxis (Maybe a)
+-- | Run a computation, restoring the state if it fails.
+try :: Praxis a -> Praxis (Either String a)
 try p = do
   s <- lift State.get
   (x, t) <- liftIO $ runPraxis' p s
   case x of
-    Left e  -> lift (State.put s) >> return Nothing
-    Right y -> lift (State.put t) >> return (Just y)
+    Left e  -> lift (State.put s) >> return (Left e)
+    Right y -> lift (State.put t) >> return (Right y)
 
 unlessSilent :: Praxis () -> Praxis ()
 unlessSilent c = do

@@ -6,6 +6,7 @@
 module Lower.Monomorphize
   ( run
   , Monomorphization(..)
+  , normalizeSubst
   ) where
 
 import           Check.Type.Instance (unapplyTypeCon)

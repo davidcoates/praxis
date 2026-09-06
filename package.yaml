@@ -31,6 +31,10 @@ dependencies:
 - raw-strings-qq
 - mtl >= 2.2.2
 - wcwidth >= 0.0.2
+- process
+- directory
+- filepath
+- bytestring
 
 library:
   source-dirs: src

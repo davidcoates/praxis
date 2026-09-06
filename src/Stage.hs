@@ -12,6 +12,7 @@ data Stage
   | KindCheck
   | TypeCheck
   | Lower
+  | Codegen
   | Evaluate
   deriving Eq
 
@@ -22,6 +23,7 @@ instance Show Stage where
     KindCheck -> "kind check"
     TypeCheck -> "type check"
     Lower     -> "lower"
+    Codegen   -> "codegen"
     Evaluate  -> "evaluate"
 
 data StageT (s :: Stage) where
@@ -30,6 +32,7 @@ data StageT (s :: Stage) where
   KindCheckT :: StageT KindCheck
   TypeCheckT :: StageT TypeCheck
   LowerT     :: StageT Lower
+  CodegenT   :: StageT Codegen
   EvaluateT  :: StageT Evaluate
 
 class IsStage (s :: Stage) where
@@ -50,6 +53,9 @@ instance IsStage TypeCheck where
 instance IsStage Lower where
   stageT = LowerT
 
+instance IsStage Codegen where
+  stageT = CodegenT
+
 instance IsStage Evaluate where
   stageT = EvaluateT
 
@@ -60,4 +66,5 @@ stageToEnum = \case
   KindCheckT -> KindCheck
   TypeCheckT -> TypeCheck
   LowerT     -> Lower
+  CodegenT   -> Codegen
   EvaluateT  -> Evaluate

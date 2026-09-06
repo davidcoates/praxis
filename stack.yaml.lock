@@ -3,18 +3,7 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages:
-- completed:
-    commit: 83b04cb576208ea74ddd62016e4fa03f0df138ac
-    git: https://github.com/luc-tielen/llvm-codegen.git
-    name: llvm-codegen
-    pantry-tree:
-      sha256: c2e5e20d8f47c024ef1a124126746b1e1ecd9cc7d78721f25c0b9a572c5c577b
-      size: 1633
-    version: 0.1.0.0
-  original:
-    commit: 83b04cb576208ea74ddd62016e4fa03f0df138ac
-    git: https://github.com/luc-tielen/llvm-codegen.git
+packages: []
 snapshots:
 - completed:
     sha256: 3f59fb01f884a786c64e247ffe145df5f6045d929b1d2752b5ce768e37fd44e5

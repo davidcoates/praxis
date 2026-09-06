@@ -82,19 +82,33 @@ fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> read y in x
     it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` "type check error at 2:14: variable y is not used in read"
 
 
-  describe "used read variable" $ do
+  describe "read only variable" $ do
+
+    let program = trim [r|
+fst : forall a b | b : Dispose. (a, b) -> a
+fst (x, y) = read y in x defer y
+|]
+
+    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
+fst : forall a b | b : Dispose . ( a , b ) -> a = \ ( x , y ) -> read y in x defer y
+|]
+
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
+fst : forall a b | b : Dispose . ( a , b ) -> a = \ ( [a] x , [b] y ) -> read y in [a] [a] x defer [&'l0 b] y
+|]
+
+
+  describe "read only variable (not disposable)" $ do
 
     let program = trim [r|
 fst : forall a b. (a, b) -> a
 fst (x, y) = read y in x defer y
 |]
 
-    it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
-fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> read y in x defer y
-|]
-
-    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-fst : forall a b . ( a , b ) -> a = \ ( [a] x , [b] y ) -> read y in [a] [a] x defer [&'l0 b] y
+    it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
+type check error: unable to satisfy: b : Dispose
+  | primary cause: variable y is not consumed at 2:5
+  | secondary cause: function fst with signature forall a b . ( a , b ) -> a at 1:1
 |]
 
 

@@ -23,7 +23,7 @@ f x = double x where
 |]
 
     it "lowers" $ runPretty (lower ProgramT program) `shouldReturn` trim [r|
-double : I32 -> I32 = \ n -> add ( n , n )
+double : I32 -> I32 = \ n -> add ( copy n , n )
 f = \ x -> double x
 |]
 
@@ -163,7 +163,7 @@ f x = go base where
 
     it "lowers" $ runPretty (lower ProgramT program) `shouldReturn` trim [r|
 go : ( I32 , I32 ) -> I32 = \ ( base , n ) -> add ( n , base )
-f = \ x -> let base = multiply ( x , 2 ) in go ( base , base )
+f = \ x -> let base = multiply ( x , 2 ) in go ( copy base , base )
 |]
 
     it "evals" $ runEvaluate program "f 5" `shouldReturn` "20"
@@ -180,7 +180,7 @@ f x = (pairWith True, pairWith 'c') where
     it "lowers" $ runPretty (lower ProgramT program) `shouldReturn` trim [r|
 pairWith : ( I32 , Bool ) -> ( I32 , Bool ) = \ ( x , y ) -> ( x , y )
 pairWith : ( I32 , Char ) -> ( I32 , Char ) = \ ( x , y ) -> ( x , y )
-f = \ x -> ( pairWith ( x , True ) , pairWith ( x , 'c' ) )
+f = \ x -> ( pairWith ( copy x , True ) , pairWith ( x , 'c' ) )
 |]
 
     it "evals" $ runEvaluate program "f 1" `shouldReturn` "((1, True), (1, 'c'))"

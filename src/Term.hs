@@ -116,6 +116,7 @@ data Inbuilt
   | InbuiltCompose | InbuiltPrint | InbuiltNewArray | InbuiltAtArray | InbuiltLenArray | InbuiltSetArray
   | InbuiltNot | InbuiltOr | InbuiltAnd
   | InbuiltEq | InbuiltNeq | InbuiltLt | InbuiltGt | InbuiltLte | InbuiltGte
+  | InbuiltCopy | InbuiltDispose
   deriving (Eq, Ord)
 
 instance Show Inbuilt where
@@ -144,6 +145,8 @@ instance Show Inbuilt where
     InbuiltGt       -> "gt"
     InbuiltLte      -> "lte"
     InbuiltGte      -> "gte"
+    InbuiltCopy     -> "copy"
+    InbuiltDispose  -> "dispose"
 
 data Exp (s :: Stage)
   = Apply (Annotated s Exp) (Annotated s Exp)
@@ -306,6 +309,8 @@ data TypeReason
   | TypeReasonIntegerLiteral Integer
   | TypeReasonMultiAlias Name
   | TypeReasonMultiUse Name
+  | TypeReasonNotConsumed Name
+  | TypeReasonNotConsumedInBranch Name
   | TypeReasonRead Name
   | TypeReasonSignature (Annotated TypeCheck Type)
   | TypeReasonSpecialization Name

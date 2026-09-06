@@ -123,9 +123,14 @@ scope src block = do
   env1 <- lift $ use (checkState . typeState . varEnv)
   let env2 = env1 `Map.difference` env0
   renames' <- lift $ use (checkState . typeState . varRename)
-  let unusedVars = [ name | (name, rename) <- Map.toList renames', case Map.lookup rename env2 of { Just (usage, _) -> view usedCount usage == 0 && view readCount usage == 0; _ -> False } ]
+  let
+    usage name = case Map.lookup name env2 of { Just (usage, _) -> Just usage; Nothing -> Nothing }
+    unusedVars = [ name | (name, rename) <- Map.toList renames', Just usage <- [usage rename], view usedCount usage == 0 && view readCount usage == 0 ]
+    -- A variable which is read but never consumed is implicitly disposed at the end of the scope.
+    unconsumedVars = [ (name, rename) | (name, rename) <- Map.toList renames', Just usage <- [usage rename], view usedCount usage == 0 && view readCount usage > 0 ]
   lift $ checkState . typeState . varRename .= savedRenames
   lift $ series [ throwAt TypeCheck src ("variable " <> pretty name <> " is not used") | name <- unusedVars ]
+  requires [ (src, TypeReasonNotConsumed name) :< Requirement (dispose t) | (name, rename) <- unconsumedVars, Just (_, _ :< Mono t) <- [Map.lookup rename env2] ]
   return x
 
 require :: Annotated TypeCheck (Requirement TypeConstraint) -> TypeM ()
@@ -164,6 +169,9 @@ join src branch1 branch2 = do
   lift $ checkState . typeState . varEnv .= env0
   y <- branch2
   env2 <- lift $ use (checkState . typeState . varEnv)
+  -- A variable which is consumed in one branch but not the other is implicitly disposed at the end of the other branch.
+  let unbalanced = Map.keys $ Map.filter (\((u1, _), (u2, _)) -> min (view usedCount u1) (view usedCount u2) == 0 && max (view usedCount u1) (view usedCount u2) > 0) $ Map.intersectionWith (,) env1 env2
+  requires [ (src, TypeReasonNotConsumedInBranch name) :< Requirement (dispose t) | name <- unbalanced, Just (_, _ :< Mono t) <- [Map.lookup name env1] ]
   lift $ checkState . typeState . varEnv .= Map.intersectionWith (\(u1, qTy) (u2, _) -> (u1 <> u2, qTy)) env1 env2
   return (x, y)
 
@@ -298,6 +306,10 @@ generateDeclTerm' forwardTy (a@(src, _) :< decl) = ((src, ()) :<) <$> case decl 
               return $ DeclTermVar rename sig exp
 
 
+-- | The lifetime of globals, which never ends.
+staticRef :: Annotated TypeCheck Type
+staticRef = phantom (TypeRef (mkName "'static"))
+
 generateInteger :: Source -> Integer -> TypeM (Annotated TypeCheck Type)
 generateInteger src n = do
   ty <- lift $ freshTypeUni Value
@@ -374,12 +386,16 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
 
   Read name exp -> do
     (rename, refName, refType) <- readVar src name
-    Just (_, qTy) <- lift $ (checkState . typeState . varEnv) `uses` Map.lookup rename
+    Just (usage0, qTy) <- lift $ (checkState . typeState . varEnv) `uses` Map.lookup rename
     lift $ (checkState . typeState . varEnv) %= Map.adjust (\(usage, _) -> (usage, mono refType)) rename
-    exp <- generateExp exp
-    Just (usage, _) <- lift $ (checkState . typeState . varEnv) `uses` Map.lookup rename
-    unless (view usedCount usage > 0) $ lift $ throwAt TypeCheck src ("variable " <> pretty name <> " is not used in read")
-    lift $ (checkState . typeState . varEnv) %= Map.adjust (const (usage, qTy)) rename
+    -- Within the read, the variable refers to the reference (even if the variable is a global)
+    exp <- saveLift (checkState . typeState . globalVars) $ do
+      lift $ checkState . typeState . globalVars %= Set.delete rename
+      generateExp exp
+    Just (usage1, _) <- lift $ (checkState . typeState . varEnv) `uses` Map.lookup rename
+    unless (view usedCount usage1 > 0) $ lift $ throwAt TypeCheck src ("variable " <> pretty name <> " is not used in read")
+    -- Uses within the read are of the reference, not of the variable itself, so the use count is restored.
+    lift $ (checkState . typeState . varEnv) %= Map.adjust (const (set usedCount (view usedCount usage0) usage1, qTy)) rename
     let ty = view annotation exp
     require $ (src, TypeReasonRead name) :< Requirement (phantom (TypeIsRefFree ty refName))
     return (ty :< Read rename exp)
@@ -402,11 +418,21 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
     return (ty :< Sig exp ty)
 
   Switch alts -> do
-    conditions <- sequence (map (generateExp . fst) alts)
-    requires [ (src, TypeReasonSwitchCondition) :< Requirement (phantom (TypeIsEq ty (phantom (TypeCon (mkName "Bool"))))) | ((src, ty) :< _) <- conditions ]
-    exps <- parallel src (map (generateExp . snd) alts)
-    ty <- equals exps TypeReasonSwitchCongruence
-    return (ty :< Switch (zip conditions exps))
+    alts <- generateSwitch alts
+    ty <- equals (map snd alts) TypeReasonSwitchCongruence
+    return (ty :< Switch alts)
+    where
+      -- Conditions are evaluated in turn until one holds, so a switch is a nest of ifs.
+      -- Nothing is reachable after the last condition fails (the switch is inexhaustive), so there is nothing to join with.
+      generateSwitch :: [(Annotated KindCheck Exp, Annotated KindCheck Exp)] -> TypeM [(Annotated TypeCheck Exp, Annotated TypeCheck Exp)]
+      generateSwitch [] = return []
+      generateSwitch ((cond, exp) : alts) = do
+        cond <- generateExp cond
+        require $ (view source cond, TypeReasonSwitchCondition) :< Requirement (phantom (TypeIsEq (view annotation cond) (phantom (TypeCon (mkName "Bool")))))
+        (exp, alts) <- case alts of
+          [] -> (\exp -> (exp, [])) <$> generateExp exp
+          _  -> join src (generateExp exp) (generateSwitch alts)
+        return ((cond, exp) : alts)
 
   Unit -> do
     let ty = phantom TypeUnit
@@ -414,12 +440,20 @@ generateExp (a@(src, _) :< exp) = (\(ty :< exp) -> (src, ty) :< exp) <$> case ex
 
   Var name -> do
     result <- lookupVar name
+    globals <- lift $ use (checkState . typeState . globalVars)
     case result of
+      Just (rename, _, qTy) | rename `Set.member` globals -> do
+        -- A global is immortal and immutable, so it is never consumed: a use of a global is a read with a static lifetime.
+        (ty, subst) <- specializeQType src name qTy
+        let ty' = phantom (TypeApplyOp staticRef ty)
+        case subst of
+          Just subst -> return (ty' :< Specialize ((src, ty') :< Var rename) subst)
+          Nothing    -> return (ty' :< Var rename)
       Just _ -> do
         (rename, ty, subst) <- useVar src name
         case subst of
           Just subst -> return (ty :< Specialize ((src, ty) :< Var rename) subst)
-          Nothing             -> return (ty :< Var rename)
+          Nothing    -> return (ty :< Var rename)
       Nothing -> do
         entry <- lift $ (checkState . typeState . inbuiltEnv) `uses` Map.lookup name
         case entry of

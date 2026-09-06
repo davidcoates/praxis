@@ -371,6 +371,8 @@ instance IsTerm (Requirement TypeConstraint) where
       TypeReasonIntegerLiteral i       -> pure (TypeReasonIntegerLiteral i)
       TypeReasonMultiAlias n           -> pure (TypeReasonMultiAlias n)
       TypeReasonMultiUse n             -> pure (TypeReasonMultiUse n)
+      TypeReasonNotConsumed n          -> pure (TypeReasonNotConsumed n)
+      TypeReasonNotConsumedInBranch n  -> pure (TypeReasonNotConsumedInBranch n)
       TypeReasonRead n                 -> pure (TypeReasonRead n)
       TypeReasonSignature t            -> TypeReasonSignature <$> f t
       TypeReasonSpecialization n       -> pure (TypeReasonSpecialization n)

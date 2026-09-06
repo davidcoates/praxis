@@ -8,6 +8,7 @@ module Check.Type.Solve
 
 import           Check.Solve
 import           Check.State
+import           Check.Type.Instance
 import           Check.Type.State
 import           Common
 import           Inbuilts            (copy)
@@ -40,14 +41,6 @@ run term = do
   term <- solve typeSolveLocal reduce term
   term <- tryDefault term
   return term
-
-unapplyTypeCon :: Annotated TypeCheck Type -> Maybe (Name, [Annotated TypeCheck Type])
-unapplyTypeCon (_ :< ty) = case ty of
-  TypeCon n -> Just (n, [])
-  TypeApply ty1 ty2 -> case unapplyTypeCon ty1 of
-    Just (n, tys) -> Just (n, tys ++ [ty2])
-    Nothing       -> Nothing
-  _ -> Nothing
 
 assertNormalized :: (IsTerm a, Eq (a TypeCheck))  => Annotated TypeCheck a -> TypeM ()
 assertNormalized term = do
@@ -233,7 +226,8 @@ reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> ca
           (_, IsInstance)          -> return tautology
           (_, IsInstanceOnlyIf cs) -> do
             cs <- traverse normalize cs
-            return (subgoals (map Subgoal cs))
+            -- The constraint is assumed while its subgoals are reduced, so that recursive data types are handled coinductively.
+            return (subgoals [ (a :< constraint) `Implies` c | c <- cs ])
         Nothing -> return contradiction
 
     typeUnis :: forall a. IsTerm a => Annotated TypeCheck a -> Set Name
@@ -327,63 +321,12 @@ normalize (a :< x) = case typeof x of
     continue = recurse normalize (a :< x)
 
 
-data Truth = Yes | No | Variable | Unknown
-  deriving Show
-
-isRef :: Annotated TypeCheck Type -> Truth
-isRef op = case view value op of
-  TypeIdentityOp -> No
-  TypeRef _      -> Yes
-  TypeSetOp ops  -> foldr (\op -> truthOr (isRef op)) No ops
-  TypeUni Ref _  -> Yes
-  TypeUni View _ -> Unknown
-  TypeVar Ref _  -> Yes
-  TypeVar View _ -> Variable
-
-truthOr :: Truth -> Truth -> Truth
-truthOr Yes _      = Yes
-truthOr _ Yes      = Yes
-truthOr Unknown _  = Unknown
-truthOr _ Unknown  = Unknown
-truthOr _ Variable = Variable
-truthOr Variable _ = Variable
-truthOr No No      = No
-
-truthNot :: Truth -> Truth
-truthNot Yes      = No
-truthNot No       = Yes
-truthNot Unknown  = Unknown
-truthNot Variable = Variable
-
-truthAnd :: Truth -> Truth -> Truth
-truthAnd a b = truthNot (truthOr (truthNot a) (truthNot b))
-
+-- | Whether a type is affine (i.e. not copyable), given the current assumptions.
 isAffine :: Annotated TypeCheck Type -> TypeM Truth
 isAffine ty = do
+  env <- lift $ use (checkState . instanceEnv)
   assumptions' <- use (typeSolveLocal . assumptions)
-  if copy ty `Set.member` assumptions'
-    then return No
-    else isAffine' ty
-  where
-    isAffine' :: Annotated TypeCheck Type -> TypeM Truth
-    isAffine' (a :< ty) = case ty of
-      TypePair ty1 ty2 -> isTypeConAffine (mkName "Pair") [ty1, ty2]
-      TypeFn ty1 ty2 -> isTypeConAffine (mkName "Fn") [ty1, ty2]
-      TypeUnit -> isTypeConAffine (mkName "Unit") []
-      TypeApplyOp op ty -> truthAnd (truthNot (isRef op)) <$> isAffine ty
-      TypeUni _ _ -> return Unknown
-      TypeVar _ _ -> return Variable
-      _ | Just (n, tys) <- unapplyTypeCon (a :< ty) -> isTypeConAffine n tys
-
-isTypeConAffine :: Name -> [Annotated TypeCheck Type] -> TypeM Truth
-isTypeConAffine name args = do
-  l <- lift $ use (checkState . instanceEnv)
-  let Just instances = Map.lookup name l
-  case Map.lookup Copy instances of
-    Just resolver -> case resolver args of
-      (_, IsInstance)                -> return No
-      (_, IsInstanceOnlyIf subgoals) -> (\(t:ts) -> foldl' truthOr t ts) <$> sequence [ isAffine ty | (_ :< TypeIsInstance Copy ty) <- subgoals ]
-    Nothing                          -> return Yes
+  return (truthNot (resolveInstance env assumptions' Copy ty))
 
 
 -- Check for undetermined unification variables, default them where possible

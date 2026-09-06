@@ -135,6 +135,8 @@ instance Pretty TypeReason where
     TypeReasonSwitchCongruence -> "switch expression branches must have the same type"
     TypeReasonMultiAlias n -> "variable " <> pretty n <> " is not a unique alias"
     TypeReasonMultiUse n -> "variable " <> pretty n <> " used more than once"
+    TypeReasonNotConsumed n -> "variable " <> pretty n <> " is not consumed"
+    TypeReasonNotConsumedInBranch n -> "variable " <> pretty n <> " is not consumed in every branch"
 
 instance Pretty KindReason where
   pretty = \case

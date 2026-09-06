@@ -194,6 +194,8 @@ evalInbuilt inbuilt specialization = return $ case inbuilt of
   InbuiltAtArray  -> Value.Fn (\(Value.Pair (Value.Array a) (Value.USize i)) -> Value.readArray a i)
   InbuiltLenArray -> Value.Fn (\(Value.Array a) -> Value.USize <$> Value.lenArray a)
   InbuiltSetArray -> Value.Fn (\(Value.Pair (Value.Array a) (Value.Pair (Value.USize i) e)) -> Value.writeArray a i e >> pure (Value.Array a))
+  InbuiltCopy     -> Value.Fn pure -- values are immutable, so a copy is the value itself
+  InbuiltDispose  -> Value.Fn (\_ -> pure Value.Unit) -- memory is managed by the Haskell runtime
   InbuiltNot      -> Value.Fn (\(Value.Bool a) -> pure (Value.Bool (not a)))
   InbuiltOr       -> Value.Fn (\(Value.Pair (Value.Bool a) (Value.Bool b)) -> pure (Value.Bool (a || b)))
   InbuiltAnd      -> Value.Fn (\(Value.Pair (Value.Bool a) (Value.Bool b)) -> pure (Value.Bool (a && b)))

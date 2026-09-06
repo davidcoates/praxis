@@ -196,7 +196,16 @@ left :: (SyntaxT f s, IsTerm a) => Prism (a s) (Annotated s a, Annotated s a) ->
 left _P p = leftWithSep _P p (pure ())
 
 foldWithSep :: forall f a s. (SyntaxT f s, IsTerm a) => (Annotation s a -> [Annotated s a] -> Annotated s a) -> ((a s) -> Maybe [Annotated s a]) -> f (a s) -> f () -> f (a s)
-foldWithSep fold unfold p s = Prism f g <$> blank (stageT :: StageT s) (termT :: TermT a) <*> (_Cons <$> annotated p <*> many (s *> annotated p)) <|> printOnly p where
+foldWithSep fold unfold = foldWithSep' fold unfold id
+
+-- | As 'foldWithSep', with a transformation applied to each (annotated) operand.
+foldWithSep' :: forall f a s. (SyntaxT f s, IsTerm a) => (Annotation s a -> [Annotated s a] -> Annotated s a) -> ((a s) -> Maybe [Annotated s a]) -> (f (Annotated s a) -> f (Annotated s a)) -> f (a s) -> f () -> f (a s)
+foldWithSep' fold unfold wrap p s =
+  -- Print only: the transformation is applied to every operand but the last
+  printOnly (Prism f g <$> blank (stageT :: StageT s) (termT :: TermT a) <*> (_Snoc <$> many (wrap (annotated p) <* s) <*> annotated p)) <|>
+  Prism f g <$> blank (stageT :: StageT s) (termT :: TermT a) <*> (_Cons <$> annotated p <*> many (s *> annotated p)) <|>
+  printOnly p
+  where
   f :: (Annotation s a, [Annotated s a]) -> (a s)
   f (a, ps) = view value (fold a ps)
   g :: (a s) -> Maybe (Annotation s a, [Annotated s a])
@@ -205,7 +214,11 @@ foldWithSep fold unfold p s = Prism f g <$> blank (stageT :: StageT s) (termT ::
     Just (x:xs) -> Just (undefined, x : xs)
 
 rightWithSep :: forall f a s. (SyntaxT f s, IsTerm a) => Prism (a s) (Annotated s a, Annotated s a) -> f (a s) -> f () -> f (a s)
-rightWithSep _P p s = foldWithSep fold unfold p s where
+rightWithSep _P = rightWithSep' _P id
+
+-- | As 'rightWithSep', with a transformation applied to each (annotated) operand.
+rightWithSep' :: forall f a s. (SyntaxT f s, IsTerm a) => Prism (a s) (Annotated s a, Annotated s a) -> (f (Annotated s a) -> f (Annotated s a)) -> f (a s) -> f () -> f (a s)
+rightWithSep' _P wrap p s = foldWithSep' fold unfold wrap p s where
   fold _ [x]    = x
   fold a (x:xs) = let y = fold a xs in (view source x <> view source y, a) :< construct _P (x, y)
   unfold  x = case destruct _P x of
@@ -400,6 +413,23 @@ closureCaptures :: (SyntaxT f s) => f [(Name, Annotated s QType)]
 closureCaptures = _Nil <$> pure () <|> names <$> internal "closure" *> special '[' *> (_Cons <$> varId <*> many (special ',' *> varId)) <* special ']' where
   names = Prism (error "closure captures are print only") (Just . map fst)
 
+_Snoc :: Prism [a] ([a], a)
+_Snoc = Prism (\(xs, x) -> xs ++ [x]) (\xs -> case reverse xs of { [] -> Nothing; (x:rest) -> Just (reverse rest, x) })
+
+-- | Whether an expression form extends as far right as possible when parsed.
+extendsRight :: Exp s -> Bool
+extendsRight = \case
+  Read _ _    -> True
+  Lambda _ _  -> True
+  If _ _ _    -> True
+  Let _ _     -> True
+  Case _ _    -> True
+  Cases _     -> True
+  Switch _    -> True
+  DoSugar _   -> True
+  Closure _ e -> extendsRight (view value e)
+  _           -> False
+
 tok :: (SyntaxT f s) => f (Tok s)
 tok = printOnly (_TokOp <$> symbol <|> _TokExp <$> annotated exp) <|> expected "token"
 
@@ -407,8 +437,12 @@ exp :: (SyntaxT f s) => f (Exp s)
 exp = exp6 `join` (_Sig, keyword KeywordColon *> annotated ty) <|> expected "expression" where
   exp6 = optWhere <$> annotated exp5 <*> blockLike (keyword KeywordWhere) (annotated declTerm) <|> printOnly exp5 <|> expected "expression(6)"
   optWhere = Prism (\(e, ps) -> case ps of { [] -> view value e; _ -> Where e ps }) (\case { Where e ps -> Just (e, ps); _ -> Nothing })
-  exp5 = rightWithSep _Defer exp4 (keyword KeywordDefer) <|> expected "expression(5)"
-  exp4 = rightWithSep _Seq exp3 (keyword KeywordSeq) <|> expected "expression(4)"
+  exp5 = rightWithSep' _Defer grouped exp4 (keyword KeywordDefer) <|> expected "expression(5)"
+  exp4 = rightWithSep' _Seq grouped exp3 (keyword KeywordSeq) <|> expected "expression(4)"
+  -- Forms which extend as far right as possible (e.g. read, lambda, if) are parenthesised when they are an operand of seq or defer.
+  -- This is print only, since grouping parentheses are parsed in exp0.
+  grouped p = printOnly (extending <$> special '(' *> annotated exp <* special ')') <|> p
+  extending = Prism id (\e -> if extendsRight (view value e) then Just e else Nothing)
   exp3 =
     _Read <$> keyword KeywordRead *> varId <*> keyword KeywordIn *> annotated exp <|>
     _DoSugar <$> keyword KeywordDo *> block (annotated stmt) <|>

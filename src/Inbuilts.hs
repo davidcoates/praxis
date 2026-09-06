@@ -154,6 +154,8 @@ inbuilts =
   , (InbuiltGt,       poly "forall a | a : Integral. (a, a) -> Bool")
   , (InbuiltLte,      poly "forall a | a : Integral. (a, a) -> Bool")
   , (InbuiltGte,      poly "forall a | a : Integral. (a, a) -> Bool")
+  , (InbuiltCopy,     poly "forall a | a : Copy. a -> a")
+  , (InbuiltDispose,  poly "forall a | a : Dispose. a -> ()")
   ]
 
 

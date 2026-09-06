@@ -8,6 +8,7 @@ module Lower.Monomorphize
   , Monomorphization(..)
   ) where
 
+import           Check.Type.Instance (unapplyTypeCon)
 import           Common
 import           Introspect
 import           Lower.State
@@ -168,15 +169,6 @@ normalizeSubst = map normPair
 stripViews :: Annotated s Type -> Annotated s Type
 stripViews (_ :< TypeApplyOp _ t) = stripViews t
 stripViews t                      = t
-
--- | Decompose a type application chain into its head constructor and arguments.
--- Returns Nothing if the head is not a TypeCon.
-unapplyTypeCon :: Annotated s Type -> Maybe (Name, [Annotated s Type])
-unapplyTypeCon = go []
-  where
-    go args (_ :< TypeApply f x) = go (x : args) f
-    go args (_ :< TypeCon name)  = Just (name, args)
-    go _    _                    = Nothing
 
 -- | Look up or create the monomorphic name for a specialization of a user-defined function.
 specialize :: Name -> Substitution TypeCheck -> MonoM Name

@@ -6,8 +6,10 @@ import           Check.Kind.State
 import           Check.State
 import           Common
 import           Inbuilts
+
 import           Introspect
 import           Praxis
+import           Prelude             hiding (drop)
 import           Print
 import           Stage
 import           Term
@@ -244,13 +246,13 @@ generateDeclType' forwardKind ((src, _) :< ty) = case ty of
       instances = case mode of
         DataUnboxed -> Map.fromList
           [ (Clone,   deduce clone)
-          , (Dispose, deduce dispose)
+          , (Drop,    deduce drop)
           , (Copy,    deduce copy)
           , (Capture, deduce capture)
           ]
         DataBoxed -> Map.fromList
           [ (Clone,   deduce clone)
-          , (Dispose, deduce dispose)
+          , (Drop,    deduce drop)
           ]
 
     lift $ checkState . instanceEnv %= Map.insert name instances
@@ -262,7 +264,7 @@ generateDeclType' forwardKind ((src, _) :< ty) = case ty of
     let
       instances = Map.fromList
         [ (Clone,   \_ -> (Trivial, IsInstance))
-        , (Dispose, \_ -> (Trivial, IsInstance))
+        , (Drop,    \_ -> (Trivial, IsInstance))
         , (Copy,    \_ -> (Trivial, IsInstance))
         , (Capture, \_ -> (Trivial, IsInstance))
         ]

@@ -9,7 +9,7 @@ import           Introspect
 import           Util
 
 
--- Linearization: after lowering, every variable is consumed exactly once on every path, by inserting explicit copies and disposes.
+-- Linearization: after lowering, every variable is consumed exactly once on every path, by inserting explicit copies and drops.
 
 spec :: Spec
 spec = do
@@ -42,11 +42,11 @@ datatype boxed List = Nil ( ) | Cons ( I32 , List )
 rec
   consume : List I32 -> ( ) = cases
     Nil ( ) -> ( )
-    Cons ( hole , xs ) -> consume xs defer dispose hole
+    Cons ( hole , xs ) -> consume xs defer drop hole
 sum : &r List I32 -> I32 = cases
   Nil ( ) -> 0
   Cons ( x , xs ) -> add ( x , sum xs )
-read_only : List I32 -> I32 = \ xs -> ( read xs in sum xs ) defer dispose xs
+read_only : List I32 -> I32 = \ xs -> ( read xs in sum xs ) defer drop xs
 |]
 
     it "evals" $ runEvaluate program "read_only (Cons (1, Cons (2, Nil ())))" `shouldReturn` "3"
@@ -64,8 +64,8 @@ datatype boxed List = Nil ( ) | Cons ( I32 , List )
 rec
   consume : List I32 -> ( ) = cases
     Nil ( ) -> ( )
-    Cons ( hole , xs ) -> consume xs defer dispose hole
-one_branch : ( Bool , List I32 ) -> ( ) = \ ( b , xs ) -> if b then consume xs else ( ) defer dispose xs
+    Cons ( hole , xs ) -> consume xs defer drop hole
+one_branch : ( Bool , List I32 ) -> ( ) = \ ( b , xs ) -> if b then consume xs else ( ) defer drop xs
 |]
 
     it "evals" $ do
@@ -85,8 +85,8 @@ datatype boxed List = Nil ( ) | Cons ( I32 , List )
 rec
   consume : List I32 -> ( ) = cases
     Nil ( ) -> ( )
-    Cons ( hole , xs ) -> consume xs defer dispose hole
-nested : ( Bool , List I32 ) -> ( ) = \ ( b , xs ) -> consume ( if b then xs else Nil ( ) defer dispose xs )
+    Cons ( hole , xs ) -> consume xs defer drop hole
+nested : ( Bool , List I32 ) -> ( ) = \ ( b , xs ) -> consume ( if b then xs else Nil ( ) defer drop xs )
 |]
 
     it "evals" $ runEvaluate program "nested (False, Cons (1, Nil ()))" `shouldReturn` "()"
@@ -107,13 +107,13 @@ datatype boxed List = Nil ( ) | Cons ( I32 , List )
 rec
   consume : List I32 -> ( ) = cases
     Nil ( ) -> ( )
-    Cons ( hole , xs ) -> consume xs defer dispose hole
+    Cons ( hole , xs ) -> consume xs defer drop hole
 sum : &r List I32 -> I32 = cases
   Nil ( ) -> 0
   Cons ( x , xs ) -> add ( x , sum xs )
 in_switch : ( I32 , List I32 ) -> I32 = \ ( n , xs ) -> switch
-  lt ( copy n , 0 ) -> ( 0 defer dispose n ) defer dispose xs
-  eq ( copy n , 0 ) -> ( ( read xs in sum xs ) defer dispose n ) defer dispose xs
+  lt ( copy n , 0 ) -> ( 0 defer drop n ) defer drop xs
+  eq ( copy n , 0 ) -> ( ( read xs in sum xs ) defer drop n ) defer drop xs
   gt ( copy n , 0 ) -> consume xs seq n
 |]
 
@@ -135,11 +135,11 @@ datatype boxed List = Nil ( ) | Cons ( I32 , List )
 rec
   consume : List I32 -> ( ) = cases
     Nil ( ) -> ( )
-    Cons ( hole , xs ) -> consume xs defer dispose hole
+    Cons ( hole , xs ) -> consume xs defer drop hole
 sum : &r List I32 -> I32 = cases
   Nil ( ) -> 0
   Cons ( x , xs ) -> add ( x , sum xs )
-let_scope : List I32 -> I32 = \ xs -> let ys = xs in ( read ys in sum ys ) defer dispose ys
+let_scope : List I32 -> I32 = \ xs -> let ys = xs in ( read ys in sum ys ) defer drop ys
 |]
 
     it "evals" $ runEvaluate program "let_scope (Cons (4, Nil ()))" `shouldReturn` "4"
@@ -157,11 +157,11 @@ copy_only : ( I32 , I32 ) -> I32 = \ ( x , y ) -> read y in add ( x , y )
 |]
 
 
-  describe "explicit dispose" $ do
+  describe "explicit drop" $ do
 
     let program = list ++ [r|
 explicit : List I32 -> ()
-explicit xs = dispose xs
+explicit xs = drop xs
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
@@ -175,7 +175,7 @@ rec
   consume : List I32 -> ( ) = [List I32 -> ( )] cases
     [List I32] Nil [( )] ( ) -> [( )] ( )
     [List I32] Cons ( [I32] hole , [List I32] xs ) -> [List I32 -> ( )] consume [List I32] xs
-explicit : List I32 -> ( ) = \ [List I32] xs -> [List I32 -> ( )] dispose [List I32] xs
+explicit : List I32 -> ( ) = \ [List I32] xs -> [List I32 -> ( )] drop [List I32] xs
 |]
 
     it "evals" $ runEvaluate program "explicit (Cons (1, Nil ()))" `shouldReturn` "()"
@@ -192,7 +192,7 @@ f x = read x in len x
 |]
 
     it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error: unable to satisfy: a : Dispose
+type check error: unable to satisfy: a : Drop
   | primary cause: variable x is not consumed at 6:3
   | secondary causes:
   | - function f with signature forall a . a -> I32 at 5:1
@@ -208,7 +208,7 @@ g (b, x, k) = if b then k x else ()
 |]
 
     it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error: unable to satisfy: a : Dispose
+type check error: unable to satisfy: a : Drop
   | primary cause: variable x is not consumed in every branch at 3:15
   | secondary causes:
   | - function g with signature forall a . ( Bool , a , a -> ( ) ) -> ( ) at 2:1
@@ -219,12 +219,12 @@ type check error: unable to satisfy: a : Dispose
   describe "disposable (one branch)" $ do
 
     let program = [r|
-g : forall a | a : Dispose. (Bool, a, a -> ()) -> ()
+g : forall a | a : Drop. (Bool, a, a -> ()) -> ()
 g (b, x, k) = if b then k x else ()
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-g : forall a | a : Dispose . ( Bool , a , a -> ( ) ) -> ( ) = \ ( [Bool] b , [a] x , [a -> ( )] k ) -> [( )] if [Bool] b then [a -> ( )] k [a] x else [( )] ( )
+g : forall a | a : Drop . ( Bool , a , a -> ( ) ) -> ( ) = \ ( [Bool] b , [a] x , [a -> ( )] k ) -> [( )] if [Bool] b then [a -> ( )] k [a] x else [( )] ( )
 |]
 
 
@@ -238,7 +238,7 @@ g (b, x, k) = switch
 |]
 
     it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error: unable to satisfy: a : Dispose
+type check error: unable to satisfy: a : Drop
   | primary cause: variable x is not consumed in every branch at 3:15
   | secondary causes:
   | - function g with signature forall a . ( Bool , a , a -> Bool ) -> ( ) at 2:1
@@ -261,13 +261,13 @@ datatype boxed List = Nil ( ) | Cons ( I32 , List )
 rec
   consume : List I32 -> ( ) = cases
     Nil ( ) -> ( )
-    Cons ( hole , xs ) -> consume xs defer dispose hole
+    Cons ( hole , xs ) -> consume xs defer drop hole
 sum : &r List I32 -> I32 = cases
   Nil ( ) -> 0
   Cons ( x , xs ) -> add ( x , sum xs )
 g : ( Bool , List I32 ) -> ( ) = \ ( b , xs ) -> switch
-  b -> ( ) defer dispose xs
-  read xs in gt ( sum xs , 0 ) -> ( ) defer dispose xs
+  b -> ( ) defer drop xs
+  read xs in gt ( sum xs , 0 ) -> ( ) defer drop xs
   True -> consume xs
 |]
 
@@ -314,7 +314,7 @@ const_zero _ = 0
 |]
 
     it "lowers" $ runPretty (lower ProgramT program) `shouldReturn` trim [r|
-const_zero : I32 -> I32 = \ hole -> 0 defer dispose hole
+const_zero : I32 -> I32 = \ hole -> 0 defer drop hole
 |]
 
 
@@ -377,7 +377,7 @@ apply_both p = fst p + snd p where
 
     it "lowers" $ runPretty (lower ProgramT program) `shouldReturn` trim [r|
 fst : ( I32 -> I32 , I32 ) -> I32 = \ ( f , n ) -> f n
-snd : ( I32 -> I32 , I32 ) -> I32 = \ ( hole , n ) -> n defer dispose hole
+snd : ( I32 -> I32 , I32 ) -> I32 = \ ( hole , n ) -> n defer drop hole
 apply_both : ( I32 -> I32 , I32 ) -> I32 = \ p -> add ( fst ( copy p ) , snd p )
 |]
 

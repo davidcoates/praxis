@@ -29,16 +29,16 @@ fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> x
   describe "unused underscore" $ do
 
     let program = trim [r|
-fst : forall a b | b : Dispose. (a, b) -> a
+fst : forall a b | b : Drop. (a, b) -> a
 fst (x, _) = x
 |]
 
     it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
-fst : forall a b | b : Dispose . ( a , b ) -> a = \ ( x , _ ) -> x
+fst : forall a b | b : Drop . ( a , b ) -> a = \ ( x , _ ) -> x
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-fst : forall a b | b : Dispose . ( a , b ) -> a = \ ( [a] x , [b] hole ) -> [a] x
+fst : forall a b | b : Drop . ( a , b ) -> a = \ ( [a] x , [b] hole ) -> [a] x
 |]
 
 
@@ -50,7 +50,7 @@ fst (x, _) = x
 |]
 
     it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error: unable to satisfy: b : Dispose
+type check error: unable to satisfy: b : Drop
   | primary cause: discarded by hole pattern at 2:9
   | secondary cause: function fst with signature forall a b . ( a , b ) -> a at 1:1
 |]
@@ -85,16 +85,16 @@ fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> read y in x
   describe "read only variable" $ do
 
     let program = trim [r|
-fst : forall a b | b : Dispose. (a, b) -> a
+fst : forall a b | b : Drop. (a, b) -> a
 fst (x, y) = read y in x defer y
 |]
 
     it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
-fst : forall a b | b : Dispose . ( a , b ) -> a = \ ( x , y ) -> read y in x defer y
+fst : forall a b | b : Drop . ( a , b ) -> a = \ ( x , y ) -> read y in x defer y
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-fst : forall a b | b : Dispose . ( a , b ) -> a = \ ( [a] x , [b] y ) -> read y in [a] [a] x defer [&'l0 b] y
+fst : forall a b | b : Drop . ( a , b ) -> a = \ ( [a] x , [b] y ) -> read y in [a] [a] x defer [&'l0 b] y
 |]
 
 
@@ -106,7 +106,7 @@ fst (x, y) = read y in x defer y
 |]
 
     it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-type check error: unable to satisfy: b : Dispose
+type check error: unable to satisfy: b : Drop
   | primary cause: variable y is not consumed at 2:5
   | secondary cause: function fst with signature forall a b . ( a , b ) -> a at 1:1
 |]

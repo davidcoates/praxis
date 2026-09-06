@@ -4,11 +4,11 @@
 --
 -- The type checker guarantees that an affine (non-Copy) variable is consumed at most once on any path, that a
 -- Copy variable may be used any number of times, and that any variable which is not consumed on some path is
--- Dispose. This pass makes copying and disposal explicit, by inserting calls to the @copy@ and @dispose@
+-- Drop. This pass makes copying and dropping explicit, by inserting calls to the @copy@ and @drop@
 -- inbuilts, so that afterwards every use of a variable is a move:
 --
 --   * A use of a variable which is used again later on the same path becomes @copy x@.
---   * A path on which a variable is not used at all ends with @dispose x@.
+--   * A path on which a variable is not used at all ends with @drop x@.
 --
 -- Hole patterns bind (unused) variables like any other pattern, so they are handled uniformly.
 -- Uses of a variable within a read of that variable are uses of the reference, so do not consume it (though for a
@@ -137,7 +137,7 @@ linearize isCopy x xTy = consume where
   -- Precondition: the variable is owned. Postcondition: the variable is consumed exactly once on every path.
   consume :: Annotated Lower Exp -> Praxis (Annotated Lower Exp)
   consume e@((src, ty) :< exp)
-    | not (used e) = return (disposeAfter x xTy e)
+    | not (used e) = return (dropAfter x xTy e)
     | otherwise = ((src, ty) :<) <$> case exp of
 
         Var _ -> return exp
@@ -174,7 +174,7 @@ linearize isCopy x xTy = consume where
         body' <- consume body
         alts' <- if any (\(c, b) -> used c || used b) alts
           then consumeSwitch alts
-          else return [ (c, disposeAfter x xTy b) | (c, b) <- alts ]
+          else return [ (c, dropAfter x xTy b) | (c, b) <- alts ]
         return ((cond', body') : alts')
     | otherwise = do
         -- The condition consumes the variable. Nothing after it uses the variable, so nothing to do there (in particular,
@@ -227,9 +227,9 @@ linearize isCopy x xTy = consume where
 
 -- * Helpers
 
--- | @e defer dispose x@
-disposeAfter :: Name -> Type' -> Annotated Lower Exp -> Annotated Lower Exp
-disposeAfter x xTy e@((src, ty) :< _) = (src, ty) :< Defer e (inbuiltApply InbuiltDispose (phantom TypeUnit) x xTy)
+-- | @e defer drop x@
+dropAfter :: Name -> Type' -> Annotated Lower Exp -> Annotated Lower Exp
+dropAfter x xTy e@((src, ty) :< _) = (src, ty) :< Defer e (inbuiltApply InbuiltDrop (phantom TypeUnit) x xTy)
 
 -- | @copy x@
 copyOf :: Name -> Type' -> Annotated Lower Exp

@@ -22,7 +22,7 @@ data Keyword
   -- Upper (kinds)
   | KeywordType | KeywordRef | KeywordView
   -- Upper (instances)
-  | KeywordClone | KeywordDispose | KeywordCopy | KeywordCapture | KeywordIntegral
+  | KeywordClone | KeywordDrop | KeywordCopy | KeywordCapture | KeywordIntegral
   -- Symbol
   | KeywordColon | KeywordEquals | KeywordLambda | KeywordArrow | KeywordAt
   deriving (Eq, Ord, Enum, Bounded)
@@ -53,7 +53,7 @@ keywordString = \case
   KeywordRef      -> "Ref"
   KeywordView     -> "View"
   KeywordClone    -> "Clone"
-  KeywordDispose  -> "Dispose"
+  KeywordDrop     -> "Drop"
   KeywordCopy     -> "Copy"
   KeywordCapture  -> "Capture"
   KeywordIntegral -> "Integral"

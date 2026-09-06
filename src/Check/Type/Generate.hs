@@ -6,7 +6,8 @@ import           Check.State
 import           Check.Type.Solve    (assumeFromQType)
 import           Check.Type.State
 import           Common
-import           Inbuilts            (capture, copy, dispose, integral)
+import           Inbuilts            (capture, copy, drop, integral)
+
 import           Introspect
 import           Praxis
 import           Print
@@ -20,7 +21,7 @@ import           Data.List           (nub, partition, sort)
 import qualified Data.Map.Strict     as Map
 import           Data.Maybe          (isJust, mapMaybe)
 import qualified Data.Set            as Set
-import           Prelude             hiding (log)
+import           Prelude             hiding (drop, log)
 
 
 run :: IsTerm a => Annotated KindCheck a -> TypeM (Annotated TypeCheck a)
@@ -126,11 +127,11 @@ scope src block = do
   let
     usage name = case Map.lookup name env2 of { Just (usage, _) -> Just usage; Nothing -> Nothing }
     unusedVars = [ name | (name, rename) <- Map.toList renames', Just usage <- [usage rename], view usedCount usage == 0 && view readCount usage == 0 ]
-    -- A variable which is read but never consumed is implicitly disposed at the end of the scope.
+    -- A variable which is read but never consumed is implicitly dropped at the end of the scope.
     unconsumedVars = [ (name, rename) | (name, rename) <- Map.toList renames', Just usage <- [usage rename], view usedCount usage == 0 && view readCount usage > 0 ]
   lift $ checkState . typeState . varRename .= savedRenames
   lift $ series [ throwAt TypeCheck src ("variable " <> pretty name <> " is not used") | name <- unusedVars ]
-  requires [ (src, TypeReasonNotConsumed name) :< Requirement (dispose t) | (name, rename) <- unconsumedVars, Just (_, _ :< Mono t) <- [Map.lookup rename env2] ]
+  requires [ (src, TypeReasonNotConsumed name) :< Requirement (drop t) | (name, rename) <- unconsumedVars, Just (_, _ :< Mono t) <- [Map.lookup rename env2] ]
   return x
 
 require :: Annotated TypeCheck (Requirement TypeConstraint) -> TypeM ()
@@ -169,9 +170,9 @@ join src branch1 branch2 = do
   lift $ checkState . typeState . varEnv .= env0
   y <- branch2
   env2 <- lift $ use (checkState . typeState . varEnv)
-  -- A variable which is consumed in one branch but not the other is implicitly disposed at the end of the other branch.
+  -- A variable which is consumed in one branch but not the other is implicitly dropped at the end of the other branch.
   let unbalanced = Map.keys $ Map.filter (\((u1, _), (u2, _)) -> min (view usedCount u1) (view usedCount u2) == 0 && max (view usedCount u1) (view usedCount u2) > 0) $ Map.intersectionWith (,) env1 env2
-  requires [ (src, TypeReasonNotConsumedInBranch name) :< Requirement (dispose t) | name <- unbalanced, Just (_, _ :< Mono t) <- [Map.lookup name env1] ]
+  requires [ (src, TypeReasonNotConsumedInBranch name) :< Requirement (drop t) | name <- unbalanced, Just (_, _ :< Mono t) <- [Map.lookup name env1] ]
   lift $ checkState . typeState . varEnv .= Map.intersectionWith (\(u1, qTy) (u2, _) -> (u1 <> u2, qTy)) env1 env2
   return (x, y)
 
@@ -528,11 +529,11 @@ generatePat' wrap ((src, _) :< pat) = (\(ty, pat, aliased) -> (ty, (src, wrap ty
         return (conTy, PatEnum name, False)
 
   PatHole -> do
-    -- treat this is a variable for drop analysis
+    -- treat this as a variable, so that it is dropped like any other unused variable
     ty <- lift $ freshTypeUni Plain
     name <- introHole (mono (wrap ty))
     -- the discarded value must be disposable
-    require $ (src, TypeReasonHole) :< Requirement (dispose (wrap ty))
+    require $ (src, TypeReasonHole) :< Requirement (drop (wrap ty))
     return (ty, PatVar name, False)
 
   -- TODO think about how view literals would work, e.g. x@"abc"

@@ -116,7 +116,7 @@ data Inbuilt
   | InbuiltCompose | InbuiltPrint | InbuiltNewArray | InbuiltAtArray | InbuiltLenArray | InbuiltSetArray
   | InbuiltNot | InbuiltOr | InbuiltAnd
   | InbuiltEq | InbuiltNeq | InbuiltLt | InbuiltGt | InbuiltLte | InbuiltGte
-  | InbuiltCopy | InbuiltDispose
+  | InbuiltCopy | InbuiltDrop
   deriving (Eq, Ord)
 
 instance Show Inbuilt where
@@ -146,7 +146,7 @@ instance Show Inbuilt where
     InbuiltLte      -> "lte"
     InbuiltGte      -> "gte"
     InbuiltCopy     -> "copy"
-    InbuiltDispose  -> "dispose"
+    InbuiltDrop  -> "drop"
 
 data Exp (s :: Stage)
   = Apply (Annotated s Exp) (Annotated s Exp)
@@ -220,7 +220,7 @@ data Flavor = Plain | Ref | Value | View
 data TypePat (s :: Stage) = TypePatVar Flavor Name
   deriving (Eq, Ord)
 
-data TypeInstance = Clone | Dispose | Copy | Capture | Integral
+data TypeInstance = Clone | Drop | Copy | Capture | Integral
   deriving (Eq, Ord)
 
 data Type (s :: Stage)

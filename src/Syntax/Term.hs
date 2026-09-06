@@ -392,7 +392,7 @@ ty :: (SyntaxT f s) => f (Type s)
 ty = ty1 `join` (_TypeFn, keyword KeywordArrow *> annotated ty) <|> expected "type"
 
 typeInstance :: Syntax f => f TypeInstance
-typeInstance = _Clone <$> keyword KeywordClone <|> _Dispose <$> keyword KeywordDispose <|> _Copy <$> keyword KeywordCopy <|> _Capture <$> keyword KeywordCapture <|> _Integral <$> keyword KeywordIntegral
+typeInstance = _Clone <$> keyword KeywordClone <|> _Drop <$> keyword KeywordDrop <|> _Copy <$> keyword KeywordCopy <|> _Capture <$> keyword KeywordCapture <|> _Integral <$> keyword KeywordIntegral
 
 ty0 :: (SyntaxT f s) => f (Type s)
 ty0 =

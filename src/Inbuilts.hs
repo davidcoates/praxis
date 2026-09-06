@@ -4,16 +4,18 @@ module Inbuilts
   ( runWithPrelude
   , integral
   , clone
-  , dispose
+  , drop
   , copy
   , capture
   ) where
 
 import           Check.State
+
 import           Common
 import           Introspect
 import qualified Parse             (run)
 import           Praxis
+import           Prelude           hiding (drop)
 import           Stage
 import           Term              hiding (Lit (..), Pair, Unit)
 
@@ -62,8 +64,8 @@ integral t = phantom (TypeIsInstance Integral t)
 clone :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
 clone t = phantom (TypeIsInstance Clone t)
 
-dispose :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
-dispose t = phantom (TypeIsInstance Dispose t)
+drop :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
+drop t = phantom (TypeIsInstance Drop t)
 
 copy :: Annotated TypeCheck Type -> Annotated TypeCheck TypeConstraint
 copy t = phantom (TypeIsInstance Copy t)
@@ -74,15 +76,15 @@ capture t = phantom (TypeIsInstance Capture t)
 initialInstanceEnv :: InstanceEnv
 initialInstanceEnv = Map.fromList
   [ (mkName "Array", Map.fromList
-    [ (Clone,   \[t] -> (Native, IsInstanceOnlyIf [clone t]))
-    , (Dispose, \[t] -> (Native, IsInstanceOnlyIf [dispose t]))
+    [ (Clone, \[t] -> (Native, IsInstanceOnlyIf [clone t]))
+    , (Drop,  \[t] -> (Native, IsInstanceOnlyIf [drop t]))
     ]
     )
   , (mkName "Bool", primitive)
   , (mkName "Char", primitive)
   , (mkName "Fn", Map.fromList
     [ (Clone,   \_ -> (Native, IsInstance))
-    , (Dispose, \_ -> (Native, IsInstance))
+    , (Drop,    \_ -> (Native, IsInstance))
     , (Copy,    \_ -> (Native, IsInstance))
     , (Capture, \_ -> (Native, IsInstance))
     ]
@@ -94,20 +96,20 @@ initialInstanceEnv = Map.fromList
   , (mkName "ISize", integralInst)
   , (mkName "Pair", Map.fromList
     [ (Clone,   \[a, b] -> (Trivial, IsInstanceOnlyIf [clone a, clone b]))
-    , (Dispose, \[a, b] -> (Trivial, IsInstanceOnlyIf [dispose a, dispose b]))
+    , (Drop,    \[a, b] -> (Trivial, IsInstanceOnlyIf [drop a, drop b]))
     , (Copy,    \[a, b] -> (Trivial, IsInstanceOnlyIf [copy a, copy b]))
     , (Capture, \[a, b] -> (Trivial, IsInstanceOnlyIf [capture a, capture b]))
     ]
     )
   , (mkName "Ref", Map.fromList
-    [ (Clone,   \_ -> (Trivial, IsInstance))
-    , (Dispose, \_ -> (Trivial, IsInstance))
-    , (Copy,    \_ -> (Trivial, IsInstance))
+    [ (Clone, \_ -> (Trivial, IsInstance))
+    , (Drop,  \_ -> (Trivial, IsInstance))
+    , (Copy,  \_ -> (Trivial, IsInstance))
     ]
     )
   , (mkName "String", Map.fromList
-    [ (Clone,   \_ -> (Native, IsInstance))
-    , (Dispose, \_ -> (Native, IsInstance))
+    [ (Clone, \_ -> (Native, IsInstance))
+    , (Drop,  \_ -> (Native, IsInstance))
     ]
     )
   , (mkName "U8",    integralInst)
@@ -119,7 +121,7 @@ initialInstanceEnv = Map.fromList
   ] where
     primitive = Map.fromList
       [ (Clone,   \_ -> (Trivial, IsInstance))
-      , (Dispose, \_ -> (Trivial, IsInstance))
+      , (Drop,    \_ -> (Trivial, IsInstance))
       , (Copy,    \_ -> (Trivial, IsInstance))
       , (Capture, \_ -> (Trivial, IsInstance))
       ]
@@ -155,7 +157,7 @@ inbuilts =
   , (InbuiltLte,      poly "forall a | a : Integral. (a, a) -> Bool")
   , (InbuiltGte,      poly "forall a | a : Integral. (a, a) -> Bool")
   , (InbuiltCopy,     poly "forall a | a : Copy. a -> a")
-  , (InbuiltDispose,  poly "forall a | a : Dispose. a -> ()")
+  , (InbuiltDrop,     poly "forall a | a : Drop. a -> ()")
   ]
 
 

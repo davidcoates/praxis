@@ -188,12 +188,12 @@ reduce disambiguate (a :< constraint) = assertNormalized (a :< constraint) >> ca
     TypeFn ty1 ty2 -> reduceTypeConInstance cls (mkName "Fn") [ty1, ty2]
     TypeUnit -> reduceTypeConInstance cls (mkName "Unit") []
     TypeVar _ _ -> do
-      -- A type variable has no instances except those assumed. However, Copy implies Clone and Dispose (copying is a trivial clone, and discarding a copy is a trivial dispose).
+      -- A type variable has no instances except those assumed. However, Copy implies Clone and Drop (copying is a trivial clone, and discarding a copy is a trivial drop).
       affine <- isAffine ty
       case (cls, affine) of
-        (Clone, No)   -> return tautology
-        (Dispose, No) -> return tautology
-        _             -> return contradiction
+        (Clone, No) -> return tautology
+        (Drop, No)  -> return tautology
+        _           -> return contradiction
     _ | Just (n, tys) <- unapplyTypeCon ty -> reduceTypeConInstance cls n tys
     _ -> return skip
 

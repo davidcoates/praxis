@@ -300,6 +300,7 @@ data TypeReason
   | TypeReasonCaseCongruence
   | TypeReasonConstructor Name
   | TypeReasonFunctionCongruence Name (Maybe (Annotated TypeCheck QType))
+  | TypeReasonHole
   | TypeReasonIfCondition
   | TypeReasonIfCongruence
   | TypeReasonIntegerLiteral Integer

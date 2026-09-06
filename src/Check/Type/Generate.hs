@@ -6,7 +6,7 @@ import           Check.State
 import           Check.Type.Solve    (assumeFromQType)
 import           Check.Type.State
 import           Common
-import           Inbuilts            (capture, copy, integral)
+import           Inbuilts            (capture, copy, dispose, integral)
 import           Introspect
 import           Praxis
 import           Print
@@ -497,6 +497,8 @@ generatePat' wrap ((src, _) :< pat) = (\(ty, pat, aliased) -> (ty, (src, wrap ty
     -- treat this is a variable for drop analysis
     ty <- lift $ freshTypeUni Plain
     name <- introHole (mono (wrap ty))
+    -- the discarded value must be disposable
+    require $ (src, TypeReasonHole) :< Requirement (dispose (wrap ty))
     return (ty, PatVar name, False)
 
   -- TODO think about how view literals would work, e.g. x@"abc"

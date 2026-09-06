@@ -124,6 +124,7 @@ instance Pretty TypeReason where
     TypeReasonFunctionCongruence n sig -> case sig of
       Nothing  -> "function " <> pretty n
       Just sig -> "function " <> pretty n <> " with signature " <> pretty sig
+    TypeReasonHole -> "discarded by hole pattern"
     TypeReasonIfCondition  -> "if expression condition must have type Bool"
     TypeReasonIfCongruence -> "if expression branches must have the same type"
     TypeReasonIntegerLiteral i -> "integer literal " <> pretty (show i)

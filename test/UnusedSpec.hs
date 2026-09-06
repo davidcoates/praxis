@@ -29,16 +29,42 @@ fst : forall a b . ( a , b ) -> a = \ ( x , y ) -> x
   describe "unused underscore" $ do
 
     let program = trim [r|
-fst : forall a b. (a, b) -> a
+fst : forall a b | b : Dispose. (a, b) -> a
 fst (x, _) = x
 |]
 
     it "parses" $ runPretty (parse ProgramT program) `shouldReturn` trim [r|
-fst : forall a b . ( a , b ) -> a = \ ( x , _ ) -> x
+fst : forall a b | b : Dispose . ( a , b ) -> a = \ ( x , _ ) -> x
 |]
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
-fst : forall a b . ( a , b ) -> a = \ ( [a] x , [b] hole ) -> [a] x
+fst : forall a b | b : Dispose . ( a , b ) -> a = \ ( [a] x , [b] hole ) -> [a] x
+|]
+
+
+  describe "unused underscore (not disposable)" $ do
+
+    let program = trim [r|
+fst : forall a b. (a, b) -> a
+fst (x, _) = x
+|]
+
+    it "does not type check" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
+type check error: unable to satisfy: b : Dispose
+  | primary cause: discarded by hole pattern at 2:9
+  | secondary cause: function fst with signature forall a b . ( a , b ) -> a at 1:1
+|]
+
+
+  describe "unused underscore (through reference)" $ do
+
+    let program = trim [r|
+fst : forall &r a b. &r (a, b) -> &r a
+fst (x, _) = x
+|]
+
+    it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
+fst : forall &r a b . &r ( a , b ) -> &r a = \ ( [&r a] x , [&r b] hole ) -> [&r a] x
 |]
 
 

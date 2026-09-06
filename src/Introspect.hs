@@ -365,6 +365,7 @@ instance IsTerm (Requirement TypeConstraint) where
       TypeReasonCaseCongruence         -> pure TypeReasonCaseCongruence
       TypeReasonConstructor n          -> pure (TypeReasonConstructor n)
       TypeReasonFunctionCongruence n s -> TypeReasonFunctionCongruence n <$> traverse f s
+      TypeReasonHole                   -> pure TypeReasonHole
       TypeReasonIfCondition            -> pure TypeReasonIfCondition
       TypeReasonIfCongruence           -> pure TypeReasonIfCongruence
       TypeReasonIntegerLiteral i       -> pure (TypeReasonIntegerLiteral i)

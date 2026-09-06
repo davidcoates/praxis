@@ -8,9 +8,9 @@ module Lower
 
 import           Common
 import           Introspect
-import qualified Lower.ClosureConvert as ClosureConvert
-import qualified Lower.Linearize      as Linearize
-import qualified Lower.Monomorphize   as Monomorphize
+import qualified Lower.Lift         as Lift
+import qualified Lower.Linearize    as Linearize
+import qualified Lower.Monomorphize as Monomorphize
 import           Praxis
 import           Stage
 import           Term
@@ -24,12 +24,12 @@ run :: IsTerm a => Annotated TypeCheck a -> Praxis (Lowering a)
 run term = case typeof (view value term) of
   ProgramT -> do
     prog <- Monomorphize.run term
-    prog <- ClosureConvert.run prog
+    prog <- Lift.run prog
     Linearize.run prog
   ExpT -> do
     (prog, exp) <- Monomorphize.run term
-    prog        <- ClosureConvert.run prog
-    (prog, exp) <- ClosureConvert.runExp prog exp
+    prog        <- Lift.run prog
+    (prog, exp) <- Lift.runExp prog exp
     prog        <- Linearize.run prog
     exp         <- Linearize.runExp exp
     return (prog, exp)

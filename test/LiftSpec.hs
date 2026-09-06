@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module ClosureSpec where
+module LiftSpec where
 
 import           Test.Hspec
 import           Text.RawString.QQ
@@ -9,7 +9,7 @@ import           Introspect
 import           Util
 
 
--- Closure conversion: after lowering, all functions are top-level, and closures are explicit partial applications.
+-- Lifting: after lowering, all functions are top-level, and closures are explicit partial applications.
 
 spec :: Spec
 spec = do

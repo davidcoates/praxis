@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 
--- | Closure conversion.
+-- | Lifting (closure conversion).
 --
 -- Every function body is lifted to a top-level declaration, so that after this pass:
 --
@@ -12,7 +12,7 @@
 --   * 'Where' does not appear; value bindings become 'Let's.
 --   * Calls to where-bound functions are direct calls to the lifted function, with the
 --     captured values passed explicitly as the first component of the argument.
-module Lower.ClosureConvert
+module Lower.Lift
   ( run
   , runExp
   ) where
@@ -67,7 +67,7 @@ run :: Annotated Lower Program -> Praxis (Annotated Lower Program)
 run (_ :< Program decls) = do
   decls' <- concat <$> mapM convertTopDecl decls
   let result = phantom (Program decls')
-  display Lower "closure converted program" result `ifFlag` debug
+  display Lower "lifted program" result `ifFlag` debug
   return result
 
 -- | Convert a standalone expression against an already converted program.
@@ -76,8 +76,8 @@ runExp :: Annotated Lower Program -> Annotated Lower Exp -> Praxis (Annotated Lo
 runExp (_ :< Program decls) exp = do
   (exp', liftedDecls) <- runStateT (convertExp (emptyEnv (mkName "it")) exp) []
   let result = phantom (Program (decls ++ liftedDecls))
-  display Lower "closure converted program" result `ifFlag` debug
-  display Lower "closure converted exp" exp' `ifFlag` debug
+  display Lower "lifted program" result `ifFlag` debug
+  display Lower "lifted exp" exp' `ifFlag` debug
   return (result, exp')
 
 emptyEnv :: Name -> Env

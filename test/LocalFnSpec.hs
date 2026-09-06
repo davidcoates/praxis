@@ -121,7 +121,7 @@ useSwap = (swap (1, True), swap (False, 2)) where
 
     let program = [r|
 test = (pairWith 1 True, pairWith 'x' 2) where
-  pairWith : forall a b. a -> b -> (a, b)
+  pairWith : forall a b | a : Capture. a -> b -> (a, b)
   pairWith a b = (a, b)
 |]
 
@@ -133,7 +133,7 @@ test = (pairWith 1 True, pairWith 'x' 2) where
 
     let program = [r|
 test = (combine 1 True, combine 'x' 2) where
-  combine : forall a b. a -> b -> (a, b)
+  combine : forall a b | a : Capture. a -> b -> (a, b)
   combine x y = (x, y)
 |]
 

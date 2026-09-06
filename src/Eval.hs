@@ -104,21 +104,19 @@ evalExp ((src, ty) :< exp) = case exp of
     x <- evalExp x
     f x
 
+  -- A closure is the partial application of a (top-level) function to the tuple of captured values.
   Closure captures exp -> do
-    let names = map fst captures
-    display Evaluate "captures" (show (map fst captures)) `ifFlag` debug
-    display Evaluate "exp" exp `ifFlag` debug
-    values <- traverse (lookupValue src) names
+    values <- traverse (lookupValue src . fst) captures
     Value.Fn fn <- evalExp exp
-    return $ Value.Fn $ \val -> save (evalState . valueEnv) $ do
-      mapM_ (\(n, v) -> (evalState . valueEnv) %= Map.insert n v) (zip names values)
-      fn val
+    return $ case values of
+      [] -> Value.Fn fn
+      _  -> Value.Fn (\val -> fn (Value.Pair (foldr1 Value.Pair values) val))
 
   Case exp alts -> do
     val <- evalExp exp
     evalCase src val alts
 
-  Cases alts -> return $ Value.Fn $ \val -> evalCase src val alts
+  Cases alts -> return $ Value.Fn $ \val -> save (evalState . valueEnv) $ evalCase src val alts
 
   Con name -> do
     case ty of
@@ -138,7 +136,7 @@ evalExp ((src, ty) :< exp) = case exp of
 
   Specialize (_ :< Inbuilt inbuilt) specialization -> evalInbuilt inbuilt specialization
 
-  Lambda pat exp -> return $ Value.Fn $ \val -> forceMatch src val pat >> evalExp exp
+  Lambda pat exp -> return $ Value.Fn $ \val -> save (evalState . valueEnv) $ forceMatch src val pat >> evalExp exp
 
   Let bind exp -> save (evalState . valueEnv) $ do
     evalBind bind

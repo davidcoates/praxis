@@ -52,7 +52,7 @@ id_fun : forall a . ( ) -> Fun a a = \ ( ) -> Fun ( \ x -> x )
 
     it "type checks" $ runPretty (check ProgramT program) `shouldReturn` trim [r|
 datatype unboxed Fun a b = [forall a b . ( a -> b ) -> Fun a b] Fun ( a -> b )
-unbox_fun : forall a b . Fun a b -> a -> b = \ [Fun a b] Fun [a -> b] f -> \ [a] x -> [a -> b] f [a] x
+unbox_fun : forall a b . Fun a b -> a -> b = \ [Fun a b] Fun [a -> b] f -> closure [ f ] \ [a] x -> [a -> b] f [a] x
 id_fun : forall a . ( ) -> Fun a a = \ [( )] ( ) -> [( a -> a ) -> Fun a a] Fun ( \ [a] x -> [a] x )
 |]
 
@@ -127,7 +127,7 @@ rec
 rec
   datatype boxed List a = [forall a . ( ) -> List a] Nil ( ) | [forall a . ( a , List a ) -> List a] Cons ( a , List a )
 rec
-  map : forall ?v a b . ( ?v a -> b ) -> ?v List a -> List b = \ [?v a -> b] f -> [?v List a -> List b] cases
+  map : forall ?v a b . ( ?v a -> b ) -> ?v List a -> List b = \ [?v a -> b] f -> closure [ f ] [?v List a -> List b] cases
     [?v List a] Nil [( )] ( ) -> [( ) -> List b] Nil [( )] ( )
     [?v List a] Cons ( [?v a] x , [?v List a] xs ) -> [( b , List b ) -> List b] Cons ( [?v a -> b] f [?v a] x , [( ?v a -> b ) -> ?v List a -> List b] map [?v a -> b] f [?v List a] xs )
 rec

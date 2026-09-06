@@ -8,8 +8,8 @@ module Lower
 
 import           Common
 import           Introspect
-import qualified Lower.LambdaLift   as LambdaLift
-import qualified Lower.Monomorphize as Monomorphize
+import qualified Lower.ClosureConvert as ClosureConvert
+import qualified Lower.Monomorphize   as Monomorphize
 import           Praxis
 import           Stage
 import           Term
@@ -23,8 +23,8 @@ run :: IsTerm a => Annotated TypeCheck a -> Praxis (Lowering a)
 run term = case typeof (view value term) of
   ProgramT -> do
     prog <- Monomorphize.run term
-    LambdaLift.run prog
+    ClosureConvert.run prog
   ExpT -> do
     (prog, exp) <- Monomorphize.run term
-    prog'       <- LambdaLift.run prog
-    LambdaLift.runExp prog' exp
+    prog'       <- ClosureConvert.run prog
+    ClosureConvert.runExp prog' exp

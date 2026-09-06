@@ -395,6 +395,11 @@ ty0 =
 ty1 :: (SyntaxT f s) => f (Type s)
 ty1 = foldType ty0 <|> expected "type(1)"
 
+-- | Closure captures are print only, e.g. closure [ x , y ] f
+closureCaptures :: (SyntaxT f s) => f [(Name, Annotated s QType)]
+closureCaptures = _Nil <$> pure () <|> names <$> internal "closure" *> special '[' *> (_Cons <$> varId <*> many (special ',' *> varId)) <* special ']' where
+  names = Prism (error "closure captures are print only") (Just . map fst)
+
 tok :: (SyntaxT f s) => f (Tok s)
 tok = printOnly (_TokOp <$> symbol <|> _TokExp <$> annotated exp) <|> expected "token"
 
@@ -411,7 +416,7 @@ exp = exp6 `join` (_Sig, keyword KeywordColon *> annotated ty) <|> expected "exp
     _Cases <$> keyword KeywordCases *> block alt <|>
     _If <$> keyword KeywordIf *> annotated exp <*> keyword KeywordThen *> annotated exp <*> keyword KeywordElse *> annotated exp <|>
     _Lambda <$> keyword KeywordLambda *> alt <|>
-    printOnly (_Closure <$> empty <*> annotated exp3) <|>
+    printOnly (_Closure <$> closureCaptures <*> annotated exp3) <|>
     _Let <$> keyword KeywordLet *> annotated bind <*> keyword KeywordIn *> annotated exp <|>
     _Switch <$> keyword KeywordSwitch *> block switch <|>
     exp2 <|> expected "expression(3)"

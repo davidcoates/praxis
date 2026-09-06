@@ -1,6 +1,7 @@
 module Util
   ( parse
   , check
+  , lower
   , eval
 
   , runPretty
@@ -29,10 +30,12 @@ parse _ term = Parse.run term :: Praxis (Annotated Parse a)
 check :: forall a. IsTerm a => TermT a -> String -> Praxis (Annotated TypeCheck a)
 check ty term = parse ty term >>= Check.run
 
+lower :: forall a. IsTerm a => TermT a -> String -> Praxis (Lower.Lowering a)
+lower ty term = check ty term >>= Lower.run
+
 eval :: forall a. IsTerm a => TermT a -> String -> Praxis (Eval.Evaluation a)
 eval ty term = do
-  checked <- check ty term
-  lower   <- Lower.run checked
+  lower <- lower ty term
   case (ty, lower) of
     (ProgramT, prog)    -> Eval.run prog
     (ExpT, (prog, exp)) -> Eval.run prog >> Eval.run exp

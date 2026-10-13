@@ -17,13 +17,16 @@ import           Data.Maybe               (fromJust)
 
 run :: Bool -> String -> Praxis [Sourced Token]
 run topLevel text = do
-  tokens <- signLiterals <$> Tokenizer.run token text
+  tokens <- Tokenizer.run token text
   display Parse "tokens" (separate " " (map (view value) tokens)) `ifFlag` debug
   let tokens' = unlayout topLevel tokens
   display Parse "tokens with layout" (separate " " (map (view value) tokens')) `ifFlag` debug
   return tokens'
 
 -- Helper functions
+consume :: Tokenizer Char
+consume = match (const True)
+
 char :: Char -> Tokenizer Char
 char c = match (== c)
 
@@ -33,8 +36,8 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` ("_\'" :: [Char]) || isAlphaNum c
 isNewline = (`elem` ("\r\n\f" :: [Char]))
 
-token :: Tokenizer (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> upper <|> lower <|> symbol)) <|> expected "token"
+token :: Maybe Token -> Tokenizer (Maybe Token)
+token prev = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal prev <|> upper <|> lower <|> symbol)) <|> expected "token"
 
 whitespace :: Tokenizer ()
 whitespace = newline <|> space <|> comment where
@@ -45,28 +48,24 @@ whitespace = newline <|> space <|> comment where
 special :: Tokenizer Token
 special = Special <$> match (`elem` ("{}(),`_" :: [Char]))
 
-literal :: Tokenizer Token
-literal = intLiteral <|> charLiteral <|> stringLiteral
+literal :: Maybe Token -> Tokenizer Token
+literal prev = intLiteral prev <|> charLiteral <|> stringLiteral
 
-intLiteral :: Tokenizer Token
-intLiteral = Lit . Integer . read <$> some (match isDigit)
-
--- | A sign directly before an integer literal is part of the literal, unless the sign directly follows an operand.
--- So @-1@, @(-1)@ and @f -1@ contain the literal -1, but @n-1@ is a subtraction.
-signLiterals :: [Sourced Token] -> [Sourced Token]
-signLiterals = go Nothing where
-  -- The argument is where the previous token ends, if it is an operand.
-  go :: Maybe Pos -> [Sourced Token] -> [Sourced Token]
-  go operandEnd ((Source s e :< Ident Plain [c]) : (Source s' e' :< Lit (Integer n)) : ts)
-    | c `elem` ("+-" :: [Char]), e == s', operandEnd /= Just s
-    = go operandEnd ((Source s e' :< Lit (Integer (if c == '-' then negate n else n))) : ts)
-  go _ (t : ts) = t : go (operandEndOf t) ts
-  go _ [] = []
-  operandEndOf (src :< t) = case t of
-    Ident _ _   -> Just (end src)
-    Lit _       -> Just (end src)
-    Special ')' -> Just (end src)
-    _           -> Nothing
+intLiteral :: Maybe Token -> Tokenizer Token
+intLiteral prev = lookahead (match isDigit <|> sign *> match isDigit) *> (Lit . Integer <$> decimal) where
+  sign = match (\c -> signed && c `elem` ("-+" :: [Char]))
+  -- A sign directly after an operand is not part of the literal
+  signed = case prev of
+    Just (Ident _ _)   -> False
+    Just (Lit _)       -> False
+    Just (Special ')') -> False
+    _                  -> True
+  decimal :: Tokenizer Integer
+  decimal = build <$> consume <*> many (match isDigit)
+  build :: Char -> [Char] -> Integer
+  build '+' ns = read ns
+  build '-' ns = negate (read ns)
+  build n   ns = read (n:ns)
 
 charEscapeSeqs = [
   ('0', '\0'),

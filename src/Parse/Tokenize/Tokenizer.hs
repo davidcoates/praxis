@@ -39,14 +39,15 @@ lookahead = Tokenizer . Parser.lookahead . runTokenizer
 match :: (Char -> Bool) -> Tokenizer Char
 match p = Tokenizer $ Parser.match (p . view value)
 
-run :: Pretty a => Tokenizer (Maybe a) -> String -> Praxis [Sourced a]
-run (Tokenizer t) cs = all (sourced cs) where
-  all [] = pure []
-  all cs = case Parser.run t cs of
+-- | The tokenizer is given the token directly before it (Nothing if there is whitespace in between).
+run :: Pretty a => (Maybe a -> Tokenizer (Maybe a)) -> String -> Praxis [Sourced a]
+run tokenizer cs = all Nothing (sourced cs) where
+  all _ [] = pure []
+  all prev cs = case Parser.run (runTokenizer (tokenizer prev)) cs of
     (Left e, []) -> throw Parse $ "expected " <> pretty e <> " but found EOF"
     (Left e, (s :< t):_) -> throwAt Parse s $ "expected " <> pretty e <> " but found '" <> pretty t <> "'"
-    (Right (s :< Just x), cs) -> ((:) <$> pure (s :< x) <*> all cs)
-    (Right _, cs) -> all cs
+    (Right (s :< Just x), cs) -> ((:) <$> pure (s :< x) <*> all (Just x) cs)
+    (Right _, cs) -> all Nothing cs
 
 sourced :: String -> [Sourced Char]
 sourced = sourced' Pos { line = 1, column = 1 } where

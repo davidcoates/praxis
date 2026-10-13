@@ -36,8 +36,8 @@ isAlphaNum c = isLower c || isUpper c || isDigit c
 isLetter c = c `elem` ("_\'" :: [Char]) || isAlphaNum c
 isNewline = (`elem` ("\r\n\f" :: [Char]))
 
-token :: Tokenizer (Maybe Token)
-token = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal <|> upper <|> lower <|> symbol)) <|> expected "token"
+token :: Maybe Token -> Tokenizer (Maybe Token)
+token prev = (whitespace *> pure Nothing) <|> (Just <$> (special <|> literal prev <|> upper <|> lower <|> symbol)) <|> expected "token"
 
 whitespace :: Tokenizer ()
 whitespace = newline <|> space <|> comment where
@@ -48,11 +48,18 @@ whitespace = newline <|> space <|> comment where
 special :: Tokenizer Token
 special = Special <$> match (`elem` ("{}(),`_" :: [Char]))
 
-literal :: Tokenizer Token
-literal = intLiteral <|> charLiteral <|> stringLiteral
+literal :: Maybe Token -> Tokenizer Token
+literal prev = intLiteral prev <|> charLiteral <|> stringLiteral
 
-intLiteral :: Tokenizer Token
-intLiteral = lookahead (match isDigit <|> match (`elem` ("-+" :: [Char])) *> match isDigit) *> (Lit . Integer <$> decimal) where
+intLiteral :: Maybe Token -> Tokenizer Token
+intLiteral prev = lookahead (match isDigit <|> sign *> match isDigit) *> (Lit . Integer <$> decimal) where
+  sign = match (\c -> signed && c `elem` ("-+" :: [Char]))
+  -- A sign directly after an operand is not part of the literal
+  signed = case prev of
+    Just (Ident _ _)   -> False
+    Just (Lit _)       -> False
+    Just (Special ')') -> False
+    _                  -> True
   decimal :: Tokenizer Integer
   decimal = build <$> consume <*> many (match isDigit)
   build :: Char -> [Char] -> Integer

@@ -17,16 +17,13 @@ import           Data.Maybe               (fromJust)
 
 run :: Bool -> String -> Praxis [Sourced Token]
 run topLevel text = do
-  tokens <- Tokenizer.run token text
+  tokens <- signLiterals <$> Tokenizer.run token text
   display Parse "tokens" (separate " " (map (view value) tokens)) `ifFlag` debug
   let tokens' = unlayout topLevel tokens
   display Parse "tokens with layout" (separate " " (map (view value) tokens')) `ifFlag` debug
   return tokens'
 
 -- Helper functions
-consume :: Tokenizer Char
-consume = match (const True)
-
 char :: Char -> Tokenizer Char
 char c = match (== c)
 
@@ -52,13 +49,24 @@ literal :: Tokenizer Token
 literal = intLiteral <|> charLiteral <|> stringLiteral
 
 intLiteral :: Tokenizer Token
-intLiteral = lookahead (match isDigit <|> match (`elem` ("-+" :: [Char])) *> match isDigit) *> (Lit . Integer <$> decimal) where
-  decimal :: Tokenizer Integer
-  decimal = build <$> consume <*> many (match isDigit)
-  build :: Char -> [Char] -> Integer
-  build '+' ns = read ns
-  build '-' ns = negate (read ns)
-  build n   ns = read (n:ns)
+intLiteral = Lit . Integer . read <$> some (match isDigit)
+
+-- | A sign directly before an integer literal is part of the literal, unless the sign directly follows an operand.
+-- So @-1@, @(-1)@ and @f -1@ contain the literal -1, but @n-1@ is a subtraction.
+signLiterals :: [Sourced Token] -> [Sourced Token]
+signLiterals = go Nothing where
+  -- The argument is where the previous token ends, if it is an operand.
+  go :: Maybe Pos -> [Sourced Token] -> [Sourced Token]
+  go operandEnd ((Source s e :< Ident Plain [c]) : (Source s' e' :< Lit (Integer n)) : ts)
+    | c `elem` ("+-" :: [Char]), e == s', operandEnd /= Just s
+    = go operandEnd ((Source s e' :< Lit (Integer (if c == '-' then negate n else n))) : ts)
+  go _ (t : ts) = t : go (operandEndOf t) ts
+  go _ [] = []
+  operandEndOf (src :< t) = case t of
+    Ident _ _   -> Just (end src)
+    Lit _       -> Just (end src)
+    Special ')' -> Just (end src)
+    _           -> Nothing
 
 charEscapeSeqs = [
   ('0', '\0'),

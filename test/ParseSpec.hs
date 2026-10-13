@@ -25,6 +25,8 @@ spec = do
           , ("f x + f y + f z", "((f x) + (f y)) + (f z)")
           , ("(x, y, z)", "(x, (y, z))")
           , ("- 1 - - -1", "(- 1) - (- (-1))")
+          , ("n-1", "n - 1")
+          , ("n -1", "n (-1)")
           , ("if a then if b then c else d else e", "if a then (if b then c else d) else e")
           ]
 

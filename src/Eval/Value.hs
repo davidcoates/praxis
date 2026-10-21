@@ -16,7 +16,8 @@ import                qualified Data.Array.IO    as ArrayIO
 import                          System.IO.Unsafe (unsafePerformIO)
 
 
-type Array = IOArray USize Value
+-- Indexed by Int, so that an empty array has bounds (0, -1) rather than wrapping around
+type Array = IOArray Int Value
 
 data Value
   = Array Array
@@ -66,16 +67,16 @@ valueToInteger v = case v of
   USize v -> toInteger v
 
 lenArray :: Array -> Praxis USize
-lenArray a = liftIOUnsafe (snd <$> ArrayIO.getBounds a)
+lenArray a = liftIOUnsafe (fromIntegral . ArrayIO.rangeSize <$> ArrayIO.getBounds a)
 
 readArray :: Array -> USize -> Praxis Value
-readArray a i = liftIOUnsafe (ArrayIO.readArray a i)
+readArray a i = liftIOUnsafe (ArrayIO.readArray a (fromIntegral i))
 
 writeArray :: Array -> USize -> Value -> Praxis ()
-writeArray a i e = liftIOUnsafe (ArrayIO.writeArray a i e)
+writeArray a i e = liftIOUnsafe (ArrayIO.writeArray a (fromIntegral i) e)
 
-newArray :: USize -> Value -> Praxis Value
-newArray i v = liftIOUnsafe (Array <$> ArrayIO.newArray (0, i) v)
+newArray :: [Value] -> Praxis Value
+newArray vs = liftIOUnsafe (Array <$> ArrayIO.newListArray (0, length vs - 1) vs)
 
 instance Show Value where
   show value = case value of

@@ -17,6 +17,7 @@ import qualified Term
 import           Term              hiding (Annotated (..))
 
 
+import           Control.Monad     (replicateM)
 import           Control.Monad.Fix (mfix)
 import           Data.Array.IO
 import           Data.List         (partition)
@@ -190,7 +191,7 @@ evalInbuilt inbuilt specialization = return $ case inbuilt of
   InbuiltPutStrLn -> Value.Fn (\(Value.String s) -> liftIOUnsafe (putStrLn s) >> pure Value.Unit)
   InbuiltCompose  -> Value.Fn (\(Value.Pair (Value.Fn f) (Value.Fn g)) -> pure (Value.Fn (\x -> g x >>= f)))
   InbuiltPrint    -> Value.Fn (\x -> liftIOUnsafe (print x) >> pure Value.Unit)
-  InbuiltNewArray -> Value.Fn (\(Value.Pair (Value.USize n) v) -> Value.newArray n v)
+  InbuiltNewArray -> Value.Fn (\(Value.Pair (Value.USize n) (Value.Fn f)) -> replicateM (fromIntegral n) (f Value.Unit) >>= Value.newArray) -- one call to the initializer per element
   InbuiltAtArray  -> Value.Fn (\(Value.Pair (Value.Array a) (Value.USize i)) -> Value.readArray a i)
   InbuiltLenArray -> Value.Fn (\(Value.Array a) -> Value.USize <$> Value.lenArray a)
   InbuiltSetArray -> Value.Fn (\(Value.Pair (Value.Array a) (Value.Pair (Value.USize i) e)) -> Value.writeArray a i e >> pure (Value.Array a))
